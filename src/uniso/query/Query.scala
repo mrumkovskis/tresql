@@ -11,17 +11,17 @@ object Query {
     //TODO connection passing design should be improved
     private implicit val conn:java.sql.Connection = null
 
-    def apply(expr:String, params:String*)(implicit conn:java.sql.Connection):Any = {
+    def apply(expr:String, params:Any*)(implicit conn:java.sql.Connection):Any = {
         apply(expr, params.toList)(conn)
     }
 
-    def apply(expr: String, params: List[String])(implicit conn:java.sql.Connection):Any = {
+    def apply(expr: String, params: List[Any])(implicit conn:java.sql.Connection):Any = {
         var i = 0
         apply(expr, params.map{e => i += 1; (i.toString, e)}.toMap)(conn)
     }
     
-    def apply(expr: String, params: Map[String, String])(implicit conn:java.sql.Connection):Any = {
-        new QueryBuilder(Env(params)(conn)).build(expr)()
+    def apply(expr: String, params: Map[String, Any])(implicit conn:java.sql.Connection):Any = {
+        apply(expr, false, params)
     }
 
     def apply(expr:String, parseParams:Boolean, params:Any*)(implicit conn:java.sql.Connection):Any = {
@@ -98,7 +98,7 @@ object Query {
     
     /*
      * scala command line sample:
-     * set java_opts=-Djdbc.drivers=com.sap.dbtech.jdbc.DriverSapDB 
+     * set JAVA_OPTS=-Djdbc.drivers=com.sap.dbtech.jdbc.DriverSapDB 
      * -Duniso.query.db=jdbc:sapdb://frida/donna -Duniso.query.user=xx -Duniso.query.password=xx
      * scala -classpath C:\dev\scala-test\bin\;C:\java\jdbc\sapdbc.jar 
      * 
