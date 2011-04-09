@@ -1,0 +1,18 @@
+[
+	{"table": {"name": "emp",
+			"cols": [{"name":"id", "type":"number"}, {"name":"name", "type":"string"}, 
+				{"name":"surname", "type":"string"}, {"name":"age", "type":"number"},
+				{"name":"salary", "type":"decimal"}, {"name":"dept_id", "type":"number"}],
+			"key": ["id"],
+			"refs": [{"table": "dept", "refs": [["dept_id"]]}]
+		}
+	},
+	{"table": {"name": "dept",
+			"cols": [{"name":"id", "type":"number"}, {"name":"name", "type":"string"},
+				{"name":"emp_count", "type":"number"}],
+			"key": ["id"],
+			"refs": []
+		}
+	}
+
+]

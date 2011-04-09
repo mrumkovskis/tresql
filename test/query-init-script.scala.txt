@@ -1,0 +1,18 @@
+Class.forName("com.sap.dbtech.jdbc.DriverSapDB")
+import uniso.query._
+val md = metadata.JDBCMetaData("burvis", "burfull2")
+val conn = Conn()()
+val env = new Env(Map(), md, conn)
+
+Env.metaData(metadata.JDBCMetaData("burvis", "burfull2"))
+
+var s = """mkString(per_persona p[p.kla_pilsoniba_id pils, p.kla_valstiskas_piederibas_id valsts]kla_kodifikatora_ieraksts?[?, ?]
+        {p.id, vards, uzvards, |mkString(per_auto_kategorija/kla_kodifikatora_ieraksts[per_persona_id = :1(0)]{kods}, "", ","),
+         pils.kods, pils.nosaukums, valsts.kods, valsts.nosaukums})"""
+
+Query(s, 1326418,1326432)(conn)
+
+var s = """mkString(per_persona p[p.kla_pilsoniba_id pils, p.kla_valstiskas_piederibas_id valsts]kla_kodifikatora_ieraksts?[?, ?]
+        {p.id, vards, uzvards, |mkString(per_auto_kategorija/kla_kodifikatora_ieraksts[per_persona_id = :1(0)]{kods,
+         |mkString(per_persona p[kla_valsts_val_prasme_id]kla_kodifikatora_ieraksts[p.id = :2(0)]{kods}, "", ",")}, "", ","),
+         pils.kods, pils.nosaukums, valsts.kods, valsts.nosaukums})"""
