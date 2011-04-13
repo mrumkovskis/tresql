@@ -31,6 +31,7 @@ class Result(private val rs: ResultSet, private val cols: Vector[Column]) extend
         } catch {case _:NoSuchElementException => rs.getObject(columnLabel)}
     }
     def columnCount = cols.length
+    def column(idx:Int) = cols(idx)
     def jdbcResult = rs
     def close {
         val st = rs.getStatement

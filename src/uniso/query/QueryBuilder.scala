@@ -218,6 +218,10 @@ class QueryBuilder(private var _env:Env, private val queryDepth:Int,
     class ColExpr(val col: Expr, val alias: String) extends Expr {
         val separateQuery = QueryBuilder.this.separateQueryFlag 
         def apply = {}
+        def aliasOrName = if (alias != null) alias else col match {
+            case IdentExpr(n, _) => n(n.length - 1)
+            case _ => null
+        }
         def sql = col.sql + (if (alias != null) " \"" + alias + "\"" else "")
     }
     case class IdentExpr(val name: List[String], val alias: String) extends Expr {

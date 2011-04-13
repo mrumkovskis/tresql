@@ -66,8 +66,8 @@ object Query {
         bindVars(st, bindVariables)
         var i = 0
         val r = new Result(st.executeQuery, Vector(cols.map{
-          c => if (c.separateQuery) Column(-1, c.alias, c.col) else {
-            i += 1; Column(i, c.alias, null)}}.asInstanceOf[List[Column]]:_*))
+          c => if (c.separateQuery) Column(-1, c.aliasOrName, c.col) else {
+            i += 1; Column(i, c.aliasOrName, null)}}.asInstanceOf[List[Column]]:_*))
         env result r
         r
     }
