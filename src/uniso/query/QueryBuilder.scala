@@ -281,7 +281,10 @@ class QueryBuilder(private var _env:Env, private val queryDepth:Int,
 
     private def buildInternal(parsedExpr: Any)(implicit parseCtx: String): Expr = {
         def buildSelect(q: Query) = new SelectExpr(q.tables map buildTable,
-            if (q.filter != null) q.filter.elements map {buildInternal(_)(WHERE_CTX)} else null,
+            if (q.filter != null) {
+                val f = (q.filter.elements map {buildInternal(_)(WHERE_CTX)}).filter(_ != null)
+                if (f.length > 0) f else null
+            } else null,
             if (q.cols != null) q.cols map {buildInternal(_)(COL_CTX).asInstanceOf[ColExpr]} else null,
             buildInternal(q.group), if (q.order != null) q.order map { buildInternal(_)(ORD_CTX) } 
                 else null)
@@ -365,7 +368,11 @@ class QueryBuilder(private var _env:Env, private val queryDepth:Int,
             case q: Query => buildSelect(q)
             case All() => AllExpr()
             case null => null
-            case Braces(expr) => new BracesExpr(buildInternal(expr)(parseCtx))
+            case Braces(expr) => {
+                var e = buildInternal(expr)(parseCtx)
+                if (unboundVarsFlag) {e = null; unboundVarsFlag = false}
+                if (e == null) null else new BracesExpr(e)
+            }
             case x => ConstExpr(x)
         }
 
