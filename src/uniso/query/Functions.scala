@@ -5,11 +5,9 @@ import java.text.SimpleDateFormat
 object Functions {
     
     def date(s: String, f: String) = new java.sql.Date(new SimpleDateFormat(f).parse(s).getTime)
-    def d(s: String, f: String) = date(s, f)
-    def d(s: String) = date(s, "yyyy-MM-dd")
+    def d(s: String, f: String = "yyyy-MM-dd") = date(s, f)
     def dateTime(s: String, f: String) = new java.sql.Timestamp(new SimpleDateFormat(f).parse(s).getTime)
-    def dt(s: String, f: String) = dateTime(s, f)
-    def dt(s: String) = dateTime(s, "yyyy-MM-dd HH:mm:ss")
+    def dt(s: String, f: String = "yyyy-MM-dd HH:mm:ss") = dateTime(s, f)
     def concat(s: String*) = s mkString
     
     def mkString(res:Result):String = mkString(res, ";")

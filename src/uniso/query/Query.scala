@@ -34,11 +34,13 @@ object Query {
     }
 
     def apply(expr: String, parseParams:Boolean, params: Map[String, Any])(implicit conn:java.sql.Connection):Any = {
-        new QueryBuilder(Env(params, parseParams)(conn)).build(expr)()
+        val exp = QueryBuilder(expr, Env(params, parseParams)(conn))
+        exp()
     }
 
     def apply(expr:Any)(implicit conn:java.sql.Connection) = {
-        new QueryBuilder(Env(Map())(conn)).build(expr)()
+        val exp = QueryBuilder(expr, Env(Map())(conn))
+        exp()
     }
 
     def select(expr:String, params:String*)(implicit conn:java.sql.Connection) = {

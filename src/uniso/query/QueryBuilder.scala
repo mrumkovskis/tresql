@@ -2,7 +2,7 @@ package uniso.query
 
 import scala.collection._
 
-class QueryBuilder(private var _env:Env, private val queryDepth:Int,
+private class QueryBuilder(private var _env:Env, private val queryDepth:Int,
         private var bindIdx:Int) extends EnvProvider {
 
     import QueryParser._
@@ -17,18 +17,22 @@ class QueryBuilder(private var _env:Env, private val queryDepth:Int,
 
     implicit val parseCtx = QUERY_CTX
 
-    def this(env:Env) = this(env, 0, 0)
-    def this() = this(null)
-    
-    private var bindVariables:mutable.LinkedList[Expr] = mutable.LinkedList()
+    private def this(env:Env) = this(env, 0, 0)
+    private def this() = this(null)
+
+    //NOT included variables from | operator expressions, included ResExpr 
+    private val _thisBindVariables = mutable.ListBuffer[Expr]()
+    private lazy val thisBindVariables = _thisBindVariables.toList
+    //included variables from | operator expressions, NOT included ResExpr
+    private val _bindVariables = mutable.ListBuffer[String]()
+    private lazy val bindVariables = _bindVariables.toList
     private var unboundVarsFlag = false
     private var separateQueryFlag = false
-
-    def update(env: Env) = this._env = env
+    
     def env = _env
-
-    case class ConstExpr(val value: Any) extends Expr {
-        def apply() = value
+    
+    case class ConstExpr(val value: Any) extends BaseExpr {
+        override def apply() = value
         def sql = value match {
             case v: Number => v.toString
             case v: String => "'" + v + "'"
@@ -38,27 +42,29 @@ class QueryBuilder(private var _env:Env, private val queryDepth:Int,
     }
 
     case class AllExpr() extends Expr {
-        def apply() = {}
         def sql = "*"
     }
 
-    case class VarExpr(val name: String, val opt: Boolean) extends Expr {
+    case class VarExpr(val name: String, val opt: Boolean) extends BaseExpr {
         if (!QueryBuilder.this.unboundVarsFlag) QueryBuilder.this.unboundVarsFlag = 
             !(env contains name)
-        def apply() = env(name)
-        def sql = {QueryBuilder.this.bindVariables = QueryBuilder.this.bindVariables :+ this; "?"}
+        QueryBuilder.this._thisBindVariables += this
+        QueryBuilder.this._bindVariables += name
+        override def apply() = env(name)
+        def sql = "?"
     }
 
     class ResExpr(val nr:Int, val col: Any) extends Expr {
-        def apply() = col match {
+        QueryBuilder.this._thisBindVariables += this
+        override def apply() = col match {
             case c:String => env(nr)(c)
             case c:Int => env(nr)(c)
         }
-        def sql = {QueryBuilder.this.bindVariables = QueryBuilder.this.bindVariables :+ this; "?"}
+        def sql = "?"
     }
 
-    class UnExpr(val op: String, val operand: Expr) extends Expr {
-        def apply() = op match {
+    class UnExpr(val op: String, val operand: Expr) extends BaseExpr {
+        override def apply() = op match {
             case "-" => -operand().asInstanceOf[Number]
             case "!" => !operand().asInstanceOf[Boolean]
             case "|" => operand()
@@ -74,8 +80,8 @@ class QueryBuilder(private var _env:Env, private val queryDepth:Int,
         override def exprType: Class[_] = if ("-" == op) operand.exprType else classOf[ConstExpr]
     }
 
-    class BinExpr(val op: String, val lop: Expr, val rop: Expr) extends Expr {
-        def apply() = op match {
+    class BinExpr(val op: String, val lop: Expr, val rop: Expr) extends BaseExpr {
+        override def apply() = op match {
             case "*" => lop * rop
             case "/" => lop / rop
             case "+" => lop + rop
@@ -123,8 +129,8 @@ class QueryBuilder(private var _env:Env, private val queryDepth:Int,
     }
 
     //TODO extend function location beyond Functions object
-    case class FunExpr(val name: String, val params: List[Expr]) extends Expr {
-        def apply() = {
+    case class FunExpr(val name: String, val params: List[Expr]) extends BaseExpr {
+        override def apply() = {
             val p = params map (_())
             val ts = p map (_.asInstanceOf[AnyRef].getClass)
             try {
@@ -144,21 +150,20 @@ class QueryBuilder(private var _env:Env, private val queryDepth:Int,
         def sql = name + (params map (_.sql)).mkString("(", ",", ")")
     }
 
-    class ArrExpr(val elements: List[Expr]) extends Expr {
-        def apply() = elements map (_())
+    class ArrExpr(val elements: List[Expr]) extends BaseExpr {
+        override def apply() = elements map (_())
         def sql = elements map { _.sql } mkString ("(", ", ", ")")
     }
 
     class SelectExpr(val tables: List[Table], val filter: List[Expr], val cols: List[ColExpr],
-        group: Expr, order: List[Expr]) extends Expr {
-        def apply() = {
-            uniso.query.Query.select(sql, cols, bindVariables, env)
+        group: Expr, order: List[Expr]) extends BaseExpr {
+        override def apply() = {
+            uniso.query.Query.select(sql, cols, QueryBuilder.this.thisBindVariables, env)
         }
         val sql = "select " + (if (cols == null) "*" else sqlCols) + " from " + join +
             (if (filter == null) "" else " where " + where) +
             (if (group == null) "" else " group by " + group.sql) +
             (if (order == null) "" else " order by " + (order map (_.sql)).mkString(" "))
-        val bindVariables = QueryBuilder.this.bindVariables.toList
         def sqlCols = cols.filter(!_.separateQuery).map(_.sql).mkString(",")
         def join = tables match {
             case t :: Nil => t.sqlName
@@ -217,7 +222,6 @@ class QueryBuilder(private var _env:Env, private val queryDepth:Int,
     }
     class ColExpr(val col: Expr, val alias: String) extends Expr {
         val separateQuery = QueryBuilder.this.separateQueryFlag 
-        def apply = {}
         def aliasOrName = if (alias != null) alias else col match {
             case IdentExpr(n, _) => n(n.length - 1)
             case _ => null
@@ -225,17 +229,14 @@ class QueryBuilder(private var _env:Env, private val queryDepth:Int,
         def sql = col.sql + (if (alias != null) " \"" + alias + "\"" else "")
     }
     case class IdentExpr(val name: List[String], val alias: String) extends Expr {
-        def apply() = {}
         def sql = name.mkString(".") + (if (alias == null) "" else " \"" + alias + "\"")
         def nameStr = name.mkString(".")
         def aliasOrName = if (alias != null) alias else nameStr
     }    
     class Order(val ordExprs: List[Expr], val asc: Boolean) extends Expr {
-        def apply() = {}
         def sql = (ordExprs map (_.sql)).mkString(",") + (if (asc) " asc" else " desc")
     }
     class Group(val groupExprs: List[Expr], val having: Expr) extends Expr {
-        def apply() = {}
         def sql = (groupExprs map (_.sql)).mkString(",") +
             (if (having != null) " having " + having.sql else "")
     }
@@ -256,12 +257,11 @@ class QueryBuilder(private var _env:Env, private val queryDepth:Int,
             (cols zip vals map{v => v._1.sql + " = " + v._2.sql}).mkString(",") +
             (if (filter == null) "" else " where " + where)
     }
-    class DeleteExpr(val table:IdentExpr, val filter: List[Expr]) extends Expr {
-        def apply() = uniso.query.Query.update(sql, bindVariables, env)
+    class DeleteExpr(val table:IdentExpr, val filter: List[Expr]) extends BaseExpr {
+        override def apply() = uniso.query.Query.update(sql, QueryBuilder.this.thisBindVariables, env)
         protected def _sql = "delete from " + table.sql +
             (if (filter == null) "" else " where " + where)
         val sql = _sql
-        val bindVariables = QueryBuilder.this.bindVariables.toList
         def where = filter match {
             case (c@ConstExpr(x))::Nil => table.aliasOrName + "." + 
                 env.tbl(table.nameStr).key.cols(0) + " = " + c.sql
@@ -273,10 +273,15 @@ class QueryBuilder(private var _env:Env, private val queryDepth:Int,
         }          
     }
     
-    class BracesExpr(val expr: Expr) extends Expr {
-        def apply() = expr()
+    class BracesExpr(val expr: Expr) extends BaseExpr {
+        override def apply() = expr()
         def sql = "(" + expr.sql + ")"
         override def exprType = expr.exprType
+    }
+    
+    abstract class BaseExpr extends Expr {
+        override def bindVariables = QueryBuilder.this.bindVariables
+        override def update(env:Env) = QueryBuilder.this._env = env
     }
 
     private def buildInternal(parsedExpr: Any)(implicit parseCtx: String): Expr = {
@@ -335,8 +340,9 @@ class QueryBuilder(private var _env:Env, private val queryDepth:Int,
             case BinOp("-", Obj(Ident(t), _, null, null), f@Arr(_)) => buildDelete(t, f)            
             case UnOp("|", oper) => {
                 val b = new QueryBuilder(new Env(this), queryDepth + 1, bindIdx)
-                val ex = b.buildInternal(oper)(parseCtx)
-                this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
+                val ex = b.buildInternal(oper)(QUERY_CTX)
+                this.separateQueryFlag = true; this.bindIdx = b.bindIdx;
+                this._bindVariables ++= b._bindVariables; ex
             }
             case UnOp(op, oper) => {
                 val o = buildInternal(oper)(parseCtx)
@@ -378,15 +384,11 @@ class QueryBuilder(private var _env:Env, private val queryDepth:Int,
 
     }
     
-    def build(parsedExpr: Any):Expr = {
-        this.bindIdx = 0
-        this.bindVariables = mutable.LinkedList()
-        this.unboundVarsFlag = false
-        this.separateQueryFlag = false
+    private def build(parsedExpr: Any):Expr = {
         buildInternal(parsedExpr)
     }
     
-    def build(ex: String):Expr = {
+    private def build(ex: String):Expr = {
         parseAll(expr, ex) match {
             case Success(r, _) => build(r)
             case x => error(x.toString)
@@ -397,6 +399,21 @@ class QueryBuilder(private var _env:Env, private val queryDepth:Int,
 
 object QueryBuilder {
     import metadata._
+  
+    def apply(parsedExpr:Any):Expr = {
+        apply(parsedExpr, null)
+    }
+    def apply(parsedExpr:Any, env:Env):Expr = {
+        new QueryBuilder(env).build(parsedExpr)
+    }
+    
+    def apply(ex:String):Expr = {
+        apply(ex, null)
+    }
+    def apply(ex:String, env:Env):Expr = {
+        new QueryBuilder(env).build(ex)
+    }
+    
     def main(args: Array[String]) {
         args.length match {
             case 0 => println("usage: <string to evaluate>")
@@ -450,6 +467,9 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
             case _ => false
         }
     }
-    def sql: String
+    def sql:String
+    def apply():Any = error("Must be implemented in subclass")
+    def update(env:Env):Unit = error("Must be implemented in subclass")
+    def bindVariables:List[String] = error("Must be implemented in subclass") 
     def exprType: Class[_] = this.getClass
 }
