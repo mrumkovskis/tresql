@@ -48,7 +48,7 @@ private class QueryBuilder(private var _env:Env, private val queryDepth:Int,
     case class VarExpr(val name: String, val opt: Boolean) extends BaseExpr {
         if (!QueryBuilder.this.unboundVarsFlag) QueryBuilder.this.unboundVarsFlag = 
             !(env contains name)
-        QueryBuilder.this._thisBindVariables += this
+        if (env contains name) QueryBuilder.this._thisBindVariables += this
         QueryBuilder.this._bindVariables += name
         override def apply() = env(name)
         def sql = "?"
