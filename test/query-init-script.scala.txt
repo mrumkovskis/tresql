@@ -1,16 +1,24 @@
+:cp bin
+:cp lib/sapdbc.jar
+
 Class.forName("com.sap.dbtech.jdbc.DriverSapDB")
 import uniso.query._
+import uniso.query.result._
 val md = metadata.JDBCMetaData("burvis", "burfull2")
 val conn = Conn()()
 val env = new Env(Map(), md, conn)
 
 Env.metaData(metadata.JDBCMetaData("burvis", "burfull2"))
 
-var s = """mkString(per_persona p[p.kla_pilsoniba_id pils, p.kla_valstiskas_piederibas_id valsts]kla_kodifikatora_ieraksts?[?, ?]
+var s = """per_persona p[p.kla_pilsoniba_id pils, p.kla_valstiskas_piederibas_id valsts]kla_kodifikatora_ieraksts?[?, ?]
         {p.id, vards, uzvards, |mkString(per_auto_kategorija/kla_kodifikatora_ieraksts[per_persona_id = :1(0)]{kods}, "", ","),
-         pils.kods, pils.nosaukums, valsts.kods, valsts.nosaukums})"""
+         pils.kods, pils.nosaukums, valsts.kods, valsts.nosaukums}"""
 
-Query(s, 1326418,1326432)(conn)
+Query("mkString(" + s + ")", 1326418,1326432)(conn)
+
+val writer = new java.io.CharArrayWriter
+Jsonizer.jsonize(Query(s, 1326418,1326432)(conn).asInstanceOf[Result], writer)
+println(writer)
 
 var s = """mkString(per_persona p[p.kla_pilsoniba_id pils, p.kla_valstiskas_piederibas_id valsts]kla_kodifikatora_ieraksts?[?, ?]
         {p.id, vards, uzvards, |mkString(per_auto_kategorija/kla_kodifikatora_ieraksts[per_persona_id = :1(0)]{kods,
