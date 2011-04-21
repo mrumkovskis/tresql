@@ -15,7 +15,7 @@ object QueryServer {
     val env = new Env(Map(), md, conn)
     Env.metaData(metadata.JDBCMetaData(user, password))
     val writer = new java.io.CharArrayWriter
-    Jsonizer.jsonize(Query(expr, pars)(conn).asInstanceOf[Result], writer)
+    Jsonizer.jsonize(Query(expr, pars)(conn), writer)
     writer.toString
   }
 }
