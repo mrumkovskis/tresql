@@ -8,55 +8,52 @@ object Query {
   //TODO parsed expression or even built expression also should be available as a parameter for 
   //performance reasons
 
-  //TODO connection passing design should be improved
-  private implicit val conn: java.sql.Connection = null
-
-  def apply(expr: String, params: Any*)(implicit conn: java.sql.Connection): Any = {
-    apply(expr, params.toList)(conn)
+  def apply(expr: String, params: Any*): Any = {
+    apply(expr, params.toList)
   }
 
-  def apply(expr: String, params: List[Any])(implicit conn: java.sql.Connection): Any = {
+  def apply(expr: String, params: List[Any]): Any = {
     var i = 0
-    apply(expr, params.map { e => i += 1; (i.toString, e) }.toMap)(conn)
+    apply(expr, params.map { e => i += 1; (i.toString, e) }.toMap)
   }
 
-  def apply(expr: String, params: Map[String, Any])(implicit conn: java.sql.Connection): Any = {
+  def apply(expr: String, params: Map[String, Any]): Any = {
     apply(expr, false, params)
   }
 
-  def apply(expr: String, parseParams: Boolean, params: Any*)(implicit conn: java.sql.Connection): Any = {
-    apply(expr, parseParams, params.toList)(conn)
+  def apply(expr: String, parseParams: Boolean, params: Any*): Any = {
+    apply(expr, parseParams, params.toList)
   }
 
-  def apply(expr: String, parseParams: Boolean, params: List[Any])(implicit conn: java.sql.Connection): Any = {
+  def apply(expr: String, parseParams: Boolean, params: List[Any]): Any = {
     var i = 0
-    apply(expr, parseParams, params.map { e => i += 1; (i.toString, e) }.toMap)(conn)
+    apply(expr, parseParams, params.map { e => i += 1; (i.toString, e) }.toMap)
   }
 
-  def apply(expr: String, parseParams: Boolean, params: Map[String, Any])(implicit conn: java.sql.Connection): Any = {
-    val exp = QueryBuilder(expr, Env(params, parseParams)(conn))
+  def apply(expr: String, parseParams: Boolean, params: Map[String, Any]): Any = {
+    val exp = QueryBuilder(expr, Env(params, parseParams))
     exp()
   }
 
-  def apply(expr: Any)(implicit conn: java.sql.Connection) = {
-    val exp = QueryBuilder(expr, Env(Map())(conn))
+  def apply(expr: Any) = {
+    val exp = QueryBuilder(expr, Env(Map()))
     exp()
   }
 
-  def select(expr: String, params: String*)(implicit conn: java.sql.Connection) = {
-    apply(expr, params.toList)(conn).asInstanceOf[Result]
+  def select(expr: String, params: String*) = {
+    apply(expr, params.toList).asInstanceOf[Result]
   }
 
-  def select(expr: String, params: List[String])(implicit conn: java.sql.Connection) = {
-    apply(expr, params)(conn).asInstanceOf[Result]
+  def select(expr: String, params: List[String]) = {
+    apply(expr, params).asInstanceOf[Result]
   }
 
-  def select(expr: String, params: Map[String, String])(implicit conn: java.sql.Connection) = {
-    apply(expr, params)(conn).asInstanceOf[Result]
+  def select(expr: String, params: Map[String, String]) = {
+    apply(expr, params).asInstanceOf[Result]
   }
 
-  def select(expr: String)(implicit conn: java.sql.Connection) = {
-    apply(expr)(conn).asInstanceOf[Result]
+  def select(expr: String) = {
+    apply(expr).asInstanceOf[Result]
   }
 
   //private[query] modifier results in runtime error :(
@@ -72,7 +69,7 @@ object Query {
         i += 1; Column(i, c.aliasOrName, null)
       }
     }.asInstanceOf[List[Column]]: _*))
-    env result r
+    env update r
     r
   }
 
@@ -97,34 +94,6 @@ object Query {
         case o => st.setObject(idx, o)
       }
       idx + 1
-    }
-  }
-
-  /*
-     * scala command line sample:
-     * set JAVA_OPTS=-Djdbc.drivers=com.sap.dbtech.jdbc.DriverSapDB 
-     * -Duniso.query.db=jdbc:sapdb://frida/donna -Duniso.query.user=xx -Duniso.query.password=xx
-     * scala -classpath C:\dev\scala-test\bin\;C:\java\jdbc\sapdbc.jar 
-     * 
-     * script:
-     * Class.forName("com.sap.dbtech.jdbc.DriverSapDB")
-     * import uniso.query._
-     * val md = metadata.JDBCMetaData("burvis", "burfull2")
-     * val conn = Conn()()
-     * val env = new Env(Map(), md, conn)
-     */
-  def main(args: Array[String]) {
-    args.length < 2 match {
-      case true => println("usage: <db schema> <sql> [<variable name> <variable value> ...]")
-      case _ => {
-        val c = Conn()()
-        try {
-          Env.metaData(new JDBCMetaData("db", args(0)))
-          Query(args(1), args.drop(2).grouped(2).map(a => (a(0), a(1))).toMap)
-        } finally {
-          c.close
-        }
-      }
     }
   }
 

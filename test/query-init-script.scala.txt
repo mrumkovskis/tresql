@@ -1,4 +1,8 @@
+set JAVA_OPTS=-Djdbc.drivers=com.sap.dbtech.jdbc.DriverSapDB 
+ -Duniso.query.db=jdbc:sapdb://frida/donna -Duniso.query.user=xx -Duniso.query.password=xx
+
 :cp bin
+:cp class
 :cp lib/sapdbc.jar
 
 Class.forName("com.sap.dbtech.jdbc.DriverSapDB")
@@ -6,18 +10,18 @@ import uniso.query._
 import uniso.query.result._
 val md = metadata.JDBCMetaData("burvis", "burfull2")
 val conn = Conn()()
-val env = new Env(Map[String, Any](), md, conn)
 
-Env.metaData(metadata.JDBCMetaData("burvis", "burfull2"))
+Env update md
+Env update conn
 
 var s = """per_persona p[p.kla_pilsoniba_id pils, p.kla_valstiskas_piederibas_id valsts]kla_kodifikatora_ieraksts?[?, ?]
         {p.id, vards, uzvards, |mkString(per_auto_kategorija/kla_kodifikatora_ieraksts[per_persona_id = :1(0)]{kods}, "", ","),
          pils.kods, pils.nosaukums, valsts.kods, valsts.nosaukums}"""
 
-Query("mkString(" + s + ")", 1326418,1326432)(conn)
+Query("mkString(" + s + ")", 1326418,1326432)
 
 val writer = new java.io.CharArrayWriter
-Jsonizer.jsonize(Query(s, 1326418,1326432)(conn).asInstanceOf[Result], writer)
+Jsonizer.jsonize(Query(s, 1326418,1326432).asInstanceOf[Result], writer)
 println(writer)
 
 var s = """per_persona p[p.kla_pilsoniba_id pils, p.kla_valstiskas_piederibas_id valsts]kla_kodifikatora_ieraksts?[?, ?]
@@ -30,4 +34,4 @@ var s = """[:id = id(dual{hibernate_sequence.nextval}),
   "(" + mkString(kla_filiale[:id]{id, kods, nosaukums}) + ")", 
   kla_filiale - [:id], mkString(kla_filiale[:id]{kods, nosaukums})]"""
   
-Query(s)(conn)
+Query(s)

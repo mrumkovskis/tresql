@@ -459,21 +459,6 @@ object QueryBuilder {
   def apply(ex: String, env: Env): Expr = {
     new QueryBuilder(env).build(ex)
   }
-
-  def main(args: Array[String]) {
-    args.length match {
-      case 0 => println("usage: <string to evaluate>")
-      case 1 => {
-        println(new QueryBuilder().build(args(0)))
-      }
-      case n => {
-        Env.metaData(JSONMetaData.fromFile(args(0)))
-        println(new QueryBuilder(Env(args.drop(1).dropRight(1).grouped(2).map(a => (a(0),
-          a(1))).toMap)(null)).build(args(args.length - 1)).sql)
-
-      }
-    }
-  }
 }
 
 abstract class Expr extends (() => Any) with Ordered[Expr] {
