@@ -3,3 +3,5 @@
 .project
 .scala_dependencies
 bin/
+class/
+.settings/
