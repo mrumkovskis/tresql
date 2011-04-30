@@ -68,9 +68,7 @@ private class QueryBuilder(val env: Env, private val queryDepth: Int,
   class AssignExpr(val variable: String, val value: Expr) extends BaseExpr {
     //add variable to environment so that variable is found when referenced in further expressions
     env(variable) = null
-    override def apply() = {
-      env(variable) = value()
-    }
+    override def apply() = env(variable) = value()
     def sql = error("Cannot construct sql statement from assignment expression")
     override def toString = variable + " = " + value
   }
