@@ -6,7 +6,7 @@ import uniso.query._
 import uniso.query.result._
 val md = metadata.JDBCMetaData("burvis", "burfull2")
 val conn = Conn()()
-val env = new Env(Map(), md, conn)
+val env = new Env(Map[String, Any](), md, conn)
 
 Env.metaData(metadata.JDBCMetaData("burvis", "burfull2"))
 
@@ -20,7 +20,14 @@ val writer = new java.io.CharArrayWriter
 Jsonizer.jsonize(Query(s, 1326418,1326432)(conn).asInstanceOf[Result], writer)
 println(writer)
 
-var s = """mkString(per_persona p[p.kla_pilsoniba_id pils, p.kla_valstiskas_piederibas_id valsts]kla_kodifikatora_ieraksts?[?, ?]
+var s = """per_persona p[p.kla_pilsoniba_id pils, p.kla_valstiskas_piederibas_id valsts]kla_kodifikatora_ieraksts?[?, ?]
         {p.id, vards, uzvards, |mkString(per_auto_kategorija/kla_kodifikatora_ieraksts[per_persona_id = :1(0)]{kods,
          |mkString(per_persona p[kla_valsts_val_prasme_id]kla_kodifikatora_ieraksts[p.id = :2(0)]{kods}, "", ",")}, "", ","),
-         pils.kods, pils.nosaukums, valsts.kods, valsts.nosaukums})"""
+         pils.kods, pils.nosaukums, valsts.kods, valsts.nosaukums}"""
+
+var s = """[:id = id(dual{hibernate_sequence.nextval}),
+  kla_filiale{id, kods, nosaukums} + [:id, "gugu", "lololo"],
+  "(" + mkString(kla_filiale[:id]{id, kods, nosaukums}) + ")", 
+  kla_filiale - [:id], mkString(kla_filiale[:id]{kods, nosaukums})]"""
+  
+Query(s)(conn)

@@ -39,7 +39,7 @@ class Result(private val rs: ResultSet, private val cols: Vector[Column]) extend
         st.close
     }
     /** needs to be overriden since super class implementation calls hasNext method */
-    override def toString = getClass.toString + ":" + cols mkString ","
+    override def toString = getClass.toString + ":" + (cols.mkString(","))
 
 }
 
