@@ -102,14 +102,23 @@ object QueryParser extends JavaTokenParsers {
   //expression
   def expr: Parser[Any] = opt(comment) ~> logical <~ opt(comment)
 
-  def binOp(p: ~[Any, List[~[String, Any]]]): Any = p match {
-    case e ~ Nil => e
-    case e ~ (l @ ((o ~ _) :: _)) => BinOp(o, e, binOp(l))
+  def exprList: Parser[Any] = repsep(expr, ",") ^^ {
+    case e::Nil => e
+    case l => Arr(l)
+  }
+  
+  def parseAll(expr:String):ParseResult[Any] = {
+    parseAll(exprList, expr)
   }
 
-  def binOp(l: List[~[String, Any]]): Any = l match {
+  private def binOp(p: ~[Any, List[~[String, Any]]]): Any = p match {
+    case e ~ Nil => e
+    case e ~ (l@((o ~ _) :: _)) => BinOp(o, e, binOp(l))
+  }
+
+  private def binOp(l: List[~[String, Any]]): Any = l match {
     case (_ ~ e) :: Nil => e
-    case (_ ~ e) :: (l @ ((o ~ _) :: _)) => BinOp(o, e, binOp(l))
+    case (_ ~ e) :: (l@((o ~ _) :: _)) => BinOp(o, e, binOp(l))
     case _ => error("Knipis")
   }
 

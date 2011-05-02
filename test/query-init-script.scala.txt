@@ -1,5 +1,4 @@
-set JAVA_OPTS=-Djdbc.drivers=com.sap.dbtech.jdbc.DriverSapDB 
- -Duniso.query.db=jdbc:sapdb://frida/donna -Duniso.query.user=xx -Duniso.query.password=xx
+set JAVA_OPTS=-Djdbc.drivers=com.sap.dbtech.jdbc.DriverSapDB -Duniso.query.db=jdbc:sapdb://frida/donna -Duniso.query.user=xx -Duniso.query.password=xx
 
 :cp bin
 :cp class
@@ -29,9 +28,9 @@ var s = """per_persona p[p.kla_pilsoniba_id pils, p.kla_valstiskas_piederibas_id
          |mkString(per_persona p[kla_valsts_val_prasme_id]kla_kodifikatora_ieraksts[p.id = :2(0)]{kods}, "", ",")}, "", ","),
          pils.kods, pils.nosaukums, valsts.kods, valsts.nosaukums}"""
 
-var s = """[:id = id(dual{hibernate_sequence.nextval}),
-  kla_filiale{id, kods, nosaukums} + [:id, "gugu", "lololo"],
+var s = """:id = id(dual{hibernate_sequence.nextval}),
+  kla_filiale{id, kods, nosaukums} + [:id, "CNTRS", "Centra ofiss"],
   "(" + mkString(kla_filiale[:id]{id, kods, nosaukums}) + ")", 
-  kla_filiale - [:id], mkString(kla_filiale[:id]{kods, nosaukums})]"""
+  kla_filiale - [:id], mkString(kla_filiale[:id]{kods, nosaukums})"""
   
 Query(s)

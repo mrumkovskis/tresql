@@ -435,7 +435,7 @@ private class QueryBuilder(val env: Env, private val queryDepth: Int,
   }
 
   private def build(ex: String): Expr = {
-    parseAll(expr, ex) match {
+    parseAll(ex) match {
       case Success(r, _) => build(r)
       case x => error(x.toString)
     }
