@@ -1,4 +1,53 @@
 Query is a language that allows to work with SQL databases in an easy manner.
 Query is written in scala.
 
-More documentation will follow.
+Query can be used from scala or java application as well as a web service which can be invoked
+from javascript for example.
+
+For database connectivity Query uses JDBC. 
+
+Query provides select, insert, update, delete operations on SQL database.
+
+In comparison with SQL language Query provides several additional features like hierarchical
+results, implicit joins, implicit search by primary key.
+
+Consider following data model in the form <table>(<column[(pk) | (ref(<table.column>))]>...)
+where pk - primary key, ref - foreign key:
+
+persons(id(pk), name, surname)
+langs(id(pk), language, person_id(ref(persons.id)))
+eds(id(pk), program, date_from, person_id(ref(persons.id))
+
+Retrieve persons with their respective ids - 1, 2, 3, their language knowledge and education
+acquired in this millenium:
+
+  persons[1, 2, 3]{id, name, surname, 
+      |langs[person_id = :1(0)]{id, language} "languages",
+      |eds[person_id = :1(0) & date_from >= '2000-01-01']{id, program} "educations"} 
+
+  persons[1, 2, 3] is a shortcut for persons[id = 1 | id = 2 | id = 3] or
+  persons[id = [1, 2, 3]]
+  
+  | operator indicates that this column must be executed into separate sql statement
+  :1(0) - indicates first column of parent result. For example :2(1) would indicate second column
+          of parent's parent result. 
+
+  So the statement above is translated into 3 sql statements:
+    select id, name, surname from persons where id in (1, 2, 3)
+    select id, language from langs where person_id = <id value from parent result>
+    select id, program from eds where persone_id = <id value from parent result> and date_from >= '2000-01-01'
+    
+  Iterating through the person result will reexecute statement for languages and educations for each
+  person row.
+  
+Retrieve all the languages and their respective persons:
+  
+  langs l/persons p{l.id, l.language, p.id, p.name, p.surname}
+  
+  / operator indicates implicit join between langs and persons table. Join condition is retrieved
+    from database metadata.
+  
+  So the statement above is translated into following sql statement:
+  
+  select l.id, l.language, p.id, p.name, p.surname from langs l join persons p on p.id = l.person_id 
+
