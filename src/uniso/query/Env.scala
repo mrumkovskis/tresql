@@ -1,17 +1,25 @@
 package uniso.query
 
-class Env(private val md: MetaData, private val provider: EnvProvider)
-  extends (String => Any) with MetaData {
+/* Environment for expression building and execution */
+class Env(private val provider: EnvProvider, private val resourceProvider: ResourceProvider,
+        val reusableExpr: Boolean) extends (String => Any) with MetaData {
 
+  private var providedEnvs: List[Env] = Nil
+  
+  if (provider != null) {
+    def rootEnv(e:Env): Env = if (e.provider == null) e else rootEnv(e.provider.env)
+    val root = rootEnv(this)
+    root.providedEnvs = this :: root.providedEnvs
+  }
+  
   private val vars: ThreadLocal[scala.collection.mutable.Map[String, Any]] = new ThreadLocal
-  private val connection: ThreadLocal[java.sql.Connection] = new ThreadLocal
   private val res: ThreadLocal[Result] = new ThreadLocal
+  private val st: ThreadLocal[java.sql.PreparedStatement] = new ThreadLocal
 
-  def this(provider: EnvProvider) = this(null, provider)
-  def this(vars: Map[String, Any], md: MetaData, conn: java.sql.Connection) = {
-    this(md, null)
+  def this(provider: EnvProvider, reusableExpr: Boolean) = this(provider, null, reusableExpr)
+  def this(vars: Map[String, Any], resourceProvider: ResourceProvider, reusableExpr: Boolean) = {
+    this(null.asInstanceOf[EnvProvider], resourceProvider, reusableExpr)
     update(vars)
-    update(conn)
   }
 
   def apply(name: String) = if (provider != null) provider.env(name) else vars.get()(name) match {
@@ -19,12 +27,12 @@ class Env(private val md: MetaData, private val provider: EnvProvider)
     case x => x
   }
   
-  override implicit def conn = if (provider != null) provider.env.conn else connection.get
+  override implicit def conn = if (provider != null) provider.env.conn else resourceProvider.conn
   
-  def dbName = if (provider != null) provider.env.dbName else md.dbName
+  def dbName = if (provider != null) provider.env.dbName else resourceProvider.metaData.dbName
   
   override def table(name: String)(implicit conn: java.sql.Connection) = if (provider != null)
-    provider.env.table(name) else md.table(name)(conn)
+    provider.env.table(name) else resourceProvider.metaData.table(name)(conn)
     
   def apply(rIdx: Int) = {
     var i = 0
@@ -35,7 +43,9 @@ class Env(private val md: MetaData, private val provider: EnvProvider)
     }
     if (i == rIdx && e != null) e.res.get else error("Result not available at index: " + rIdx)
   }
-
+  
+  def statement = this.st.get
+  
   def contains(name: String): Boolean = if (provider != null) provider.env.contains(name)
   else vars.get.contains(name)
   
@@ -48,28 +58,42 @@ class Env(private val md: MetaData, private val provider: EnvProvider)
     else this.vars set scala.collection.mutable.Map(vars.toList: _*)
   }
   
-  def update(conn: java.sql.Connection) {
-    if (provider != null) provider.env.update(conn)
-    else this.connection set conn
+  def update(r: Result) = this.res set r
+  def update(st: java.sql.PreparedStatement) = this.st set st
+  
+  def closeStatement {
+    val st = this.st.get
+    if (st != null) {
+      this.st set null
+      st.close
+    }
+    this.providedEnvs foreach (_.closeStatement)
   }
   
-  def update(r: Result) = this.res set r
 }
 
-object Env {
+object Env extends ResourceProvider {
+  //meta data object must be thread safe!
   private var md: MetaData = null
-  private val conn: ThreadLocal[java.sql.Connection] = new ThreadLocal
-  def apply(params: Map[String, String]): Env = {
-    new Env(params mapValues (Query(_)), md, conn.get)
+  private val threadConn: ThreadLocal[java.sql.Connection] = new ThreadLocal
+  def apply(params: Map[String, String], reusableExpr: Boolean): Env = {
+    new Env(params mapValues (Query(_)), Env, reusableExpr)
   }
-  def apply(params: Map[String, Any], parseParams: Boolean): Env = {
-    if (parseParams) apply(params.asInstanceOf[Map[String, String]])
-    else new Env(params, md, conn.get)
+  def apply(params: Map[String, Any], reusableExpr: Boolean, parseParams: Boolean): Env = {
+    if (parseParams) apply(params.asInstanceOf[Map[String, String]], reusableExpr)
+    else new Env(params, Env, reusableExpr)
   }
+  def conn = threadConn.get
+  def metaData = md
   def update(md: MetaData) = this.md = md
-  def update(conn: java.sql.Connection) = this.conn set conn
+  def update(conn: java.sql.Connection) = this.threadConn set conn
 }
 
 trait EnvProvider {
   def env: Env
+}
+
+trait ResourceProvider {
+  def conn: java.sql.Connection
+  def metaData: MetaData
 }

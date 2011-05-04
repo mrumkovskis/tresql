@@ -5,8 +5,6 @@ import java.sql.{ Date, Timestamp, PreparedStatement }
 import uniso.query.metadata._
 
 object Query {
-  //TODO parsed expression or even built expression also should be available as a parameter for 
-  //performance reasons
 
   def apply(expr: String, params: Any*): Any = {
     apply(expr, params.toList)
@@ -31,14 +29,18 @@ object Query {
   }
 
   def apply(expr: String, parseParams: Boolean, params: Map[String, Any]): Any = {
-    val exp = QueryBuilder(expr, Env(params, parseParams))
+    val exp = QueryBuilder(expr, Env(params, false, parseParams))
     exp()
   }
 
   def apply(expr: Any) = {
-    val exp = QueryBuilder(expr, Env(Map()))
+    val exp = QueryBuilder(expr, Env(Map(), false))
     exp()
   }
+
+  def parse(expr: String) = QueryParser.parseAll(expr)
+  def build(expr: String): Expr = QueryBuilder(expr, Env(Map(), true, false))
+  def build(expr: Any): Expr = QueryBuilder(expr, Env(Map(), true, false))
 
   def select(expr: String, params: String*) = {
     apply(expr, params.toList).asInstanceOf[Result]
@@ -56,31 +58,38 @@ object Query {
     apply(expr).asInstanceOf[Result]
   }
 
-  //private[query] modifier results in runtime error :(
-  def select(sql: String, cols: List[QueryBuilder#ColExpr],
+  private[query] def select(sql: String, cols: List[QueryBuilder#ColExpr],
     bindVariables: List[Expr], env: Env): Result = {
+    //TODO remove later, for debugging purposes
     println(sql)
-    val conn = env.conn
-    val st = conn.prepareStatement(sql)
+    val st = statement(sql, env)
     bindVars(st, bindVariables)
     var i = 0
     val r = new Result(st.executeQuery, Vector(cols.map { c =>
       if (c.separateQuery) Column(-1, c.aliasOrName, c.col) else {
         i += 1; Column(i, c.aliasOrName, null)
       }
-    }.asInstanceOf[List[Column]]: _*))
+    }.asInstanceOf[List[Column]]: _*), env.reusableExpr)
     env update r
     r
   }
 
-  def update(sql: String, bindVariables: List[Expr], env: Env) = {
+  private[query] def update(sql: String, bindVariables: List[Expr], env: Env) = {
+    //TODO remove later, for debugging purposes
     println(sql)
-    val conn = env.conn
-    val st = conn.prepareStatement(sql)
+    val st = statement(sql, env)
     bindVars(st, bindVariables)
     val r = st.executeUpdate
-    st.close
+    if (!env.reusableExpr) st.close
     r
+  }
+
+  private def statement(sql: String, env: Env) = {
+    if (env.reusableExpr)
+      if (env.statement == null) { 
+        val conn = env.conn; val s = conn.prepareStatement(sql); env.update(s); s
+      } else env.statement
+    else { val conn = env.conn; conn.prepareStatement(sql) }
   }
 
   private def bindVars(st: PreparedStatement, bindVariables: List[Expr]) {

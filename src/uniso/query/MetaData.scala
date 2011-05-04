@@ -3,7 +3,7 @@ package uniso.query
 import java.util.NoSuchElementException
 
 //TODO consider letting metadata to span multiple databases?
-
+//Implementation of meta data must be thread safe
 trait MetaData {
   import metadata._
   protected implicit def conn:java.sql.Connection = null

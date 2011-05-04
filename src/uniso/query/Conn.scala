@@ -4,6 +4,7 @@ import java.sql.{ Connection => C }
 import java.sql.{ DriverManager => DM }
 import javax.sql.{ DataSource => D }
 
+//TODO should be redesigned!
 trait Conn extends (() => C) {
     private[this] lazy val c = initConn
     private[this] lazy val d = initDataSource

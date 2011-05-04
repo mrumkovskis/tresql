@@ -2,7 +2,7 @@ package uniso.query
 
 import scala.collection._
 
-private class QueryBuilder(val env: Env, private val queryDepth: Int,
+class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private var bindIdx: Int) extends EnvProvider {
 
   import QueryParser._
@@ -18,7 +18,6 @@ private class QueryBuilder(val env: Env, private val queryDepth: Int,
   val HAVING_CTX = "HAVING"
 
   private def this(env: Env) = this(env, 0, 0)
-  private def this() = this(null)
 
   //bind variables for jdbc prepared statement 
   private val _thisBindVariables = mutable.ListBuffer[Expr]()
@@ -48,9 +47,11 @@ private class QueryBuilder(val env: Env, private val queryDepth: Int,
   }
 
   case class VarExpr(val name: String, val opt: Boolean) extends BaseExpr {
-    if (!QueryBuilder.this.unboundVarsFlag) QueryBuilder.this.unboundVarsFlag =
-      !(env contains name)
-    if (env contains name) QueryBuilder.this._thisBindVariables += this
+    if (!env.reusableExpr) {
+      if (!QueryBuilder.this.unboundVarsFlag) QueryBuilder.this.unboundVarsFlag =
+        !(env contains name)
+    }
+    if (env.reusableExpr || env.contains(name)) QueryBuilder.this._thisBindVariables += this
     QueryBuilder.this._bindVariables += name
     override def apply() = env(name)
     def sql = "?"
@@ -185,9 +186,9 @@ private class QueryBuilder(val env: Env, private val queryDepth: Int,
       case _ => error("Knipis")
     }
     def where = filter match {
-      case (c @ ConstExpr(x)) :: Nil => tables(0).aliasOrName + "." +
+      case (c@ConstExpr(x)) :: Nil => tables(0).aliasOrName + "." +
         env.tbl(tables(0).name).key.cols(0) + " = " + c.sql
-      case (v @ VarExpr(x, _)) :: Nil => tables(0).aliasOrName + "." +
+      case (v@VarExpr(x, _)) :: Nil => tables(0).aliasOrName + "." +
         env.tbl(tables(0).name).key.cols(0) + " = " + v.sql
       case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
       case l => tables(0).aliasOrName + "." + env.tbl(tables(0).name).key.cols(0) + " in(" +
@@ -281,9 +282,9 @@ private class QueryBuilder(val env: Env, private val queryDepth: Int,
       (if (filter == null) "" else " where " + where)
     val sql = _sql
     def where = filter match {
-      case (c @ ConstExpr(x)) :: Nil => table.aliasOrName + "." +
+      case (c@ConstExpr(x)) :: Nil => table.aliasOrName + "." +
         env.tbl(table.nameStr).key.cols(0) + " = " + c.sql
-      case (v @ VarExpr(x, _)) :: Nil => table.aliasOrName + "." +
+      case (v@VarExpr(x, _)) :: Nil => table.aliasOrName + "." +
         env.tbl(table.nameStr).key.cols(0) + " = " + v.sql
       case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
       case l => table.aliasOrName + "." + env.tbl(table.nameStr).key.cols(0) + " in(" +
@@ -299,6 +300,15 @@ private class QueryBuilder(val env: Env, private val queryDepth: Int,
 
   abstract class BaseExpr extends Expr {
     override def bindVariables = QueryBuilder.this.bindVariables
+    override def apply(params: List[Any]): Any = {
+      var i = 0
+      apply(params.map { e => i += 1; (i.toString, e) }.toMap)
+    }
+    override def apply(params: scala.collection.immutable.Map[String, Any]): Any = {
+      env update params
+      apply()
+    }
+    override def close = env.closeStatement
   }
 
   private def buildInsert(table: List[String], cols: List[Col], vals: List[Any]) = {
@@ -353,35 +363,35 @@ private class QueryBuilder(val env: Env, private val queryDepth: Int,
       case BinOp("=", Variable(n, o), v) if (parseCtx == ROOT_CTX) =>
         new AssignExpr(n, buildInternal(v, parseCtx))
       //insert
-      case BinOp("+", Query(Obj(Ident(t), _, null, null) :: Nil, null, c @ (Col(Obj(Ident(_), _,
+      case BinOp("+", Query(Obj(Ident(t), _, null, null) :: Nil, null, c@(Col(Obj(Ident(_), _,
         null, null), _) :: l), null, null), Arr(v)) => {
-        val b = new QueryBuilder(new Env(this), queryDepth, bindIdx)
+        val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
         val ex = b.buildInsert(t, c, v)
         this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
       }
       //update
-      case BinOp("=", Query(Obj(Ident(t), _, null, null) :: Nil, f, c @ (Col(Obj(Ident(_), _,
+      case BinOp("=", Query(Obj(Ident(t), _, null, null) :: Nil, f, c@(Col(Obj(Ident(_), _,
         null, null), _) :: l), null, null), Arr(v)) => {
-        val b = new QueryBuilder(new Env(this), queryDepth, bindIdx)
+        val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
         val ex = b.buildUpdate(t, c, v, f)
         this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
       }
       //delete
-      case BinOp("-", Obj(Ident(t), _, null, null), f @ Arr(_)) => {
-        val b = new QueryBuilder(new Env(this), queryDepth, bindIdx)
+      case BinOp("-", Obj(Ident(t), _, null, null), f@Arr(_)) => {
+        val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
         val ex = b.buildDelete(t, f)
         this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
       }
       //child query
       case UnOp("|", oper) => {
-        val b = new QueryBuilder(new Env(this), queryDepth + 1, bindIdx)
+        val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth + 1, bindIdx)
         val ex = b.buildInternal(oper, QUERY_CTX)
         this.separateQueryFlag = true; this.bindIdx = b.bindIdx;
         this._bindVariables ++= b._bindVariables; ex
       }
       case t: Obj => parseCtx match {
         case ROOT_CTX => {
-          val b = new QueryBuilder(new Env(this), queryDepth, bindIdx)
+          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildInternal(t, TABLE_CTX)
           this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
         }
@@ -390,7 +400,7 @@ private class QueryBuilder(val env: Env, private val queryDepth: Int,
       }
       case q: Query => parseCtx match {
         case ROOT_CTX => {
-          val b = new QueryBuilder(new Env(this), queryDepth, bindIdx)
+          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildInternal(q, QUERY_CTX)
           this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
         }
@@ -446,16 +456,10 @@ private class QueryBuilder(val env: Env, private val queryDepth: Int,
 object QueryBuilder {
   import metadata._
 
-  def apply(parsedExpr: Any): Expr = {
-    apply(parsedExpr, null)
-  }
   def apply(parsedExpr: Any, env: Env): Expr = {
     new QueryBuilder(env).build(parsedExpr)
   }
 
-  def apply(ex: String): Expr = {
-    apply(ex, null)
-  }
   def apply(ex: String, env: Env): Expr = {
     new QueryBuilder(env).build(ex)
   }
@@ -500,7 +504,10 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
   }
   def sql: String
   def apply(): Any = error("Must be implemented in subclass")
+  def apply(params: List[Any]): Any = error("Must be implemented in subclass")
+  def apply(params: scala.collection.immutable.Map[String, Any]): Any = error("Must be implemented in subclass")
   def bindVariables: List[String] = error("Must be implemented in subclass")
+  def close: Unit = error("Must be implemented in subclass")
   def exprType: Class[_] = this.getClass
   override def toString = sql
 }
