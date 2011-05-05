@@ -14,9 +14,11 @@ object QueryParser extends JavaTokenParsers {
 
   case class Obj(obj: Any, alias: String, join: Any, outerJoin: String)
   case class Col(col: Any, alias: String)
+  case class Cols(distinct: Boolean, cols: List[Col])
   case class Grp(cols: List[Any], having: Any)
   case class Ord(cols: List[Any], asc: Boolean)
-  case class Query(tables: List[Obj], filter: Arr, cols: List[Col], group: Grp, order: List[Ord])
+  case class Query(tables: List[Obj], filter: Arr, cols: List[Col], distinct: Boolean, 
+             group: Grp, order: List[Ord])
   case class Arr(elements: List[Any])
   case class All()
   case class Null()
@@ -76,7 +78,9 @@ object QueryParser extends JavaTokenParsers {
     case e ~ a => Col(e,
       if (a == None) null else a.get)
   }
-  def columns: Parser[List[Col]] = "{" ~> rep1sep(column, ",") <~ "}"
+  def columns: Parser[Cols] = (opt("#") <~ "{") ~ rep1sep(column, ",") <~ "}" ^^ {
+    case d ~ c => Cols(d != None, c) 
+  }
   def group: Parser[Grp] = (("@" ~ "(") ~> rep1sep(expr, ",") <~ ")") ~
     opt(("^" ~ "(") ~> expr <~ ")") ^^ { case g ~ h => Grp(g, if (h == None) null else h.get) }
   def orderAsc: Parser[Ord] = ("#" ~ "(") ~> rep1sep(expr, ",") <~ ")" ^^ (Ord(_, true))
@@ -85,7 +89,8 @@ object QueryParser extends JavaTokenParsers {
   def query: Parser[Any] = objs ~ opt(filter) ~ opt(columns) ~ opt(group) ~ opt(order) ^^ {
     case (t :: Nil) ~ None ~ None ~ None ~ None => t
     case t ~ f ~ c ~ g ~ o => Query(t, if (f == None) null else f.get,
-      if (c == None) null else c.get, if (g == None) null else g.get, if (o == None) null else o.get)
+      if (c == None) null else c.get.cols, if (c == None) false else c.get.distinct,
+      if (g == None) null else g.get, if (o == None) null else o.get)
   }
 
   //operation parsers

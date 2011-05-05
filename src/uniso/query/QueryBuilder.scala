@@ -92,20 +92,33 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
 
   class BinExpr(val op: String, val lop: Expr, val rop: Expr) extends BaseExpr {
-    override def apply() = op match {
-      case "*" => lop * rop
-      case "/" => lop / rop
-      case "+" => lop + rop
-      case "-" => lop - rop
-      case "=" => lop == rop
-      case "!=" => lop != rop
-      case "<" => lop < rop
-      case ">" => lop > rop
-      case "<=" => lop <= rop
-      case ">=" => lop >= rop
-      case "&" => lop & rop
-      case "|" => lop | rop
-      case _ => error("unknown operation " + op)
+    override def apply() = {
+      def selCols(ex: Expr): List[QueryBuilder#ColExpr] = {
+          ex match {
+            case e:SelectExpr => e.cols
+            case e:BinExpr => selCols(e.lop)
+            case e:BracesExpr => selCols(e.expr)
+          }
+      }
+      op match {
+        case "*" => lop * rop
+        case "/" => lop / rop
+        case "+" => if (exprType == classOf[SelectExpr])
+          uniso.query.Query.select(sql, selCols(lop), QueryBuilder.this.thisBindVariables, env)
+        else lop + rop
+        case "-" => if (exprType == classOf[SelectExpr])
+          uniso.query.Query.select(sql, selCols(lop), QueryBuilder.this.thisBindVariables, env)
+        else lop - rop
+        case "=" => lop == rop
+        case "!=" => lop != rop
+        case "<" => lop < rop
+        case ">" => lop > rop
+        case "<=" => lop <= rop
+        case ">=" => lop >= rop
+        case "&" => lop & rop
+        case "|" => lop | rop
+        case _ => error("unknown operation " + op)
+      }
     }
     def sql = op match {
       case "*" => lop.sql + " * " + rop.sql
@@ -169,11 +182,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
 
   class SelectExpr(val tables: List[Table], val filter: List[Expr], val cols: List[ColExpr],
-    group: Expr, order: List[Expr]) extends BaseExpr {
+    val distinct: Boolean, val group: Expr, val order: List[Expr]) extends BaseExpr {
     override def apply() = {
       uniso.query.Query.select(sql, cols, QueryBuilder.this.thisBindVariables, env)
     }
-    val sql = "select " + (if (cols == null) "*" else sqlCols) + " from " + join +
+    val sql = "select " + (if (distinct) "distinct " else "") +
+      (if (cols == null) "*" else sqlCols) + " from " + join +
       (if (filter == null) "" else " where " + where) +
       (if (group == null) "" else " group by " + group.sql) +
       (if (order == null) "" else " order by " + (order map (_.sql)).mkString(" "))
@@ -336,8 +350,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         if (f.length > 0) f else null
       } else null,
       if (q.cols != null) q.cols map { buildInternal(_, COL_CTX).asInstanceOf[ColExpr] } else null,
-      buildInternal(q.group), if (q.order != null) q.order map { buildInternal(_, ORD_CTX) }
-      else null)
+      q.distinct, buildInternal(q.group),
+      if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null)
 
     def buildTable(t: Obj) = t match {
       case Obj(Ident(i), a, j, o) => new Table(i, a, buildJoin(j), o)
@@ -364,14 +378,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         new AssignExpr(n, buildInternal(v, parseCtx))
       //insert
       case BinOp("+", Query(Obj(Ident(t), _, null, null) :: Nil, null, c@(Col(Obj(Ident(_), _,
-        null, null), _) :: l), null, null), Arr(v)) => {
+        null, null), _) :: l), _, null, null), Arr(v)) => {
         val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
         val ex = b.buildInsert(t, c, v)
         this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
       }
       //update
       case BinOp("=", Query(Obj(Ident(t), _, null, null) :: Nil, f, c@(Col(Obj(Ident(_), _,
-        null, null), _) :: l), null, null), Arr(v)) => {
+        null, null), _) :: l), _, null, null), Arr(v)) => {
         val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
         val ex = b.buildUpdate(t, c, v, f)
         this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
@@ -395,7 +409,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           val ex = b.buildInternal(t, TABLE_CTX)
           this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
         }
-        case TABLE_CTX => new SelectExpr(List(buildTable(t)), null, null, null, null)
+        case TABLE_CTX => new SelectExpr(List(buildTable(t)), null, null, false, null, null)
         case _ => buildIdent(t)
       }
       case q: Query => parseCtx match {
@@ -411,9 +425,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         if (!unboundVarsFlag) new UnExpr(op, o) else { unboundVarsFlag = false; null }
       }
       case BinOp(op, lop, rop) => {
-        var l = buildInternal(lop, parseCtx)
+        var l = buildInternal(lop, QUERY_CTX) //enter into query context because of potential union or minus
         if (unboundVarsFlag) { l = null; unboundVarsFlag = false }
-        var r = buildInternal(rop, parseCtx)
+        var r = buildInternal(rop, QUERY_CTX) //enter into query context because of potential union or minus
         if (unboundVarsFlag) { r = null; unboundVarsFlag = false }
         if (l != null && r != null) new BinExpr(op, l, r) else if (op == "&" || op == "|")
           if (l != null) l else if (r != null) r else null
