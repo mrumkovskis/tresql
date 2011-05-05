@@ -425,9 +425,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         if (!unboundVarsFlag) new UnExpr(op, o) else { unboundVarsFlag = false; null }
       }
       case BinOp(op, lop, rop) => {
-        var l = buildInternal(lop, QUERY_CTX) //enter into query context because of potential union or minus
+        //enter into query context because of potential union or minus in the case of ROOT_CTX
+        val ctx = if (parseCtx == ROOT_CTX) QUERY_CTX else parseCtx
+        var l = buildInternal(lop, ctx)
         if (unboundVarsFlag) { l = null; unboundVarsFlag = false }
-        var r = buildInternal(rop, QUERY_CTX) //enter into query context because of potential union or minus
+        var r = buildInternal(rop, ctx)
         if (unboundVarsFlag) { r = null; unboundVarsFlag = false }
         if (l != null && r != null) new BinExpr(op, l, r) else if (op == "&" || op == "|")
           if (l != null) l else if (r != null) r else null
