@@ -39,7 +39,7 @@ class Result private[query] (rs: ResultSet, cols: Vector[Column], reusableStatem
     if (!reusableStatement) st.close
   }
 
-  override def toList = { val l = (this map (r => Row(this.content))).toList; close; l }
+  override def toList = { val l = (this map (r => Row(this.content, this))).toList; close; l }
   
   def content = {
     val b = new scala.collection.mutable.ListBuffer[Any]
@@ -63,11 +63,13 @@ trait RowLike {
   def apply(idx: Int): Any
   def columnCount: Int
   def content: Seq[Any]
+  def column(idx: Int): Column
 }
 
-case class Row(row: Seq[Any]) extends RowLike {
+case class Row(row: Seq[Any], result: Result) extends RowLike {
   def apply(idx: Int) = row(idx)
   def content = row
   def columnCount = row.length
+  def column(idx: Int) = result.column(idx)
 }
 case class Column(val idx: Int, val name: String, private[query] val expr: Expr)
