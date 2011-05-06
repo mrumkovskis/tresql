@@ -69,7 +69,7 @@ object Query {
       if (c.separateQuery) Column(-1, c.aliasOrName, c.col) else {
         i += 1; Column(i, c.aliasOrName, null)
       }
-    }.asInstanceOf[List[Column]]: _*), env.reusableExpr)
+    }: _*), env.reusableExpr)
     env update r
     r
   }
@@ -86,7 +86,7 @@ object Query {
 
   private def statement(sql: String, env: Env) = {
     if (env.reusableExpr)
-      if (env.statement == null) { 
+      if (env.statement == null) {
         val conn = env.conn; val s = conn.prepareStatement(sql); env.update(s); s
       } else env.statement
     else { val conn = env.conn; conn.prepareStatement(sql) }

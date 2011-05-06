@@ -2,8 +2,8 @@ package uniso.query
 
 import java.sql.ResultSet
 
-private[query] class Result(private val rs: ResultSet, private val cols: Vector[Column],
-    private val reusableStatement:Boolean) extends Iterator[Result] {
+class Result private[query] (rs: ResultSet, cols: Vector[Column], reusableStatement: Boolean)
+  extends Iterator[RowLike] with RowLike {
   private[this] val colMap = cols.filter(_.name != null).map(c => (c.name, c)).toMap
   private[this] val row = new Array[Any](cols.length)
   private[this] var hn = true; private[this] var flag = true
@@ -33,14 +33,41 @@ private[query] class Result(private val rs: ResultSet, private val cols: Vector[
   def columnCount = cols.length
   def column(idx: Int) = cols(idx)
   def jdbcResult = rs
-  def close { 
+  def close {
     val st = rs.getStatement
     rs.close
-    if (!reusableStatement) st.close      
+    if (!reusableStatement) st.close
   }
+
+  override def toList = { val l = (this map (r => Row(this.content))).toList; close; l }
+  
+  def content = {
+    val b = new scala.collection.mutable.ListBuffer[Any]
+    var i = 0
+    while (i < columnCount) {
+      b += (this(i) match {
+        case r: Result => r.toList 
+        case x => x 
+      })
+      i += 1
+    }
+    Vector(b: _*)
+  }
+
   /** needs to be overriden since super class implementation calls hasNext method */
   override def toString = getClass.toString + ":" + (cols.mkString(","))
 
 }
 
+trait RowLike {
+  def apply(idx: Int): Any
+  def columnCount: Int
+  def content: Seq[Any]
+}
+
+case class Row(row: Seq[Any]) extends RowLike {
+  def apply(idx: Int) = row(idx)
+  def content = row
+  def columnCount = row.length
+}
 case class Column(val idx: Int, val name: String, private[query] val expr: Expr)
