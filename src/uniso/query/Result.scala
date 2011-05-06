@@ -39,15 +39,15 @@ class Result private[query] (rs: ResultSet, cols: Vector[Column], reusableStatem
     if (!reusableStatement) st.close
   }
 
-  override def toList = { val l = (this map (r => Row(this.content, this))).toList; close; l }
-  
+  override def toList = { val l = (this map (r => Row(this.content))).toList; close; l }
+
   def content = {
     val b = new scala.collection.mutable.ListBuffer[Any]
     var i = 0
     while (i < columnCount) {
       b += (this(i) match {
-        case r: Result => r.toList 
-        case x => x 
+        case r: Result => r.toList
+        case x => x
       })
       i += 1
     }
@@ -56,6 +56,13 @@ class Result private[query] (rs: ResultSet, cols: Vector[Column], reusableStatem
 
   /** needs to be overriden since super class implementation calls hasNext method */
   override def toString = getClass.toString + ":" + (cols.mkString(","))
+
+  case class Row(row: Seq[Any]) extends RowLike {
+    def apply(idx: Int) = row(idx)
+    def content = row
+    def columnCount = row.length
+    def column(idx: Int) = Result.this.column(idx)
+  }
 
 }
 
@@ -66,10 +73,4 @@ trait RowLike {
   def column(idx: Int): Column
 }
 
-case class Row(row: Seq[Any], result: Result) extends RowLike {
-  def apply(idx: Int) = row(idx)
-  def content = row
-  def columnCount = row.length
-  def column(idx: Int) = result.column(idx)
-}
 case class Column(val idx: Int, val name: String, private[query] val expr: Expr)
