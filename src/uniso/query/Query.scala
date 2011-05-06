@@ -1,7 +1,7 @@
 package uniso.query
 
 import java.sql.{ Array => JArray }
-import java.sql.{ Date, Timestamp, PreparedStatement }
+import java.sql.{ Date, Timestamp, PreparedStatement, ResultSet }
 import uniso.query.metadata._
 
 object Query {
@@ -87,9 +87,11 @@ object Query {
   private def statement(sql: String, env: Env) = {
     if (env.reusableExpr)
       if (env.statement == null) {
-        val conn = env.conn; val s = conn.prepareStatement(sql); env.update(s); s
+        val conn = env.conn; val s = conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY,
+                ResultSet.CONCUR_READ_ONLY); env.update(s); s
       } else env.statement
-    else { val conn = env.conn; conn.prepareStatement(sql) }
+    else { val conn = env.conn; conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY,
+                ResultSet.CONCUR_READ_ONLY) }
   }
 
   private def bindVars(st: PreparedStatement, bindVariables: List[Expr]) {
