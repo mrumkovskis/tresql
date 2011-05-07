@@ -40,11 +40,10 @@ object QueryServer extends RestHelper {
   def json(jdbcDriverClass: String, user: String, password: String, //
     expr: String, pars: List[String], writer: Writer) {
     Class.forName(jdbcDriverClass)
-    val md = metadata.JDBCMetaData(user, password)
+    Env update metadata.JDBCMetaData(user, password)
     val conn = Conn()()
-    val env = new Env(Map(), md, conn)
-    Env.metaData(metadata.JDBCMetaData(user, password))
-    Jsonizer.jsonize(Query(expr, pars)(conn), writer)
-    conn.close
+    Env update conn
+    Jsonizer.jsonize(Query(expr, pars), writer)
+    conn close
   }
 }
