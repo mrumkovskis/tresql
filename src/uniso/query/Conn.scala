@@ -6,6 +6,7 @@ import javax.sql.{ DataSource => D }
 
 //TODO should be redesigned!
 trait Conn extends (() => C) {
+
     private[this] lazy val c = initConn
     private[this] lazy val d = initDataSource
 
@@ -34,15 +35,24 @@ trait Conn extends (() => C) {
             case _ => null
         }
     }
-    def init: Any = (System.getProperty("uniso.query.db"), System.getProperty("uniso.query.user"),
-            System.getProperty("uniso.query.password")) match {
+    def init: Any = (System.getProperty(Conn.dbProp), System.getProperty(Conn.usrProp),
+            System.getProperty(Conn.pwdProp)) match {
         case params@(d:String, u:String, p:String) => params
-        case _ => System.getProperty("uniso.query.data.source", "java:/comp/env/jdbc/uniso/query") 
+        case _ => System.getProperty(Conn.dsProp, Conn.dsDefaultName) 
     }
 
 }
 
 object Conn extends (() => Conn) {
+
+    val driverProp = "uniso.query.driver"
+    val dbProp = "uniso.query.db"
+    val usrProp = "uniso.query.user"
+    val pwdProp = "uniso.query.password"
+    val schemaProp = "uniso.query.schema"
+    val dsProp = "uniso.query.data.source"
+
+    val dsDefaultName = "java:/comp/env/jdbc/uniso/query"
 
     def apply() = new Conn {init}
     

@@ -4,6 +4,7 @@ import java.io.{ OutputStreamWriter, CharArrayWriter, Writer, OutputStream }
 import net.liftweb.http.rest._
 import net.liftweb.http._
 import net.liftweb._
+import uniso.query.metadata.JDBCMetaData
 import uniso.query.result._
 import uniso.query._
 
@@ -34,13 +35,20 @@ object QueryServer extends RestHelper {
   }
 
   def json(expr: String, pars: List[String], writer: Writer) { //
-    json("com.sap.dbtech.jdbc.DriverSapDB", "burvis", "burfull2", expr, pars, writer)
+    json(
+      System.getProperty(Conn.driverProp),
+      System.getProperty(Conn.usrProp),
+      System.getProperty(Conn.schemaProp),
+      expr, pars, writer)
   }
 
-  def json(jdbcDriverClass: String, user: String, password: String, //
+  def json(jdbcDriverClass: String, user: String, schema: String, //
     expr: String, pars: List[String], writer: Writer) {
-    Class.forName(jdbcDriverClass)
-    Env update metadata.JDBCMetaData(user, password)
+    // Mulkibas te notiek. Ja jau core satur init kodu, tad kapec ne lidz galam?
+    // TODO Kapec man janorada usr, bet nav janorada pwd?
+    // TODO Kapec man jarupejas par driver class iekrausanu?
+    if (jdbcDriverClass != null) Class.forName(jdbcDriverClass)
+    Env update JDBCMetaData(user, schema)
     val conn = Conn()()
     Env update conn
     Jsonizer.jsonize(Query(expr, pars), writer)
