@@ -9,7 +9,24 @@ import uniso.query._
 object Jsonizer {
   def jsonize(result: Any, buf: Writer) {
     result match {
-      case r: Result => jsonizeResult(r, buf)
+      case r: Result =>
+        var done = false;
+        try {
+          jsonizeResult(r, buf)
+          done = true
+        } finally {
+          try {
+            r.close
+          } catch {
+            case e: Exception => if (done) {
+              throw e
+            } else {
+              // exception while closing result on top of another exception
+              // must not lose the first exception - can not throw
+              // TODO log low priority?
+            }
+          }
+        }
       case a: Seq[_] => jsonizeArray(a, buf)
       case a: Array[_] => jsonizeArray(a, buf)
       case b: Boolean => buf append b.toString
