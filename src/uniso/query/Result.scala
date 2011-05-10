@@ -62,6 +62,11 @@ class Result private[query] (rs: ResultSet, cols: Vector[Column], reusableStatem
     def content = row
     def columnCount = row.length
     def column(idx: Int) = Result.this.column(idx)
+    override def equals(row: Any) = row match {
+      case r:RowLike => this.row == r.content
+      case r:Seq[_] => this.row == r
+      case _ => false
+    }
   }
 
 }
