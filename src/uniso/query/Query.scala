@@ -60,8 +60,7 @@ object Query {
 
   private[query] def select(sql: String, cols: List[QueryBuilder#ColExpr],
     bindVariables: List[Expr], env: Env): Result = {
-    //TODO remove later, for debugging purposes
-    println(sql)
+    Env log sql
     val st = statement(sql, env)
     bindVars(st, bindVariables)
     var i = 0
@@ -75,8 +74,7 @@ object Query {
   }
 
   private[query] def update(sql: String, bindVariables: List[Expr], env: Env) = {
-    //TODO remove later, for debugging purposes
-    println(sql)
+    Env log sql
     val st = statement(sql, env)
     bindVars(st, bindVariables)
     val r = st.executeUpdate
@@ -101,6 +99,7 @@ object Query {
         case n: BigDecimal => st.setBigDecimal(idx, n.bigDecimal)
         case d: Date => st.setDate(idx, d)
         case dt: Timestamp => st.setTimestamp(idx, dt)
+        case d: java.util.Date => st.setDate(idx, new Date(d.getTime))
         case b: Boolean => st.setBoolean(idx, b)
         case o => st.setObject(idx, o)
       }
