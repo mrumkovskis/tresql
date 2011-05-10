@@ -51,19 +51,26 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       if (!QueryBuilder.this.unboundVarsFlag) QueryBuilder.this.unboundVarsFlag =
         !(env contains name)
     }
-    if (env.reusableExpr || env.contains(name)) QueryBuilder.this._thisBindVariables += this
     QueryBuilder.this._bindVariables += name
     override def apply() = env(name)
-    def sql = "?"
+    var binded = false
+    def sql = {
+      if (!binded) { QueryBuilder.this._thisBindVariables += this; binded = true }
+      "?"
+    }
+    override def toString = if (env contains name) name + " = " + env(name) else name
   }
 
   class ResExpr(val nr: Int, val col: Any) extends Expr {
-    QueryBuilder.this._thisBindVariables += this
     override def apply() = col match {
       case c: String => env(nr)(c)
       case c: Int => env(nr)(c)
     }
-    def sql = "?"
+    var binded = false
+    def sql = {
+      if (!binded) { QueryBuilder.this._thisBindVariables += this; binded = true }
+      "?"
+    }
   }
 
   class AssignExpr(val variable: String, val value: Expr) extends BaseExpr {
@@ -94,11 +101,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   class BinExpr(val op: String, val lop: Expr, val rop: Expr) extends BaseExpr {
     override def apply() = {
       def selCols(ex: Expr): List[QueryBuilder#ColExpr] = {
-          ex match {
-            case e:SelectExpr => e.cols
-            case e:BinExpr => selCols(e.lop)
-            case e:BracesExpr => selCols(e.expr)
-          }
+        ex match {
+          case e: SelectExpr => e.cols
+          case e: BinExpr => selCols(e.lop)
+          case e: BracesExpr => selCols(e.expr)
+        }
       }
       op match {
         case "*" => lop * rop
@@ -282,8 +289,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       "(" + cols.map(_.sql).mkString(",") + ")" +
       " values (" + vals.map(_.sql).mkString(",") + ")"
   }
-  class UpdateExpr(table: IdentExpr, val cols: List[IdentExpr], val vals: List[Expr],
-    filter: List[Expr]) extends DeleteExpr(table, filter) {
+  class UpdateExpr(table: IdentExpr, filter: List[Expr], val cols: List[IdentExpr],
+    val vals: List[Expr]) extends DeleteExpr(table, filter) {
     if (cols.length != vals.length) error("update statement columns and values count differ: " +
       cols.length + "," + vals.length)
     override protected def _sql = "update " + table.sql + " set " +
@@ -331,12 +338,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     },
       vals map { buildInternal(_) })
   }
-  private def buildUpdate(table: List[String], cols: List[Col], vals: List[Any], filter: Arr) = {
-    new UpdateExpr(new IdentExpr(table, null), cols map { c =>
-      new IdentExpr(c.col.asInstanceOf[Obj].obj.asInstanceOf[Ident].ident, null)
-    },
-      vals map { buildInternal(_) },
-      if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null)
+  private def buildUpdate(table: List[String], filter: Arr, cols: List[Col], vals: List[Any]) = {
+    new UpdateExpr(new IdentExpr(table, null),
+      if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null,
+      cols map { c => new IdentExpr(c.col.asInstanceOf[Obj].obj.asInstanceOf[Ident].ident, null) },
+      vals map { buildInternal(_) })
   }
   private def buildDelete(table: List[String], filter: Arr) = {
     new DeleteExpr(new IdentExpr(table, null),
@@ -387,7 +393,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case BinOp("=", Query(Obj(Ident(t), _, null, null) :: Nil, f, c@(Col(Obj(Ident(_), _,
         null, null), _) :: l), _, null, null), Arr(v)) => {
         val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-        val ex = b.buildUpdate(t, c, v, f)
+        val ex = b.buildUpdate(t, f, c, v)
         this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
       }
       //delete
