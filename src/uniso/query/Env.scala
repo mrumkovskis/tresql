@@ -2,16 +2,16 @@ package uniso.query
 
 /* Environment for expression building and execution */
 class Env(private val provider: EnvProvider, private val resourceProvider: ResourceProvider,
-        val reusableExpr: Boolean) extends (String => Any) with MetaData {
+  val reusableExpr: Boolean) extends (String => Any) with MetaData {
 
   private var providedEnvs: List[Env] = Nil
-  
+
   if (provider != null) {
-    def rootEnv(e:Env): Env = if (e.provider == null) e else rootEnv(e.provider.env)
+    def rootEnv(e: Env): Env = if (e.provider == null) e else rootEnv(e.provider.env)
     val root = rootEnv(this)
     root.providedEnvs = this :: root.providedEnvs
   }
-  
+
   private val vars: ThreadLocal[scala.collection.mutable.Map[String, Any]] = new ThreadLocal
   private val res: ThreadLocal[Result] = new ThreadLocal
   private val st: ThreadLocal[java.sql.PreparedStatement] = new ThreadLocal
@@ -26,14 +26,14 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
     case e: Expr => e()
     case x => x
   }
-  
+
   override implicit def conn = if (provider != null) provider.env.conn else resourceProvider.conn
-  
+
   def dbName = if (provider != null) provider.env.dbName else resourceProvider.metaData.dbName
-  
+
   override def table(name: String)(implicit conn: java.sql.Connection) = if (provider != null)
     provider.env.table(name) else resourceProvider.metaData.table(name)(conn)
-    
+
   def apply(rIdx: Int) = {
     var i = 0
     var e: Env = this
@@ -43,24 +43,24 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
     }
     if (i == rIdx && e != null) e.res.get else error("Result not available at index: " + rIdx)
   }
-  
+
   def statement = this.st.get
-  
+
   def contains(name: String): Boolean = if (provider != null) provider.env.contains(name)
   else vars.get.contains(name)
-  
+
   def update(name: String, value: Any) {
     if (provider != null) provider.env(name) = value else this.vars.get()(name) = value
   }
-  
+
   def update(vars: Map[String, Any]) {
     if (provider != null) provider.env.update(vars)
     else this.vars set scala.collection.mutable.Map(vars.toList: _*)
   }
-  
+
   def update(r: Result) = this.res set r
   def update(st: java.sql.PreparedStatement) = this.st set st
-  
+
   def closeStatement {
     val st = this.st.get
     if (st != null) {
@@ -69,10 +69,11 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
     }
     this.providedEnvs foreach (_.closeStatement)
   }
-  
+
 }
 
 object Env extends ResourceProvider {
+  private var logger: (String, Int) => Unit = null
   //meta data object must be thread safe!
   private var md: MetaData = null
   private val threadConn: ThreadLocal[java.sql.Connection] = new ThreadLocal
@@ -87,6 +88,9 @@ object Env extends ResourceProvider {
   def metaData = md
   def update(md: MetaData) = this.md = md
   def update(conn: java.sql.Connection) = this.threadConn set conn
+  def update(logger: (String, Int) => Unit) = this.logger = logger
+  def log(msg: String, level: Int): Unit = if (logger != null) logger(msg, level)
+  def log(msg: String): Unit = log(msg, 0)
 }
 
 trait EnvProvider {
