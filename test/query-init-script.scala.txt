@@ -12,6 +12,7 @@ val conn = Conn()()
 
 Env update md
 Env update conn
+Env update ((msg, level) => println (msg))
 
 var s = """per_persona p[p.kla_pilsoniba_id pils, p.kla_valstiskas_piederibas_id valsts]kla_kodifikatora_ieraksts?[?, ?]
         {p.id, vards, uzvards, |mkString(per_auto_kategorija/kla_kodifikatora_ieraksts[per_persona_id = :1(0)]{kods}, "", ","),
