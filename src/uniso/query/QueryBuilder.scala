@@ -16,6 +16,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   val ORD_CTX = "ORD"
   val GROUP_CTX = "GROUP"
   val HAVING_CTX = "HAVING"
+  val VALUES_CTX = "VALUES"
 
   private def this(env: Env) = this(env, 0, 0)
 
@@ -336,13 +337,13 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     new InsertExpr(new IdentExpr(table, null), cols map { c =>
       new IdentExpr(c.col.asInstanceOf[Obj].obj.asInstanceOf[Ident].ident, null)
     },
-      vals map { buildInternal(_) })
+      vals map { buildInternal(_, VALUES_CTX) })
   }
   private def buildUpdate(table: List[String], filter: Arr, cols: List[Col], vals: List[Any]) = {
     new UpdateExpr(new IdentExpr(table, null),
       if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null,
       cols map { c => new IdentExpr(c.col.asInstanceOf[Obj].obj.asInstanceOf[Ident].ident, null) },
-      vals map { buildInternal(_) })
+      vals map { buildInternal(_, VALUES_CTX) })
   }
   private def buildDelete(table: List[String], filter: Arr) = {
     new DeleteExpr(new IdentExpr(table, null),
@@ -384,23 +385,32 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         new AssignExpr(n, buildInternal(v, parseCtx))
       //insert
       case BinOp("+", Query(Obj(Ident(t), _, null, null) :: Nil, null, c@(Col(Obj(Ident(_), _,
-        null, null), _) :: l), _, null, null), Arr(v)) => {
-        val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-        val ex = b.buildInsert(t, c, v)
-        this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
+        null, null), _) :: l), _, null, null), Arr(v)) => parseCtx match {
+        case ROOT_CTX => {
+          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+          val ex = b.buildInsert(t, c, v)
+          this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex  
+        }
+        case _ => buildInsert(t, c, v)
       }
       //update
       case BinOp("=", Query(Obj(Ident(t), _, null, null) :: Nil, f, c@(Col(Obj(Ident(_), _,
-        null, null), _) :: l), _, null, null), Arr(v)) => {
-        val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-        val ex = b.buildUpdate(t, f, c, v)
-        this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
+        null, null), _) :: l), _, null, null), Arr(v)) => parseCtx match {
+        case ROOT_CTX => {
+          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+          val ex = b.buildUpdate(t, f, c, v)
+          this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
+        }
+        case _ => buildUpdate(t, f, c, v)
       }
       //delete
-      case BinOp("-", Obj(Ident(t), _, null, null), f@Arr(_)) => {
-        val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-        val ex = b.buildDelete(t, f)
-        this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
+      case BinOp("-", Obj(Ident(t), _, null, null), f@Arr(_)) => parseCtx match {
+        case ROOT_CTX => {
+          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+          val ex = b.buildDelete(t, f)
+          this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
+        }
+        case _ => buildDelete(t, f)
       }
       //child query
       case UnOp("|", oper) => {
