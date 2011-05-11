@@ -89,8 +89,7 @@ object Env extends ResourceProvider {
   def update(md: MetaData) = this.md = md
   def update(conn: java.sql.Connection) = this.threadConn set conn
   def update(logger: (String, Int) => Unit) = this.logger = logger
-  def log(msg: String, level: Int): Unit = if (logger != null) logger(msg, level)
-  def log(msg: String): Unit = log(msg, 0)
+  def log(msg: String, level: Int = 0): Unit = if (logger != null) logger(msg, level)
 }
 
 trait EnvProvider {
