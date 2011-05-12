@@ -96,7 +96,7 @@ object QueryParser extends JavaTokenParsers {
   //operation parsers
   def unaryExpr = negation | not | operand | sep
   def mulDiv: Parser[Any] = unaryExpr ~ rep("*" ~ unaryExpr | "/" ~ unaryExpr) ^^ (p => binOp(p))
-  def plusMinus: Parser[Any] = mulDiv ~ rep("+" ~ mulDiv | "-" ~ mulDiv) ^^ (p => binOp(p))
+  def plusMinus: Parser[Any] = mulDiv ~ rep(("++" | "+" | "-") ~ mulDiv) ^^ (p => binOp(p))
   def comp: Parser[Any] = plusMinus ~
     opt(("<=" | ">=" | "<" | ">" | "!=" | "=" | "~") ~ plusMinus) ^^ {
       case l ~ None => l
