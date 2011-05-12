@@ -74,9 +74,9 @@ object QueryParser extends JavaTokenParsers {
       else a.get, if (b != None) "r" else if (d != None) "l" else null)
     }
   def objs: Parser[List[Obj]] = rep1(obj)
-  def column: Parser[Col] = expr ~ opt(stringLiteral) ^^ {
-    case e ~ a => Col(e,
-      if (a == None) null else a.get)
+  def column: Parser[Col] = expr ~ opt(stringLiteral | qualifiedIdent) ^^ {
+    case e ~ a => Col(e, if (a == None) null else a.get match 
+            {case Ident(i) => i.mkString; case s => "\"" + s + "\""})
   }
   def columns: Parser[Cols] = (opt("#") <~ "{") ~ rep1sep(column, ",") <~ "}" ^^ {
     case d ~ c => Cols(d != None, c) 

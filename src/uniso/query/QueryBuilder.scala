@@ -266,14 +266,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   class ColExpr(val col: Expr, val alias: String) extends Expr {
     val separateQuery = QueryBuilder.this.separateQueryFlag
     def aliasOrName = if (alias != null) alias else col match {
-      case IdentExpr(n, _) => n(n.length - 1)
+      case IdentExpr(n, a) => if (a == null) n(n.length - 1) else a
       case _ => null
     }
-    def sql = col.sql + (if (alias != null) " \"" + alias + "\"" else "")
-    override def toString = col.toString + (if (alias != null) " \"" + alias + "\"" else "")
+    def sql = col.sql + (if (alias != null) " " + alias else "")
+    override def toString = col.toString + (if (alias != null) " " + alias else "")
   }
   case class IdentExpr(val name: List[String], val alias: String) extends Expr {
-    def sql = name.mkString(".") + (if (alias == null) "" else " \"" + alias + "\"")
+    def sql = name.mkString(".") + (if (alias == null) "" else " " + alias)
     def nameStr = name.mkString(".")
     def aliasOrName = if (alias != null) alias else nameStr
   }
