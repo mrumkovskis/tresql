@@ -193,7 +193,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
 
   class SelectExpr(val tables: List[Table], val filter: List[Expr], val cols: List[ColExpr],
-    val distinct: Boolean, val group: Expr, val order: List[Expr]) extends BaseExpr {
+    val distinct: Boolean, val group: Expr, val order: List[Expr],
+    offset: Int, limit: Int) extends BaseExpr {
     override def apply() = {
       uniso.query.Query.select(sql, cols, QueryBuilder.this.thisBindVariables, env)
     }
@@ -201,7 +202,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       (if (cols == null) "*" else sqlCols) + " from " + join +
       (if (filter == null) "" else " where " + where) +
       (if (group == null) "" else " group by " + group.sql) +
-      (if (order == null) "" else " order by " + (order map (_.sql)).mkString(" "))
+      (if (order == null) "" else " order by " + (order map (_.sql)).mkString(", ")) +
+      (if (offset == -1) "" else " offset " + offset) +
+      (if (limit == -1) "" else " limit " + limit)
     def sqlCols = cols.filter(!_.separateQuery).map(_.sql).mkString(",")
     def join = tables match {
       case t :: Nil => t.sqlName
@@ -361,7 +364,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       } else null,
       if (q.cols != null) q.cols map { buildInternal(_, COL_CTX).asInstanceOf[ColExpr] } else null,
       q.distinct, buildInternal(q.group),
-      if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null)
+      if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null, q.offset, q.limit)
 
     def buildTable(t: Obj) = t match {
       case Obj(Ident(i), a, j, o) => new Table(i, a, buildJoin(j), o)
@@ -388,7 +391,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         new AssignExpr(n, buildInternal(v, parseCtx))
       //insert
       case BinOp("+", Query(Obj(Ident(t), _, null, null) :: Nil, null, c@(Col(Obj(Ident(_), _,
-        null, null), _) :: l), _, null, null), Arr(v)) => parseCtx match {
+        null, null), _) :: l), _, null, null, -1, -1), Arr(v)) => parseCtx match {
         case ROOT_CTX => {
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildInsert(t, c, v)
@@ -398,7 +401,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }
       //update
       case BinOp("=", Query(Obj(Ident(t), _, null, null) :: Nil, f, c@(Col(Obj(Ident(_), _,
-        null, null), _) :: l), _, null, null), Arr(v)) => parseCtx match {
+        null, null), _) :: l), _, null, null, -1, -1), Arr(v)) => parseCtx match {
         case ROOT_CTX => {
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildUpdate(t, f, c, v)
@@ -425,10 +428,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case t: Obj => parseCtx match {
         case ROOT_CTX => {
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-          val ex = b.buildInternal(t, TABLE_CTX)
+          val ex = b.buildInternal(t, QUERY_CTX)
           this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
         }
-        case TABLE_CTX => new SelectExpr(List(buildTable(t)), null, null, false, null, null)
+        case QUERY_CTX => new SelectExpr(List(buildTable(t)), null, null, false, null, null, -1, -1)
+        case TABLE_CTX => new SelectExpr(List(buildTable(t)), null, null, false, null, null, -1, -1)
         case _ => buildIdent(t)
       }
       case q: Query => parseCtx match {

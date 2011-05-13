@@ -18,7 +18,7 @@ object QueryParser extends JavaTokenParsers {
   case class Grp(cols: List[Any], having: Any)
   case class Ord(cols: List[Any], asc: Boolean)
   case class Query(tables: List[Obj], filter: Arr, cols: List[Col], distinct: Boolean, 
-             group: Grp, order: List[Ord])
+             group: Grp, order: List[Ord], offset: Int, limit: Int)
   case class Arr(elements: List[Any])
   case class All()
   case class Null()
@@ -81,16 +81,21 @@ object QueryParser extends JavaTokenParsers {
   def columns: Parser[Cols] = (opt("#") <~ "{") ~ rep1sep(column, ",") <~ "}" ^^ {
     case d ~ c => Cols(d != None, c) 
   }
-  def group: Parser[Grp] = (("@" ~ "(") ~> rep1sep(expr, ",") <~ ")") ~
+  def group: Parser[Grp] = ("(" ~> rep1sep(expr, ",") <~ ")") ~
     opt(("^" ~ "(") ~> expr <~ ")") ^^ { case g ~ h => Grp(g, if (h == None) null else h.get) }
   def orderAsc: Parser[Ord] = ("#" ~ "(") ~> rep1sep(expr, ",") <~ ")" ^^ (Ord(_, true))
   def orderDesc: Parser[Ord] = ("~#" ~ "(") ~> rep1sep(expr, ",") <~ ")" ^^ (Ord(_, false))
   def order: Parser[List[Ord]] = rep1(orderAsc | orderDesc)
-  def query: Parser[Any] = objs ~ opt(filter) ~ opt(columns) ~ opt(group) ~ opt(order) ^^ {
-    case (t :: Nil) ~ None ~ None ~ None ~ None => t
-    case t ~ f ~ c ~ g ~ o => Query(t, if (f == None) null else f.get,
+  def offsetLimit: Parser[(Int, Int)] = ("@" ~ "(") ~> "[0-9]+".r ~ opt("[0-9]+".r) <~ ")" ^^ {
+    case o ~ l => if (l == None) (-1, o.toInt) else (o.toInt, l.get.toInt)
+  }
+  def query: Parser[Any] = objs ~ opt(filter) ~ opt(columns) ~ opt(group) ~ opt(order) ~ 
+      opt(offsetLimit) ^^ {
+    case (t :: Nil) ~ None ~ None ~ None ~ None ~ None => t
+    case t ~ f ~ c ~ g ~ o ~ l => Query(t, if (f == None) null else f.get,
       if (c == None) null else c.get.cols, if (c == None) false else c.get.distinct,
-      if (g == None) null else g.get, if (o == None) null else o.get)
+      if (g == None) null else g.get, if (o == None) null else o.get,
+      if (l == None) -1 else l.get._1, if (l == None) -1 else l.get._2)
   }
 
   //operation parsers

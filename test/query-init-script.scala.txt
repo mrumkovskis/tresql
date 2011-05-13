@@ -4,6 +4,7 @@ set JAVA_OPTS=-Djdbc.drivers=com.sap.dbtech.jdbc.DriverSapDB -Duniso.query.db=jd
 :cp class
 :cp lib/sapdbc.jar
 
+Class.forName("oracle.jdbc.OracleDriver")
 Class.forName("com.sap.dbtech.jdbc.DriverSapDB")
 import uniso.query._
 import uniso.query.result._
