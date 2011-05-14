@@ -18,6 +18,7 @@ persons(id(pk), name, surname)
 langs(id(pk), language, person_id(ref(persons.id)))
 eds(id(pk), program, date_from, person_id(ref(persons.id))
 
+Example 1
 Retrieve persons with their respective ids - 1, 2, 3, their language knowledge and education
 acquired in this millenium:
 
@@ -40,6 +41,7 @@ acquired in this millenium:
   Iterating through the person result will reexecute statement for languages and educations for each
   person row.
   
+Example 2
 Retrieve all the languages and their respective persons:
   
   langs l/persons p{l.id, l.language, p.id, p.name, p.surname}
