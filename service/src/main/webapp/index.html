@@ -1,0 +1,41 @@
+<!DOCTYPE HTML SYSTEM>
+<html>
+<head>
+  <title>Query</title>
+</head>
+
+<body class="lift:content_id=main">
+  <div id="main" class="lift:surround?with=default;at=content">
+  <div class="lift:AjaxQuery">
+  <form class="lift:form.ajax" action="/query">
+    <p>
+      <textarea name="query" id="query" rows="20" cols="80" />
+    </p>
+    <div id="params">
+    <table>
+      <tr>
+        <td>Par1</td>
+        <td><input type="text" name="par1" /></td>
+      </tr>
+      <tr>
+        <td>Par2</td>
+        <td><input type="text" name="par2" /></td>
+      </tr>
+      <tr>
+        <td>Par3</td>
+        <td><input type="text" name="par3" /></td>
+      </tr>
+    </table>
+    </div>
+    <p>
+      <button id="refresh-pars">Refresh parameters</button>
+      <button id="execute-query">Execute query</button>
+      <input id="hideme" type="hidden" value="true" />
+    </p>
+  </form>
+  </div>
+  <div id="result"></div>
+  <div id="sql" />
+  </div>
+</body>
+</html>

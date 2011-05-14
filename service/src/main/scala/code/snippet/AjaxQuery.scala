@@ -2,43 +2,62 @@ package code
 package snippet
 
 import net.liftweb.http.js._
+import net.liftweb.http.js.JsCmd._
 import net.liftweb.http._
 import net.liftweb.util.Helpers._
 import net.liftweb._
+import scala.collection.mutable.Map
+import uniso.query.Query
+import QueryServer.{ P_, Plen }
 
 object AjaxQuery {
   def render = {
     var queryString = ""
-    var par1 = ""
-    var par2 = ""
-    var par3 = ""
-    var par4 = ""
-    var par5 = ""
+    var expectedPars = List("p_1", "p_2", "p_3")
+    val pars = Map("p_1" -> "", "p_2" -> "", "p_3" -> "")
     var resultString = ""
+    var tableElement: IdMemoizeTransform = null
+    var doQuery = false
 
     def process(): JsCmd = {
-      S.notice("Query: " + queryString)
-      S.notice("Par1: " + par1)
-      S.notice("Par2: " + par2)
-      S.notice("Par3: " + par3)
-      S.notice("Par4: " + par4)
-      S.notice("Par5: " + par5)
       try {
-        resultString = //
-          QueryServer.json(queryString, List(par1, par2, par3, par4, par5))
-        S.notice("RESULT: " + resultString)
+        expectedPars = QueryServer.bindVariables(queryString).map(P_ + _)
+        if (doQuery) {
+          S.notice("QUERY: " + queryString)
+          val queryPars =
+            (for (p <- expectedPars) yield {
+              if (!(pars contains p)) pars(p) = ""
+              p.substring(Plen) -> pars(p)
+            }).toMap
+          println("PARS: " + queryPars)
+          S.notice("PARS: " + queryPars)
+          resultString = QueryServer.json(queryString, queryPars)
+          S.notice("RESULT: " + resultString)
+        }
       } catch {
-        case e: Exception => S.notice("ERROR: " + e.toString)
+        case e: Exception => e.printStackTrace; S.notice("ERROR: " + e.toString)
       }
+      SHtml.ajaxInvoke(tableElement.setHtml _)._2.cmd
     }
+
+    def setDoQuery(b: Boolean) = { doQuery = b; JsCmds.Noop }
 
     "#result *" #> resultString &
       "name=query" #> SHtml.textarea(queryString, queryString = _) &
-      "name=par1" #> SHtml.text(par1, par1 = _) &
-      "name=par2" #> SHtml.text(par2, par2 = _) &
-      "name=par3" #> SHtml.text(par3, par3 = _) &
-      "name=par4" #> SHtml.text(par4, par4 = _) &
-      "name=par5" #> SHtml.text(par5, par5 = _) &
-      "#hideme" #> SHtml.hidden(process)
+      "#params" #> SHtml.idMemoize(table =>
+        "table" #>
+          <table>{
+            tableElement = table
+            expectedPars.map(p =>
+              <tr>
+                <td>{ p.substring(Plen) }</td>
+                <td>{
+                  SHtml.text(if (pars.contains(p)) pars(p) else "", pars(p) = _)
+                }</td>
+              </tr>)
+          }</table>) &
+      "#refresh-pars [onclick]" #> SHtml.ajaxInvoke(() => setDoQuery(false)) &
+      "#execute-query [onclick]" #> SHtml.ajaxInvoke(() => setDoQuery(true)) &
+      "#hideme" #> S.formGroup(1000) { SHtml.hidden(process) }
   }
 }
