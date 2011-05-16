@@ -17,8 +17,8 @@ object QueryParser extends JavaTokenParsers {
   case class Cols(distinct: Boolean, cols: List[Col])
   case class Grp(cols: List[Any], having: Any)
   case class Ord(cols: List[Any], asc: Boolean)
-  case class Query(tables: List[Obj], filter: Arr, cols: List[Col], distinct: Boolean, 
-             group: Grp, order: List[Ord], offset: Int, limit: Int)
+  case class Query(tables: List[Obj], filter: Arr, cols: List[Col], distinct: Boolean,
+    group: Grp, order: List[Ord], offset: Int, limit: Int)
   case class Arr(elements: List[Any])
   case class All()
   case class Null()
@@ -75,11 +75,10 @@ object QueryParser extends JavaTokenParsers {
     }
   def objs: Parser[List[Obj]] = rep1(obj)
   def column: Parser[Col] = expr ~ opt(stringLiteral | qualifiedIdent) ^^ {
-    case e ~ a => Col(e, if (a == None) null else a.get match 
-            {case Ident(i) => i.mkString; case s => "\"" + s + "\""})
+    case e ~ a => Col(e, if (a == None) null else a.get match { case Ident(i) => i.mkString; case s => "\"" + s + "\"" })
   }
   def columns: Parser[Cols] = (opt("#") <~ "{") ~ rep1sep(column, ",") <~ "}" ^^ {
-    case d ~ c => Cols(d != None, c) 
+    case d ~ c => Cols(d != None, c)
   }
   def group: Parser[Grp] = ("(" ~> rep1sep(expr, ",") <~ ")") ~
     opt(("^" ~ "(") ~> expr <~ ")") ^^ { case g ~ h => Grp(g, if (h == None) null else h.get) }
@@ -89,14 +88,14 @@ object QueryParser extends JavaTokenParsers {
   def offsetLimit: Parser[(Int, Int)] = ("@" ~ "(") ~> "[0-9]+".r ~ opt("[0-9]+".r) <~ ")" ^^ {
     case o ~ l => if (l == None) (-1, o.toInt) else (o.toInt, l.get.toInt)
   }
-  def query: Parser[Any] = objs ~ opt(filter) ~ opt(columns) ~ opt(group) ~ opt(order) ~ 
-      opt(offsetLimit) ^^ {
-    case (t :: Nil) ~ None ~ None ~ None ~ None ~ None => t
-    case t ~ f ~ c ~ g ~ o ~ l => Query(t, if (f == None) null else f.get,
-      if (c == None) null else c.get.cols, if (c == None) false else c.get.distinct,
-      if (g == None) null else g.get, if (o == None) null else o.get,
-      if (l == None) -1 else l.get._1, if (l == None) -1 else l.get._2)
-  }
+  def query: Parser[Any] = objs ~ opt(filter) ~ opt(columns) ~ opt(group) ~ opt(order) ~
+    opt(offsetLimit) ^^ {
+      case (t :: Nil) ~ None ~ None ~ None ~ None ~ None => t
+      case t ~ f ~ c ~ g ~ o ~ l => Query(t, if (f == None) null else f.get,
+        if (c == None) null else c.get.cols, if (c == None) false else c.get.distinct,
+        if (g == None) null else g.get, if (o == None) null else o.get,
+        if (l == None) -1 else l.get._1, if (l == None) -1 else l.get._2)
+    }
 
   //operation parsers
   def unaryExpr = negation | not | operand | sep
@@ -113,11 +112,11 @@ object QueryParser extends JavaTokenParsers {
   def expr: Parser[Any] = opt(comment) ~> logical <~ opt(comment)
 
   def exprList: Parser[Any] = repsep(expr, ",") ^^ {
-    case e::Nil => e
+    case e :: Nil => e
     case l => Arr(l)
   }
-  
-  def parseAll(expr:String):ParseResult[Any] = {
+
+  def parseAll(expr: String): ParseResult[Any] = {
     parseAll(exprList, expr)
   }
 
@@ -130,6 +129,40 @@ object QueryParser extends JavaTokenParsers {
     case (_ ~ e) :: Nil => e
     case (_ ~ e) :: (l@((o ~ _) :: _)) => BinOp(o, e, binOp(l))
     case _ => error("Knipis")
+  }
+
+  def bindVariables(ex: String): List[String] = {
+    var bindIdx = 0
+    def bindVariables(parsedExpr: Any, vars: scala.collection.mutable.ListBuffer[String]): Any =
+      parsedExpr match {
+        case Variable("?", _) => bindIdx += 1; vars += bindIdx.toString
+        case Variable(n, _) => vars += n
+        case Fun(_, pars) => pars foreach (bindVariables(_, vars))
+        case UnOp(_, operand) => bindVariables(operand, vars)
+        case BinOp(_, lop, rop) => bindVariables(lop, vars); bindVariables(rop, vars)
+        case Obj(t, _, j, _) => bindVariables(j, vars); bindVariables(t, vars)
+        case Col(c, _) => bindVariables(c, vars)
+        case Cols(_, cols) => cols foreach (bindVariables(_, vars))
+        case Grp(cols, hv) => cols foreach (bindVariables(_, vars)); bindVariables(hv, vars)
+        case Ord(cols, _) => cols foreach (bindVariables(_, vars))
+        case Query(objs, filter, cols, _, gr, ord, _, _) => {
+          objs foreach (bindVariables(_, vars)); bindVariables(filter, vars)
+          if (cols != null) cols foreach (bindVariables(_, vars))
+          bindVariables(gr, vars);
+          if (ord != null) ord foreach (bindVariables(_, vars))
+        }
+        case Arr(els) => els foreach (bindVariables(_, vars))
+        case _ =>
+      }
+    parseAll(ex) match {
+      case Success(r, _) => {
+        val vars = new scala.collection.mutable.ListBuffer[String]
+        bindVariables(r, vars)
+        vars.toList
+      }
+      case x => error(x.toString)
+    }
+
   }
 
   def main(args: Array[String]) {
