@@ -12,9 +12,9 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
     root.providedEnvs = this :: root.providedEnvs
   }
 
-  private val vars: ThreadLocal[scala.collection.mutable.Map[String, Any]] = new ThreadLocal
-  private val res: ThreadLocal[Result] = new ThreadLocal
-  private val st: ThreadLocal[java.sql.PreparedStatement] = new ThreadLocal
+  private val vars = new ThreadLocal[scala.collection.mutable.Map[String, Any]]
+  private val res = new ThreadLocal[Result]
+  private val st = new ThreadLocal[java.sql.PreparedStatement]
 
   def this(provider: EnvProvider, reusableExpr: Boolean) = this(provider, null, reusableExpr)
   def this(vars: Map[String, Any], resourceProvider: ResourceProvider, reusableExpr: Boolean) = {
@@ -76,7 +76,8 @@ object Env extends ResourceProvider {
   private var logger: (String, Int) => Unit = null
   //meta data object must be thread safe!
   private var md: MetaData = null
-  private val threadConn: ThreadLocal[java.sql.Connection] = new ThreadLocal
+  private val threadConn = new ThreadLocal[java.sql.Connection]
+  var motherConn: java.sql.Connection = null
   def apply(params: Map[String, String], reusableExpr: Boolean): Env = {
     new Env(params mapValues (Query(_)), Env, reusableExpr)
   }
@@ -84,7 +85,7 @@ object Env extends ResourceProvider {
     if (parseParams) apply(params.asInstanceOf[Map[String, String]], reusableExpr)
     else new Env(params, Env, reusableExpr)
   }
-  def conn = threadConn.get
+  def conn = { val c = threadConn.get; if (c == null) motherConn else c }
   def metaData = md
   def update(md: MetaData) = this.md = md
   def update(conn: java.sql.Connection) = this.threadConn set conn
