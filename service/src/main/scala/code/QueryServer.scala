@@ -62,22 +62,6 @@ object QueryServer extends RestHelper {
   }
 
   def bindVariables(expr: String): List[String] = { //
-    bindVariables(
-      System.getProperty(Conn.driverProp),
-      System.getProperty(Conn.usrProp),
-      System.getProperty(Conn.schemaProp),
-      expr)
-  }
-
-  def bindVariables(jdbcDriverClass: String, user: String, schema: String, //
-    expr: String) = {
-    // TODO Kakova hrena lai uzzinatu bind variables man kaut kas jainicialize?
-    if (jdbcDriverClass != null) Class.forName(jdbcDriverClass)
-    Env update JDBCMetaData(user, schema)
-    val conn = Conn()()
-    Env update conn
-    val parsed = Query.build(expr)
-    conn.close
-    parsed.bindVariables
+    QueryParser.bindVariables(expr)
   }
 }

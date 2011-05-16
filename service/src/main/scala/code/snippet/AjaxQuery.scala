@@ -1,14 +1,13 @@
 package code
 package snippet
 
-import net.liftweb.http.js._
+import QueryServer.{ P_, Plen }
 import net.liftweb.http.js.JsCmd._
+import net.liftweb.http.js._
 import net.liftweb.http._
 import net.liftweb.util.Helpers._
 import net.liftweb._
 import scala.collection.mutable.Map
-import uniso.query.Query
-import QueryServer.{ P_, Plen }
 
 object AjaxQuery {
   def render = {
