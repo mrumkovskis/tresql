@@ -21,11 +21,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private def this(env: Env) = this(env, 0, 0)
 
   //bind variables for jdbc prepared statement 
-  private val _thisBindVariables = mutable.ListBuffer[Expr]()
-  private lazy val thisBindVariables = _thisBindVariables.toList
-
-  //bind variables, NOT included ResExpr
-  private val _bindVariables = mutable.ListBuffer[String]()
+  private val _bindVariables = mutable.ListBuffer[Expr]()
   private lazy val bindVariables = _bindVariables.toList
 
   //used internally while building expression, used for optional binding
@@ -52,11 +48,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       if (!QueryBuilder.this.unboundVarsFlag) QueryBuilder.this.unboundVarsFlag =
         !(env contains name)
     }
-    QueryBuilder.this._bindVariables += name
     override def apply() = env(name)
     var binded = false
     def sql = {
-      if (!binded) { QueryBuilder.this._thisBindVariables += this; binded = true }
+      if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       "?"
     }
     override def toString = if (env contains name) name + " = " + env(name) else name
@@ -69,7 +64,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     var binded = false
     def sql = {
-      if (!binded) { QueryBuilder.this._thisBindVariables += this; binded = true }
+      if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       "?"
     }
   }
@@ -112,12 +107,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case "*" => lop * rop
         case "/" => lop / rop
         case "++" => uniso.query.Query.select(sql, selCols(lop), 
-          QueryBuilder.this.thisBindVariables, env)
+          QueryBuilder.this.bindVariables, env)
         case "+" => if (exprType == classOf[SelectExpr])
-          uniso.query.Query.select(sql, selCols(lop), QueryBuilder.this.thisBindVariables, env)
+          uniso.query.Query.select(sql, selCols(lop), QueryBuilder.this.bindVariables, env)
         else lop + rop
         case "-" => if (exprType == classOf[SelectExpr])
-          uniso.query.Query.select(sql, selCols(lop), QueryBuilder.this.thisBindVariables, env)
+          uniso.query.Query.select(sql, selCols(lop), QueryBuilder.this.bindVariables, env)
         else lop - rop
         case "=" => lop == rop
         case "!=" => lop != rop
@@ -196,7 +191,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     val distinct: Boolean, val group: Expr, val order: List[Expr],
     offset: Int, limit: Int) extends BaseExpr {
     override def apply() = {
-      uniso.query.Query.select(sql, cols, QueryBuilder.this.thisBindVariables, env)
+      uniso.query.Query.select(sql, cols, QueryBuilder.this.bindVariables, env)
     }
     val sql = "select " + (if (distinct) "distinct " else "") +
       (if (cols == null) "*" else sqlCols) + " from " + join +
@@ -305,7 +300,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       (if (filter == null) "" else " where " + where)
   }
   class DeleteExpr(val table: IdentExpr, val filter: List[Expr]) extends BaseExpr {
-    override def apply() = uniso.query.Query.update(sql, QueryBuilder.this.thisBindVariables, env)
+    override def apply() = uniso.query.Query.update(sql, QueryBuilder.this.bindVariables, env)
     protected def _sql = "delete from " + table.sql +
       (if (filter == null) "" else " where " + where)
     val sql = _sql
@@ -327,7 +322,6 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
 
   abstract class BaseExpr extends Expr {
-    override def bindVariables = QueryBuilder.this.bindVariables
     override def apply(params: List[Any]): Any = {
       var i = 0
       apply(params.map { e => i += 1; (i.toString, e) }.toMap)
@@ -545,7 +539,6 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
   def apply(): Any = error("Must be implemented in subclass")
   def apply(params: List[Any]): Any = error("Must be implemented in subclass")
   def apply(params: scala.collection.immutable.Map[String, Any]): Any = error("Must be implemented in subclass")
-  def bindVariables: List[String] = error("Must be implemented in subclass")
   def close: Unit = error("Must be implemented in subclass")
   def exprType: Class[_] = this.getClass
   override def toString = sql
