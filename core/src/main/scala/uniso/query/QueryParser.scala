@@ -18,7 +18,7 @@ object QueryParser extends JavaTokenParsers {
   case class Grp(cols: List[Any], having: Any)
   case class Ord(cols: List[Any], asc: Boolean)
   case class Query(tables: List[Obj], filter: Arr, cols: List[Col], distinct: Boolean,
-    group: Grp, order: List[Ord], offset: Int, limit: Int)
+    group: Grp, order: List[Ord], offset: Any, limit: Any)
   case class Arr(elements: List[Any])
   case class All()
   case class Null()
@@ -46,9 +46,9 @@ object QueryParser extends JavaTokenParsers {
     case r ~ c => Result(r.toInt, try { c.toInt } catch { case _: NumberFormatException => c })
   }
   def bracesExp: Parser[Braces] = "(" ~> expr <~ ")" ^^ (Braces(_))
-  /* Imporant is that function parser is applied before query because of the longest token
+  /* Important is that function parser is applied before query because of the longest token
      * matching, otherwise qualifiedIdent of query will match earlier.
-     * Also important is that bracesExpr parser is applied before query otherwise it will allways 
+     * Also important is that bracesExpr parser is applied before query otherwise it will always 
      * match down to query.
      * Also important is that array parser is applied after query parser because it matches join parser
      * of the query.
@@ -85,16 +85,21 @@ object QueryParser extends JavaTokenParsers {
   def orderAsc: Parser[Ord] = ("#" ~ "(") ~> rep1sep(expr, ",") <~ ")" ^^ (Ord(_, true))
   def orderDesc: Parser[Ord] = ("~#" ~ "(") ~> rep1sep(expr, ",") <~ ")" ^^ (Ord(_, false))
   def order: Parser[List[Ord]] = rep1(orderAsc | orderDesc)
-  def offsetLimit: Parser[(Int, Int)] = ("@" ~ "(") ~> "[0-9]+".r ~ opt("[0-9]+".r) <~ ")" ^^ {
-    case o ~ l => if (l == None) (-1, o.toInt) else (o.toInt, l.get.toInt)
-  }
+  def offsetLimit: Parser[(Any, Any)] = ("@" ~ "(") ~> ("[0-9]+".r | variable) ~
+    opt("[0-9]+".r | variable) <~ ")" ^^ {
+      case o ~ l =>
+        if (l == None) (null, o match { case v: Variable => v case s: String => BigDecimal(s) })
+        else (o match { case v: Variable => v case s: String => BigDecimal(s) },
+          l match { case Some(v: Variable) => v case Some(s: String) => BigDecimal(s)
+          case None => error("Knipis")})
+    }
   def query: Parser[Any] = objs ~ opt(filter) ~ opt(columns) ~ opt(group) ~ opt(order) ~
     opt(offsetLimit) ^^ {
       case (t :: Nil) ~ None ~ None ~ None ~ None ~ None => t
       case t ~ f ~ c ~ g ~ o ~ l => Query(t, if (f == None) null else f.get,
         if (c == None) null else c.get.cols, if (c == None) false else c.get.distinct,
         if (g == None) null else g.get, if (o == None) null else o.get,
-        if (l == None) -1 else l.get._1, if (l == None) -1 else l.get._2)
+        if (l == None) null else l.get._1, if (l == None) null else l.get._2)
     }
 
   //operation parsers

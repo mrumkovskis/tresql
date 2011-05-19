@@ -17,6 +17,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   val GROUP_CTX = "GROUP"
   val HAVING_CTX = "HAVING"
   val VALUES_CTX = "VALUES"
+  val LIMIT_CTX = "LIMIT"
 
   private def this(env: Env) = this(env, 0, 0)
 
@@ -189,7 +190,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   class SelectExpr(val tables: List[Table], val filter: List[Expr], val cols: List[ColExpr],
     val distinct: Boolean, val group: Expr, val order: List[Expr],
-    offset: Int, limit: Int) extends BaseExpr {
+    offset: Expr, limit: Expr) extends BaseExpr {
     override def apply() = {
       uniso.query.Query.select(sql, cols, QueryBuilder.this.bindVariables, env)
     }
@@ -198,8 +199,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       (if (filter == null) "" else " where " + where) +
       (if (group == null) "" else " group by " + group.sql) +
       (if (order == null) "" else " order by " + (order map (_.sql)).mkString(", ")) +
-      (if (offset == -1) "" else " offset " + offset) +
-      (if (limit == -1) "" else " limit " + limit)
+      (if (offset == null) "" else " offset " + offset.sql) +
+      (if (limit == null) "" else " limit " + limit.sql)
     def sqlCols = cols.filter(!_.separateQuery).map(_.sql).mkString(",")
     def join = tables match {
       case t :: Nil => t.sqlName
@@ -358,7 +359,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       } else null,
       if (q.cols != null) q.cols map { buildInternal(_, COL_CTX).asInstanceOf[ColExpr] } else null,
       q.distinct, buildInternal(q.group),
-      if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null, q.offset, q.limit)
+      if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null, 
+          buildInternal(q.offset, LIMIT_CTX), buildInternal(q.limit, LIMIT_CTX))
 
     def buildTable(t: Obj) = t match {
       case Obj(Ident(i), a, j, o) => new Table(i, a, buildJoin(j), o)
@@ -425,8 +427,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           val ex = b.buildInternal(t, QUERY_CTX)
           this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
         }
-        case QUERY_CTX => new SelectExpr(List(buildTable(t)), null, null, false, null, null, -1, -1)
-        case TABLE_CTX => new SelectExpr(List(buildTable(t)), null, null, false, null, null, -1, -1)
+        case QUERY_CTX => new SelectExpr(List(buildTable(t)), null, null, false, null, null, null, null)
+        case TABLE_CTX => new SelectExpr(List(buildTable(t)), null, null, false, null, null, null, null)
         case _ => buildIdent(t)
       }
       case q: Query => parseCtx match {
