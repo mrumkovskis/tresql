@@ -6,6 +6,14 @@ from javascript for example.
 
 For database connectivity Query uses JDBC. 
 
+-- Getting started --------------
+* add your jdbc driver jar to service/lib
+* set java_opts environment variable
+  java_opts=-Djdbc.drivers=... -Duniso.query.driver=... -Duniso.query.db=... -Duniso.query.user=... -Duniso.query.password=... -Duniso.query.schema=...
+* execute sbt update ~jetty-run
+* browse to http://localhost:8080
+---------------------------------
+
 Query provides select, insert, update, delete operations on SQL database.
 
 In comparison with SQL language Query provides several additional features like hierarchical

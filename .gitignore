@@ -1,7 +1,18 @@
 # eclipse + scala plugin
 .classpath
 .project
+.manager
 .scala_dependencies
 bin/
 class/
 .settings/
+
+# sbt
+target
+lib_managed
+src_managed
+project/boot/
+*/project/boot
+
+# db
+lift_proto*

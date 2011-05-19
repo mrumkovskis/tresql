@@ -1,5 +1,12 @@
 import sbt._
 
+class QueryProject(info: ProjectInfo) extends ParentProject(info)
+{
+   lazy val core = project("core", "Query Core")
+   lazy val service = project("service", "Query web service", new LiftProject(_), core)
+}
+
+protected
 class LiftProject(info: ProjectInfo) extends DefaultWebProject(info) {
   val liftVersion = "2.3"
 

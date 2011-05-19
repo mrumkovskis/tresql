@@ -1,1 +1,0 @@
-sbt update ~jetty-run
