@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+
+<head>
+  <title>Query POST</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+</head>
+
+<body>
+  <form method="post" action="/query">
+    <p>
+      <textarea name="query" id="query" rows="20" cols="80" />
+    </p>
+    <table id="params">
+      <tr>
+        <td>Parameter 1</td>
+        <td><input type="text" name="p_1" /></td>
+      </tr>
+      <tr>
+        <td>Parameter 2</td>
+        <td><input type="text" name="p_2" /></td>
+      </tr>
+      <tr>
+        <td>Parameter 3</td>
+        <td><input type="text" name="p_3" /></td>
+      </tr>
+      <tr>
+        <td>Parameter 4</td>
+        <td><input type="text" name="p_4" /></td>
+      </tr>
+      <tr>
+        <td>Parameter 5</td>
+        <td><input type="text" name="p_5" /></td>
+      </tr>
+    </table>
+    <p>
+      <input type="submit" value="Execute query" />
+    </p>
+  </form>
+</body>
+</html>

@@ -14,18 +14,27 @@ object QueryServer extends RestHelper {
   val Plen = P_.size
 
   serve {
-    // FIXME served with GET - ensure query is readonly!!!
     case JsonGet("query" :: Nil, _) =>
-      for {
-        query <- S.param("query") ?~ "query is missing"
-        req <- S.request ?~ "request is missing :-O"
-      } yield {
-        val pars = req.params.map(x =>
-          (if (x._1 startsWith P_) x._1.substring(Plen) else x._1, x._2.head))
-        OutputStreamResponse( //
-          (os: OutputStream) => json(query, pars, os),
-          List("Content-Type" -> "application/json"));
-      }
+      // FIXME served with GET - ensure query is readonly!!!
+      respond
+    case JsonPost("query" :: Nil, _) =>
+      respond
+    case Post("query" :: Nil, _) =>
+      respond
+  }
+
+  def respond = {
+    for {
+      query <- S.param("query") ?~ "query is missing"
+      req <- S.request ?~ "request is missing :-O"
+    } yield {
+      val pars = req.params.map(x =>
+        (if (x._1 startsWith P_) x._1.substring(Plen) else x._1, x._2.head))
+      println("PARS: " + pars)
+      OutputStreamResponse( //
+        (os: OutputStream) => json(query, pars, os),
+        List("Content-Type" -> "application/json"));
+    }
   }
 
   def json(expr: String, pars: Map[String, String]): String = {
