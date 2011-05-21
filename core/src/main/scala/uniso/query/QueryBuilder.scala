@@ -107,7 +107,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       op match {
         case "*" => lop * rop
         case "/" => lop / rop
-        case "++" => uniso.query.Query.select(sql, selCols(lop), 
+        case "++" => uniso.query.Query.select(sql, selCols(lop),
           QueryBuilder.this.bindVariables, env)
         case "+" => if (exprType == classOf[SelectExpr])
           uniso.query.Query.select(sql, selCols(lop), QueryBuilder.this.bindVariables, env)
@@ -219,10 +219,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         (l map { _.sql }).mkString(",") + ")"
     }
     val queryDepth = QueryBuilder.this.queryDepth
-    override def toString = sql + "\n" + (if (cols != null) cols.filter(_.separateQuery).map {
-      "    " * (queryDepth + 1) + _.toString
-    }.mkString
-    else "")
+    override def toString = sql + " (" + QueryBuilder.this + ")\n" +
+      (if (cols != null) cols.filter(_.separateQuery).map {
+        "    " * (queryDepth + 1) + _.toString
+      }.mkString
+      else "")
   }
   class Table(val table: Any, val alias: String, val join: List[Expr], val outerJoin: String) {
     def name = table match {
@@ -359,8 +360,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       } else null,
       if (q.cols != null) q.cols map { buildInternal(_, COL_CTX).asInstanceOf[ColExpr] } else null,
       q.distinct, buildInternal(q.group),
-      if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null, 
-          buildInternal(q.offset, LIMIT_CTX), buildInternal(q.limit, LIMIT_CTX))
+      if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null,
+      buildInternal(q.offset, LIMIT_CTX), buildInternal(q.limit, LIMIT_CTX))
 
     def buildTable(t: Obj) = t match {
       case Obj(Ident(i), a, j, o) => new Table(i, a, buildJoin(j), o)
@@ -391,7 +392,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case ROOT_CTX => {
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildInsert(t, c, v)
-          this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex  
+          this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
         }
         case _ => buildInsert(t, c, v)
       }
@@ -485,6 +486,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case x => error(x.toString)
     }
   }
+
+  override def toString = "QueryBuilder: " + queryDepth
 
 }
 

@@ -73,7 +73,7 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
 }
 
 object Env extends ResourceProvider {
-  private var logger: (String, Int) => Unit = null
+  private var logger: (=>String, Int) => Unit = null
   //meta data object must be thread safe!
   private var md: MetaData = null
   private val threadConn = new ThreadLocal[java.sql.Connection]
@@ -89,8 +89,8 @@ object Env extends ResourceProvider {
   def metaData = md
   def update(md: MetaData) = this.md = md
   def update(conn: java.sql.Connection) = this.threadConn set conn
-  def update(logger: (String, Int) => Unit) = this.logger = logger
-  def log(msg: String, level: Int = 0): Unit = if (logger != null) logger(msg, level)
+  def update(logger: (=>String, Int) => Unit) = this.logger = logger
+  def log(msg: => String, level: Int = 0): Unit = if (logger != null) logger(msg, level)
 }
 
 trait EnvProvider {
