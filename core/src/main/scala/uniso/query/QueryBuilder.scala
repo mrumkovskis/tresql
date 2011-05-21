@@ -68,6 +68,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       "?"
     }
+    override def toString = ":" + nr + "(" + col + ")"
   }
 
   class AssignExpr(val variable: String, val value: Expr) extends BaseExpr {
@@ -392,7 +393,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case ROOT_CTX => {
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildInsert(t, c, v)
-          this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
+          this.bindIdx = b.bindIdx; ex
         }
         case _ => buildInsert(t, c, v)
       }
@@ -402,7 +403,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case ROOT_CTX => {
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildUpdate(t, f, c, v)
-          this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
+          this.bindIdx = b.bindIdx; ex
         }
         case _ => buildUpdate(t, f, c, v)
       }
@@ -411,7 +412,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case ROOT_CTX => {
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildDelete(t, f)
-          this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
+          this.bindIdx = b.bindIdx; ex
         }
         case _ => buildDelete(t, f)
       }
@@ -419,14 +420,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case UnOp("|", oper) => {
         val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth + 1, bindIdx)
         val ex = b.buildInternal(oper, QUERY_CTX)
-        this.separateQueryFlag = true; this.bindIdx = b.bindIdx;
-        this._bindVariables ++= b._bindVariables; ex
+        this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
       }
       case t: Obj => parseCtx match {
         case ROOT_CTX => {
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-          val ex = b.buildInternal(t, QUERY_CTX)
-          this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
+          val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
         }
         case QUERY_CTX => new SelectExpr(List(buildTable(t)), null, null, false, null, null, null, null)
         case TABLE_CTX => new SelectExpr(List(buildTable(t)), null, null, false, null, null, null, null)
@@ -435,8 +434,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case q: Query => parseCtx match {
         case ROOT_CTX => {
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-          val ex = b.buildInternal(q, QUERY_CTX)
-          this.bindIdx = b.bindIdx; this._bindVariables ++= b._bindVariables; ex
+          val ex = b.buildInternal(q, QUERY_CTX); this.bindIdx = b.bindIdx; ex
         }
         case _ => buildSelect(q)
       }
