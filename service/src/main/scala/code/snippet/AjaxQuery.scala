@@ -28,9 +28,9 @@ object AjaxQuery {
               if (!(pars contains p)) pars(p) = ""
               p.substring(Plen) -> pars(p)
             }).toMap
-          println("PARS: " + queryPars)
           S.notice("PARS: " + queryPars)
-          resultString = QueryServer.json(queryString, queryPars)
+          resultString =
+            QueryServer.json(queryString, QueryServer.typeConvert(queryPars))
           S.notice("RESULT: " + resultString)
         }
       } catch {
