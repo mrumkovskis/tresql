@@ -12,6 +12,13 @@ For database connectivity Query uses JDBC.
   java_opts=-Djdbc.drivers=... -Duniso.query.driver=... -Duniso.query.db=... -Duniso.query.user=... -Duniso.query.password=... -Duniso.query.schema=...
 * execute sbt update ~jetty-run
 * browse to http://localhost:8080
+
+* for get and post examples, browse to http://localhost:8080/get and http://localhost:8080/post
+* named query parameters are not supported by examples, but are supported by query server
+* for more info on gets and posts, see scaladoc for QueryServer
+* to create scaladoc, execute sbt doc
+* to create core jar and service war, execute sbt package
+* compiled and generated files (jars, wars, classes, docs) are found in core/target and service/target
 ---------------------------------
 
 Query provides select, insert, update, delete operations on SQL database.
