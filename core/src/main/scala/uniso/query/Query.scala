@@ -93,6 +93,7 @@ object Query {
   }
 
   private def bindVars(st: PreparedStatement, bindVariables: List[Expr]) {
+    Env.log({(bindVariables.map(_.toString).mkString("Bind vars: ", ", ", "\n"))}, 1)
     bindVariables.foldLeft(1) { (idx, expr) =>
       expr() match {
         case s: String => st.setString(idx, s)

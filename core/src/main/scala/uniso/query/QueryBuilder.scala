@@ -68,7 +68,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       "?"
     }
-    override def toString = ":" + nr + "(" + col + ")"
+    override def toString = nr + "(" + col + ")"
   }
 
   class AssignExpr(val variable: String, val value: Expr) extends BaseExpr {
