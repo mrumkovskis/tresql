@@ -389,7 +389,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         new AssignExpr(n, buildInternal(v, parseCtx))
       //insert
       case BinOp("+", Query(Obj(Ident(t), _, null, null) :: Nil, null, c@(Col(Obj(Ident(_), _,
-        null, null), _) :: l), _, null, null, -1, -1), Arr(v)) => parseCtx match {
+        null, null), _) :: l), _, null, null, _, _), Arr(v)) => parseCtx match {
         case ROOT_CTX => {
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildInsert(t, c, v)
@@ -399,7 +399,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }
       //update
       case BinOp("=", Query(Obj(Ident(t), _, null, null) :: Nil, f, c@(Col(Obj(Ident(_), _,
-        null, null), _) :: l), _, null, null, -1, -1), Arr(v)) => parseCtx match {
+        null, null), _) :: l), _, null, null, _, _), Arr(v)) => parseCtx match {
         case ROOT_CTX => {
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildUpdate(t, f, c, v)
