@@ -29,6 +29,7 @@ object QueryServer extends RestHelper {
 
   val P_ = "p_" // pars prefix to legalize name
   val Plen = P_.size
+  private var initialized = false
 
   object ArgTypes {
     val strong = "strong"
@@ -115,7 +116,7 @@ object QueryServer extends RestHelper {
     writer.flush
   }
 
-  def json(expr: String, pars: Map[String, Any], writer: Writer) { //
+  def json(expr: String, pars: Map[String, Any], writer: Writer) {
     json(
       System.getProperty(Conn.driverProp),
       System.getProperty(Conn.usrProp),
@@ -123,17 +124,23 @@ object QueryServer extends RestHelper {
       expr, pars, writer)
   }
 
-  def json(jdbcDriverClass: String, user: String, schema: String, //
+  private def json(jdbcDriverClass: String, user: String, schema: String, //
     expr: String, pars: Map[String, Any], writer: Writer) {
     // Mulkibas te notiek. Ja jau core satur init kodu, tad kapec ne lidz galam?
     // TODO Kapec man janorada usr, bet nav janorada pwd?
     // TODO Kapec man jarupejas par driver class iekrausanu?
-    if (jdbcDriverClass != null) Class.forName(jdbcDriverClass)
-    Env update JDBCMetaData(user, schema)
+    if (!initialized) {
+      if (jdbcDriverClass != null) Class.forName(jdbcDriverClass)
+      Env update JDBCMetaData(user, schema)
+      initialized = true;
+    }
     val conn = Conn()()
-    Env update conn
-    Jsonizer.jsonize(Query(expr, pars), writer)
-    conn close
+    try {
+      Env update conn
+      Jsonizer.jsonize(Query(expr, pars), writer)
+    } finally {
+      conn close
+    }
   }
 
   def bindVariables(expr: String): List[String] = { //
