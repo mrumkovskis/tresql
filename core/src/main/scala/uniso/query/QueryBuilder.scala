@@ -29,6 +29,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private var unboundVarsFlag = false
   //used internally while building expression
   private var separateQueryFlag = false
+  //indicate * in column
+  private var allCols = false
 
   case class ConstExpr(val value: Any) extends BaseExpr {
     override def apply() = value
@@ -109,12 +111,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case "*" => lop * rop
         case "/" => lop / rop
         case "++" => uniso.query.Query.select(sql, selCols(lop),
-          QueryBuilder.this.bindVariables, env)
+          QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols)
         case "+" => if (exprType == classOf[SelectExpr])
-          uniso.query.Query.select(sql, selCols(lop), QueryBuilder.this.bindVariables, env)
+          uniso.query.Query.select(sql, selCols(lop), QueryBuilder.this.bindVariables, env,
+            QueryBuilder.this.allCols)
         else lop + rop
         case "-" => if (exprType == classOf[SelectExpr])
-          uniso.query.Query.select(sql, selCols(lop), QueryBuilder.this.bindVariables, env)
+          uniso.query.Query.select(sql, selCols(lop), QueryBuilder.this.bindVariables, env,
+            QueryBuilder.this.allCols)
         else lop - rop
         case "=" => lop == rop
         case "!=" => lop != rop
@@ -193,7 +197,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     val distinct: Boolean, val group: Expr, val order: List[Expr],
     offset: Expr, limit: Expr) extends BaseExpr {
     override def apply() = {
-      uniso.query.Query.select(sql, cols, QueryBuilder.this.bindVariables, env)
+      uniso.query.Query.select(sql, cols, QueryBuilder.this.bindVariables, env,
+        QueryBuilder.this.allCols)
     }
     val sql = "select " + (if (distinct) "distinct " else "") +
       (if (cols == null) "*" else sqlCols) + " from " + join +
@@ -266,6 +271,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
   class ColExpr(val col: Expr, val alias: String) extends Expr {
     val separateQuery = QueryBuilder.this.separateQueryFlag
+    if (!QueryBuilder.this.allCols) QueryBuilder.this.allCols = col.isInstanceOf[AllExpr]
     def aliasOrName = if (alias != null) alias else col match {
       case IdentExpr(n, a) => if (a == null) n(n.length - 1) else a
       case _ => null

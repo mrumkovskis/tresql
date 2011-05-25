@@ -1,7 +1,7 @@
 package uniso.query
 
 import java.sql.{ Array => JArray }
-import java.sql.{ Date, Timestamp, PreparedStatement, ResultSet }
+import java.sql.{ Date, Timestamp, PreparedStatement, ResultSet, ResultSetMetaData => RSMD }
 import uniso.query.metadata._
 
 object Query {
@@ -59,16 +59,23 @@ object Query {
   }
 
   private[query] def select(sql: String, cols: List[QueryBuilder#ColExpr],
-    bindVariables: List[Expr], env: Env): Result = {
+    bindVariables: List[Expr], env: Env, allCols: Boolean): Result = {
     Env log sql
     val st = statement(sql, env)
     bindVars(st, bindVariables)
     var i = 0
-    val r = new Result(st.executeQuery, Vector(cols.map { c =>
-      if (c.separateQuery) Column(-1, c.aliasOrName, c.col) else {
-        i += 1; Column(i, c.aliasOrName, null)
-      }
-    }: _*), env.reusableExpr)
+    val rs = st.executeQuery
+    def rcol(c: QueryBuilder#ColExpr) = if (c.separateQuery) Column(-1, c.aliasOrName, c.col) else {
+      i += 1; Column(i, c.aliasOrName, null)
+    }
+    val r = new Result(rs, Vector((if (!allCols) cols.map { rcol(_) }
+    else cols.flatMap { c =>
+      (if (c.col.isInstanceOf[QueryBuilder#AllExpr]) {
+        var (j, md: RSMD, l) = (1, rs.getMetaData, List[Column]()); val cnt = md.getColumnCount
+        while (j <= cnt) { i += 1; l = Column(i, md.getColumnLabel(j), null) :: l; j += 1 }
+        l.reverse
+      } else List(rcol(c)))
+    }): _*), env.reusableExpr)
     env update r
     r
   }
@@ -86,10 +93,12 @@ object Query {
     if (env.reusableExpr)
       if (env.statement == null) {
         val conn = env.conn; val s = conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY,
-                ResultSet.CONCUR_READ_ONLY); env.update(s); s
+          ResultSet.CONCUR_READ_ONLY); env.update(s); s
       } else env.statement
-    else { val conn = env.conn; conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY,
-                ResultSet.CONCUR_READ_ONLY) }
+    else {
+      val conn = env.conn; conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY,
+        ResultSet.CONCUR_READ_ONLY)
+    }
   }
 
   private def bindVars(st: PreparedStatement, bindVariables: List[Expr]) {
