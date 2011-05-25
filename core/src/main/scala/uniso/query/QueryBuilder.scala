@@ -259,7 +259,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         }) mkString " and "
       }
       join match {
-        case Nil => outerJoinSql + " " + sqlName
+        case Nil => ", " + sqlName
         case l => sqlJoin(l)
       }
     }
