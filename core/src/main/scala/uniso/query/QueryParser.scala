@@ -138,31 +138,32 @@ object QueryParser extends JavaTokenParsers {
 
   def bindVariables(ex: String): List[String] = {
     var bindIdx = 0
-    def bindVariables(parsedExpr: Any, vars: scala.collection.mutable.ListBuffer[String]): Any =
+    val vars = scala.collection.mutable.ListBuffer[String]()
+    def bindVars(parsedExpr: Any): Any =
       parsedExpr match {
         case Variable("?", _) => bindIdx += 1; vars += bindIdx.toString
         case Variable(n, _) => vars += n
-        case Fun(_, pars) => pars foreach (bindVariables(_, vars))
-        case UnOp(_, operand) => bindVariables(operand, vars)
-        case BinOp(_, lop, rop) => bindVariables(lop, vars); bindVariables(rop, vars)
-        case Obj(t, _, j, _) => bindVariables(j, vars); bindVariables(t, vars)
-        case Col(c, _) => bindVariables(c, vars)
-        case Cols(_, cols) => cols foreach (bindVariables(_, vars))
-        case Grp(cols, hv) => cols foreach (bindVariables(_, vars)); bindVariables(hv, vars)
-        case Ord(cols, _) => cols foreach (bindVariables(_, vars))
+        case Fun(_, pars) => pars foreach (bindVars(_))
+        case UnOp(_, operand) => bindVars(operand)
+        case BinOp(_, lop, rop) => bindVars(lop); bindVars(rop)
+        case Obj(t, _, j, _) => bindVars(j); bindVars(t)
+        case Col(c, _) => bindVars(c)
+        case Cols(_, cols) => cols foreach (bindVars(_))
+        case Grp(cols, hv) => cols foreach (bindVars(_)); bindVars(hv)
+        case Ord(cols, _) => cols foreach (bindVars(_))
         case Query(objs, filter, cols, _, gr, ord, _, _) => {
-          objs foreach (bindVariables(_, vars)); bindVariables(filter, vars)
-          if (cols != null) cols foreach (bindVariables(_, vars))
-          bindVariables(gr, vars);
-          if (ord != null) ord foreach (bindVariables(_, vars))
+          objs foreach (bindVars(_)); bindVars(filter)
+          if (cols != null) cols foreach (bindVars(_))
+          bindVars(gr);
+          if (ord != null) ord foreach (bindVars(_))
         }
-        case Arr(els) => els foreach (bindVariables(_, vars))
+        case Arr(els) => els foreach (bindVars(_))
+        case Braces(expr) => bindVars(expr)
         case _ =>
       }
     parseAll(ex) match {
       case Success(r, _) => {
-        val vars = new scala.collection.mutable.ListBuffer[String]
-        bindVariables(r, vars)
+        bindVars(r)
         vars.toList
       }
       case x => error(x.toString)
