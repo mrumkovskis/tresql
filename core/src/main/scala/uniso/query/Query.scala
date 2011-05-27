@@ -1,7 +1,7 @@
 package uniso.query
 
 import java.sql.{ Array => JArray }
-import java.sql.{ Date, Timestamp, PreparedStatement, ResultSet, ResultSetMetaData => RSMD }
+import java.sql.{ Date, Timestamp, PreparedStatement, ResultSet }
 import uniso.query.metadata._
 
 object Query {
@@ -71,7 +71,7 @@ object Query {
     val r = new Result(rs, Vector((if (!allCols) cols.map { rcol(_) }
     else cols.flatMap { c =>
       (if (c.col.isInstanceOf[QueryBuilder#AllExpr]) {
-        var (j, md: RSMD, l) = (1, rs.getMetaData, List[Column]()); val cnt = md.getColumnCount
+        var (j, md, l) = (1, rs.getMetaData, List[Column]()); val cnt = md.getColumnCount
         while (j <= cnt) { i += 1; l = Column(i, md.getColumnLabel(j), null) :: l; j += 1 }
         l.reverse
       } else List(rcol(c)))
@@ -103,18 +103,23 @@ object Query {
 
   private def bindVars(st: PreparedStatement, bindVariables: List[Expr]) {
     Env.log(bindVariables.map(_.toString).mkString("Bind vars: ", ", ", "\n"), 1)
-    bindVariables.foldLeft(1) { (idx, expr) =>
-      expr() match {
-        case s: String => st.setString(idx, s)
-        case n: BigDecimal => st.setBigDecimal(idx, n.bigDecimal)
-        case d: Date => st.setDate(idx, d)
-        case dt: Timestamp => st.setTimestamp(idx, dt)
-        case d: java.util.Date => st.setDate(idx, new Date(d.getTime))
-        case b: Boolean => st.setBoolean(idx, b)
-        case o => st.setObject(idx, o)
-      }
-      idx + 1
+    bindVariables.map(_()).zipWithIndex.foreach {
+      case (null, idx) => st.setNull(idx + 1, java.sql.Types.VARCHAR)
+      case (i: Int, idx) => st.setInt(idx + 1, i)
+      case (l: Long, idx) => st.setLong(idx + 1, l)
+      case (d: Double, idx) => st.setDouble(idx + 1, d)
+      case (f: Float, idx) => st.setFloat(idx + 1, f)
+      // Allow the user to specify how they want the Date handled based on the input type
+      case (t: java.sql.Timestamp, idx) => st.setTimestamp(idx + 1, t)
+      case (d: java.sql.Date, idx) => st.setDate(idx + 1, d)
+      case (t: java.sql.Time, idx) => st.setTime(idx + 1, t)
+      /* java.util.Date has to go last, since the java.sql date/time classes subclass it. By default we
+* assume a Timestamp value */
+      case (d: java.util.Date, idx) => st.setTimestamp(idx + 1, new java.sql.Timestamp(d.getTime))
+      case (b: Boolean, idx) => st.setBoolean(idx + 1, b)
+      case (s: String, idx) => st.setString(idx + 1, s)
+      case (bn: java.math.BigDecimal, idx) => st.setBigDecimal(idx + 1, bn)
+      case (obj, idx) => st.setObject(idx + 1, obj)
     }
   }
-
 }
