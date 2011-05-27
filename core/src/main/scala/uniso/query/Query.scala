@@ -119,6 +119,7 @@ object Query {
       case (b: Boolean, idx) => st.setBoolean(idx + 1, b)
       case (s: String, idx) => st.setString(idx + 1, s)
       case (bn: java.math.BigDecimal, idx) => st.setBigDecimal(idx + 1, bn)
+      case (bd: BigDecimal, idx) => st.setBigDecimal(idx + 1, bd.bigDecimal)
       case (obj, idx) => st.setObject(idx + 1, obj)
     }
   }
