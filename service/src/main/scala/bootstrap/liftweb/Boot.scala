@@ -8,6 +8,8 @@ import net.liftweb.sitemap._
 import net.liftweb.util._
 import net.liftweb._
 
+import uniso.query.result.Jsonizer
+
 /**
  * A class that's instantiated early and run.  It allows the application
  * to modify lift's environment
@@ -53,6 +55,12 @@ class Boot {
 
     // Use jQuery 1.4
     LiftRules.jsArtifacts = net.liftweb.http.js.jquery.JQuery14Artifacts
+
+    // this does not work for func in OutputStreamResponse
+    LiftRules.exceptionHandler prepend {
+      case (_, _, e: Jsonizer.ResultTypeException) =>
+        NotFoundResponse(e.getMessage)
+    }
 
     // Make a transaction span the whole HTTP request
     S.addAround(DB.buildLoanWrapper)

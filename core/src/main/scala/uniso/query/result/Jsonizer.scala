@@ -7,12 +7,21 @@ import scala.util.parsing.json.JSONFormat
 import uniso.query._
 
 object Jsonizer {
-  def jsonize(result: Any, buf: Writer) {
+
+  sealed class ResultType
+  case object Objects extends ResultType
+  case object Arrays extends ResultType
+  case object Object extends ResultType
+
+  class ResultTypeException(message: String)
+    extends RuntimeException(message: String)
+
+  def jsonize(result: Any, buf: Writer, rType: ResultType = Objects) {
     result match {
       case r: Result =>
         var done = false;
         try {
-          jsonizeResult(r, buf)
+          jsonizeResult(r, buf, rType)
           done = true
         } finally {
           try {
@@ -27,8 +36,8 @@ object Jsonizer {
             }
           }
         }
-      case a: Seq[_] => jsonizeArray(a, buf)
-      case a: Array[_] => jsonizeArray(a, buf)
+      case a: Seq[_] => jsonizeArray(a, buf, rType)
+      case a: Array[_] => jsonizeArray(a, buf, rType)
       case b: Boolean => buf append b.toString
       case n: Byte => buf append n.toString
       case n: Short => buf append n.toString
@@ -49,36 +58,41 @@ object Jsonizer {
     }
   }
 
-  def jsonizeResult(result: Result, buf: Writer) {
-    buf append '['
+  def jsonizeResult(result: Result, buf: Writer, rType: ResultType = Objects) {
+    if (rType != Object) buf append '['
     var i = 0
     result foreach { r =>
+      if (i > 0 && rType == Object)
+        throw new ResultTypeException("Failed to jsonize result: " +
+          "single-object result requested, but result has more than one")
       if (i > 0) buf append ", "
-      buf append '{'
+      buf append (if (rType == Arrays) '[' else '{')
       var j = 0
       while (j < r.columnCount) {
         if (j > 0) buf append ", "
 
         // name
-        buf append '"'
-        buf append (r.column(j).name match {
-          case null => j.toString
-          case name => JSONFormat.quoteString(name)
-        })
-        buf append "\": "
+        if (rType != Arrays) {
+          buf append '"'
+          buf append (r.column(j).name match {
+            case null => j.toString
+            case name => JSONFormat.quoteString(name)
+          })
+          buf append "\": "
+        }
 
         // value
-        jsonize(r(j), buf)
+        jsonize(r(j), buf, if (rType == Object) Arrays else rType)
 
         j += 1
       }
       i += 1
-      buf append '}'
+      buf append (if (rType == Arrays) ']' else '}')
     }
-    buf append ']'
+    if (rType != Object) buf append ']'
   }
 
-  def jsonizeArray(result: Iterable[_], buf: Writer) {
+  def jsonizeArray(result: Iterable[_], buf: Writer, rType: ResultType = Objects) {
     buf append '['
     var i = 0
     result foreach { r =>
@@ -89,7 +103,7 @@ object Jsonizer {
       buf append "\": "
 
       // value
-      jsonize(r, buf)
+      jsonize(r, buf, if (rType == Object) Arrays else rType)
       i += 1
     }
     buf append ']'

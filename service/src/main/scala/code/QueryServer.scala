@@ -23,7 +23,9 @@ import uniso.query._
  * date-time (yyyy-mm-dd hh:mm:ss), string. Strings must be prefixed with '
  * (apostrophe), which will be stripped. You can turn off type convertion by
  * adding argtypes=string to request parameters. Then all query parameters will
- * be sent to query core as strings without modifications.
+ * be sent to query core as strings without modifications. You can modify result
+ * by adding res-type to request parameters. Supported res-type values are
+ * objects (default), arrays, object.
  */
 object QueryServer extends RestHelper {
 
@@ -31,10 +33,25 @@ object QueryServer extends RestHelper {
   val Plen = P_.size
   private var initialized = false
 
+  /** special parameter names */
+  private object PN {
+    val query = "query"
+    val argtypes = "argtypes"
+    val restype = "res-type"
+  }
+
   object ArgTypes {
     val strong = "strong"
     val string = "string"
   }
+  def defaultArgTypes = ArgTypes.strong
+
+  object ResultType {
+    val objects = "objects"
+    val arrays = "arrays"
+    val singleObject = "object"
+  }
+  def defaultResultType = Jsonizer.Objects
 
   serve {
     case JsonGet("query" :: Nil, _) =>
@@ -47,35 +64,48 @@ object QueryServer extends RestHelper {
   }
 
   def respond = {
+    import Jsonizer.ResultType
     for {
-      query <- S.param("query") ?~ "query is missing"
+      query <- S.param(PN.query) ?~ "query is missing"
       req <- S.request ?~ "request is missing :-O"
+      resType <- S.param(PN.restype) match {
+        case Empty => Box[ResultType](defaultResultType)
+        case Full(s) => s match {
+          case ResultType.objects => Box[ResultType](Jsonizer.Objects)
+          case ResultType.singleObject => Box[ResultType](Jsonizer.Object)
+          case ResultType.arrays => Box[ResultType](Jsonizer.Arrays)
+          case s => Failure("Unknown result type value: " + s)
+        }
+        case f: Failure => new Failure(
+          "Failed to get result type value", Empty, Box(f))
+      }
+      argTypes <- S.param(PN.argtypes) match {
+        case Empty => Full(defaultArgTypes)
+        case Full(s) if (s == ArgTypes.string || s == ArgTypes.strong) => Full(s)
+        case Full(s) => Failure("Unknown argtypes value: " + s)
+        case f: Failure => new Failure(
+          "Failed to get result type parameter value", Empty, Box(f))
+      }
     } yield {
-      val argTypes = S.param("argtypes")
-      val pars = (req.params - "query" - "argtypes").map(x =>
+      val pars = (req.params - PN.query - PN.argtypes - PN.restype).map(x =>
         (if (x._1 startsWith P_) x._1.substring(Plen) else x._1, x._2.head))
       OutputStreamResponse( //
-        (os: OutputStream) => json(query, typeConvert(pars, argTypes), os),
+        (os: OutputStream) =>
+          json(query, typeConvert(pars, argTypes), os, resType),
         List("Content-Type" -> "application/json"));
     }
   }
 
-  def typeConvert(pars: Map[String, String]): Map[String, Any] = {
-    typeConvert(pars, Empty)
-  }
-
   def typeConvert(pars: Map[String, String],
-    argTypes: Box[String]): Map[String, Any] = {
+    argTypes: String = defaultArgTypes): Map[String, Any] = {
     pars.map(x => (x._1, typeConvert(x._1, x._2, argTypes)))
   }
 
-  def typeConvert(name: String, value: String, argTypes: Box[String]) = {
+  def typeConvert(name: String, value: String, argTypes: String) = {
     argTypes match {
-      case Empty => convert(name, value)
-      //case Full(ArgTypes.duck) => convert(name, value, false)
-      case Full(ArgTypes.strong) => convert(name, value)
-      case Full(ArgTypes.string) => value
-      case f: Failure => argTypes
+      case ArgTypes.strong => convert(name, value)
+      case ArgTypes.string => value
+      case s => throw new IllegalArgumentException(s)
     }
   }
 
@@ -104,28 +134,32 @@ object QueryServer extends RestHelper {
     }
   }
 
-  def json(expr: String, pars: Map[String, Any]): String = {
+  def json(expr: String, pars: Map[String, Any],
+    rType: Jsonizer.ResultType = defaultResultType): String = {
     val writer = new CharArrayWriter
-    json(expr, pars, writer)
+    json(expr, pars, writer, rType)
     writer.toString
   }
 
-  def json(expr: String, pars: Map[String, Any], os: OutputStream) {
+  def json(expr: String, pars: Map[String, Any],
+    os: OutputStream, rType: Jsonizer.ResultType) {
     val writer = new OutputStreamWriter(os, "UTF-8")
-    json(expr, pars, writer)
+    json(expr, pars, writer, rType)
     writer.flush
   }
 
-  def json(expr: String, pars: Map[String, Any], writer: Writer) {
+  def json(expr: String, pars: Map[String, Any],
+    writer: Writer, rType: Jsonizer.ResultType) {
     json(
       System.getProperty(Conn.driverProp),
       System.getProperty(Conn.usrProp),
       System.getProperty(Conn.schemaProp),
-      expr, pars, writer)
+      expr, pars, writer, rType)
   }
 
   private def json(jdbcDriverClass: String, user: String, schema: String, //
-    expr: String, pars: Map[String, Any], writer: Writer) {
+    expr: String, pars: Map[String, Any],
+    writer: Writer, rType: Jsonizer.ResultType) {
     // Mulkibas te notiek. Ja jau core satur init kodu, tad kapec ne lidz galam?
     // TODO Kapec man janorada usr, bet nav janorada pwd?
     // TODO Kapec man jarupejas par driver class iekrausanu?
@@ -137,7 +171,7 @@ object QueryServer extends RestHelper {
     val conn = Conn()()
     try {
       Env update conn
-      Jsonizer.jsonize(Query(expr, pars), writer)
+      Jsonizer.jsonize(Query(expr, pars), writer, rType)
     } finally {
       conn close
     }
