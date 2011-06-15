@@ -110,6 +110,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       op match {
         case "*" => lop * rop
         case "/" => lop / rop
+        case "&&" => uniso.query.Query.select(sql, selCols(lop),
+          QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols)
         case "++" => uniso.query.Query.select(sql, selCols(lop),
           QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols)
         case "+" => if (exprType == classOf[SelectExpr])
@@ -135,6 +137,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case "*" => lop.sql + " * " + rop.sql
       case "/" => lop.sql + " / " + rop.sql
       case "++" => lop.sql + " union all " + rop.sql
+      case "&&" => lop.sql + " intersect " + rop.sql
       case "+" => lop.sql + (if (exprType == classOf[SelectExpr]) " union " else " + ") + rop.sql
       case "-" => lop.sql + (if (exprType == classOf[SelectExpr]) " minus " else " - ") + rop.sql
       case "=" => rop match {
@@ -159,7 +162,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case "~" => lop.sql + " like " + rop.sql
       case _ => error("unknown operation " + op)
     }
-    override def exprType: Class[_] = if (List("++", "+", "-", "*", "/") exists (_ == op)) {
+    override def exprType: Class[_] = if (List("&&", "++", "+", "-", "*", "/") exists (_ == op)) {
       if (lop.exprType == rop.exprType) lop.exprType else super.exprType
     } else classOf[ConstExpr]
   }
