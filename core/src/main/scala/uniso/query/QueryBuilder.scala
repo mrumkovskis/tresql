@@ -110,6 +110,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       op match {
         case "*" => lop * rop
         case "/" => lop / rop
+        case "||" => lop + rop
         case "&&" => uniso.query.Query.select(sql, selCols(lop),
           QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols)
         case "++" => uniso.query.Query.select(sql, selCols(lop),
@@ -136,6 +137,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def sql = op match {
       case "*" => lop.sql + " * " + rop.sql
       case "/" => lop.sql + " / " + rop.sql
+      case "||" => lop.sql + " || " + rop.sql
       case "++" => lop.sql + " union all " + rop.sql
       case "&&" => lop.sql + " intersect " + rop.sql
       case "+" => lop.sql + (if (exprType == classOf[SelectExpr]) " union " else " + ") + rop.sql
