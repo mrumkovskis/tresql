@@ -30,6 +30,14 @@ object QueryParser extends JavaTokenParsers {
   override def stringLiteral: Parser[String] =
     ("\"" + """([^"\p{Cntrl}\\]|\\[\\/bfnrt"]|\\u[a-fA-F0-9]{4})*""" + "\"").r ^^
       (s => s.substring(1, s.length - 1).replace("\\\"", "\""))
+  def excludeKeywordsIdent = new Parser[String] {
+    def apply(in: Input) = {
+      ident(in) match {
+        case s@Success(r, i) => if (r != "in") s else Failure("cannot be in in identifier", i)
+        case r => r
+      }
+    }
+  }
   def comment: Parser[String] = """/\*(.|[\r\n])*?\*/""".r
   def decimalNr: Parser[BigDecimal] = decimalNumber ^^ (BigDecimal(_))
   def TRUE: Parser[Boolean] = "true" ^^^ true
@@ -37,7 +45,7 @@ object QueryParser extends JavaTokenParsers {
   def NULL = "null" ^^^ Null()
   def ALL: Parser[All] = "*" ^^^ All()
 
-  def qualifiedIdent: Parser[Ident] = rep1sep(ident, ".") ^^ (Ident(_))
+  def qualifiedIdent: Parser[Ident] = rep1sep(excludeKeywordsIdent, ".") ^^ (Ident(_))
   def variable: Parser[Variable] = ((":" ~> (ident ~ opt("?"))) | "?") ^^ {
     case "?" => Variable("?", false)
     case (i: String) ~ o => Variable(i, o != None)
@@ -68,7 +76,7 @@ object QueryParser extends JavaTokenParsers {
   def join: Parser[Any] = ("[" ~> repsep(expr, ",") <~ "]") | "/"
   def filter: Parser[Arr] = array
   def obj: Parser[Obj] = opt(join) ~ opt("?") ~ (qualifiedIdent | bracesExp) ~
-    opt("?") ~ opt(ident) ^^ {
+    opt("?") ~ opt(excludeKeywordsIdent) ^^ {
       case a ~ Some(b) ~ c ~ Some(d) ~ e => error("Cannot be right and left join at the same time")
       case a ~ b ~ c ~ d ~ e => Obj(c, if (e == None) null else e.get, if (a == None) null
       else a.get, if (b != None) "r" else if (d != None) "l" else null)
@@ -90,8 +98,10 @@ object QueryParser extends JavaTokenParsers {
       case o ~ l =>
         if (l == None) (null, o match { case v: Variable => v case s: String => BigDecimal(s) })
         else (o match { case v: Variable => v case s: String => BigDecimal(s) },
-          l match { case Some(v: Variable) => v case Some(s: String) => BigDecimal(s)
-          case None => error("Knipis")})
+          l match {
+            case Some(v: Variable) => v case Some(s: String) => BigDecimal(s)
+            case None => error("Knipis")
+          })
     }
   def query: Parser[Any] = objs ~ opt(filter) ~ opt(columns) ~ opt(group) ~ opt(order) ~
     opt(offsetLimit) ^^ {
@@ -107,7 +117,7 @@ object QueryParser extends JavaTokenParsers {
   def mulDiv: Parser[Any] = unaryExpr ~ rep("*" ~ unaryExpr | "/" ~ unaryExpr) ^^ (p => binOp(p))
   def plusMinus: Parser[Any] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ (p => binOp(p))
   def comp: Parser[Any] = plusMinus ~
-    opt(("<=" | ">=" | "<" | ">" | "!=" | "=" | "~") ~ plusMinus) ^^ {
+    opt(("<=" | ">=" | "<" | ">" | "!=" | "=" | "~" | "in") ~ plusMinus) ^^ {
       case l ~ None => l
       case l ~ Some(o ~ r) => BinOp(o, l, r)
     }

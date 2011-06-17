@@ -55,7 +55,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     var binded = false
     def sql = {
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
-      "?"
+      if (!env.reusableExpr && (env contains name)) {
+          env(name) match {
+            case l:scala.collection.Iterator[_] => l.map(e=>"?").mkString(",")
+            case l:scala.collection.Iterable[_] => l.map(e=>"?").mkString(",")
+            case a:Array[_] => a.map(e=>"?").mkString(",")
+            case _ => "?"
+          }
+      } else "?"
     }
     override def toString = if (env contains name) name + " = " + env(name) else name
   }
@@ -162,6 +169,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case "|" => (if (lop.exprType == classOf[SelectExpr]) "exists " else "") + lop.sql +
         " or " + (if (rop.exprType == classOf[SelectExpr]) "exists " else "") + rop.sql
       case "~" => lop.sql + " like " + rop.sql
+      case "in" => lop.sql + " in " + rop.sql
       case _ => error("unknown operation " + op)
     }
     override def exprType: Class[_] = if (List("&&", "++", "+", "-", "*", "/") exists (_ == op)) {

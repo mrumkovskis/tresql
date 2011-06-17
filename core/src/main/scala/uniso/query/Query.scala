@@ -103,24 +103,34 @@ object Query {
 
   private def bindVars(st: PreparedStatement, bindVariables: List[Expr]) {
     Env.log(bindVariables.map(_.toString).mkString("Bind vars: ", ", ", "\n"), 1)
-    bindVariables.map(_()).zipWithIndex.foreach {
-      case (null, idx) => st.setNull(idx + 1, java.sql.Types.VARCHAR)
-      case (i: Int, idx) => st.setInt(idx + 1, i)
-      case (l: Long, idx) => st.setLong(idx + 1, l)
-      case (d: Double, idx) => st.setDouble(idx + 1, d)
-      case (f: Float, idx) => st.setFloat(idx + 1, f)
-      // Allow the user to specify how they want the Date handled based on the input type
-      case (t: java.sql.Timestamp, idx) => st.setTimestamp(idx + 1, t)
-      case (d: java.sql.Date, idx) => st.setDate(idx + 1, d)
-      case (t: java.sql.Time, idx) => st.setTime(idx + 1, t)
-      /* java.util.Date has to go last, since the java.sql date/time classes subclass it. By default we
+    var idx = 1
+    def bindVar(p: Any) {
+      p match {
+        case null => st.setNull(idx, java.sql.Types.VARCHAR)
+        case i: Int => st.setInt(idx, i)
+        case l: Long => st.setLong(idx, l)
+        case d: Double => st.setDouble(idx, d)
+        case f: Float => st.setFloat(idx, f)
+        // Allow the user to specify how they want the Date handled based on the input type
+        case t: java.sql.Timestamp => st.setTimestamp(idx, t)
+        case d: java.sql.Date => st.setDate(idx, d)
+        case t: java.sql.Time => st.setTime(idx, t)
+        /* java.util.Date has to go last, since the java.sql date/time classes subclass it. By default we
 * assume a Timestamp value */
-      case (d: java.util.Date, idx) => st.setTimestamp(idx + 1, new java.sql.Timestamp(d.getTime))
-      case (b: Boolean, idx) => st.setBoolean(idx + 1, b)
-      case (s: String, idx) => st.setString(idx + 1, s)
-      case (bn: java.math.BigDecimal, idx) => st.setBigDecimal(idx + 1, bn)
-      case (bd: BigDecimal, idx) => st.setBigDecimal(idx + 1, bd.bigDecimal)
-      case (obj, idx) => st.setObject(idx + 1, obj)
+        case d: java.util.Date => st.setTimestamp(idx, new java.sql.Timestamp(d.getTime))
+        case b: Boolean => st.setBoolean(idx, b)
+        case s: String => st.setString(idx, s)
+        case bn: java.math.BigDecimal => st.setBigDecimal(idx, bn)
+        case bd: BigDecimal => st.setBigDecimal(idx, bd.bigDecimal)
+        //array binding
+        case i:scala.collection.Iterable[_] => i foreach (bindVar(_)); idx -= 1
+        case i:scala.collection.Iterator[_] => i foreach (bindVar(_)); idx -= 1
+        case a:Array[_] => a foreach (bindVar(_)); idx -= 1
+        //unknown object
+        case obj => st.setObject(idx, obj)
+      }
+      idx += 1
     }
+    bindVariables.map(_()).foreach { bindVar(_) }
   }
 }
