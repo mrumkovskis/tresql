@@ -123,8 +123,7 @@ object Query {
         case bn: java.math.BigDecimal => st.setBigDecimal(idx, bn)
         case bd: BigDecimal => st.setBigDecimal(idx, bd.bigDecimal)
         //array binding
-        case i:scala.collection.Iterable[_] => i foreach (bindVar(_)); idx -= 1
-        case i:scala.collection.Iterator[_] => i foreach (bindVar(_)); idx -= 1
+        case i:scala.collection.Traversable[_] => i foreach (bindVar(_)); idx -= 1
         case a:Array[_] => a foreach (bindVar(_)); idx -= 1
         //unknown object
         case obj => st.setObject(idx, obj)

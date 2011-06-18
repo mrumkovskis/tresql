@@ -57,8 +57,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       if (!env.reusableExpr && (env contains name)) {
           env(name) match {
-            case l:scala.collection.Iterator[_] => l.map(e=>"?").mkString(",")
-            case l:scala.collection.Iterable[_] => l.map(e=>"?").mkString(",")
+            case l:scala.collection.Traversable[_] => l.map(e=>"?").mkString(",")
             case a:Array[_] => a.map(e=>"?").mkString(",")
             case _ => "?"
           }
@@ -373,15 +372,16 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
 
   private def buildInternal(parsedExpr: Any, parseCtx: String = ROOT_CTX): Expr = {
-    def buildSelect(q: Query) = new SelectExpr(q.tables map buildTable,
-      if (q.filter != null) {
+    def buildSelect(q: Query) = new SelectExpr(q.tables map buildTable, //tables
+      if (q.filter != null) { //filter
         val f = (q.filter.elements map { buildInternal(_, WHERE_CTX) }).filter(_ != null)
         if (f.length > 0) f else null
       } else null,
-      if (q.cols != null) q.cols map { buildInternal(_, COL_CTX).asInstanceOf[ColExpr] } else null,
-      q.distinct, buildInternal(q.group),
-      if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null,
-      buildInternal(q.offset, LIMIT_CTX), buildInternal(q.limit, LIMIT_CTX))
+      if (q.cols != null) q.cols map { buildInternal(_, COL_CTX).asInstanceOf[ColExpr] } //cols 
+      else List(new ColExpr(AllExpr(), null)),
+      q.distinct, buildInternal(q.group),//distinct, group
+      if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null,//order
+      buildInternal(q.offset, LIMIT_CTX), buildInternal(q.limit, LIMIT_CTX))//offset, limit
 
     def buildTable(t: Obj) = t match {
       case Obj(Ident(i), a, j, o) => new Table(i, a, buildJoin(j), o)
