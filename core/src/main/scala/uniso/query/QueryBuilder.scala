@@ -446,8 +446,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
         }
-        case QUERY_CTX => new SelectExpr(List(buildTable(t)), null, null, false, null, null, null, null)
-        case TABLE_CTX => new SelectExpr(List(buildTable(t)), null, null, false, null, null, null, null)
+        case QUERY_CTX => new SelectExpr(List(buildTable(t)), null, 
+                List(new ColExpr(AllExpr(), null)), false, null, null, null, null)
+        case TABLE_CTX => new SelectExpr(List(buildTable(t)), null, 
+                List(new ColExpr(AllExpr(), null)), false, null, null, null, null)
         case _ => buildIdent(t)
       }
       case q: Query => parseCtx match {
