@@ -3,11 +3,10 @@ import java.util.{ ArrayList, List => JList, Map => JMap }
 import scala.collection.JavaConversions._
 
 object JavaQuery {
-  /* not tested
+
   def ids(expr: String, params: JMap[String, Any]): JList[Long] = {
-    resultToIds(Query(expr, params))
+    resultToIds(Query(expr, asScalaMap(params).toMap))
   }
-  */
 
   def ids(expr: String, params: JList[Any]): JList[Long] = {
     val parsSeq: Seq[Any] = params
@@ -16,15 +15,8 @@ object JavaQuery {
 
   private def resultToIds(result: Any): JList[Long] = {
     var ids = new ArrayList[Long]()
-    result match {
-      case r: Result =>
-        r.foreach { i =>
-          ids.add(i.asInstanceOf[Long])
-        }
-      case r: Iterable[_] =>
-        r.foreach { i =>
-          ids.add(i.asInstanceOf[Long])
-        }
+    result.asInstanceOf[Result].foreach { r =>
+      ids.add(r(0).asInstanceOf[Long])
     }
     ids
   }
