@@ -128,9 +128,9 @@ object QueryServer extends RestHelper {
         new GregorianCalendar(y.toInt, m.toInt - 1, d.toInt).getTime()
       case DecimalP(_, _, _) => BigDecimal(value)
       case StringP(s) => s
-      case s => Failure(
+      case s => throw new IllegalArgumentException(
         "For argtypes=strong, strings must be" +
-          " prefixed with ' (for " + name + "=" + value + ")", Empty, Empty)
+          " prefixed with ' (for " + name + "=" + value + ")")
     }
   }
 
