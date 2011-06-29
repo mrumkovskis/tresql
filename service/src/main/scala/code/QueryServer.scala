@@ -98,7 +98,8 @@ object QueryServer extends RestHelper {
 
   def typeConvert(pars: Map[String, String],
     argTypes: String = defaultArgTypes): Map[String, Any] = {
-    pars.map(x => (x._1, typeConvert(x._1, x._2, argTypes)))
+    pars.map(x => (x._1, typeConvert(x._1, x._2, argTypes))).filter(
+      (x) => x._2 != None)
   }
 
   def typeConvert(name: String, value: String, argTypes: String) = {
@@ -109,14 +110,14 @@ object QueryServer extends RestHelper {
     }
   }
 
-  def convert(name: String, value: String, strong: Boolean = true) = {
+  private def convert(name: String, value: String, strong: Boolean = true) = {
     val DateP = """(\d\d\d\d)-(\d\d)-(\d\d)""".r
     val DateTimeP =
       """(\d\d\d\d)\-(\d\d)\-(\d\d)[T ]?(\d\d)\:(\d\d)\:(\d\d)""".r
     val DecimalP = """(-)?(\d+)(\.\d*)?""".r
     val StringP = """\'(.*)""".r
     value match {
-      case "" => null
+      case "" => None
       case "null" => null
       case "true" => true
       case "false" => false
@@ -127,10 +128,9 @@ object QueryServer extends RestHelper {
         new GregorianCalendar(y.toInt, m.toInt - 1, d.toInt).getTime()
       case DecimalP(_, _, _) => BigDecimal(value)
       case StringP(s) => s
-      case s if strong => Failure(
+      case s => Failure(
         "For argtypes=strong, strings must be" +
           " prefixed with ' (for " + name + "=" + value + ")", Empty, Empty)
-      case s => s
     }
   }
 
