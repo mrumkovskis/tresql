@@ -43,6 +43,9 @@ class Boot {
     LiftRules.ajaxStart =
       Full(() => LiftRules.jsArtifacts.show("ajax-loader").cmd)
 
+    // increase timeouts to enable long running queries
+    LiftRules.ajaxPostTimeout = 60000
+
     // Make the spinny image go away when it ends
     LiftRules.ajaxEnd =
       Full(() => LiftRules.jsArtifacts.hide("ajax-loader").cmd)
