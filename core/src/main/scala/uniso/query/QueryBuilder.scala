@@ -167,6 +167,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         rop.sql
       case "|" => (if (lop.exprType == classOf[SelectExpr]) "exists " else "") + lop.sql +
         " or " + (if (rop.exprType == classOf[SelectExpr]) "exists " else "") + rop.sql
+      case "~~" => "upper(" + lop.sql + ") like upper(" + rop.sql + ")"
+      case "!~~" => "upper(" + lop.sql + ") not like upper(" + rop.sql + ")"
       case "~" => lop.sql + " like " + rop.sql
       case "!~" => lop.sql + " not like " + rop.sql
       case "in" => lop.sql + " in " + rop.sql
