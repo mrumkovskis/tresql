@@ -168,7 +168,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case "|" => (if (lop.exprType == classOf[SelectExpr]) "exists " else "") + lop.sql +
         " or " + (if (rop.exprType == classOf[SelectExpr]) "exists " else "") + rop.sql
       case "~" => lop.sql + " like " + rop.sql
+      case "!~" => lop.sql + " not like " + rop.sql
       case "in" => lop.sql + " in " + rop.sql
+      case "!in" => lop.sql + " not in " + rop.sql
       case _ => error("unknown operation " + op)
     }
     override def exprType: Class[_] = if (List("&&", "++", "+", "-", "*", "/") exists (_ == op)) {

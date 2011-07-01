@@ -117,7 +117,7 @@ object QueryParser extends JavaTokenParsers {
   def mulDiv: Parser[Any] = unaryExpr ~ rep("*" ~ unaryExpr | "/" ~ unaryExpr) ^^ (p => binOp(p))
   def plusMinus: Parser[Any] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ (p => binOp(p))
   def comp: Parser[Any] = plusMinus ~
-    opt(("<=" | ">=" | "<" | ">" | "!=" | "=" | "~" | "in") ~ plusMinus) ^^ {
+    opt(("<=" | ">=" | "<" | ">" | "!=" | "=" | "~" | "!~" | "in" | "!in") ~ plusMinus) ^^ {
       case l ~ None => l
       case l ~ Some(o ~ r) => BinOp(o, l, r)
     }
