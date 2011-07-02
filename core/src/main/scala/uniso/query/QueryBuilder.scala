@@ -328,7 +328,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def apply() = uniso.query.Query.update(sql, QueryBuilder.this.bindVariables, env)
     protected def _sql = "delete from " + table.sql +
       (if (filter == null) "" else " where " + where)
-    val sql = _sql
+    lazy val sql = _sql
     def where = filter match {
       case (c@ConstExpr(x)) :: Nil => table.aliasOrName + "." +
         env.tbl(table.nameStr).key.cols(0) + " = " + c.sql
