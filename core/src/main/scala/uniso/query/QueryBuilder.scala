@@ -216,17 +216,13 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       uniso.query.Query.select(sql, cols, QueryBuilder.this.bindVariables, env,
         QueryBuilder.this.allCols)
     }
-    //for caching purposes
-    private [this] var _sql: String = null
-    def sql = { if (_sql == null) _sql = ("select " + (if (distinct) "distinct " else "") +
+    lazy val sql = "select " + (if (distinct) "distinct " else "") +
       (if (cols == null) "*" else sqlCols) + " from " + join +
       (if (filter == null) "" else " where " + where) +
       (if (group == null) "" else " group by " + group.sql) +
       (if (order == null) "" else " order by " + (order map (_.sql)).mkString(", ")) +
       (if (offset == null) "" else " offset " + offset.sql) +
-      (if (limit == null) "" else " limit " + limit.sql))
-      _sql
-    }
+      (if (limit == null) "" else " limit " + limit.sql)
     def sqlCols = cols.filter(!_.separateQuery).map(_.sql).mkString(",")
     def join = tables match {
       case t :: Nil => t.sqlName
