@@ -2,8 +2,14 @@ import sbt._
 
 class QueryProject(info: ProjectInfo) extends ParentProject(info)
 {
-   lazy val core = project("core", "Query Core")
+   lazy val core = project("core", "Query Core", new QueryCoreProject(_))
    lazy val service = project("service", "Query web service", new LiftProject(_), core)
+      
+}
+
+protected class QueryCoreProject(info: ProjectInfo) extends DefaultProject(info) {
+      override def libraryDependencies = Set("org.scalatest" % "scalatest_2.8.1" % "1.5" % "test",
+           "org.hsqldb" % "hsqldb-j5" % "2.2.4" % "test") ++ super.libraryDependencies 
 }
 
 protected
