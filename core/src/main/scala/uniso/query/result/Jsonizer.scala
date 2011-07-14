@@ -57,6 +57,12 @@ object Jsonizer {
       case x => buf.append("\"" + JSONFormat.quoteString(x.toString) + "\"")
     }
   }
+  
+  def jsonize(result: Any, rType: ResultType): String = {
+    val w = new java.io.StringWriter
+    jsonize(result, w, rType)
+    w.toString
+  }
 
   def jsonizeResult(result: Result, buf: Writer, rType: ResultType = Objects) {
     if (rType != Object) buf append '['

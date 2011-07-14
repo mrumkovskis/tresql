@@ -1,0 +1,42 @@
+// each line consists of statement to be tested. line format is following:
+//<statement> --> [<optional binding comma separated params>] --> <result as returned from method uniso.query.result.Jsonizer.jsonize(..., ..., Jsonizer.Arrays)>
+//INSERT
+//DEPTS
+DEPT {DEPTNO, DNAME, LOC} + [10, "ACCOUNTING", "NEW YORK"] --> 1
+DEPT {DEPTNO, DNAME, LOC} + [20, "RESEARCH",   "DALLAS"] --> 1
+DEPT {DEPTNO, DNAME, LOC} + [30, "SALES",      "CHICAGO"] --> 1
+DEPT {DEPTNO, DNAME, LOC} + [40, "OPERATIONS", "BOSTON"] --> 1
+//EMPS
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7839, "KING",   "PRESIDENT", null, "1981-11-17", 5000, null, 10] --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7698, "BLAKE",  "MANAGER",   7839, "1981-05-01",  2850, null, 30] --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7782, "CLARK",  "MANAGER",   7839, "1981-06-9", 2450, null, 10] --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7566, "JONES",  "MANAGER",   7839, "1981-04-02",  2975, null, 20] --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7499, "ALLEN",  "SALESMAN",  7698, "1981-02-20", 1600,  300, 30] --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7521, "WARD",   "SALESMAN",  7698, "1981-02-22", 1250,  500, 30] --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7654, "MARTIN", "SALESMAN",  7698, "1981-09-28", 1250, 1400, 30] --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7844, "TURNER", "SALESMAN",  7698, "1981-09-8", 1500,    0, 30] --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7900, "JAMES",  "CLERK",     7698, "1981-12-3", 950, null, 30] --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7934, "MILLER", "CLERK",     7782, "1982-01-23", 1300, null, 10] --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7788, "SCOTT",  "ANALYST",   7566, "1982-12-09", 3000, null, 20] --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7902, "FORD",   "ANALYST",   7566, "1981-12-3", 3000, null, 20] --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7876, "ADAMS",  "CLERK",     7788, "1983-01-12", 1100, null, 20] --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [?, ?, ?, ?, ?, ?, ?, ?] --> 7369, 'SMITH, 'CLERK, 7902, 1980-12-17, 800, null, 20 --> 1
+
+//SALGRADES
+SALGRADE {GRADE, HISAL, LOSAL} + [1,  700, 1200] --> 1
+SALGRADE {GRADE, HISAL, LOSAL} + [2, 1201, 1400] --> 1
+SALGRADE {GRADE, HISAL, LOSAL} + [3, 1401, 2000] --> 1
+SALGRADE {GRADE, HISAL, LOSAL} + [4, 2001, 3000] --> 1
+SALGRADE {GRADE, HISAL, LOSAL} + [5, 3001, 9999] --> 1
+
+//DUMMY
+DUMMY {DUMMY} + [0] --> 1
+
+//SELECT
+emp {count(*)} --> [[14]]
+emp e/dept d [d.deptno = 20]{empno, ename, dname}#(empno) --> [[7369, "SMITH", "RESEARCH"], [7566, "JONES", "RESEARCH"], [7788, "SCOTT", "RESEARCH"], [7876, "ADAMS", "RESEARCH"], [7902, "FORD", "RESEARCH"]]
+dept [deptno in (emp{deptno})]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
+dept d[(emp e[e.deptno = d.deptno])]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
+dept d/emp? e[e.deptno != null]#{d.deptno}#(deptno) --> [[10], [20], [30]]
+//DELETE
+

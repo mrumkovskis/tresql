@@ -102,7 +102,7 @@ object Query {
   }
 
   private def bindVars(st: PreparedStatement, bindVariables: List[Expr]) {
-    Env.log(bindVariables.map(_.toString).mkString("Bind vars: ", ", ", "\n"), 1)
+    Env.log(bindVariables.map(_.toString).mkString("Bind vars: ", ", ", ""), 1)
     var idx = 1
     def bindVar(p: Any) {
       p match {

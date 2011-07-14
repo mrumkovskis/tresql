@@ -2,16 +2,62 @@ package uniso.query.test
 
 import org.scalatest.Suite
 import java.sql._
+import uniso.query._
+import uniso.query.result.Jsonizer._
+import scala.util.parsing.json._
 
 class QueryTest extends Suite {
+  //initialize environment
   Class.forName("org.hsqldb.jdbc.JDBCDriver")
   val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
+  Env update conn
+  Env update metadata.JDBCMetaData("test", "PUBLIC")
+  Env update ((msg, level) => println (msg))
+  //create test db script
   new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split(";").foreach {
     sql => val st = conn.createStatement; st.execute(sql); st.close
   }
-  
-  def testEcho {
-    assert(1 === 1)
+  //freaky way to run the tests by printing results only (did not find the way to pass parameters to test case through sbt)
+  var onlyRegisterResults = System.getProperty("sun.java.command", "").contains("__register.results")
+    
+  def testStatements {
+    def parsePars(pars: String) = {
+      val DF = new java.text.SimpleDateFormat("yyyy-MM-dd")
+      val TF = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+      val D = """(\d{4}-\d{1,2}-\d{1,2})""".r
+      val T = """(\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}:\d{1,2})""".r
+      val N = """(-?\d+(\.\d*)?|\d*\.\d+)""".r
+      pars.split(",").map {
+        _.trim match {
+          case s if (s.startsWith("'")) => s.substring(1, s.length)
+          case "null" => null
+          case "false" => false
+          case "true" => true
+          case D(d) => DF.parse(d)
+          case T(t) => TF.parse(t)
+          case N(n,_) => BigDecimal(n)
+          case x => error("unparseable parameter: " + x)
+        }
+      } toList
+    }
+    new scala.io.BufferedSource(getClass.getResourceAsStream("/test.txt")).getLines.foreach {
+      case l if (l.trim.startsWith("//")) => 
+      case l if (l.trim.length > 0) => {
+        val c = l.split("-->")
+        val (st, params, result) = (c(0).trim, if (c.length == 2) null else c(1),
+             if (c.length == 2) c(1) else c(2))
+        println("Executing:\n" + st)
+        val res = if (params == null) Query(st) else Query(st, parsePars(params))
+        if (onlyRegisterResults) {
+          println("Result: " + jsonize(res, Arrays))
+        } else {
+          res match {
+            case i: Int => assert(i === Integer.parseInt(result.trim))
+            case r: Result => assert(r.toList === JSON.parseFull(result).get)
+          }    
+        }        
+      }
+      case _ =>
+    }
   }
-
 }
