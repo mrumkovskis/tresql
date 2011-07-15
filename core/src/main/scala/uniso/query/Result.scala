@@ -53,7 +53,7 @@ class Result private[query] (rs: ResultSet, cols: Vector[Column], reusableStatem
       })
       i += 1
     }
-    b.toList
+    Vector(b: _*)
   }
 
   /** needs to be overriden since super class implementation calls hasNext method */
