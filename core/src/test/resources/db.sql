@@ -25,4 +25,5 @@ CREATE TABLE DUMMY (DUMMY INTEGER);
 alter table dept add primary key (deptno);
 alter table emp add primary key (empno);
 alter table emp add foreign key (deptno) references dept(deptno);
-alter table emp add foreign key (mgr) references emp(empno)
+alter table emp add foreign key (mgr) references emp(empno);
+alter table salgrade add primary key (grade)

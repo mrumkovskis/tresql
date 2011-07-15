@@ -21,13 +21,14 @@ class QueryTest extends Suite {
   var onlyRegisterResults = System.getProperty("sun.java.command", "").contains("__register.results")
     
   def testStatements {
-    def parsePars(pars: String) = {
+    def parsePars(pars: String, sep:String = ";"): List[Any] = {
       val DF = new java.text.SimpleDateFormat("yyyy-MM-dd")
       val TF = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
       val D = """(\d{4}-\d{1,2}-\d{1,2})""".r
       val T = """(\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}:\d{1,2})""".r
       val N = """(-?\d+(\.\d*)?|\d*\.\d+)""".r
-      pars.split(",").map {
+      val A = """(\[(.*)\])""".r
+      pars.split(sep).map {
         _.trim match {
           case s if (s.startsWith("'")) => s.substring(1, s.length)
           case "null" => null
@@ -36,6 +37,7 @@ class QueryTest extends Suite {
           case D(d) => DF.parse(d)
           case T(t) => TF.parse(t)
           case N(n,_) => BigDecimal(n)
+          case A(a, ac) => parsePars(ac, ",")
           case x => error("unparseable parameter: " + x)
         }
       } toList
