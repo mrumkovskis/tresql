@@ -56,6 +56,6 @@ dept{deptno, dname, |emp[sal >= hisal & sal <= losal]salgrade[deptno = :1(0)] {g
 //union
 /(dept{deptno} + salgrade{grade}) ~#(1) --> [[40], [30], [20], [10], [5], [4], [3], [2], [1]]
 //intersect
-dept d[d.deptno = d1.deptno](dept{deptno} && emp[sal >= 5000]{deptno}) d1 {deptno, dname} --> [[10, "ACCOUNTING"]]
+dept d[d.deptno = d1.deptno](dept{deptno} && emp[sal >= ?]{deptno}) d1 {deptno, dname} --> 5000 --> [[10, "ACCOUNTING"]]
 //DELETE
 
