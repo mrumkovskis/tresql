@@ -53,7 +53,7 @@ class Result private[query] (rs: ResultSet, cols: Vector[Column], reusableStatem
       })
       i += 1
     }
-    Vector(b: _*)
+    b.toList
   }
 
   /** needs to be overriden since super class implementation calls hasNext method */
@@ -64,8 +64,10 @@ class Result private[query] (rs: ResultSet, cols: Vector[Column], reusableStatem
     md.getColumnType(pos) match {
       case ARRAY | BINARY | BLOB | DATALINK | DISTINCT | JAVA_OBJECT | LONGVARBINARY | NULL |
         OTHER | REF | STRUCT | VARBINARY => rs.getObject(pos)
-      case DECIMAL | NUMERIC => rs.getBigDecimal(pos)
-      case BIGINT | INTEGER | /* DECIMAL | NUMERIC | */ SMALLINT | TINYINT => rs.getLong(pos)
+      //scala BigDecimal is returned instead of java.math.BigDecimal
+      //because it can be easily compared using standart operators (==, <, >, etc) 
+      case DECIMAL | NUMERIC => BigDecimal(rs.getBigDecimal(pos))
+      case BIGINT | INTEGER | SMALLINT | TINYINT => rs.getLong(pos)
       case BIT | BOOLEAN => rs.getBoolean(pos)
       case VARCHAR | CHAR | CLOB | LONGVARCHAR => rs.getString(pos)
       case DATE => rs.getDate(pos)
