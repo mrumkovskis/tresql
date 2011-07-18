@@ -17,8 +17,6 @@ class QueryTest extends Suite {
   new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split(";").foreach {
     sql => val st = conn.createStatement; st.execute(sql); st.close
   }
-  //freaky way to run the tests by printing results only (did not find the way to pass parameters to test case through sbt)
-  var onlyRegisterResults = System.getProperty("sun.java.command", "").contains("__register.results")
     
   def testStatements {
     def parsePars(pars: String, sep:String = ";"): List[Any] = {
@@ -50,13 +48,13 @@ class QueryTest extends Suite {
              if (c.length == 2) c(1) else c(2))
         println("Executing:\n" + st)
         val res = if (params == null) Query(st) else Query(st, parsePars(params))
-        if (onlyRegisterResults) {
-          println("Result: " + jsonize(res, Arrays))
-        } else {
-          res match {
-            case i: Int => assert(i === Integer.parseInt(result.trim))
-            case r: Result => assert(r.toList === JSON.parseFull(result).get)
-          }    
+        res match {
+          case i: Int => println("Result: " + i); assert(i === Integer.parseInt(result.trim))
+          case r: Result => {
+              val rs = jsonize(res, Arrays)
+              println("Result: " + rs)
+              assert(JSON.parseFull(rs).get === JSON.parseFull(result).get)
+          }
         }        
       }
       case _ =>

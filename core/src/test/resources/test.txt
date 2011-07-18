@@ -54,8 +54,9 @@ emp [ename ~~ ? & empno in(?) & mgr = null & sal = ?]{empno, ename, job} --> 'ki
 //in subselect with binding
 dept[deptno in (emp[sal >= ?]{deptno})] {dname} --> 5000 --> [["ACCOUNTING"]]
 
-//group by
+//group by, having
 emp[sal >= hisal & sal <= losal]salgrade {grade, hisal, losal, count(empno)} (grade, hisal, losal) #(1) --> [[1, 700, 1200, 3], [2, 1201, 1400, 3], [3, 1401, 2000, 2], [4, 2001, 3000, 5], [5, 3001, 9999, 1]]
+emp[sal >= hisal & sal <= losal]salgrade {grade, hisal, losal, count(*)} (grade, hisal, losal)^(count(*) > ?)#(1) --> 1 --> [[1, 700, 1200, 3], [2, 1201, 1400, 3], [3, 1401, 2000, 2], [4, 2001, 3000, 5]] 
 
 //two level query: salgrade -> emp
 salgrade[?] {grade, hisal, losal, |emp[sal >= :1(1) & sal <= :1(2)]{ename, sal}} --> 5 --> [[5, 3001, 9999, [["KING", 5000.00]]]]
