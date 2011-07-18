@@ -40,13 +40,15 @@ class QueryTest extends Suite {
         }
       } toList
     }
+    var nr = 0
     new scala.io.BufferedSource(getClass.getResourceAsStream("/test.txt")).getLines.foreach {
       case l if (l.trim.startsWith("//")) => 
       case l if (l.trim.length > 0) => {
+        nr += 1
         val c = l.split("-->")
         val (st, params, result) = (c(0).trim, if (c.length == 2) null else c(1),
              if (c.length == 2) c(1) else c(2))
-        println("Executing:\n" + st)
+        println("Executing test #" + nr + ":\n" + st)
         val res = if (params == null) Query(st) else Query(st, parsePars(params))
         res match {
           case i: Int => println("Result: " + i); assert(i === Integer.parseInt(result.trim))
