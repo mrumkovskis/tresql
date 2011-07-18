@@ -32,30 +32,50 @@ SALGRADE {GRADE, HISAL, LOSAL} + [5, 3001, 9999] --> 1
 //DUMMY
 DUMMY {DUMMY} + [0] --> 1
 
-//SELECT
+//----SELECT----
 dummy --> [[0]]
+
 emp {count(*)} --> [[14]]
 emp e/dept d [d.deptno = 20]{empno, ename, dname}#(empno) --> [[7369, "SMITH", "RESEARCH"], [7566, "JONES", "RESEARCH"], [7788, "SCOTT", "RESEARCH"], [7876, "ADAMS", "RESEARCH"], [7902, "FORD", "RESEARCH"]]
+
 //in subselect
 dept [deptno in (emp{deptno})]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
+
 //exists correlated subselect
 dept d[(emp e[e.deptno = d.deptno])]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
+
 //outer join
 dept d/emp? e[e.deptno != null]#{d.deptno}#(deptno) --> [[10], [20], [30]]
+
 //array binding
 emp [empno in(?)]{empno, ename, job}#(empno) --> [7839, 7782] --> [[7782, "CLARK", "MANAGER"], [7839, "KING", "PRESIDENT"]]
 emp [ename ~~ ? & empno in(?) & mgr = null & sal = ?]{empno, ename, job} --> 'kin%; [7839, 7782]; 5000  --> [[7839, "KING", "PRESIDENT"]]
+
 //in subselect with binding
 dept[deptno in (emp[sal >= ?]{deptno})] {dname} --> 5000 --> [["ACCOUNTING"]]
+
 //group by
 emp[sal >= hisal & sal <= losal]salgrade {grade, hisal, losal, count(empno)} (grade, hisal, losal) #(1) --> [[1, 700, 1200, 3], [2, 1201, 1400, 3], [3, 1401, 2000, 2], [4, 2001, 3000, 5], [5, 3001, 9999, 1]]
+
 //two level query: salgrade -> emp
 salgrade[?] {grade, hisal, losal, |emp[sal >= :1(1) & sal <= :1(2)]{ename, sal}} --> 5 --> [[5, 3001, 9999, [["KING", 5000.00]]]]
+
 //three level query: dept -> salgrade -> emp
 dept{deptno, dname, |emp[sal >= hisal & sal <= losal]salgrade[deptno = :1(0)] {grade, hisal, losal, count(empno), |emp/dept[sal >= :1(1) & sal <= :1(2) & deptno = :2(0)]{ename, deptno, dname, sal}#(empno)} (grade, hisal, losal) #(1)}#(deptno) --> [[10, "ACCOUNTING", [[2, 1201, 1400, 1, [["MILLER", 10, "ACCOUNTING", 1300.00]]], [4, 2001, 3000, 1, [["CLARK", 10, "ACCOUNTING", 2450.00]]], [5, 3001, 9999, 1, [["KING", 10, "ACCOUNTING", 5000.00]]]]], [20, "RESEARCH", [[1, 700, 1200, 2, [["SMITH", 20, "RESEARCH", 800.00], ["ADAMS", 20, "RESEARCH", 1100.00]]], [4, 2001, 3000, 3, [["JONES", 20, "RESEARCH", 2975.00], ["SCOTT", 20, "RESEARCH", 3000.00], ["FORD", 20, "RESEARCH", 3000.00]]]]], [30, "SALES", [[1, 700, 1200, 1, [["JAMES", 30, "SALES", 950.00]]], [2, 1201, 1400, 2, [["WARD", 30, "SALES", 1250.00], ["MARTIN", 30, "SALES", 1250.00]]], [3, 1401, 2000, 2, [["ALLEN", 30, "SALES", 1600.00], ["TURNER", 30, "SALES", 1500.00]]], [4, 2001, 3000, 1, [["BLAKE", 30, "SALES", 2850.00]]]]], [40, "OPERATIONS", []]]
+
 //union
+dept[?]{deptno} ++ emp[?]{empno} ++ salgrade[?]{grade} --> 10;7839;1 --> [[10], [7839], [1]]
 /(dept{deptno} + salgrade{grade}) ~#(1) --> [[40], [30], [20], [10], [5], [4], [3], [2], [1]]
+
 //intersect
+dept{deptno} && emp{empno} --> []
 dept d[d.deptno = d1.deptno](dept{deptno} && emp[sal >= ?]{deptno}) d1 {deptno, dname} --> 5000 --> [[10, "ACCOUNTING"]]
-//DELETE
+
+//----UPDATE----
+emp[hiredate >= ? & hiredate <= ?]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;1000.35 --> 2
+emp[hiredate >= ? & hiredate <= ?]{sal} ~#(1) --> '1982-01-23;'1982-12-09 --> [[4000.35], [2300.35]]
+
+//----DELETE----
+salgrade - [?] --> 5 --> 1
+
 
