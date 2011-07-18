@@ -72,6 +72,9 @@ dept[?]{deptno} ++ emp[?]{empno} ++ salgrade[?]{grade} --> 10;7839;1 --> [[10], 
 dept{deptno} && emp{empno} --> []
 dept d[d.deptno = d1.deptno](dept{deptno} && emp[sal >= ?]{deptno}) d1 {deptno, dname} --> 5000 --> [[10, "ACCOUNTING"]]
 
+//product, multiple col sorting
+dept[]salgrade{dname, grade}#(1,loc)~#(2) --> [["ACCOUNTING", 5], ["ACCOUNTING", 4], ["ACCOUNTING", 3], ["ACCOUNTING", 2], ["ACCOUNTING", 1], ["OPERATIONS", 5], ["OPERATIONS", 4], ["OPERATIONS", 3], ["OPERATIONS", 2], ["OPERATIONS", 1], ["RESEARCH", 5], ["RESEARCH", 4], ["RESEARCH", 3], ["RESEARCH", 2], ["RESEARCH", 1], ["SALES", 5], ["SALES", 4], ["SALES", 3], ["SALES", 2], ["SALES", 1]]
+
 //----UPDATE----
 emp[hiredate >= ? & hiredate <= ?]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;1000.35 --> 2
 emp[hiredate >= ? & hiredate <= ?]{sal} ~#(1) --> '1982-01-23;'1982-12-09 --> [[4000.35], [2300.35]]
