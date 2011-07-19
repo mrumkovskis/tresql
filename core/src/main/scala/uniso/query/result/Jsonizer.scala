@@ -104,10 +104,11 @@ object Jsonizer {
     result foreach { r =>
       if (i > 0) buf append ", "
       // name
-      buf append '"'
-      buf append i.toString
-      buf append "\": "
-
+      if (rType != Arrays) {
+        buf append '"'
+        buf append i.toString
+        buf append "\": "          
+      }
       // value
       jsonize(r, buf, if (rType == Object) Arrays else rType)
       i += 1
