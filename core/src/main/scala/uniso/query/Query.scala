@@ -106,7 +106,7 @@ object Query {
     var idx = 1
     def bindVar(p: Any) {
       p match {
-        case null => st.setNull(idx, java.sql.Types.VARCHAR)
+        case null => st.setNull(idx, java.sql.Types.NULL)
         case i: Int => st.setInt(idx, i)
         case l: Long => st.setLong(idx, l)
         case d: Double => st.setDouble(idx, d)
