@@ -66,7 +66,9 @@ class Result private[query] (rs: ResultSet, cols: Vector[Column], reusableStatem
         OTHER | REF | STRUCT | VARBINARY => rs.getObject(pos)
       //scala BigDecimal is returned instead of java.math.BigDecimal
       //because it can be easily compared using standart operators (==, <, >, etc) 
-      case DECIMAL | NUMERIC => BigDecimal(rs.getBigDecimal(pos))
+      case DECIMAL | NUMERIC => {
+        val bd = rs.getBigDecimal(pos); if (bd != null) BigDecimal(bd) else null
+      }
       case BIGINT | INTEGER | SMALLINT | TINYINT => rs.getLong(pos)
       case BIT | BOOLEAN => rs.getBoolean(pos)
       case VARCHAR | CHAR | CLOB | LONGVARCHAR => rs.getString(pos)
