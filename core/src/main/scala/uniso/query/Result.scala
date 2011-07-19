@@ -67,14 +67,16 @@ class Result private[query] (rs: ResultSet, cols: Vector[Column], reusableStatem
       //scala BigDecimal is returned instead of java.math.BigDecimal
       //because it can be easily compared using standart operators (==, <, >, etc) 
       case DECIMAL | NUMERIC => {
-        val bd = rs.getBigDecimal(pos); if (bd != null) BigDecimal(bd) else null
+        val bd = rs.getBigDecimal(pos); if (rs.wasNull) null else BigDecimal(bd)
       }
-      case BIGINT | INTEGER | SMALLINT | TINYINT => rs.getLong(pos)
-      case BIT | BOOLEAN => rs.getBoolean(pos)
+      case BIGINT | INTEGER | SMALLINT | TINYINT => {
+        val v = rs.getLong(pos); if (rs.wasNull) null else v
+      }
+      case BIT | BOOLEAN => val v = rs.getBoolean(pos); if (rs.wasNull) null else v
       case VARCHAR | CHAR | CLOB | LONGVARCHAR => rs.getString(pos)
       case DATE => rs.getDate(pos)
       case TIME | TIMESTAMP => rs.getTimestamp(pos)
-      case DOUBLE | FLOAT | REAL => rs.getDouble(pos)
+      case DOUBLE | FLOAT | REAL => val v = rs.getDouble(pos); if (rs.wasNull) null else v
     }
   }
   
