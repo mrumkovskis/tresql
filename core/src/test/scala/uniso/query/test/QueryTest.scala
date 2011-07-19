@@ -40,24 +40,30 @@ class QueryTest extends Suite {
         }
       } toList
     }
+
     var nr = 0
     new scala.io.BufferedSource(getClass.getResourceAsStream("/test.txt")).getLines.foreach {
       case l if (l.trim.startsWith("//")) => 
       case l if (l.trim.length > 0) => {
         nr += 1
         val c = l.split("-->")
-        val (st, params, result) = (c(0).trim, if (c.length == 2) null else c(1),
+        val (st, params, patternRes) = (c(0).trim, if (c.length == 2) null else c(1),
              if (c.length == 2) c(1) else c(2))
         println("Executing test #" + nr + ":\n" + st)
-        val res = if (params == null) Query(st) else Query(st, parsePars(params))
-        res match {
-          case i: Int => println("Result: " + i); assert(i === Integer.parseInt(result.trim))
+        val testRes = if (params == null) Query(st) else Query(st, parsePars(params))
+        testRes match {
+          case i: Int => println("Result: " + i); assert(i === Integer.parseInt(patternRes.trim))
           case r: Result => {
-              val rs = jsonize(res, Arrays)
-              println("Result: " + rs)
-              assert(JSON.parseFull(rs).get === JSON.parseFull(result).get)
+            val rs = jsonize(testRes, Arrays)
+            println("Result: " + rs)
+            assert(JSON.parseFull(rs).get === JSON.parseFull(patternRes).get)
           }
-        }        
+          case s: Seq[_] => {
+            val rs = jsonize(testRes, Arrays)
+            println("Result: " + rs)
+            assert(JSON.parseFull(rs).get === JSON.parseFull(patternRes).get)
+          }
+        }         
       }
       case _ =>
     }

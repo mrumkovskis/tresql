@@ -79,8 +79,12 @@ dept[]salgrade[]dummy{dname, grade, dummy}#(1,loc)~#(2) --> [["ACCOUNTING", 5, 0
 //----UPDATE----
 emp[hiredate >= ? & hiredate <= ?]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;1000.35 --> 2
 emp[hiredate >= ? & hiredate <= ?]{sal} ~#(1) --> '1982-01-23;'1982-12-09 --> [[4000.35], [2300.35]]
+emp[?] {ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} = [?, ?, ?, ?, ?, ?, ?] --> 7876; null; null; null; null; null; null; null --> 1
+emp[7876] --> [[7876, null, null, null, null, null, null, null]]
 
 //----DELETE----
 salgrade - [?] --> 5 --> 1
 
+//----BATCH----
+SALGRADE {GRADE, HISAL, LOSAL} + [?, ?, ?], emp[?] {ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} = [?, ?, ?, ?, ?, ?, ?], emp[?] --> 6; 10000; 11000; 7876; 'ADAMS;  'CLERK; 7788; '1983-01-12; 1100; null; 20; 7788 --> [1, 1, [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 4000.35, null, 20]]]
 
