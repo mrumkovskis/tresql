@@ -554,7 +554,7 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
       val r2 = e().asInstanceOf[Result]
       val b = new scala.collection.mutable.ListBuffer[Any]
       r1 foreach { r =>
-        b += r1.content ++ (if (r2.hasNext) r2.content else Nil)
+        b += r1.content ++ (if (r2.hasNext) { r2.next; r2.content } else Nil)
       }
       b.toList
     }
