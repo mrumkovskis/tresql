@@ -450,9 +450,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
         }
-        case QUERY_CTX => new SelectExpr(List(buildTable(t)), null, 
-                List(new ColExpr(AllExpr(), null)), false, null, null, null, null)
-        case TABLE_CTX => new SelectExpr(List(buildTable(t)), null, 
+        case QUERY_CTX | TABLE_CTX => new SelectExpr(List(buildTable(t)), null, 
                 List(new ColExpr(AllExpr(), null)), false, null, null, null, null)
         case _ => buildIdent(t)
       }
@@ -467,16 +465,20 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         val o = buildInternal(oper, parseCtx)
         if (!unboundVarsFlag) new UnExpr(op, o) else { unboundVarsFlag = false; null }
       }
-      case BinOp(op, lop, rop) => {
-        //enter into query context because of potential union or minus in the case of ROOT_CTX
-        val ctx = if (parseCtx == ROOT_CTX) QUERY_CTX else parseCtx
-        var l = buildInternal(lop, ctx)
-        if (unboundVarsFlag) { l = null; unboundVarsFlag = false }
-        var r = buildInternal(rop, ctx)
-        if (unboundVarsFlag) { r = null; unboundVarsFlag = false }
-        if (l != null && r != null) new BinExpr(op, l, r) else if (op == "&" || op == "|")
-          if (l != null) l else if (r != null) r else null
-        else null
+      case e@BinOp(op, lop, rop) => parseCtx match {
+        case ROOT_CTX => {
+          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+          val ex = b.buildInternal(e, QUERY_CTX); this.bindIdx = b.bindIdx; ex            
+        }
+        case ctx => {
+          var l = buildInternal(lop, ctx)
+          if (unboundVarsFlag) { l = null; unboundVarsFlag = false }
+          var r = buildInternal(rop, ctx)
+          if (unboundVarsFlag) { r = null; unboundVarsFlag = false }
+          if (l != null && r != null) new BinExpr(op, l, r) else if (op == "&" || op == "|")
+            if (l != null) l else if (r != null) r else null
+          else null  
+        }
       }
       case Fun(n, pl: List[_]) => new FunExpr(n, pl map { buildInternal(_, parseCtx) })
       case Arr(l: List[_]) => new ArrExpr(l map { buildInternal(_, parseCtx) })
