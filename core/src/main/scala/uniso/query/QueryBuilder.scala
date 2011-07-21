@@ -550,6 +550,14 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
   }
   def |(e: Expr) = this() match {
     case x: Boolean => x | e().asInstanceOf[Boolean]
+    case r1: Result => {
+      val r2 = e().asInstanceOf[Result]
+      val b = new scala.collection.mutable.ListBuffer[Any]
+      r1 foreach { r =>
+        b += r1.content ++ (if (r2.hasNext) r2.content else Nil)
+      }
+      b.toList
+    }
   }
   def compare(that: Expr) = {
     this() match {
