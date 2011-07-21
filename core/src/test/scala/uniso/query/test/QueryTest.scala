@@ -46,9 +46,10 @@ class QueryTest extends Suite {
       case l if (l.trim.startsWith("//")) => 
       case l if (l.trim.length > 0) => {
         nr += 1
-        val c = l.split("-->")
-        val (st, params, patternRes) = (c(0).trim, if (c.length == 2) null else c(1),
-             if (c.length == 2) c(1) else c(2))
+        val (st, params, patternRes) = l.split("-->") match {
+          case scala.Array(s, r) => (s, null, r)
+          case scala.Array(s, p, r) => (s, p, r)
+        }
         println("Executing test #" + nr + ":\n" + st)
         val testRes = if (params == null) Query(st) else Query(st, parsePars(params))
         testRes match {
