@@ -15,7 +15,7 @@ Env update conn
 Env update ((msg, level) => println (msg))
 
 var s = """per_persona p[p.kla_pilsoniba_id pils, p.kla_valstiskas_piederibas_id valsts]kla_kodifikatora_ieraksts?[?, ?]
-        {p.id, vards, uzvards, |mkString(per_auto_kategorija/kla_kodifikatora_ieraksts[per_persona_id = :1(0)]{kods}, "", ","),
+        {p.id, vards, uzvards, |mkString(per_auto_kategorija/kla_kodifikatora_ieraksts[per_persona_id = :1(1)]{kods}, "", ","),
          pils.kods, pils.nosaukums, valsts.kods, valsts.nosaukums}"""
 
 Query("mkString(" + s + ")", 1326418,1326432)
@@ -25,8 +25,8 @@ Jsonizer.jsonize(Query(s, 1326418,1326432).asInstanceOf[Result], writer)
 println(writer)
 
 var s = """per_persona p[p.kla_pilsoniba_id pils, p.kla_valstiskas_piederibas_id valsts]kla_kodifikatora_ieraksts?[?, ?]
-        {p.id, vards, uzvards, |mkString(per_auto_kategorija/kla_kodifikatora_ieraksts[per_persona_id = :1(0)]{kods,
-         |mkString(per_persona p[kla_valsts_val_prasme_id]kla_kodifikatora_ieraksts[p.id = :2(0)]{kods}, "", ",")}, "", ","),
+        {p.id, vards, uzvards, |mkString(per_auto_kategorija/kla_kodifikatora_ieraksts[per_persona_id = :1(1)]{kods,
+         |mkString(per_persona p[kla_valsts_val_prasme_id]kla_kodifikatora_ieraksts[p.id = :2(1)]{kods}, "", ",")}, "", ","),
          pils.kods, pils.nosaukums, valsts.kods, valsts.nosaukums}"""
 
 val expr = Query.build("mkString(" + s + ")")

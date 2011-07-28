@@ -69,7 +69,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   class ResExpr(val nr: Int, val col: Any) extends Expr {
     override def apply() = col match {
       case c: String => env(nr)(c)
-      case c: Int => env(nr)(c)
+      case c: Int if (c > 0) => env(nr)(c - 1)
+      case c: Int => error("column index in result expression must be greater than 0. Is: " + c)
     }
     var binded = false
     def sql = {
