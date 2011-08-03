@@ -153,7 +153,7 @@ object QueryServer extends RestHelper {
     json(
       System.getProperty(Conn.driverProp),
       System.getProperty(Conn.usrProp),
-      System.getProperty(Conn.schemaProp),
+      System.getProperty(Conn.schemaProp, "public"),
       expr, pars, writer, rType)
   }
 
