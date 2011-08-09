@@ -40,10 +40,12 @@ Note: With this web service you can not only receive result data, but also see S
 <a name="wiki-quickstart"/>Quickstart
 ----------
 Consider the following simplified tables for employees and departments with parent-child relationship:  
+
     dept(deptno (primary key), dname)
     emp(empno (primary key), ename, deptno (references dept))
 
 Consider the following data in those tables: 
+
     dept[10, "ACCOUNTING"]
     emp[7839, "BLAKE", 10]
     emp[7839, "SCOTT", 10]
