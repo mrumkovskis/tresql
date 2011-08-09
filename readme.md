@@ -54,46 +54,45 @@ Example 1. To select employees with their department name, use the following ONQ
 `emp/dept {empno, ename, dname}`
 
 The query returns a JSON object:  
+
     [
       {"empno": 7698, "ename": "BLAKE", "dname": "ACCOUNTING"}, 
       {"empno": 7788, "ename": "SCOTT", "dname": "ACCOUNTING"}
     ]
 
 Example 2. Now let's select parent record and the child records:
-```
-dept {
-  deptno, 
-  dname, 
-  |emp [deptno = :1(1)] {empno, ename} emp
-}
-```
+
+    dept {
+      deptno, 
+      dname, 
+      |emp [deptno = :1(1)] {empno, ename} emp
+    }
 
 Result:
-```
-[
-    {
-	"deptno": 10, 
-	"dname": "ACCOUNTING", 
-	"emp": [
-            {"empno": 7698, "ename": "BLAKE"}, 
-            {"empno": 7788, "ename": "SCOTT"}
-        ]
-    }
-]
-```
+
+    [
+        {
+    	"deptno": 10, 
+    	"dname": "ACCOUNTING", 
+    	"emp": [
+                {"empno": 7698, "ename": "BLAKE"}, 
+                {"empno": 7788, "ename": "SCOTT"}
+            ]
+        }
+    ]
+
 
 This query returns information from both tables in a JSON object. It is ready to use by the client application.   
 You can also choose to receive data more concisely in an array format:
-```
-[
-  [
-    10, "ACCOUNTING", [
-      [7698, "BLAKE"], 
-      [7788, "SCOTT"]
+
+    [
+      [
+        10, "ACCOUNTING", [
+          [7698, "BLAKE"], 
+          [7788, "SCOTT"]
+        ]
+      ]
     ]
-  ]
-]
-```
 
 ### Syntax explanation
 
@@ -115,14 +114,14 @@ In the example 2:
 Figure brackets {} again denote objects to be selected. The 3d object is a subselect from emp table to return employee records.  
 Square brackets [] denote a WHERE condition.   
 Notation :1(1) is a little tricky. Colon ":" denotes a binding variable. :1(1) instructs to bind value to parent SELECT statement (1 level up) , 1st value. The ONQL query in this example produces 2 SELECT statements:   
-```sql
-1. select deptno, dname from dept  
-2. select empno, ename from emp where deptno = :1(1)  
-```
+
+    1. select deptno, dname from dept  
+    2. select empno, ename from emp where deptno = :1(1)  
+
 Therefore, :1(1) substitutes deptno value from first select as deptno value in second select statement.  
 
 Further reading
 ---------------
 
-Compiling and installing
-ONQL language guide
+[Compiling and installing](wiki/Installation)  
+[ONQL language guide](wiki/Language-documentation)  
