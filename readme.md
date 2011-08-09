@@ -53,13 +53,11 @@ Consider the following data in those tables:
 Example 1. To select employees with their department name, use the following ONQL query:  
 `emp/dept {empno, ename, dname}`
 
-The query returns a JSON object:
-```
-[
-  {"empno": 7698, "ename": "BLAKE", "dname": "ACCOUNTING"}, 
-  {"empno": 7788, "ename": "SCOTT", "dname": "ACCOUNTING"}
-]
-```
+The query returns a JSON object:  
+    [
+      {"empno": 7698, "ename": "BLAKE", "dname": "ACCOUNTING"}, 
+      {"empno": 7788, "ename": "SCOTT", "dname": "ACCOUNTING"}
+    ]
 
 Example 2. Now let's select parent record and the child records:
 ```
