@@ -1,4 +1,4 @@
-ONQL Language Guide
+TreSQL Language Guide
 ===================
 
 Contents
@@ -8,7 +8,7 @@ Contents
 * [Data manipulation](#data-manipulation)  
 * [Appendix Data](#appendix-data)  
 
-ONQL provides syntax for both data manipulation (INSERT, UPDATE) and querying (SELECT) as well as more rarely used SQL clauses (GROUP BY, INTERSECT etc.). Once the database structure is defined, it can fulfill all the SQL needs for your application.  
+TreSQL provides syntax for both data manipulation (INSERT, UPDATE) and querying (SELECT) as well as more rarely used SQL clauses (GROUP BY, INTERSECT etc.). Once the database structure is defined, it can fulfill all the SQL needs for your application.  
 
 The sample data used by the following examples is described in [Appendix Data](#appendix-data).  
  
@@ -104,7 +104,7 @@ EMP E
 ```
 
 ### <a name="wiki-nesting-objects"/> Nesting objects
-Let us proceed at once to the more complex topic of including nested objects in your results, since this was one of the main reasons to use ONQL (for the more basic ONQL usage, proceed to next section).
+Let us proceed at once to the more complex topic of including nested objects in your results, since this was one of the main reasons to use TreSQL (for the more basic TreSQL usage, proceed to next section).
 
 We have already seen this query in [Quickstart](#quickstart) section:  
 ```
@@ -114,7 +114,7 @@ dept {
   |emp [deptno = :1(1)] {empno, ename} emp
 }
 ```
-The pipe "|" syntax specifies a query for nested object. This enclosed query follows the same ONQL syntax as it's parent query. It has to somehow reference parent query, and this is specified by special binding variables like :1(1).   
+The pipe "|" syntax specifies a query for nested object. This enclosed query follows the same TreSQL syntax as it's parent query. It has to somehow reference parent query, and this is specified by special binding variables like :1(1).   
 Syntax :m(N) specifies to use as a binding value column number N (starting from 1) of parent (enclosing) select number m. Think of select numbering as this: parent (enclosing) select query is number 1, it's parent is number 2, etc.  
 The following 3-level query returns departments, their employees (1st level nesting) and their managers, if the manager belongs to the same department. So for managers subselect, departments query is a 2nd level parent select:   
 ```
@@ -138,7 +138,7 @@ salgrade
 
 ### <a name="wiki-shortcut-for-joins"/> Shortcut for joins
 
-ONQL provides slash "/" as a shortcut for joins. This is an Xpath-like syntax. It infers the relationship between the two tables if there is just 1 foreign key joining them. The following query joins EMP and DEPT tables:  
+TreSQL provides slash "/" as a shortcut for joins. This is an Xpath-like syntax. It infers the relationship between the two tables if there is just 1 foreign key joining them. The following query joins EMP and DEPT tables:  
 `emp e/dept d {e.ename, d.dname}`
 
 It is same as the following (table order does not matter):   
@@ -193,7 +193,7 @@ group by grade, hisal, losal having count(*) > 1
 ```
 
 ### <a name="wiki-nesting-selects-with-in"/> Nesting selects with IN and EXISTS
-You can specify a nested IN query in ONQL, just as you would specify a nested IN query in SQL WHERE clause:
+You can specify a nested IN query in TreSQL, just as you would specify a nested IN query in SQL WHERE clause:
 ```
 dept [
       deptno in (
@@ -210,7 +210,7 @@ dept d [
 ```
 
 ### <a name="wiki-boolean"/>Combining boolean conditions (AND, OR, NOT) in WHERE clauses
-ONQL uses the syntax:
+TreSQL uses the syntax:
 <pre>
 & for AND
 | for OR
@@ -282,7 +282,7 @@ emp [ job ~~ "%lyST"] {ename, job}
 ```
 
 ### <a name="wiki-array-binding"/>Array binding
-Array binding is a special shortcut of ONQL that allows to bind several binding variables as one array parameter. What distinguishes it is that you specify only one placeholder, and supply only one binding value, which is an array:
+Array binding is a special shortcut of TreSQL that allows to bind several binding variables as one array parameter. What distinguishes it is that you specify only one placeholder, and supply only one binding value, which is an array:
 ```
 emp [empno in (?)] 
   {empno, ename, job}
@@ -388,7 +388,7 @@ alter table salgrade add primary key (grade);
 
 ### Data records
 
-You can use the following ONQL script to load the data.
+You can use the following TreSQL script to load the data.
 
 ```
 DEPT {DEPTNO, DNAME, LOC} + [10, "ACCOUNTING", "NEW YORK"], 
