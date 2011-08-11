@@ -1,7 +1,7 @@
-TreSQL - object-notated SQL for web clients
+TreSQL - Tree SQL language for web clients
 =========================================
 
-TreSQL (Tree SQL) is a query language built on top of SQL that can select data into hierarchical [JSON](http://en.wikipedia.org/wiki/JSON) objects. This allows to select data for complex input form using one simple query, without any additional server-side programming. TreSQL has very compact notation and provides many powerful shortcuts. It aims to provide complete functionality of SQL for query and data manipulation purposes. In a web application or a client-server application, it can fullfill all the database querying needs for the client. It's Scala API is much more concise than JDBC and can be used for all database requests.
+[TreSQL (Tree SQL)](Query/wiki/language-guide) is a query language built on top of SQL that can select data into hierarchical [JSON](http://en.wikipedia.org/wiki/JSON) objects. This allows to select data for complex input form using one simple query, without any additional server-side programming. TreSQL has very compact notation and provides many powerful shortcuts. It aims to provide complete functionality of SQL for query and data manipulation purposes. In a web application or a client-server application, it can fullfill all the database querying needs for the client. It's Scala API is much more concise than JDBC and can be used for all database requests.
 
 <b>With TreSQL, we provide: </b>  
 1. Query and data manipulation language with SQL functionality  
@@ -34,7 +34,7 @@ Try it online
 You can test TreSQL queries, including all examples from this guide, directly using our web service:  
 http://uniso.lv/querytest/get
 
-This web service is set up with test data described in [Appendix Data](wiki/language-guide#wiki-appendix-data). (We do no allow data manipulation at this URL).  
+This web service is set up with test data described in [Appendix Data](Query/wiki/language-guide#wiki-appendix-data). (We do no allow data manipulation at this URL).  
 Note: With this web service you can not only receive result data, but also see SQL statement(s) that are generated from your TreSQL query. This way you can understand the meaning of any TreSQL query even without explanations below.  
 
 <a name="wiki-quickstart"/>Quickstart
