@@ -34,7 +34,7 @@ Try it online
 You can test TreSQL queries, including all examples from this guide, directly using our web service:  
 http://uniso.lv/querytest/get
 
-This web service is set up with test data described in [Appendix Data](#appendix-data). (We do no allow data manipulation at this URL).  
+This web service is set up with test data described in [Appendix Data](wiki/language-guide#wiki-appendix-data). (We do no allow data manipulation at this URL).  
 Note: With this web service you can not only receive result data, but also see SQL statement(s) that are generated from your TreSQL query. This way you can understand the meaning of any TreSQL query even without explanations below.  
 
 <a name="wiki-quickstart"/>Quickstart
