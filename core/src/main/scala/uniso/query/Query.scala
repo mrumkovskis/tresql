@@ -16,22 +16,9 @@ object Query {
   }
 
   def apply(expr: String, params: Map[String, Any]): Any = {
-    apply(expr, false, params)
-  }
+    val exp = QueryBuilder(expr, Env(params, false))
+    exp()  }
 
-  def apply(expr: String, parseParams: Boolean, params: Any*): Any = {
-    apply(expr, parseParams, params.toList)
-  }
-
-  def apply(expr: String, parseParams: Boolean, params: List[Any]): Any = {
-    var i = 0
-    apply(expr, parseParams, params.map { e => i += 1; (i.toString, e) }.toMap)
-  }
-
-  def apply(expr: String, parseParams: Boolean, params: Map[String, Any]): Any = {
-    val exp = QueryBuilder(expr, Env(params, false, parseParams))
-    exp()
-  }
 
   def apply(expr: Any) = {
     val exp = QueryBuilder(expr, Env(Map(), false))
@@ -39,8 +26,8 @@ object Query {
   }
 
   def parse(expr: String) = QueryParser.parseAll(expr)
-  def build(expr: String): Expr = QueryBuilder(expr, Env(Map(), true, false))
-  def build(expr: Any): Expr = QueryBuilder(expr, Env(Map(), true, false))
+  def build(expr: String): Expr = QueryBuilder(expr, Env(Map(), true))
+  def build(expr: Any): Expr = QueryBuilder(expr, Env(Map(), true))
 
   def select(expr: String, params: String*) = {
     apply(expr, params.toList).asInstanceOf[Result]

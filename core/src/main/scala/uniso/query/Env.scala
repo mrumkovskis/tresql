@@ -78,12 +78,8 @@ object Env extends ResourceProvider {
   private var md: MetaData = null
   private val threadConn = new ThreadLocal[java.sql.Connection]
   var motherConn: java.sql.Connection = null
-  def apply(params: Map[String, String], reusableExpr: Boolean): Env = {
-    new Env(params mapValues (Query(_)), Env, reusableExpr)
-  }
-  def apply(params: Map[String, Any], reusableExpr: Boolean, parseParams: Boolean): Env = {
-    if (parseParams) apply(params.asInstanceOf[Map[String, String]], reusableExpr)
-    else new Env(params, Env, reusableExpr)
+  def apply(params: Map[String, Any], reusableExpr: Boolean): Env = {
+    new Env(params, Env, reusableExpr)
   }
   def conn = { val c = threadConn.get; if (c == null) motherConn else c }
   def metaData = md
