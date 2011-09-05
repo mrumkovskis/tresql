@@ -124,4 +124,4 @@ Further reading
 ---------------
 
 [Compiling and installing](Query/wiki/Installation)  
-[TreSQL language guide](Query/wiki/Language-documentation)  
+[TreSQL language guide](Query/wiki/language-guide)
