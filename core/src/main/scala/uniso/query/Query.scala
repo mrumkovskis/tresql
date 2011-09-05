@@ -17,8 +17,8 @@ object Query {
 
   def apply(expr: String, params: Map[String, Any]): Any = {
     val exp = QueryBuilder(expr, Env(params, false))
-    exp()  }
-
+    exp() 
+  }
 
   def apply(expr: Any) = {
     val exp = QueryBuilder(expr, Env(Map(), false))
