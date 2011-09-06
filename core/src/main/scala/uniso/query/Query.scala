@@ -77,9 +77,12 @@ object Query {
   }
 
   private def statement(sql: String, env: Env) = {
+    val conn = env.conn
+    if (conn == null) throw new NullPointerException(
+        """Connection not found in environment. Check if "Env update conn" (in this case statement execution must be done in the same thread) or "Env.motherConn = conn" is called.""")
     if (env.reusableExpr)
       if (env.statement == null) {
-        val conn = env.conn; val s = conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY,
+        val s = conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY,
           ResultSet.CONCUR_READ_ONLY); env.update(s); s
       } else env.statement
     else {
