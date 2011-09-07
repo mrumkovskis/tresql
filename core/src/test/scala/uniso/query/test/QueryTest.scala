@@ -54,6 +54,8 @@ class QueryTest extends Suite {
         val testRes = if (params == null) Query(st) else Query(st, parsePars(params))
         testRes match {
           case i: Int => println("Result: " + i); assert(i === Integer.parseInt(patternRes.trim))
+          case d: BigDecimal => println("Result: " + d); assert(d === BigDecimal(patternRes.trim))
+          case s: String => println("Result: " + s); assert(s === patternRes.trim)
           case r: Result => {
             val rs = jsonize(testRes, Arrays)
             println("Result: " + rs)
