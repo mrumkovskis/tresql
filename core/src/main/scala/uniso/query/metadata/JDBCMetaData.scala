@@ -17,6 +17,8 @@ class JDBCMetaData(private val db: String, private val defaultSchema: String)
             metaData(name)
         } catch {
             case _: NoSuchElementException => {
+                if (conn == null) throw new NullPointerException(
+                    """Connection not found in environment. Check if "Env update conn" (in this case statement execution must be done in the same thread) or "Env.motherConn = conn" is called.""")
                 val dmd = conn.getMetaData
                 val rs = (if (dmd.storesUpperCaseIdentifiers) name.toUpperCase 
                         else name).split("\\.") match {
