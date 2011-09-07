@@ -77,11 +77,12 @@ object Env extends ResourceProvider {
   //meta data object must be thread safe!
   private var md: MetaData = null
   private val threadConn = new ThreadLocal[java.sql.Connection]
-  var motherConn: java.sql.Connection = null
+  //this is for scala interperter since it executes every command in separate thread from console thread
+  var sharedConn: java.sql.Connection = null
   def apply(params: Map[String, Any], reusableExpr: Boolean): Env = {
     new Env(params, Env, reusableExpr)
   }
-  def conn = { val c = threadConn.get; if (c == null) motherConn else c }
+  def conn = { val c = threadConn.get; if (c == null) sharedConn else c }
   def metaData = md
   def update(md: MetaData) = this.md = md
   def update(conn: java.sql.Connection) = this.threadConn set conn
