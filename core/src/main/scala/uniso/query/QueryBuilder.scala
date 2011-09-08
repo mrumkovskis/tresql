@@ -57,8 +57,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       if (!env.reusableExpr && (env contains name)) {
           env(name) match {
-            case l:scala.collection.Traversable[_] => l.map(e=>"?").mkString(",")
-            case a:Array[_] => a.map(e=>"?").mkString(",")
+            case l:scala.collection.Traversable[_] => "?," * (l size) dropRight 1
+            case a:Array[_] => "?," * (a size) dropRight 1
             case _ => "?"
           }
       } else "?"
