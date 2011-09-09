@@ -31,6 +31,8 @@ object QueryServer extends RestHelper {
 
   val P_ = "p_" // pars prefix to legalize name
   val Plen = P_.size
+  var logLevel = 0
+
   private var initialized = false
 
   /** special parameter names */
@@ -38,6 +40,7 @@ object QueryServer extends RestHelper {
     val query = "query"
     val argtypes = "argtypes"
     val restype = "res-type"
+    val debugMode = "debug-mode"
   }
 
   object ArgTypes {
@@ -63,11 +66,38 @@ object QueryServer extends RestHelper {
       respond
   }
 
+  var logBuffer : StringBuffer = new StringBuffer("")
+  def flushLog(writer: Writer) = {
+     writer.write("\n\nLog:\n")
+     writer.write(logBuffer.toString)
+     logBuffer.delete(0, logBuffer.length)
+  }
+
   def respond = {
     import Jsonizer.ResultType
+
+    S.param(PN.debugMode) match {
+      case Full(s) => {
+        logLevel = 2
+	Env update ((msg, level) => { 
+          println (msg)
+          logBuffer.append(msg + "\n")
+	})
+      }
+      case _ => {
+	logLevel = 1
+	Env update ((msg, level) => println (msg))
+      }
+    }
+
     for {
       query <- S.param(PN.query) ?~ "query is missing"
       req <- S.request ?~ "request is missing :-O"
+      //      debugMode <- S.param(PN.debugMode) match {
+      //        case Empty => "off"
+      //        case Full(s) => "on"
+      //      }
+
       resType <- S.param(PN.restype) match {
         case Empty => Box[ResultType](defaultResultType)
         case Full(s) => s match {
@@ -87,7 +117,8 @@ object QueryServer extends RestHelper {
           "Failed to get result type parameter value", Empty, Box(f))
       }
     } yield {
-      val pars = (req.params - PN.query - PN.argtypes - PN.restype).map(x =>
+
+      val pars = (req.params - PN.query - PN.argtypes - PN.restype - PN.debugMode).map(x =>
         (if (x._1 startsWith P_) x._1.substring(Plen) else x._1, x._2.head))
       OutputStreamResponse( //
         (os: OutputStream) =>
@@ -97,7 +128,7 @@ object QueryServer extends RestHelper {
   }
 
   def typeConvert(pars: Map[String, String],
-    argTypes: String = defaultArgTypes): Map[String, Any] = {
+		  argTypes: String = defaultArgTypes): Map[String, Any] = {
     pars.map(x => (x._1, typeConvert(x._1, x._2, argTypes))).filter(
       (x) => x._2 != None)
   }
@@ -130,26 +161,26 @@ object QueryServer extends RestHelper {
       case StringP(s) => s
       case s => throw new IllegalArgumentException(
         "For argtypes=strong, strings must be" +
-          " prefixed with ' (for " + name + "=" + value + ")")
+        " prefixed with ' (for " + name + "=" + value + ")")
     }
   }
 
   def json(expr: String, pars: Map[String, Any],
-    rType: Jsonizer.ResultType = defaultResultType): String = {
+	   rType: Jsonizer.ResultType = defaultResultType): String = {
     val writer = new CharArrayWriter
     json(expr, pars, writer, rType)
     writer.toString
   }
 
   def json(expr: String, pars: Map[String, Any],
-    os: OutputStream, rType: Jsonizer.ResultType) {
+	   os: OutputStream, rType: Jsonizer.ResultType) {
     val writer = new OutputStreamWriter(os, "UTF-8")
     json(expr, pars, writer, rType)
     writer.flush
   }
 
   def json(expr: String, pars: Map[String, Any],
-    writer: Writer, rType: Jsonizer.ResultType) {
+	   writer: Writer, rType: Jsonizer.ResultType) {
     json(
       System.getProperty(Conn.driverProp),
       System.getProperty(Conn.usrProp),
@@ -158,8 +189,8 @@ object QueryServer extends RestHelper {
   }
 
   private def json(jdbcDriverClass: String, user: String, schema: String, //
-    expr: String, pars: Map[String, Any],
-    writer: Writer, rType: Jsonizer.ResultType) {
+		   expr: String, pars: Map[String, Any],
+		   writer: Writer, rType: Jsonizer.ResultType) {
     // Mulkibas te notiek. Ja jau core satur init kodu, tad kapec ne lidz galam?
     // TODO Kapec man janorada usr, bet nav janorada pwd?
     // TODO Kapec man jarupejas par driver class iekrausanu?
@@ -172,11 +203,12 @@ object QueryServer extends RestHelper {
     try {
       Env update conn
       Jsonizer.jsonize(Query(expr, pars), writer, rType)
+      if (logLevel >=2) flushLog(writer)
     } finally {
       conn close
     }
   }
-
+  
   def bindVariables(expr: String): List[String] = { //
     QueryParser.bindVariables(expr)
   }
