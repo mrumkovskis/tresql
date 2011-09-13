@@ -9,12 +9,17 @@ class Result private[query] (rs: ResultSet, cols: Vector[Column], reusableStatem
   private[this] val colMap = cols.filter(_.name != null).map(c => (c.name, c)).toMap
   private[this] val row = new Array[Any](cols.length)
   private[this] var hn = true; private[this] var flag = true
+  private[this] var closed = false
+  /** calls jdbc result set next method. after jdbc result set next method returns false closes this result */
   def hasNext = {
     if (hn && flag) {
       hn = rs.next; flag = false
       if (hn) {
         var i = 0
         cols foreach { c => if (c.expr != null) row(i) = c.expr(); i += 1 }
+      } else {
+        close
+        closed = true
       }
     }
     hn
@@ -36,6 +41,7 @@ class Result private[query] (rs: ResultSet, cols: Vector[Column], reusableStatem
   def column(idx: Int) = cols(idx)
   def jdbcResult = rs
   def close {
+    if (closed) return
     val st = rs.getStatement
     rs.close
     if (!reusableStatement) st.close
