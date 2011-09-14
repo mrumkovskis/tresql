@@ -8,6 +8,9 @@ import net.liftweb.http.rest._
 import net.liftweb.http._
 import net.liftweb._
 import scala.math.BigDecimal
+import scala.collection.mutable.ConcurrentMap //can't import all mutable classes with (_) becauce code use immutable Map
+import scala.collection.immutable.Map //
+import scala.collection.JavaConversions._ //need for ConcurrentMap to incorporate with Java ConcurrentHashMap
 import uniso.query.metadata.JDBCMetaData
 import uniso.query.result._
 import uniso.query._
@@ -31,10 +34,12 @@ object QueryServer extends RestHelper {
 
   val P_ = "p_" // pars prefix to legalize name
   val Plen = P_.size
-  private var initialized = false
+  val mapForMetaData: ConcurrentMap[String, MetaData] = new java.util.concurrent.ConcurrentHashMap[String, MetaData]
 
   /** special parameter names */
   private object PN {
+    val database = "database"
+    val dbschema = "dbschema"
     val query = "query"
     val argtypes = "argtypes"
     val restype = "res-type"
@@ -66,6 +71,18 @@ object QueryServer extends RestHelper {
   def respond = {
     import Jsonizer.ResultType
     for {
+      database <- S.param(PN.database) match {
+    	case Empty => Box[String]("")
+    	case Full(s:String) => Box[String](s)
+    	case f: Failure => new Failure(
+    			"Failed to get database name", Empty, Box(f))
+      }
+      dbschema <- S.param(PN.dbschema) match {
+  		case Empty => Box[String]("")
+  		case Full(s:String) => Box[String](s)
+  		case f: Failure => new Failure(
+  	    	  "Failed to get database schema name", Empty, Box(f))
+      }
       query <- S.param(PN.query) ?~ "query is missing"
       req <- S.request ?~ "request is missing :-O"
       resType <- S.param(PN.restype) match {
@@ -87,11 +104,11 @@ object QueryServer extends RestHelper {
           "Failed to get result type parameter value", Empty, Box(f))
       }
     } yield {
-      val pars = (req.params - PN.query - PN.argtypes - PN.restype).map(x =>
+      val pars = (req.params - PN.database - PN.dbschema - PN.query - PN.argtypes - PN.restype).map(x =>
         (if (x._1 startsWith P_) x._1.substring(Plen) else x._1, x._2.head))
       OutputStreamResponse( //
         (os: OutputStream) =>
-          json(query, typeConvert(pars, argTypes), os, resType),
+          json(database, dbschema, query, typeConvert(pars, argTypes), os, resType),
         List("Content-Type" -> "application/json"));
     }
   }
@@ -134,50 +151,57 @@ object QueryServer extends RestHelper {
     }
   }
 
-  def json(expr: String, pars: Map[String, Any],
+  def json(databaseString: String, dbSchemaString: String, expr: String, pars: Map[String, Any],
     rType: Jsonizer.ResultType = defaultResultType): String = {
     val writer = new CharArrayWriter
-    json(expr, pars, writer, rType)
+    json(databaseString, dbSchemaString, expr, pars, writer, rType)
     writer.toString
   }
 
-  def json(expr: String, pars: Map[String, Any],
+  def json(databaseString: String, dbSchemaString: String, expr: String, pars: Map[String, Any],
     os: OutputStream, rType: Jsonizer.ResultType) {
     val writer = new OutputStreamWriter(os, "UTF-8")
-    json(expr, pars, writer, rType)
+    json(databaseString, dbSchemaString, expr, pars, writer, rType)
     writer.flush
   }
 
-  def json(expr: String, pars: Map[String, Any],
+  def json(databaseString: String, dbSchemaString: String, expr: String, pars: Map[String, Any],
     writer: Writer, rType: Jsonizer.ResultType) {
-    json(
-      System.getProperty(Conn.driverProp),
-      System.getProperty(Conn.usrProp),
-      System.getProperty(Conn.schemaProp, "public"),
-      expr, pars, writer, rType)
-  }
 
-  private def json(jdbcDriverClass: String, user: String, schema: String, //
-    expr: String, pars: Map[String, Any],
-    writer: Writer, rType: Jsonizer.ResultType) {
-    // Mulkibas te notiek. Ja jau core satur init kodu, tad kapec ne lidz galam?
-    // TODO Kapec man janorada usr, bet nav janorada pwd?
-    // TODO Kapec man jarupejas par driver class iekrausanu?
-    if (!initialized) {
-      if (jdbcDriverClass != null) Class.forName(jdbcDriverClass)
-      Env update JDBCMetaData(user, schema)
-      initialized = true;
+    val (jndiExpr, schema) = if (databaseString == "") 
+    	("java:/comp/env/jdbc/uniso/query", "public")
+    else 
+    	("java:/comp/env/" + databaseString, if (dbSchemaString == "") "public" else dbSchemaString)
+
+    val ctx = new javax.naming.InitialContext()
+    val dataSource = {
+      ctx.lookup(jndiExpr) match {
+        case ds: javax.sql.DataSource => ds
+        case x => error("not data source in jndi context: " + x)
+      }
     }
-    val conn = Conn()()
+    val conn: Connection = dataSource.getConnection
+
+    val uniqueMetaDataRecognizationString = jndiExpr + schema
+    var md: MetaData = null
+    if (mapForMetaData.contains(uniqueMetaDataRecognizationString))
+      md = mapForMetaData(uniqueMetaDataRecognizationString)
+    else {
+      md = metadata.JDBCMetaData("", schema)
+      mapForMetaData += ((uniqueMetaDataRecognizationString, md))
+    }
+
     try {
+      Env update md
       Env update conn
       Jsonizer.jsonize(Query(expr, pars), writer, rType)
     } finally {
-      conn close
-    }
+      conn.close()
+    } //finally
   }
 
   def bindVariables(expr: String): List[String] = { //
     QueryParser.bindVariables(expr)
   }
+
 }
