@@ -30,7 +30,7 @@ object AjaxQuery {
             }).toMap
           S.notice("PARS: " + queryPars)
           resultString =
-            QueryServer.json(queryString, QueryServer.typeConvert(queryPars))
+            QueryServer.json("","", queryString, QueryServer.typeConvert(queryPars))
           S.notice("RESULT: " + resultString)
         }
       } catch {
