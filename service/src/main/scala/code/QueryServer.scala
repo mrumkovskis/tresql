@@ -182,13 +182,13 @@ object QueryServer extends RestHelper {
     }
     val conn: Connection = dataSource.getConnection
 
-    val uniqueMetaDataRecognizationString = jndiExpr + schema
+    val uniqueMetaDataHash = jndiExpr + schema
     var md: MetaData = null
-    if (mapForMetaData.contains(uniqueMetaDataRecognizationString))
-      md = mapForMetaData(uniqueMetaDataRecognizationString)
+    if (mapForMetaData.contains(uniqueMetaDataHash))
+      md = mapForMetaData(uniqueMetaDataHash)
     else {
       md = metadata.JDBCMetaData("", schema)
-      mapForMetaData += ((uniqueMetaDataRecognizationString, md))
+      mapForMetaData += ((uniqueMetaDataHash, md))
     }
 
     try {

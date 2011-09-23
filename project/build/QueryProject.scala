@@ -5,6 +5,7 @@ class QueryProject(info: ProjectInfo) extends ParentProject(info) {
   lazy val core = project("core", "Query Core", new QueryCoreProject(_))
   //lazy val service = project("service", "Query service", new QueryServicesProject(_), core)
   lazy val webapp = project("service", "Query web app", new LiftWebProject(_), core)
+  
   //val unisorepo = "Uniso Repo" at "http://159.148.47.6:8087/artifactory/libs-release-local"
 
   //override def managedStyle = ManagedStyle.Maven
@@ -20,7 +21,7 @@ protected class QueryCoreProject(info: ProjectInfo) extends DefaultProject(info)
       "org.hsqldb" % "hsqldb-j5" % "2.2.4" % "test") ++ super.libraryDependencies
 }
 
-/*protected class QueryServicesProject(info: ProjectInfo) extends DefaultProject(info) {
+protected class QueryServicesProject(info: ProjectInfo) extends DefaultProject(info) {
   val liftVersion = "2.4-M3"
   lazy val JavaNet = "Java.net Maven2 Repository" at "http://download.java.net/maven/2/"
   override def libraryDependencies = Set(
@@ -32,7 +33,7 @@ protected class QueryCoreProject(info: ProjectInfo) extends DefaultProject(info)
     "org.scala-tools.testing" %% "specs" % "1.6.8" % "test",
     "com.h2database" % "h2" % "1.2.147") ++ super.libraryDependencies
 }
-*/
+
 
 protected class LiftWebProject(info: ProjectInfo) extends DefaultWebProject(info) {
   val liftVersion = "2.4-M3"
@@ -48,11 +49,11 @@ protected class LiftWebProject(info: ProjectInfo) extends DefaultWebProject(info
   val myPathAsJavaFileName = myPath.asFile
   
   val fileContent = new myJettyWebXml {
-	val jdbcName = "java:comp/env/" + system[String]("uniso.query.jdbcname").value 
-	val driverClassName = system[String]("uniso.query.driverclassname").value
-	val url = system[String]("uniso.query.url").value
-	val user = system[String]("uniso.query.user").value
-	val password = system[String]("uniso.query.password").value
+	val jndiName = "java:comp/env/" + systemOptional[String]("uniso.query.jndi.name","jdbc/uniso/query").value 
+	val driverClassName = systemOptional[String]("uniso.query.driver.class","org.postgresql.Driver").value
+	val url = systemOptional[String]("uniso.query.url","jdbc:postgresql://x.x.x.x/database").value
+	val user = systemOptional[String]("uniso.query.user","userName").value
+	val password = systemOptional[String]("uniso.query.password","password").value
   }
 	   
   lazy val preProcessToCreateJettyWebXml = task {
@@ -81,7 +82,7 @@ protected class LiftWebProject(info: ProjectInfo) extends DefaultWebProject(info
 }
 
 abstract class myJettyWebXml {
-  val jdbcName:String
+  val jndiName:String
   val driverClassName: String
   val url:String
   val user:String
@@ -91,7 +92,7 @@ abstract class myJettyWebXml {
 <Configure class="org.mortbay.jetty.webapp.WebAppContext">
   <New id="Test" class="org.mortbay.jetty.plus.naming.Resource">
     <Arg></Arg>
-    <Arg>{jdbcName}</Arg>
+    <Arg>{jndiName}</Arg>
     <Arg>
       <New class="org.apache.commons.dbcp.BasicDataSource">
         <Set name="url">{url}</Set>
