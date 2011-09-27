@@ -13,6 +13,7 @@ lib_managed
 src_managed
 project/boot/
 */project/boot
+setenv*
 
 # db
 lift_proto*
