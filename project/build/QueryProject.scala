@@ -6,13 +6,6 @@ class QueryProject(info: ProjectInfo) extends ParentProject(info) {
   //lazy val service = project("service", "Query service", new QueryServicesProject(_), core)
   lazy val webapp = project("service", "Query web app", new LiftWebProject(_), core)
   
-  //val unisorepo = "Uniso Repo" at "http://159.148.47.6:8087/artifactory/libs-release-local"
-
-  //override def managedStyle = ManagedStyle.Maven
-  //Credentials.add("Artifactory Realm", "159.148.47.6", "admin", "uniso123")
-  //Credentials(Path.userHome / ".m2" / ".credentials", log)
-  //val publishTo = unisorepo
-
 }
 
 protected class QueryCoreProject(info: ProjectInfo) extends DefaultProject(info) {
@@ -43,11 +36,8 @@ protected class LiftWebProject(info: ProjectInfo) extends DefaultWebProject(info
 
   // If you're using JRebel for Lift development, uncomment
   // this line
-  // override def scanDirectories = Nil
+  //override def scanDirectories = Nil
     
-  val myPath = "src"/"main"/"webapp"/"WEB-INF"/"jetty-web.xml"
-  val myPathAsJavaFileName = myPath.asFile
-  
   val fileContent = new myJettyWebXml {
 	val jndiName = "java:comp/env/" + systemOptional[String]("uniso.query.jndi.name","jdbc/uniso/query").value 
 	val driverClassName = systemOptional[String]("uniso.query.driver.class","org.postgresql.Driver").value
@@ -55,30 +45,32 @@ protected class LiftWebProject(info: ProjectInfo) extends DefaultWebProject(info
 	val user = systemOptional[String]("uniso.query.user","userName").value
 	val password = systemOptional[String]("uniso.query.password","password").value
   }
-	   
+	
+  override def webappUnmanaged = (temporaryWarPath / "WEB-INF" / "jetty-web.xml" ***) 
+  
+  val myfile = (temporaryWarPath/"WEB-INF"/"jetty-web.xml").asFile
   lazy val preProcessToCreateJettyWebXml = task {
-	//FileUtilities.clean(myPath, log)
-    //FileUtilities.append(myPathAsJavaFileName, fileContent.toXML.toString, log)
-	if (!myPathAsJavaFileName.exists) FileUtilities.append(myPathAsJavaFileName, fileContent.toXML.toString, log)
+	if (!myfile.exists) { 
+	  FileUtilities.append(myfile, fileContent.toXML.toString, log)
+	  log.info("File:" + myfile.toString + " created!!!")
+	}
 	None
   }
-  
-  override def compileAction = super.compileAction dependsOn(preProcessToCreateJettyWebXml)  
-  
+
+  override def jettyRunAction = super.jettyRunAction dependsOn(preProcessToCreateJettyWebXml)  
   
   lazy val JavaNet = "Java.net Maven2 Repository" at "http://download.java.net/maven/2/"
-
   override def libraryDependencies = Set(
     "net.liftweb" %% "lift-webkit" % liftVersion % "compile",
     "net.liftweb" %% "lift-mapper" % liftVersion % "compile",
     "org.mortbay.jetty" % "jetty" % "6.1.26" % "test",
-    "org.mortbay.jetty" % "jetty-plus" % "6.1.26", 		//for jetty to work with jndi
-    "org.mortbay.jetty" % "jetty-naming" % "6.1.26", 	//for jetty to work with jndi
-    "commons-dbcp" % "commons-dbcp" % "1.4",			//for example "org.postgresql.ds.PGSimpleDataSource" don't provide variable url (to avoid for need to use other variables in sbt file, this package is added)
+    "org.mortbay.jetty" % "jetty-plus" % "6.1.26" % "test",		//for jetty to work with jndi
+    "org.mortbay.jetty" % "jetty-naming" % "6.1.26" % "test", 	//for jetty to work with jndi
+    "commons-dbcp" % "commons-dbcp" % "1.4" % "test",			//for example "org.postgresql.ds.PGSimpleDataSource" don't provide variable url (to avoid for need to use other variables in sbt file, this package is added)
     "junit" % "junit" % "4.7" % "test",
     "ch.qos.logback" % "logback-classic" % "0.9.26",
     "org.scala-tools.testing" %% "specs" % "1.6.8" % "test",
-    "com.h2database" % "h2" % "1.2.147") ++ super.libraryDependencies
+    "com.h2database" % "h2" % "1.2.147") ++ super.libraryDependencies 
 }
 
 abstract class myJettyWebXml {
