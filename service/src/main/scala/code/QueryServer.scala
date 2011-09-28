@@ -43,6 +43,7 @@ object QueryServer extends RestHelper {
     val query = "query"
     val argtypes = "argtypes"
     val restype = "res-type"
+    val debugmode = "debug-mode"
   }
 
   object ArgTypes {
@@ -96,6 +97,12 @@ object QueryServer extends RestHelper {
         case f: Failure => new Failure(
           "Failed to get result type value", Empty, Box(f))
       }
+      debug <- S.param(PN.debugmode) match {
+        case Empty => Box[Boolean](false)
+        case Full(_) => Box[Boolean](true)
+        case f: Failure => new Failure(
+          "Failed to get debug mode parameter", Empty, Box(f))
+      }      
       argTypes <- S.param(PN.argtypes) match {
         case Empty => Full(defaultArgTypes)
         case Full(s) if (s == ArgTypes.string || s == ArgTypes.strong) => Full(s)
@@ -104,11 +111,11 @@ object QueryServer extends RestHelper {
           "Failed to get result type parameter value", Empty, Box(f))
       }
     } yield {
-      val pars = (req.params - PN.database - PN.dbschema - PN.query - PN.argtypes - PN.restype).map(x =>
-        (if (x._1 startsWith P_) x._1.substring(Plen) else x._1, x._2.head))
+      val pars = (req.params - PN.database - PN.dbschema - PN.query - PN.argtypes - PN.restype - 
+        PN.debugmode).map(x => (if (x._1 startsWith P_) x._1.substring(Plen) else x._1, x._2.head))
       OutputStreamResponse( //
         (os: OutputStream) =>
-          json(database, dbschema, query, typeConvert(pars, argTypes), os, resType),
+          json(database, dbschema, query, typeConvert(pars, argTypes), os, resType, debug),
         List("Content-Type" -> "application/json"));
     }
   }
@@ -154,19 +161,19 @@ object QueryServer extends RestHelper {
   def json(databaseString: String, dbSchemaString: String, expr: String, pars: Map[String, Any],
     rType: Jsonizer.ResultType = defaultResultType): String = {
     val writer = new CharArrayWriter
-    json(databaseString, dbSchemaString, expr, pars, writer, rType)
+    json(databaseString, dbSchemaString, expr, pars, writer, rType, false)
     writer.toString
   }
 
   def json(databaseString: String, dbSchemaString: String, expr: String, pars: Map[String, Any],
-    os: OutputStream, rType: Jsonizer.ResultType) {
+    os: OutputStream, rType: Jsonizer.ResultType, debug: Boolean) {
     val writer = new OutputStreamWriter(os, "UTF-8")
-    json(databaseString, dbSchemaString, expr, pars, writer, rType)
+    json(databaseString, dbSchemaString, expr, pars, writer, rType, debug)
     writer.flush
   }
 
   def json(databaseString: String, dbSchemaString: String, expr: String, pars: Map[String, Any],
-    writer: Writer, rType: Jsonizer.ResultType) {
+    writer: Writer, rType: Jsonizer.ResultType, debug: Boolean) {
 
     val (jndiExpr, schema) = if (databaseString == "") 
     	("java:/comp/env/jdbc/uniso/query", "public")
@@ -194,6 +201,8 @@ object QueryServer extends RestHelper {
     try {
       Env update md
       Env update conn
+      if (debug) Env update {(msg, level) => writer.write(msg + "\n")} 
+        else Env update {(msg, level) => ()} 
       Jsonizer.jsonize(Query(expr, pars), writer, rType)
     } finally {
       conn.close()
