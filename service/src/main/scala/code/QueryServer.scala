@@ -201,8 +201,9 @@ object QueryServer extends RestHelper {
     try {
       Env update md
       Env update conn
-      if (debug) Env update {(msg, level) => writer.write(msg + "\n")} 
-        else Env update {(msg, level) => ()} 
+      if (debug) Env update {(msg, level) => 
+        {writer.write(msg + "\n"); println(msg)}} 
+      else Env update {(msg, level) => ()} 
       Jsonizer.jsonize(Query(expr, pars), writer, rType)
     } finally {
       conn.close()
