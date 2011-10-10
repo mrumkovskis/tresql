@@ -8,7 +8,7 @@ import java.sql.ResultSet
 
 //TODO all names perhaps should be stored in upper case?
 //This class is thread safe i.e. instance can be used across multiple threads
-class JDBCMetaData(private val db: String, private val defaultSchema: String)
+class JDBCMetaData(private val db: String, private val defaultSchema: String = "%")
     extends MetaData {
     val metaData = new java.util.concurrent.ConcurrentHashMap[String, Table]
     override def dbName = db
