@@ -175,10 +175,9 @@ object QueryServer extends RestHelper {
   def json(databaseString: String, dbSchemaString: String, expr: String, pars: Map[String, Any],
     writer: Writer, rType: Jsonizer.ResultType, debug: Boolean) {
 
-    val (jndiExpr, schema) = if (databaseString == "") 
-    	("java:/comp/env/jdbc/uniso/query", "public")
-    else 
-    	("java:/comp/env/" + databaseString, if (dbSchemaString == "") "public" else dbSchemaString)
+    val jndiExpr = "java:/comp/env/" +
+      (if (databaseString != "") databaseString else "jdbc/uniso/query")
+    val schema = dbSchemaString
 
     val ctx = new javax.naming.InitialContext()
     val dataSource = {
