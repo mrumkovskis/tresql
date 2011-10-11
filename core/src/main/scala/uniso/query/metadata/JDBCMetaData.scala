@@ -28,9 +28,18 @@ class JDBCMetaData(private val db: String, private val defaultSchema: String = "
                     case Array(s, t) => dmd.getTables(null, s, t, null)
                     case Array(c, s, t) => dmd.getTables(c, s, t, null)
                 }
+                var m = Set[(String, String)]()
                 while (rs.next) {
                     val schema = rs.getString("TABLE_SCHEM")
                     val tableName = rs.getString("TABLE_NAME")
+                    m += Option(schema).getOrElse("<null>") -> tableName
+                    if (m.size > 1) {
+                      metaData -= name
+                      rs.close
+                      throw new RuntimeException(
+                          "Ambiguous table name: " + name + "." + " Both " +
+                          m.map((t) => t._1 + "." + t._2).mkString(" and ") + " match")
+                    }
                     val tableType = rs.getString("TABLE_TYPE")
                     val remarks = rs.getString("REMARKS")
                     val mdh = Map("name" -> tableName,
