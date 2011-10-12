@@ -20,6 +20,7 @@ class JDBCMetaData(private val db: String, private val defaultSchema: String = "
                 if (conn == null) throw new NullPointerException(
                     """Connection not found in environment. Check if "Env update conn" (in this case statement execution must be done in the same thread) or "Env.sharedConn = conn" is called.""")
                 val dmd = conn.getMetaData
+                val defaultSchema = Option(this.defaultSchema).getOrElse("%")
                 val rs = (if (dmd.storesUpperCaseIdentifiers) name.toUpperCase 
                         else name).split("\\.") match {
                     case Array(t) => dmd.getTables(null,

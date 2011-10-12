@@ -72,18 +72,6 @@ object QueryServer extends RestHelper {
   def respond = {
     import Jsonizer.ResultType
     for {
-      database <- S.param(PN.database) match {
-    	case Empty => Box[String]("")
-    	case Full(s:String) => Box[String](s)
-    	case f: Failure => new Failure(
-    			"Failed to get database name", Empty, Box(f))
-      }
-      dbschema <- S.param(PN.dbschema) match {
-  		case Empty => Box[String]("")
-  		case Full(s:String) => Box[String](s)
-  		case f: Failure => new Failure(
-  	    	  "Failed to get database schema name", Empty, Box(f))
-      }
       query <- S.param(PN.query) ?~ "query is missing"
       req <- S.request ?~ "request is missing :-O"
       resType <- S.param(PN.restype) match {
@@ -111,6 +99,8 @@ object QueryServer extends RestHelper {
           "Failed to get result type parameter value", Empty, Box(f))
       }
     } yield {
+      val database = S.param(PN.database) orNull
+      val dbschema = S.param(PN.dbschema) orNull
       val pars = (req.params - PN.database - PN.dbschema - PN.query - PN.argtypes - PN.restype - 
         PN.debugmode).map(x => (if (x._1 startsWith P_) x._1.substring(Plen) else x._1, x._2.head))
       OutputStreamResponse( //
@@ -176,7 +166,7 @@ object QueryServer extends RestHelper {
     writer: Writer, rType: Jsonizer.ResultType, debug: Boolean) {
 
     val jndiExpr = "java:/comp/env/" +
-      (if (databaseString != "") databaseString else "jdbc/uniso/query")
+      (if (databaseString != null) databaseString else "jdbc/uniso/query")
     val schema = dbSchemaString
 
     val ctx = new javax.naming.InitialContext()
@@ -188,7 +178,7 @@ object QueryServer extends RestHelper {
     }
     val conn: Connection = dataSource.getConnection
 
-    val uniqueMetaDataHash = jndiExpr + schema
+    val uniqueMetaDataHash = jndiExpr + ", " + Option(schema).getOrElse("<null>")
     var md: MetaData = null
     if (mapForMetaData.contains(uniqueMetaDataHash))
       md = mapForMetaData(uniqueMetaDataHash)
