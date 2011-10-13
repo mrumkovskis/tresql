@@ -166,8 +166,8 @@ object QueryServer extends RestHelper {
     writer: Writer, rType: Jsonizer.ResultType, debug: Boolean) {
 
     val jndiExpr = "java:/comp/env/" +
-      (if (databaseString != null) databaseString else "jdbc/uniso/query")
-    val schema = dbSchemaString
+      (if (databaseString != null && databaseString != "") databaseString else "jdbc/uniso/query")
+    val schema = if (dbSchemaString == "") null else dbSchemaString
 
     val ctx = new javax.naming.InitialContext()
     val dataSource = {
