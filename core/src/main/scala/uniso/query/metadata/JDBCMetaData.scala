@@ -8,7 +8,7 @@ import java.sql.ResultSet
 
 //TODO all names perhaps should be stored in upper case?
 //This class is thread safe i.e. instance can be used across multiple threads
-class JDBCMetaData(private val db: String, private val defaultSchema: String = "%")
+class JDBCMetaData(private val db: String, private val defaultSchema: String = null)
     extends MetaData {
     val metaData = new java.util.concurrent.ConcurrentHashMap[String, Table]
     override def dbName = db
@@ -20,11 +20,11 @@ class JDBCMetaData(private val db: String, private val defaultSchema: String = "
                 if (conn == null) throw new NullPointerException(
                     """Connection not found in environment. Check if "Env update conn" (in this case statement execution must be done in the same thread) or "Env.sharedConn = conn" is called.""")
                 val dmd = conn.getMetaData
-                val defaultSchema = Option(this.defaultSchema).getOrElse("%")
                 val rs = (if (dmd.storesUpperCaseIdentifiers) name.toUpperCase 
                         else name).split("\\.") match {
                     case Array(t) => dmd.getTables(null,
-                            if (dmd.storesUpperCaseIdentifiers) defaultSchema.toUpperCase
+                            if (dmd.storesUpperCaseIdentifiers &&
+                                defaultSchema != null) defaultSchema.toUpperCase
                             else defaultSchema, t, null)
                     case Array(s, t) => dmd.getTables(null, s, t, null)
                     case Array(c, s, t) => dmd.getTables(c, s, t, null)
