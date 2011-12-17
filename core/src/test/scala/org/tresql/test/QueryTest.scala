@@ -1,9 +1,9 @@
-package uniso.query.test
+package org.tresql.test
 
 import org.scalatest.Suite
 import java.sql._
-import uniso.query._
-import uniso.query.result.Jsonizer._
+import org.tresql._
+import org.tresql.result.Jsonizer._
 import scala.util.parsing.json._
 
 class QueryTest extends Suite {

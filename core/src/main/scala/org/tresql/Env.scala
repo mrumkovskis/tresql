@@ -1,4 +1,6 @@
-package uniso.query
+package org.tresql
+
+import sys._
 
 /* Environment for expression building and execution */
 class Env(private val provider: EnvProvider, private val resourceProvider: ResourceProvider,

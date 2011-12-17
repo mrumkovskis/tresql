@@ -1,6 +1,7 @@
-package uniso.query
+package org.tresql
 
 import scala.collection._
+import sys._
 
 class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private var bindIdx: Int) extends EnvProvider {
@@ -121,16 +122,16 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case "*" => lop * rop
         case "/" => lop / rop
         case "||" => lop + rop
-        case "&&" => uniso.query.Query.select(sql, selCols(lop),
+        case "&&" => org.tresql.Query.select(sql, selCols(lop),
           QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols)
-        case "++" => uniso.query.Query.select(sql, selCols(lop),
+        case "++" => org.tresql.Query.select(sql, selCols(lop),
           QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols)
         case "+" => if (exprType == classOf[SelectExpr])
-          uniso.query.Query.select(sql, selCols(lop), QueryBuilder.this.bindVariables, env,
+          org.tresql.Query.select(sql, selCols(lop), QueryBuilder.this.bindVariables, env,
             QueryBuilder.this.allCols)
         else lop + rop
         case "-" => if (exprType == classOf[SelectExpr])
-          uniso.query.Query.select(sql, selCols(lop), QueryBuilder.this.bindVariables, env,
+          org.tresql.Query.select(sql, selCols(lop), QueryBuilder.this.bindVariables, env,
             QueryBuilder.this.allCols)
         else lop - rop
         case "=" => lop == rop
@@ -217,7 +218,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     val distinct: Boolean, val group: Expr, val order: List[Expr],
     offset: Expr, limit: Expr) extends BaseExpr {
     override def apply() = {
-      uniso.query.Query.select(sql, cols, QueryBuilder.this.bindVariables, env,
+      org.tresql.Query.select(sql, cols, QueryBuilder.this.bindVariables, env,
         QueryBuilder.this.allCols)
     }
     lazy val sql = "select " + (if (distinct) "distinct " else "") +
@@ -329,7 +330,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       (if (filter == null) "" else " where " + where)
   }
   class DeleteExpr(val table: IdentExpr, val filter: List[Expr]) extends BaseExpr {
-    override def apply() = uniso.query.Query.update(sql, QueryBuilder.this.bindVariables, env)
+    override def apply() = org.tresql.Query.update(sql, QueryBuilder.this.bindVariables, env)
     protected def _sql = "delete from " + table.sql +
       (if (filter == null) "" else " where " + where)
     lazy val sql = _sql

@@ -1,7 +1,8 @@
-package uniso.query.metadata
+package org.tresql.metadata
 
 import util.parsing.json.JSON
-import uniso.query.MetaData
+import org.tresql.MetaData
+import sys._
 
 //TODO improve json parser so it accepts property names without quotes
 

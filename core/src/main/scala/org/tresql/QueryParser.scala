@@ -1,7 +1,8 @@
-package uniso.query
+package org.tresql
 
 import scala.util.parsing.combinator.JavaTokenParsers
 import scala.util.parsing.input.Reader
+import sys._
 
 object QueryParser extends JavaTokenParsers {
 

@@ -1,10 +1,10 @@
-package uniso.query.result
+package org.tresql.result
 
 import java.io.Writer
 import java.text.SimpleDateFormat
 import java.util.Date
 import scala.util.parsing.json.JSONFormat
-import uniso.query._
+import org.tresql._
 
 object Jsonizer {
 

@@ -1,6 +1,7 @@
-package uniso.query
+package org.tresql
 
 import java.util.NoSuchElementException
+import sys._
 
 //TODO consider letting metadata to span multiple databases?
 //Implementation of meta data must be thread safe

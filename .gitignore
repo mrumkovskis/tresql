@@ -3,9 +3,10 @@
 .project
 .manager
 .scala_dependencies
-bin/
 class/
 .settings/
+lib/
+jetty-env.xml
 
 # sbt
 target
@@ -14,6 +15,8 @@ src_managed
 project/boot/
 */project/boot
 setenv*
+.history
+bin/*.jar
 
 # db
 lift_proto*

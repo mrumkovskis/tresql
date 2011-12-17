@@ -11,9 +11,9 @@ import scala.math.BigDecimal
 import scala.collection.mutable.ConcurrentMap //can't import all mutable classes with (_) becauce code use immutable Map
 import scala.collection.immutable.Map //
 import scala.collection.JavaConversions._ //need for ConcurrentMap to incorporate with Java ConcurrentHashMap
-import uniso.query.metadata.JDBCMetaData
-import uniso.query.result._
-import uniso.query._
+import org.tresql.metadata.JDBCMetaData
+import org.tresql.result._
+import org.tresql._
 
 /**
  * Serves query results as json. Supports HTTP GET and POST methods to /query

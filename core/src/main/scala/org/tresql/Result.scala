@@ -1,9 +1,9 @@
-package uniso.query
+package org.tresql
 
 import java.sql.ResultSet
 import java.sql.ResultSetMetaData
 
-class Result private[query] (rs: ResultSet, cols: Vector[Column], reusableStatement: Boolean)
+class Result private[tresql] (rs: ResultSet, cols: Vector[Column], reusableStatement: Boolean)
   extends Iterator[RowLike] with RowLike {
   private[this] val md = rs.getMetaData
   private[this] val colMap = cols.filter(_.name != null).map(c => (c.name, c)).toMap
@@ -106,4 +106,4 @@ trait RowLike {
   def column(idx: Int): Column
 }
 
-case class Column(val idx: Int, val name: String, private[query] val expr: Expr)
+case class Column(val idx: Int, val name: String, private[tresql] val expr: Expr)

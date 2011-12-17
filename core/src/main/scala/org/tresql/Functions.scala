@@ -1,4 +1,4 @@
-package uniso.query
+package org.tresql
 
 import java.text.SimpleDateFormat
 

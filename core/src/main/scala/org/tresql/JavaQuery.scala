@@ -1,4 +1,4 @@
-package uniso.query;
+package org.tresql;
 import java.util.{ ArrayList, List => JList, Map => JMap }
 import scala.collection.JavaConversions._
 

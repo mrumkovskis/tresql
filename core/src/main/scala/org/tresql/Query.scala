@@ -1,8 +1,8 @@
-package uniso.query
+package org.tresql
 
 import java.sql.{ Array => JArray }
 import java.sql.{ Date, Timestamp, PreparedStatement, ResultSet }
-import uniso.query.metadata._
+import org.tresql.metadata._
 
 object Query {
 
@@ -45,7 +45,7 @@ object Query {
     apply(expr).asInstanceOf[Result]
   }
 
-  private[query] def select(sql: String, cols: List[QueryBuilder#ColExpr],
+  private[tresql] def select(sql: String, cols: List[QueryBuilder#ColExpr],
     bindVariables: List[Expr], env: Env, allCols: Boolean): Result = {
     Env log sql
     val st = statement(sql, env)
@@ -67,7 +67,7 @@ object Query {
     r
   }
 
-  private[query] def update(sql: String, bindVariables: List[Expr], env: Env) = {
+  private[tresql] def update(sql: String, bindVariables: List[Expr], env: Env) = {
     Env log sql
     val st = statement(sql, env)
     bindVars(st, bindVariables)

@@ -1,0 +1,14 @@
+<Configure class="org.mortbay.jetty.webapp.WebAppContext">
+  <New id="Test" class="org.mortbay.jetty.plus.naming.Resource">
+    <Arg></Arg>
+    <Arg>jdbc/tresql</Arg>
+    <Arg>
+      <New class="org.apache.commons.dbcp.BasicDataSource">
+        <Set name="url">{database jdbc url}</Set>
+        <Set name="username">{user}</Set>
+        <Set name="password">{password}</Set>
+        <Set name="driverClassName">{driverClassName}</Set>
+      </New>
+    </Arg>
+  </New>
+</Configure>  

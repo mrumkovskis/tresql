@@ -8,7 +8,7 @@ import net.liftweb.sitemap._
 import net.liftweb.util._
 import net.liftweb._
 
-import uniso.query.result.Jsonizer
+import org.tresql.result.Jsonizer
 
 /**
  * A class that's instantiated early and run.  It allows the application

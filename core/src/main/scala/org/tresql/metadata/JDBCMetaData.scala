@@ -1,7 +1,7 @@
-package uniso.query.metadata
+package org.tresql.metadata
 
-import uniso.query.MetaData
-import uniso.query._
+import org.tresql.MetaData
+import org.tresql._
 import scala.collection.JavaConversions._
 import java.sql.{ Connection => C }
 import java.sql.ResultSet
@@ -120,24 +120,7 @@ class JDBCMetaData(private val db: String, private val defaultSchema: String = n
 }
 
 object JDBCMetaData extends ((String, String) => JDBCMetaData){
-    
     def apply(db: String, defaultSchema: String) = {
         new JDBCMetaData(db, defaultSchema)
     }
-
-    def main(args: Array[String]) {
-        args.length < 6 match {
-            case true => println("usage: <driver> <dburl> <user> <password> <default schema> <table>")
-            case false => {
-                val c = Conn(args(0), args(1), args(2), args(3))()
-                try {
-                    val md = JDBCMetaData(args(1), args(4))
-                    println(md.table(args(5))(c))
-                } finally {
-                    c.close
-                }
-            }
-        }
-    }
-
 }
