@@ -6,6 +6,8 @@ import org.tresql._
 import org.tresql.result.Jsonizer._
 import scala.util.parsing.json._
 
+import sys._
+
 class QueryTest extends Suite {
   //initialize environment
   Class.forName("org.hsqldb.jdbc.JDBCDriver")
