@@ -3,7 +3,7 @@ package org.tresql
 import java.sql.ResultSet
 import java.sql.ResultSetMetaData
 
-class Result private[tresql] (rs: ResultSet, cols: Vector[Column], reusableStatement: Boolean)
+class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   extends Iterator[RowLike] with RowLike {
   private[this] val md = rs.getMetaData
   private[this] val colMap = cols.filter(_.name != null).map(c => (c.name, c)).toMap
@@ -44,7 +44,11 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], reusableState
     if (closed) return
     val st = rs.getStatement
     rs.close
-    if (!reusableStatement) st.close
+    env update (null:Result)
+    if (!env.reusableExpr) {
+      st.close
+      env update (null:java.sql.PreparedStatement)
+    }
   }
 
   override def toList = { val l = (this map (r => Row(this.content))).toList; close; l }

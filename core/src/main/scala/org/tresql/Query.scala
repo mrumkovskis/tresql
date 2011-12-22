@@ -62,7 +62,7 @@ object Query {
         while (j <= cnt) { i += 1; l = Column(i, md.getColumnLabel(j), null) :: l; j += 1 }
         l.reverse
       } else List(rcol(c)))
-    }): _*), env.reusableExpr)
+    }): _*), env)
     env update r
     r
   }
