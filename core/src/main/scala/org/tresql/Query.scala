@@ -29,15 +29,15 @@ object Query {
   def build(expr: String): Expr = QueryBuilder(expr, Env(Map(), true))
   def build(expr: Any): Expr = QueryBuilder(expr, Env(Map(), true))
 
-  def select(expr: String, params: String*) = {
+  def select(expr: String, params: Any*) = {
     apply(expr, params.toList).asInstanceOf[Result]
   }
 
-  def select(expr: String, params: List[String]) = {
+  def select(expr: String, params: List[Any]) = {
     apply(expr, params).asInstanceOf[Result]
   }
 
-  def select(expr: String, params: Map[String, String]) = {
+  def select(expr: String, params: Map[String, Any]) = {
     apply(expr, params).asInstanceOf[Result]
   }
 
@@ -72,7 +72,10 @@ object Query {
     val st = statement(sql, env)
     bindVars(st, bindVariables)
     val r = st.executeUpdate
-    if (!env.reusableExpr) st.close
+    if (!env.reusableExpr) {
+      st.close
+      env update (null:PreparedStatement)
+    }
     r
   }
 
