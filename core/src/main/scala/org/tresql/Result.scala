@@ -3,6 +3,8 @@ package org.tresql
 import java.sql.ResultSet
 import java.sql.ResultSetMetaData
 
+import sys._
+
 class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   extends Iterator[RowLike] with RowLike {
   private[this] val md = rs.getMetaData
@@ -92,6 +94,7 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   
   case class Row(row: Seq[Any]) extends RowLike {
     def apply(idx: Int) = row(idx)
+    def apply(name: String) = error("unsupported method")
     def content = row
     def columnCount = row.length
     def column(idx: Int) = Result.this.column(idx)
@@ -105,6 +108,7 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
 
 trait RowLike {
   def apply(idx: Int): Any
+  def apply(name: String): Any
   def columnCount: Int
   def content: Seq[Any]
   def column(idx: Int): Column
