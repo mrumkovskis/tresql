@@ -67,7 +67,15 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     }
     Vector(b: _*)
   }
-
+  
+  //shortcut methods to get exactly one value
+  def onevalue = toList(0) content(0)
+  def string = onevalue.asInstanceOf[String]
+  def int = onevalue.asInstanceOf[Int]
+  def date = onevalue.asInstanceOf[java.sql.Date]
+  def timestamp = onevalue.asInstanceOf[java.sql.Timestamp]
+  def bigdecimal = onevalue.asInstanceOf[BigDecimal]
+  
   /** needs to be overriden since super class implementation calls hasNext method */
   override def toString = getClass.toString + ":" + (cols.mkString(","))
 
