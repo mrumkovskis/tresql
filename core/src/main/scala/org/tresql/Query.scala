@@ -11,15 +11,14 @@ object Query {
   }
 
   def apply(expr: String, params: List[Any]): Any = {
-    var i = 0
-    apply(expr, params.map { e => i += 1; (i.toString, e) }.toMap)
-  }
+    apply(expr, params.zipWithIndex.map(t=>(t._2 + 1).toString->t._1).toMap)
+  }                    
 
   def apply(expr: String, params: Map[String, Any]): Any = {
     val exp = QueryBuilder(expr, Env(params, false))
     exp() 
   }
-
+  
   def apply(expr: Any) = {
     val exp = QueryBuilder(expr, Env(Map(), false))
     exp()

@@ -1,6 +1,5 @@
 package org.tresql
 
-import scala.collection._
 import sys._
 
 class QueryBuilder private (val env: Env, private val queryDepth: Int,
@@ -23,7 +22,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private def this(env: Env) = this(env, 0, 0)
 
   //bind variables for jdbc prepared statement 
-  private val _bindVariables = mutable.ListBuffer[Expr]()
+  private val _bindVariables = scala.collection.mutable.ListBuffer[Expr]()
   private lazy val bindVariables = _bindVariables.toList
 
   //used internally while building expression, used for optional binding
@@ -353,10 +352,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   abstract class BaseExpr extends Expr {
     override def apply(params: List[Any]): Any = {
-      var i = 0
-      apply(params.map { e => i += 1; (i.toString, e) }.toMap)
+      apply(params.zipWithIndex.map(t=>(t._2 + 1).toString->t._1).toMap)
     }
-    override def apply(params: scala.collection.immutable.Map[String, Any]): Any = {
+    override def apply(params: Map[String, Any]): Any = {
       env update params
       apply()
     }
@@ -581,11 +579,11 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
   def sql: String
   def apply(): Any = error("Must be implemented in subclass")
   def apply(params: List[Any]): Any = error("Must be implemented in subclass")
-  def apply(params: scala.collection.immutable.Map[String, Any]): Any = error("Must be implemented in subclass")
+  def apply(params: Map[String, Any]): Any = error("Must be implemented in subclass")
   def select = apply().asInstanceOf[Result]
   def select(params: Any*) = apply(params.toList).asInstanceOf[Result]
   def select(params: List[Any]) = apply(params).asInstanceOf[Result]
-  def select(params: scala.collection.immutable.Map[String, Any]) = apply(params).asInstanceOf[Result]
+  def select(params: Map[String, Any]) = apply(params).asInstanceOf[Result]
   def close: Unit = error("Must be implemented in subclass")
   def exprType: Class[_] = this.getClass
   override def toString = sql
