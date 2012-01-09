@@ -57,8 +57,8 @@ object Query {
     val r = new Result(rs, Vector((if (!allCols) cols.map { rcol(_) }
     else cols.flatMap { c =>
       (if (c.col.isInstanceOf[QueryBuilder#AllExpr]) {
-        var (j, md, l) = (1, rs.getMetaData, List[Column]()); val cnt = md.getColumnCount
-        while (j <= cnt) { i += 1; l = Column(i, md.getColumnLabel(j), null) :: l; j += 1 }
+        var (md, l) = (rs.getMetaData, List[Column]())
+        1 to md.getColumnCount foreach { j => i += 1; l = Column(i, md.getColumnLabel(j), null) :: l }
         l.reverse
       } else List(rcol(c)))
     }): _*), env)
