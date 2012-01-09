@@ -8,7 +8,7 @@ import sys._
 class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   extends Iterator[RowLike] with RowLike {
   private[this] val md = rs.getMetaData
-  private[this] val colMap = cols.filter(_.name != null).map(c => (c.name, c)).toMap
+  private[this] val colMap = cols.zipWithIndex.filter(_._1.name != null).map(t=> t._1.name->t._2).toMap
   private[this] val row = new Array[Any](cols.length)
   private[this] var hn = true; private[this] var flag = true
   private[this] var closed = false
@@ -33,10 +33,7 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   }
   def apply(columnLabel: String) = {
     try {
-      colMap(columnLabel) match {
-        case Column(i, _, null) => asAny(i)
-        case Column(i, _, e) => row(i)
-      }
+      apply(colMap(columnLabel))
     } catch { case _: NoSuchElementException => asAny(rs.findColumn(columnLabel)) }
   }
   def columnCount = cols.length
