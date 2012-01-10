@@ -8,7 +8,7 @@ import sys._
 class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   extends Iterator[RowLike] with RowLike {
   private[this] val md = rs.getMetaData
-  private[this] val colMap = cols.zipWithIndex.filter(_._1.name != null).map(t=> t._1.name->t._2).toMap
+  private[this] val colMap = cols.zipWithIndex.filter(_._1.name != null).map(t => t._1.name -> t._2).toMap
   private[this] val row = new Array[Any](cols.length)
   private[this] var hn = true; private[this] var flag = true
   private[this] var closed = false
@@ -43,10 +43,10 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     if (closed) return
     val st = rs.getStatement
     rs.close
-    env update (null:Result)
+    env update (null: Result)
     if (!env.reusableExpr) {
       st.close
-      env update (null:java.sql.PreparedStatement)
+      env update (null: java.sql.PreparedStatement)
     }
   }
 
@@ -64,15 +64,15 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     }
     Vector(b: _*)
   }
-  
+
   //shortcut methods to get exactly one value
-  def onevalue = toList(0) content(0)
+  def onevalue = toList(0) content (0)
   def string = onevalue.asInstanceOf[String]
   def int = onevalue.asInstanceOf[Int]
   def date = onevalue.asInstanceOf[java.sql.Date]
   def timestamp = onevalue.asInstanceOf[java.sql.Timestamp]
   def bigdecimal = onevalue.asInstanceOf[BigDecimal]
-  
+
   /** needs to be overriden since super class implementation calls hasNext method */
   override def toString = getClass.toString + ":" + (cols.mkString(","))
 
@@ -96,7 +96,7 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
       case DOUBLE | FLOAT | REAL => val v = rs.getDouble(pos); if (rs.wasNull) null else v
     }
   }
-  
+
   case class Row(row: Seq[Any]) extends RowLike {
     def apply(idx: Int) = row(idx)
     def apply(name: String) = error("unsupported method")
@@ -108,12 +108,15 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
       case r: Seq[_] => this.row == r
       case _ => false
     }
-  }  
+  }
 }
 
 trait RowLike {
   def apply(idx: Int): Any
+  //this can be renamed to apply, when scala compiler provides overloaded methods with default parameters
+  def typed[T](idx: Int, conv: (Any) => T = (v: Any) => v.asInstanceOf[T]): T = conv(apply(idx))
   def apply(name: String): Any
+  def apply[T](name: String, conv: (Any) => T = (v: Any) => v.asInstanceOf[T]): T = apply(name).asInstanceOf[T]
   def columnCount: Int
   def content: Seq[Any]
   def column(idx: Int): Column
