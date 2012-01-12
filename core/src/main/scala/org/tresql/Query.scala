@@ -3,6 +3,7 @@ package org.tresql
 import java.sql.{ Array => JArray }
 import java.sql.{ Date, Timestamp, PreparedStatement, ResultSet }
 import org.tresql.metadata._
+import sys._
 
 object Query {
 
@@ -44,6 +45,45 @@ object Query {
     apply(expr).asInstanceOf[Result]
   }
 
+  def head[T](expr: String, params: Any*)(conv: Any => T = (x: Any) => x.asInstanceOf[T]):T = {
+    def h(r: Result) = r hasNext match {
+      case true => r next; val v = r(0); r close; v
+      case false => error("No rows in result")
+    }
+    if (params.size == 1) params(0) match {
+      case l: List[_] => conv(h(select(expr, l)))
+      case m: Map[String, _] => conv(h(select(expr, m)))
+      case x => conv(h(select(expr, x)))
+    }
+    else conv(h(select(expr, params)))    
+  }
+  def headOption[T](expr: String, params: Any*)(conv: Any => T = (x: Any) => x.asInstanceOf[T]):Option[T] = {
+    def h(r: Result) = r hasNext match {
+      case true => r next; val v = r(0); r close; v
+      case false => None
+    }
+    if (params.size == 1) params(0) match {
+      case l: List[_] => Some(conv(h(select(expr, l))))
+      case m: Map[String, _] => Some(conv(h(select(expr, m))))
+      case x => Some(conv(h(select(expr, x))))
+    }
+    else Some(conv(h(select(expr, params))))    
+  }
+  def unique[T](expr: String, params: Any*)(conv: Any => T = (x: Any) => x.asInstanceOf[T]):T = {
+    def h(r: Result) = r hasNext match {
+      case true => r next; val v = r(0); if (r hasNext) {
+        r.close; error("More than one row for unique result")   
+      } else v
+      case false => error("No rows in result")
+    }
+    if (params.size == 1) params(0) match {
+      case l: List[_] => conv(h(select(expr, l)))
+      case m: Map[String, _] => conv(h(select(expr, m)))
+      case x => conv(h(select(expr, x)))
+    }
+    else conv(h(select(expr, params)))    
+  } 
+  
   private[tresql] def select(sql: String, cols: List[QueryBuilder#ColExpr],
     bindVariables: List[Expr], env: Env, allCols: Boolean): Result = {
     Env log sql
