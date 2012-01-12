@@ -46,43 +46,51 @@ object Query {
   }
 
   def head[T](expr: String, params: Any*)(conv: Any => T = (x: Any) => x.asInstanceOf[T]):T = {
-    def h(r: Result) = r hasNext match {
-      case true => r next; val v = r(0); r close; v
-      case false => error("No rows in result")
-    }
     if (params.size == 1) params(0) match {
-      case l: List[_] => conv(h(select(expr, l)))
-      case m: Map[String, _] => conv(h(select(expr, m)))
-      case x => conv(h(select(expr, x)))
+      case l: List[_] => conv(typedRow[T](select(expr, l), HEAD))
+      case m: Map[String, _] => conv(typedRow[T](select(expr, m), HEAD))
+      case x => conv(typedRow[T](select(expr, x), HEAD))
     }
-    else conv(h(select(expr, params)))    
+    else conv(typedRow[T](select(expr, params), HEAD))    
   }
   def headOption[T](expr: String, params: Any*)(conv: Any => T = (x: Any) => x.asInstanceOf[T]):Option[T] = {
-    def h(r: Result) = r hasNext match {
-      case true => r next; val v = r(0); r close; v
-      case false => None
-    }
     if (params.size == 1) params(0) match {
-      case l: List[_] => Some(conv(h(select(expr, l))))
-      case m: Map[String, _] => Some(conv(h(select(expr, m))))
-      case x => Some(conv(h(select(expr, x))))
+      case l: List[_] => Some(conv(typedRow(select(expr, l), HEAD_OPTION)))
+      case m: Map[String, _] => Some(conv(typedRow(select(expr, m), HEAD_OPTION)))
+      case x => Some(conv(typedRow(select(expr, x), HEAD_OPTION)))
     }
-    else Some(conv(h(select(expr, params))))    
+    else Some(conv(typedRow[T](select(expr, params), HEAD_OPTION)))    
   }
   def unique[T](expr: String, params: Any*)(conv: Any => T = (x: Any) => x.asInstanceOf[T]):T = {
-    def h(r: Result) = r hasNext match {
-      case true => r next; val v = r(0); if (r hasNext) {
-        r.close; error("More than one row for unique result")   
-      } else v
-      case false => error("No rows in result")
-    }
     if (params.size == 1) params(0) match {
-      case l: List[_] => conv(h(select(expr, l)))
-      case m: Map[String, _] => conv(h(select(expr, m)))
-      case x => conv(h(select(expr, x)))
+      case l: List[_] => conv(typedRow[T](select(expr, l), UNIQUE))
+      case m: Map[String, _] => conv(typedRow[T](select(expr, m), UNIQUE))
+      case x => conv(typedRow[T](select(expr, x), UNIQUE))
     }
-    else conv(h(select(expr, params)))    
-  } 
+    else conv(typedRow[T](select(expr, params), UNIQUE))    
+  }
+  
+  private val HEAD = 1
+  private val HEAD_OPTION = 2
+  private val UNIQUE = 3
+  private def typedRow[T](r: Result, mode: Int) = {
+    mode match {
+      case HEAD | HEAD_OPTION => {
+        r hasNext match {
+          case true => r next; val v = r(0); r close; v
+          case false => if (mode == HEAD) error("No rows in result") else None
+        }
+      }
+      case UNIQUE => r hasNext match {
+        case true =>
+          r next; val v = r(0); if (r hasNext) {
+            r.close; error("More than one row for unique result")
+          } else v
+        case false => error("No rows in result")
+      }
+      case x => error("Knipis: " + x)
+    }
+  }
   
   private[tresql] def select(sql: String, cols: List[QueryBuilder#ColExpr],
     bindVariables: List[Expr], env: Env, allCols: Boolean): Result = {

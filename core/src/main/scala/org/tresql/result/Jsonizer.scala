@@ -82,7 +82,7 @@ object Jsonizer {
           buf append '"'
           buf append (r.column(j).name match {
             case null => j.toString
-            case name => JSONFormat.quoteString(name)
+            case name => JSONFormat.quoteString(name toLowerCase)
           })
           buf append "\": "
         }
