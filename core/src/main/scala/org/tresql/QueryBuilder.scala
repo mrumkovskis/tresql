@@ -47,7 +47,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
 
   case class VarExpr(val name: String, val opt: Boolean) extends BaseExpr {
-    if (!env.reusableExpr) {
+    if (!env.reusableExpr && opt) {
       if (!QueryBuilder.this.unboundVarsFlag) QueryBuilder.this.unboundVarsFlag =
         !(env contains name)
     }
@@ -55,7 +55,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     var binded = false
     def sql = {
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
-      if (!env.reusableExpr && (env contains name)) {
+      if (!env.reusableExpr && opt && (env contains name)) {
           env(name) match {
             case l:scala.collection.Traversable[_] => "?," * (l size) dropRight 1
             case a:Array[_] => "?," * (a size) dropRight 1
@@ -580,7 +580,6 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
   def apply(): Any = error("Must be implemented in subclass")
   def apply(params: List[Any]): Any = error("Must be implemented in subclass")
   def apply(params: Map[String, Any]): Any = error("Must be implemented in subclass")
-  def select = apply().asInstanceOf[Result]
   def select(params: Any*) = apply(params.toList).asInstanceOf[Result]
   def select(params: List[Any]) = apply(params).asInstanceOf[Result]
   def select(params: Map[String, Any]) = apply(params).asInstanceOf[Result]

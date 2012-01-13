@@ -50,6 +50,72 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     }
   }
 
+  //concrete type return methods
+  override def int(columnIndex: Int): Int = {
+    if (cols(columnIndex).idx != -1) rs.getInt(cols(columnIndex).idx)
+    else row(columnIndex).asInstanceOf[Int]
+  }
+  override def int(columnLabel: String): Int = {
+    try {
+      int(colMap(columnLabel))
+    } catch { case _: NoSuchElementException => int(rs.findColumn(columnLabel)) }
+  }
+  override def long(columnIndex: Int): Long = {
+    if (cols(columnIndex).idx != -1) rs.getLong(cols(columnIndex).idx)
+    else row(columnIndex).asInstanceOf[Long]
+  }
+  override def long(columnLabel: String): Long = {
+    try {
+      long(colMap(columnLabel))
+    } catch { case _: NoSuchElementException => long(rs.findColumn(columnLabel)) }
+  }
+  override def double(columnIndex: Int): Double = {
+    if (cols(columnIndex).idx != -1) rs.getDouble(cols(columnIndex).idx)
+    else row(columnIndex).asInstanceOf[Double]
+  }
+  override def double(columnLabel: String): Double = {
+    try {
+      double(colMap(columnLabel))
+    } catch { case _: NoSuchElementException => double(rs.findColumn(columnLabel)) }
+  }
+  override def bigdecimal(columnIndex: Int): BigDecimal = {
+    if (cols(columnIndex).idx != -1) {
+      val bd = rs.getBigDecimal(cols(columnIndex).idx); if (rs.wasNull) null else BigDecimal(bd)
+    } else row(columnIndex).asInstanceOf[BigDecimal]
+  }
+  override def bigdecimal(columnLabel: String): BigDecimal = {
+    try {
+      int(colMap(columnLabel))
+    } catch { case _: NoSuchElementException => bigdecimal(rs.findColumn(columnLabel)) }
+  }
+  override def string(columnIndex: Int): String = {
+    if (cols(columnIndex).idx != -1) rs.getString(cols(columnIndex).idx)
+    else row(columnIndex).asInstanceOf[String]
+  }
+  override def string(columnLabel: String): String = {
+    try {
+      string(colMap(columnLabel))
+    } catch { case _: NoSuchElementException => string(rs.findColumn(columnLabel)) }
+  }
+  override def date(columnIndex: Int): java.sql.Date = {
+    if (cols(columnIndex).idx != -1) rs.getDate(cols(columnIndex).idx)
+    else row(columnIndex).asInstanceOf[java.sql.Date]
+  }
+  override def date(columnLabel: String): java.sql.Date = {
+    try {
+      date(colMap(columnLabel))
+    } catch { case _: NoSuchElementException => date(rs.findColumn(columnLabel)) }
+  }
+  override def timestamp(columnIndex: Int): java.sql.Timestamp = {
+    if (cols(columnIndex).idx != -1) rs.getTimestamp(cols(columnIndex).idx)
+    else row(columnIndex).asInstanceOf[java.sql.Timestamp]
+  }
+  override def timestamp(columnLabel: String): java.sql.Timestamp = {
+    try {
+      timestamp(colMap(columnLabel))
+    } catch { case _: NoSuchElementException => timestamp(rs.findColumn(columnLabel)) }
+  }
+
   override def toList = { val l = (this map (r => Row(this.content))).toList; close; l }
 
   def content = {
@@ -109,6 +175,20 @@ trait RowLike {
   def typed[T](idx: Int, conv: (Any) => T = (v: Any) => v.asInstanceOf[T]): T = conv(apply(idx))
   def apply(name: String): Any
   def apply[T](name: String, conv: (Any) => T = (v: Any) => v.asInstanceOf[T]): T = apply(name).asInstanceOf[T]
+  def int(idx: Int) = apply(idx).asInstanceOf[Int]
+  def int(name: String) = apply(name).asInstanceOf[Int]
+  def long(idx: Int) = apply(idx).asInstanceOf[Long]
+  def long(name: String) = apply(name).asInstanceOf[Long]
+  def double(idx: Int) = apply(idx).asInstanceOf[Double]
+  def double(name: String) = apply(name).asInstanceOf[Double]
+  def bigdecimal(idx: Int) = apply(idx).asInstanceOf[BigDecimal]
+  def bigdecimal(name: String) = apply(name).asInstanceOf[BigDecimal]
+  def string(idx: Int) = apply(idx).asInstanceOf[String]
+  def string(name: String) = apply(name).asInstanceOf[String]
+  def date(idx: Int) = apply(idx).asInstanceOf[java.sql.Date]
+  def date(name: String) = apply(name).asInstanceOf[java.sql.Date]
+  def timestamp(idx: Int) = apply(idx).asInstanceOf[java.sql.Timestamp]
+  def timestamp(name: String) = apply(name).asInstanceOf[java.sql.Timestamp]
   def columnCount: Int
   def content: Seq[Any]
   def column(idx: Int): Column
