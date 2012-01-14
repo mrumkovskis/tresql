@@ -12,14 +12,14 @@ object Query {
   }
 
   def apply(expr: String, params: List[Any]): Any = {
-    apply(expr, params.zipWithIndex.map(t=>(t._2 + 1).toString->t._1).toMap)
-  }                    
+    apply(expr, params.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap)
+  }
 
   def apply(expr: String, params: Map[String, Any]): Any = {
     val exp = QueryBuilder(expr, Env(params, false))
-    exp() 
+    exp()
   }
-  
+
   def apply(expr: Any) = {
     val exp = QueryBuilder(expr, Env(Map(), false))
     exp()
@@ -45,31 +45,40 @@ object Query {
     apply(expr).asInstanceOf[Result]
   }
 
-  def head[T](expr: String, params: Any*)(conv: Any => T = (x: Any) => x.asInstanceOf[T]):T = {
+  def foreach(expr: String, params: Any*)(f: (RowLike) => Unit = (row) => ()) {
+    (if (params.size == 1) params(0) match {
+      case l: List[_] => select(expr, l)
+      case m: Map[String, _] => select(expr, m)
+      case x => select(expr, x)
+    }
+    else select(expr, params)) foreach f
+  }
+
+  def head[T](expr: String, params: Any*)(conv: Any => T = (x: Any) => x.asInstanceOf[T]): T = {
     if (params.size == 1) params(0) match {
       case l: List[_] => conv(typedRow[T](select(expr, l), HEAD))
       case m: Map[String, _] => conv(typedRow[T](select(expr, m), HEAD))
       case x => conv(typedRow[T](select(expr, x), HEAD))
     }
-    else conv(typedRow[T](select(expr, params), HEAD))    
+    else conv(typedRow[T](select(expr, params), HEAD))
   }
-  def headOption[T](expr: String, params: Any*)(conv: Any => T = (x: Any) => x.asInstanceOf[T]):Option[T] = {
+  def headOption[T](expr: String, params: Any*)(conv: Any => T = (x: Any) => x.asInstanceOf[T]): Option[T] = {
     if (params.size == 1) params(0) match {
       case l: List[_] => Some(conv(typedRow(select(expr, l), HEAD_OPTION)))
       case m: Map[String, _] => Some(conv(typedRow(select(expr, m), HEAD_OPTION)))
       case x => Some(conv(typedRow(select(expr, x), HEAD_OPTION)))
     }
-    else Some(conv(typedRow[T](select(expr, params), HEAD_OPTION)))    
+    else Some(conv(typedRow[T](select(expr, params), HEAD_OPTION)))
   }
-  def unique[T](expr: String, params: Any*)(conv: Any => T = (x: Any) => x.asInstanceOf[T]):T = {
+  def unique[T](expr: String, params: Any*)(conv: Any => T = (x: Any) => x.asInstanceOf[T]): T = {
     if (params.size == 1) params(0) match {
       case l: List[_] => conv(typedRow[T](select(expr, l), UNIQUE))
       case m: Map[String, _] => conv(typedRow[T](select(expr, m), UNIQUE))
       case x => conv(typedRow[T](select(expr, x), UNIQUE))
     }
-    else conv(typedRow[T](select(expr, params), UNIQUE))    
+    else conv(typedRow[T](select(expr, params), UNIQUE))
   }
-  
+
   private val HEAD = 1
   private val HEAD_OPTION = 2
   private val UNIQUE = 3
@@ -91,7 +100,7 @@ object Query {
       case x => error("Knipis: " + x)
     }
   }
-  
+
   private[tresql] def select(sql: String, cols: List[QueryBuilder#ColExpr],
     bindVariables: List[Expr], env: Env, allCols: Boolean): Result = {
     Env log sql
@@ -121,7 +130,7 @@ object Query {
     val r = st.executeUpdate
     if (!env.reusableExpr) {
       st.close
-      env update (null:PreparedStatement)
+      env update (null: PreparedStatement)
     }
     r
   }
@@ -129,7 +138,7 @@ object Query {
   private def statement(sql: String, env: Env) = {
     val conn = env.conn
     if (conn == null) throw new NullPointerException(
-        """Connection not found in environment. Check if "Env update conn" (in this case statement execution must be done in the same thread) or "Env.sharedConn = conn" is called.""")
+      """Connection not found in environment. Check if "Env update conn" (in this case statement execution must be done in the same thread) or "Env.sharedConn = conn" is called.""")
     if (env.reusableExpr)
       if (env.statement == null) {
         val s = conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY,
@@ -163,8 +172,8 @@ object Query {
         case bn: java.math.BigDecimal => st.setBigDecimal(idx, bn)
         case bd: BigDecimal => st.setBigDecimal(idx, bd.bigDecimal)
         //array binding
-        case i:scala.collection.Traversable[_] => i foreach (bindVar(_)); idx -= 1
-        case a:Array[_] => a foreach (bindVar(_)); idx -= 1
+        case i: scala.collection.Traversable[_] => i foreach (bindVar(_)); idx -= 1
+        case a: Array[_] => a foreach (bindVar(_)); idx -= 1
         //unknown object
         case obj => st.setObject(idx, obj)
       }

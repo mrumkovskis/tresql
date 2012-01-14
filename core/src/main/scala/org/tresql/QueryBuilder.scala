@@ -583,6 +583,14 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
   def select(params: Any*) = apply(params.toList).asInstanceOf[Result]
   def select(params: List[Any]) = apply(params).asInstanceOf[Result]
   def select(params: Map[String, Any]) = apply(params).asInstanceOf[Result]
+  def foreach(params: Any*)(f: (RowLike) => Unit = (row) => ()) {
+    (if (params.size == 1) params(0) match {
+      case l: List[_] => select(l)
+      case m: Map[String, _] => select(m)
+      case x => select(x)
+    }
+    else select(params)) foreach f
+  }  
   def close: Unit = error("Must be implemented in subclass")
   def exprType: Class[_] = this.getClass
   override def toString = sql
