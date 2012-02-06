@@ -84,6 +84,9 @@ dept[10]{*} --> [[10, "ACCOUNTING", "NEW YORK"]]
 dept[10]{*, |emp[deptno = :1(1)]{ename}} --> [[10, "ACCOUNTING", "NEW YORK", [["KING"], ["CLARK"], ["MILLER"]]]]
 dept[?]{|emp[?]{ename}, *} --> 10;7839 --> [[[["KING"]], 10, "ACCOUNTING", "NEW YORK"]]
 
+//single quoted string
+dept[dname ~ 'ACC%'] --> [[10, "ACCOUNTING", "NEW YORK"]]
+
 //----UPDATE----
 emp[hiredate >= ? & hiredate <= ?]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;1000.35 --> 2
 emp[hiredate >= ? & hiredate <= ?]{sal} ~#(1) --> '1982-01-23;'1982-12-09 --> [[4000.35], [2300.35]]

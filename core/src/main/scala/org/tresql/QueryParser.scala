@@ -28,9 +28,13 @@ object QueryParser extends JavaTokenParsers {
 
   /*TODO allow string literal to be enclosed into single quotes*/
   /* allow double quotes in string literal */
-  override def stringLiteral: Parser[String] =
+  def quotedStringLiteral: Parser[String] = 
+    ("'" + """([^'\p{Cntrl}\\]|\\[\\/bfnrt']|\\u[a-fA-F0-9]{4})*""" + "'").r ^^
+      (s => s.substring(1, s.length - 1).replace("\\'", "'"))
+  def doubleQuotedStringLiteral: Parser[String] =
     ("\"" + """([^"\p{Cntrl}\\]|\\[\\/bfnrt"]|\\u[a-fA-F0-9]{4})*""" + "\"").r ^^
       (s => s.substring(1, s.length - 1).replace("\\\"", "\""))
+  override def stringLiteral: Parser[String] = quotedStringLiteral | doubleQuotedStringLiteral
   def excludeKeywordsIdent = new Parser[String] {
     def apply(in: Input) = {
       ident(in) match {
