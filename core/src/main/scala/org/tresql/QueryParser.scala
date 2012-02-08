@@ -26,8 +26,6 @@ object QueryParser extends JavaTokenParsers {
 
   case class Braces(expr: Any)
 
-  /*TODO allow string literal to be enclosed into single quotes*/
-  /* allow double quotes in string literal */
   def quotedStringLiteral: Parser[String] = 
     ("'" + """([^'\p{Cntrl}\\]|\\[\\/bfnrt']|\\u[a-fA-F0-9]{4})*""" + "'").r ^^
       (s => s.substring(1, s.length - 1).replace("\\'", "'"))
