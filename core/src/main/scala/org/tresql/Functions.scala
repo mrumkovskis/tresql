@@ -1,6 +1,7 @@
 package org.tresql
 
 import java.text.SimpleDateFormat
+import java.sql.Statement
 
 object Functions {
 
@@ -20,6 +21,16 @@ object Functions {
     else sb.toString
   }
 
+  def postgreNextId(sequence: String) = {
+    val st = Env.conn.prepareStatement("select nextval('" + sequence + "')")
+    val res = st.executeQuery()
+    res.next
+    val id = res.getLong(1)
+    res.close
+    st.close
+    id
+  } 
+  
   def id(res: Result) = {
     val r = if (res.hasNext) res.next()(0) else null
     res.close
