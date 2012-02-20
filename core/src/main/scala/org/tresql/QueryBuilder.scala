@@ -25,8 +25,6 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private val _bindVariables = scala.collection.mutable.ListBuffer[Expr]()
   private lazy val bindVariables = _bindVariables.toList
 
-  //used internally while building expression, used for optional binding
-  private var unboundVarsFlag = false
   //used internally while building expression
   private var separateQueryFlag = false
   //indicate * in column
@@ -47,10 +45,6 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
 
   case class VarExpr(val name: String, val opt: Boolean) extends BaseExpr {
-    if (!env.reusableExpr && opt) {
-      if (!QueryBuilder.this.unboundVarsFlag) QueryBuilder.this.unboundVarsFlag =
-        !(env contains name)
-    }
     override def apply() = env(name)
     var binded = false
     def sql = {
@@ -466,7 +460,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }
       case UnOp(op, oper) => {
         val o = buildInternal(oper, parseCtx)
-        if (!unboundVarsFlag) new UnExpr(op, o) else { unboundVarsFlag = false; null }
+        if (o == null) null else new UnExpr(op, o)
       }
       case e@BinOp(op, lop, rop) => parseCtx match {
         case ROOT_CTX => {
@@ -474,10 +468,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           val ex = b.buildInternal(e, QUERY_CTX); this.bindIdx = b.bindIdx; ex            
         }
         case ctx => {
-          var l = buildInternal(lop, ctx)
-          if (unboundVarsFlag) { l = null; unboundVarsFlag = false }
-          var r = buildInternal(rop, ctx)
-          if (unboundVarsFlag) { r = null; unboundVarsFlag = false }
+          val l = buildInternal(lop, ctx)
+          val r = buildInternal(rop, ctx)
           if (l != null && r != null) new BinExpr(op, l, r) else if (op == "&" || op == "|")
             if (l != null) l else if (r != null) r else null
           else null  
@@ -486,7 +478,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case Fun(n, pl: List[_]) => new FunExpr(n, pl map { buildInternal(_, parseCtx) })
       case Arr(l: List[_]) => new ArrExpr(l map { buildInternal(_, parseCtx) })
       case Variable("?", o) => this.bindIdx += 1; new VarExpr(this.bindIdx.toString, o)
-      case Variable(n, o) => new VarExpr(n, o)
+      case Variable(n, o) => if (!env.reusableExpr && o && !(env contains n)) null else new VarExpr(n, o)
       case Result(r, c) => new ResExpr(r, c)
       case Col(c, a) => { separateQueryFlag = false; new ColExpr(buildInternal(c, parseCtx), a) }
       case Grp(cols, having) => new Group(cols map { buildInternal(_, GROUP_CTX) },
@@ -495,8 +487,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case All() => AllExpr()
       case null => null
       case Braces(expr) => {
-        var e = buildInternal(expr, parseCtx)
-        if (unboundVarsFlag) { e = null; unboundVarsFlag = false }
+        val e = buildInternal(expr, parseCtx)
         if (e == null) null else new BracesExpr(e)
       }
       case x => ConstExpr(x)

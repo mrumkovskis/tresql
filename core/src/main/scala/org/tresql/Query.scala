@@ -7,9 +7,11 @@ import sys._
 
 object Query {
 
-  def apply(expr: String, params: Any*): Any = {
-    apply(expr, params.toList)
-  }
+  def apply(expr: String, params: Any*): Any = if (params.size == 1) params(0) match {
+    case l:List[_] => apply(expr, l)
+    case m:Map[String, _] => apply(expr, m)
+    case x => apply(expr, List(x))
+  } else apply(expr, params.toList)
 
   def apply(expr: String, params: List[Any]): Any = {
     apply(expr, params.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap)

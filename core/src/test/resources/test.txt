@@ -38,6 +38,9 @@ dummy --> [[0]]
 emp {count(*)} --> [[14]]
 emp e/dept d [d.deptno = 20]{empno, ename, dname}#(empno) --> [[7369, "SMITH", "RESEARCH"], [7566, "JONES", "RESEARCH"], [7788, "SCOTT", "RESEARCH"], [7876, "ADAMS", "RESEARCH"], [7902, "FORD", "RESEARCH"]]
 
+//implicit search by primary key
+dept[:id] {deptno} #(deptno) --> id=10 --> [[10]]
+
 //in subselect
 dept [deptno in (emp{deptno})]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
 
@@ -50,6 +53,12 @@ dept d/emp? e[e.deptno != null]#{d.deptno}#(deptno) --> [[10], [20], [30]]
 //array binding
 emp [empno in(?)]{empno, ename, job}#(empno) --> [7839, 7782] --> [[7782, "CLARK", "MANAGER"], [7839, "KING", "PRESIDENT"]]
 emp [ename ~~ ? & empno in(?) & mgr = null & sal = ?]{empno, ename, job} --> 'kin%; [7839, 7782]; 5000  --> [[7839, "KING", "PRESIDENT"]]
+
+//named variables
+dept[dname ~~ :name] --> name='acc% --> [[10, "ACCOUNTING", "NEW YORK"]]
+
+//mixed mode - named indexed variables
+dept[deptno = ? & dname ~~ :name] --> name='acc%;10 --> [[10, "ACCOUNTING", "NEW YORK"]]
 
 //in subselect with binding
 dept[deptno in (emp[sal >= ?]{deptno})] {dname} --> 5000 --> [["ACCOUNTING"]]
@@ -86,6 +95,17 @@ dept[?]{|emp[?]{ename}, *} --> 10;7839 --> [[[["KING"]], 10, "ACCOUNTING", "NEW 
 
 //single quoted string
 dept[dname ~ 'ACC%'] --> [[10, "ACCOUNTING", "NEW YORK"]]
+
+//optional binding
+dept[deptno = :id?] {deptno} #(deptno) --> [[10], [20], [30], [40]]
+
+dept[:id?] {deptno} #(deptno) --> id=10 --> [[10]]
+
+dept[:id?] {deptno} #(deptno) --> [[10], [20], [30], [40]]
+
+dept[:id? & dname ~~ :name? & loc ~~ :loc?] --> loc = 'bost% --> [[40, "OPERATIONS", "BOSTON"]]
+
+dept[(:id? & (dname ~~ :name? & (loc ~~ :loc?)))] --> loc = 'bost% --> [[40, "OPERATIONS", "BOSTON"]]
 
 //----UPDATE----
 emp[hiredate >= ? & hiredate <= ?]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;1000.35 --> 2

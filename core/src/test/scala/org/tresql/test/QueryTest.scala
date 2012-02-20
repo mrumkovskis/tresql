@@ -21,26 +21,35 @@ class QueryTest extends Suite {
   }
     
   def testStatements {
-    def parsePars(pars: String, sep:String = ";"): List[Any] = {
+    def parsePars(pars: String, sep:String = ";"): Any = {
       val DF = new java.text.SimpleDateFormat("yyyy-MM-dd")
       val TF = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
       val D = """(\d{4}-\d{1,2}-\d{1,2})""".r
       val T = """(\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}:\d{1,2})""".r
       val N = """(-?\d+(\.\d*)?|\d*\.\d+)""".r
       val A = """(\[(.*)\])""".r
-      pars.split(sep).map {
-        _.trim match {
-          case s if (s.startsWith("'")) => s.substring(1, s.length)
-          case "null" => null
-          case "false" => false
-          case "true" => true
-          case D(d) => DF.parse(d)
-          case T(t) => TF.parse(t)
-          case N(n,_) => BigDecimal(n)
-          case A(a, ac) => parsePars(ac, ",")
-          case x => error("unparseable parameter: " + x)
-        }
-      } toList
+      val VAR = """(\w+)\s*=\s*(.+)""".r
+      var map = false
+      def par(p: String): Any = p.trim match {
+        case VAR(v, x) => {map = true; (v, par(x))}
+        case s if (s.startsWith("'")) => s.substring(1, s.length)
+        case "null" => null
+        case "false" => false
+        case "true" => true
+        case D(d) => DF.parse(d)
+        case T(t) => TF.parse(t)
+        case N(n,_) => BigDecimal(n)
+        case A(a, ac) => parsePars(ac, ",")
+        case x => error("unparseable parameter: " + x)        
+      }
+      val pl = pars.split(sep).map(par).toList
+      if (map) {
+        var i = 0
+        pl map {_ match {
+          case t@(k, v) => t
+          case x => {i += 1; (i toString, x)}
+        }} toMap
+      } else pl
     }
 
     var nr = 0
