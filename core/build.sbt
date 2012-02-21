@@ -7,7 +7,7 @@ scalaVersion := "2.9.1"
 scalacOptions += "-deprecation"
 
 libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "1.6.1" % "test", 
-                            "org.hsqldb" % "hsqldb-j5" % "2.2.4" % "test")
+                            "org.hsqldb" % "hsqldb" % "2.2.8" % "test")
 
 publishTo <<= version { v: String =>
   val nexus = "https://oss.sonatype.org/"
