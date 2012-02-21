@@ -13,7 +13,6 @@ class QueryTest extends Suite {
   Class.forName("org.hsqldb.jdbc.JDBCDriver")
   val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
   Env update conn
-  Env update metadata.JDBCMetaData("test", "PUBLIC")
   Env update ((msg, level) => println (msg))
   //create test db script
   new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split(";").foreach {

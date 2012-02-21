@@ -82,7 +82,7 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
 object Env extends ResourceProvider {
   private var logger: (=> String, Int) => Unit = null
   //meta data object must be thread safe!
-  private var md: MetaData = null
+  private var md: MetaData = metadata.JDBCMetaData("", null)
   private val threadConn = new ThreadLocal[java.sql.Connection]
   //this is for scala interperter since it executes every command in separate thread from console thread
   var sharedConn: java.sql.Connection = null
