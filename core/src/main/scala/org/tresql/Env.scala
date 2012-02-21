@@ -3,8 +3,9 @@ package org.tresql
 import sys._
 
 /* Environment for expression building and execution */
+/* TODO provider vs resourceProvider? Some clarification or reorganization needed perhaps. */
 class Env(private val provider: EnvProvider, private val resourceProvider: ResourceProvider,
-  val reusableExpr: Boolean) extends (String => Any) with MetaData {
+  val reusableExpr: Boolean) extends MetaData {
 
   private var providedEnvs: List[Env] = Nil
 
@@ -14,7 +15,8 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
     root.providedEnvs = this :: root.providedEnvs
   }
 
-  private val vars = new ThreadLocal[scala.collection.mutable.Map[String, Any]]
+  private val _vars = new ThreadLocal[scala.collection.mutable.Map[String, Any]]
+  private def vars = if (_vars.get != null) _vars.get else error("Bind variables not set")
   private val res = new ThreadLocal[Result]
   private val st = new ThreadLocal[java.sql.PreparedStatement]
 
@@ -24,17 +26,20 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
     update(vars)
   }
 
-  def apply(name: String) = if (provider != null) provider.env(name) else vars.get()(name) match {
+  def apply(name: String):Any = if (provider != null) provider.env(name) else vars(name) match {
     case e: Expr => e()
     case x => x
   }
 
   override implicit def conn = if (provider != null) provider.env.conn else resourceProvider.conn
 
-  def dbName = if (provider != null) provider.env.dbName else resourceProvider.metaData.dbName
+  def dbName = if (provider != null) provider.env.dbName else metadata.dbName
 
   override def table(name: String)(implicit conn: java.sql.Connection) = if (provider != null)
-    provider.env.table(name) else resourceProvider.metaData.table(name)(conn)
+    provider.env.table(name) else metadata.table(name)(conn)
+
+  private def metadata = if (resourceProvider.metaData != null) resourceProvider.metaData
+                         else error("Meta data not found. Shortcut syntax not available.")
 
   def apply(rIdx: Int) = {
     var i = 0
@@ -49,15 +54,15 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
   def statement = this.st.get
 
   def contains(name: String): Boolean = if (provider != null) provider.env.contains(name)
-  else vars.get.contains(name)
+  else vars.contains(name)
 
   def update(name: String, value: Any) {
-    if (provider != null) provider.env(name) = value else this.vars.get()(name) = value
+    if (provider != null) provider.env(name) = value else this.vars(name) = value
   }
 
   def update(vars: Map[String, Any]) {
     if (provider != null) provider.env.update(vars)
-    else this.vars set scala.collection.mutable.Map(vars.toList: _*)
+    else this._vars set scala.collection.mutable.Map(vars.toList: _*)
   }
 
   def update(r: Result) = this.res set r
@@ -75,7 +80,7 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
 }
 
 object Env extends ResourceProvider {
-  private var logger: (=>String, Int) => Unit = null
+  private var logger: (=> String, Int) => Unit = null
   //meta data object must be thread safe!
   private var md: MetaData = null
   private val threadConn = new ThreadLocal[java.sql.Connection]
@@ -88,7 +93,7 @@ object Env extends ResourceProvider {
   def metaData = md
   def update(md: MetaData) = this.md = md
   def update(conn: java.sql.Connection) = this.threadConn set conn
-  def update(logger: (=>String, Int) => Unit) = this.logger = logger
+  def update(logger: (=> String, Int) => Unit) = this.logger = logger
   def log(msg: => String, level: Int = 0): Unit = if (logger != null) logger(msg, level)
 }
 
