@@ -31,10 +31,23 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     if (cols(columnIndex).idx != -1) asAny(cols(columnIndex).idx)
     else row(columnIndex)
   }
+  def typed[T](columnIndex: Int)(implicit m:scala.reflect.Manifest[T]):T = m.toString match {
+    case "Int" => int(columnIndex).asInstanceOf[T]
+    case "Long" => long(columnIndex).asInstanceOf[T]
+    case "Double" => double(columnIndex).asInstanceOf[T]
+    case "scala.math.BigDecimal" => bigdecimal(columnIndex).asInstanceOf[T]
+    case "java.lang.String" => string(columnIndex).asInstanceOf[T]
+    case "java.sql.Date" => date(columnIndex).asInstanceOf[T]
+    case "java.sql.Timestamp" => timestamp(columnIndex).asInstanceOf[T]
+    case x => asAny(cols(columnIndex).idx).asInstanceOf[T]
+  }
   def apply(columnLabel: String) = {
     try {
       apply(colMap(columnLabel))
     } catch { case _: NoSuchElementException => asAny(rs.findColumn(columnLabel)) }
+  }
+  def typed[T](columnLabel: String)(implicit m:scala.reflect.Manifest[T]):T = {
+    typed[T](colMap(columnLabel))
   }
   def columnCount = cols.length
   def column(idx: Int) = cols(idx)
@@ -157,7 +170,9 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
 
   case class Row(row: Seq[Any]) extends RowLike {
     def apply(idx: Int) = row(idx)
+    def typed[T](idx: Int)(implicit m:scala.reflect.Manifest[T]) = row(idx).asInstanceOf[T]
     def apply(name: String) = error("unsupported method")
+    def typed[T](name: String)(implicit m:scala.reflect.Manifest[T]) = error("unsupported method")
     def content = row
     def columnCount = row.length
     def column(idx: Int) = Result.this.column(idx)
@@ -171,24 +186,23 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
 
 trait RowLike {
   def apply(idx: Int): Any
-  //this can be renamed to apply, when scala compiler provides overloaded methods with default parameters
-  def typed[T](idx: Int, conv: (Any) => T = (v: Any) => v.asInstanceOf[T]): T = conv(apply(idx))
+  def typed[T](idx: Int)(implicit m:scala.reflect.Manifest[T]): T
   def apply(name: String): Any
-  def apply[T](name: String, conv: (Any) => T = (v: Any) => v.asInstanceOf[T]): T = apply(name).asInstanceOf[T]
-  def int(idx: Int) = apply(idx).asInstanceOf[Int]
-  def int(name: String) = apply(name).asInstanceOf[Int]
-  def long(idx: Int) = apply(idx).asInstanceOf[Long]
-  def long(name: String) = apply(name).asInstanceOf[Long]
-  def double(idx: Int) = apply(idx).asInstanceOf[Double]
-  def double(name: String) = apply(name).asInstanceOf[Double]
-  def bigdecimal(idx: Int) = apply(idx).asInstanceOf[BigDecimal]
-  def bigdecimal(name: String) = apply(name).asInstanceOf[BigDecimal]
-  def string(idx: Int) = apply(idx).asInstanceOf[String]
-  def string(name: String) = apply(name).asInstanceOf[String]
-  def date(idx: Int) = apply(idx).asInstanceOf[java.sql.Date]
-  def date(name: String) = apply(name).asInstanceOf[java.sql.Date]
-  def timestamp(idx: Int) = apply(idx).asInstanceOf[java.sql.Timestamp]
-  def timestamp(name: String) = apply(name).asInstanceOf[java.sql.Timestamp]
+  def typed[T](name: String)(implicit m:scala.reflect.Manifest[T]): T
+  def int(idx: Int) = typed[Int](idx)
+  def int(name: String) = typed[Int](name)
+  def long(idx: Int) = typed[Long](idx)
+  def long(name: String) = typed[Long](name)
+  def double(idx: Int) = typed[Double](idx)
+  def double(name: String) = typed[Double](name)
+  def bigdecimal(idx: Int) = typed[BigDecimal](idx)
+  def bigdecimal(name: String) = typed[BigDecimal](name)
+  def string(idx: Int) = typed[String](idx)
+  def string(name: String) = typed[String](name)
+  def date(idx: Int) = typed[java.sql.Date](idx)
+  def date(name: String) = typed[java.sql.Date](name)
+  def timestamp(idx: Int) = typed[java.sql.Timestamp](idx)
+  def timestamp(name: String) = typed[java.sql.Timestamp](name)
   def columnCount: Int
   def content: Seq[Any]
   def column(idx: Int): Column

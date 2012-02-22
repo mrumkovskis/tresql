@@ -56,53 +56,6 @@ object Query {
     else select(expr, params)) foreach f
   }
 
-  def head[T](expr: String, params: Any*)(conv: Any => T = (x: Any) => x.asInstanceOf[T]): T = {
-    if (params.size == 1) params(0) match {
-      case l: List[_] => conv(typedRow[T](select(expr, l), HEAD))
-      case m: Map[String, _] => conv(typedRow[T](select(expr, m), HEAD))
-      case x => conv(typedRow[T](select(expr, x), HEAD))
-    }
-    else conv(typedRow[T](select(expr, params), HEAD))
-  }
-  def headOption[T](expr: String, params: Any*)(conv: Any => T = (x: Any) => x.asInstanceOf[T]): Option[T] = {
-    if (params.size == 1) params(0) match {
-      case l: List[_] => Some(conv(typedRow(select(expr, l), HEAD_OPTION)))
-      case m: Map[String, _] => Some(conv(typedRow(select(expr, m), HEAD_OPTION)))
-      case x => Some(conv(typedRow(select(expr, x), HEAD_OPTION)))
-    }
-    else Some(conv(typedRow[T](select(expr, params), HEAD_OPTION)))
-  }
-  def unique[T](expr: String, params: Any*)(conv: Any => T = (x: Any) => x.asInstanceOf[T]): T = {
-    if (params.size == 1) params(0) match {
-      case l: List[_] => conv(typedRow[T](select(expr, l), UNIQUE))
-      case m: Map[String, _] => conv(typedRow[T](select(expr, m), UNIQUE))
-      case x => conv(typedRow[T](select(expr, x), UNIQUE))
-    }
-    else conv(typedRow[T](select(expr, params), UNIQUE))
-  }
-
-  private val HEAD = 1
-  private val HEAD_OPTION = 2
-  private val UNIQUE = 3
-  private def typedRow[T](r: Result, mode: Int) = {
-    mode match {
-      case HEAD | HEAD_OPTION => {
-        r hasNext match {
-          case true => r next; val v = r(0); r close; v
-          case false => if (mode == HEAD) error("No rows in result") else None
-        }
-      }
-      case UNIQUE => r hasNext match {
-        case true =>
-          r next; val v = r(0); if (r hasNext) {
-            r.close; error("More than one row for unique result")
-          } else v
-        case false => error("No rows in result")
-      }
-      case x => error("Knipis: " + x)
-    }
-  }
-
   private[tresql] def select(sql: String, cols: List[QueryBuilder#ColExpr],
     bindVariables: List[Expr], env: Env, allCols: Boolean): Result = {
     Env log sql
@@ -183,4 +136,56 @@ object Query {
     }
     bindVariables.map(_()).foreach { bindVar(_) }
   }
+  
+  /*---------------- Single value methods -------------*/
+  def head[T](expr: String, params: Any*)(implicit m:scala.reflect.Manifest[T]): T = {
+    if (params.size == 1) params(0) match {
+      case l: List[_] => typedValue[T](select(expr, l), HEAD)
+      case map: Map[String, _] => typedValue[T](select(expr, map), HEAD)
+      case x => typedValue[T](select(expr, x), HEAD)
+    }
+    else typedValue[T](select(expr, params), HEAD)
+  }
+  def headOption[T](expr: String, params: Any*)(implicit m:scala.reflect.Manifest[T]): Option[T] = {
+    try {
+      if (params.size == 1) params(0) match {
+        case l: List[_] => Some(typedValue(select(expr, l), HEAD_OPTION))
+        case map: Map[String, _] => Some(typedValue(select(expr, map), HEAD_OPTION))
+        case x => Some(typedValue(select(expr, x), HEAD_OPTION))
+      }
+      else Some(typedValue[T](select(expr, params), HEAD_OPTION))
+    } catch {
+      case e: NoSuchElementException => None
+    }
+  }
+  def unique[T](expr: String, params: Any*)(implicit m:scala.reflect.Manifest[T]): T = {
+    if (params.size == 1) params(0) match {
+      case l: List[_] => typedValue[T](select(expr, l), UNIQUE)
+      case map: Map[String, _] => typedValue[T](select(expr, map), UNIQUE)
+      case x => typedValue[T](select(expr, x), UNIQUE)
+    }
+    else typedValue[T](select(expr, params), UNIQUE)
+  }
+
+  private val HEAD = 1
+  private val HEAD_OPTION = 2
+  private val UNIQUE = 3
+  private def typedValue[T](r: Result, mode: Int)(implicit m:scala.reflect.Manifest[T]):T = {
+    mode match {
+      case HEAD | HEAD_OPTION => {
+        r hasNext match {
+          case true => r next; val v = r.typed[T](0); r close; v
+          case false => throw new NoSuchElementException("No rows in result")
+        }
+      }
+      case UNIQUE => r hasNext match {
+        case true =>
+          r next; val v = r.typed(0); if (r hasNext) {
+                                  r.close; error("More than one row for unique result")
+                                } else v
+        case false => error("No rows in result")
+      }
+      case x => error("Knipis: " + x)
+    }
+  }  
 }
