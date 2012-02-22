@@ -19,7 +19,7 @@ class QueryTest extends Suite {
     sql => val st = conn.createStatement; st.execute(sql); st.close
   }
     
-  def testStatements {
+  def test {
     def parsePars(pars: String, sep:String = ";"): Any = {
       val DF = new java.text.SimpleDateFormat("yyyy-MM-dd")
       val TF = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
@@ -50,7 +50,7 @@ class QueryTest extends Suite {
         }} toMap
       } else pl
     }
-
+    println("------------------------ Test TreSQL statements ----------------------")
     var nr = 0
     new scala.io.BufferedSource(getClass.getResourceAsStream("/test.txt")).getLines.foreach {
       case l if (l.trim.startsWith("//")) => 
@@ -80,5 +80,16 @@ class QueryTest extends Suite {
       }
       case _ =>
     }
+    println("---------------- Test API ----------------------")
+    expect(10)(Query.head[Int]("dept{deptno}#(deptno)"))
+    expect(10)(Query.unique[Int]("dept[10]{deptno}#(deptno)"))
+    expect(Some(10))(Query.headOption[Int]("dept{deptno}#(deptno)"))
+    intercept[Exception](Query.unique[Int]("dept{deptno}#(deptno)"))
+    intercept[Exception](Query.unique[Int]("dept[100]{deptno}#(deptno)"))    
+    intercept[Exception](Query.head[Int]("dept[100]{deptno}#(deptno)"))    
+    expect(None)(Query.headOption[Int]("dept[100]{deptno}#(deptno)"))    
+    expect("ACCOUNTING")(Query.unique[String]("dept[10]{dname}#(deptno)"))
+    expect("1981-11-17")(Query.unique[java.sql.Date]("emp[sal = 5000]{hiredate}").toString)    
+    expect(BigDecimal(10))(Query.unique[BigDecimal]("dept[10]{deptno}#(deptno)"))
   }
 }
