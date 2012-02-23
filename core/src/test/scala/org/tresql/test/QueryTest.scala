@@ -92,7 +92,7 @@ class QueryTest extends Suite {
     expect("1981-11-17")(Query.unique[java.sql.Date]("emp[sal = 5000]{hiredate}").toString)    
     expect(BigDecimal(10))(Query.unique[BigDecimal]("dept[10]{deptno}#(deptno)"))
     expect(5)(Query.unique[Int]("inc_val_5(?)", 0))
+    expect(20)(Query.unique[Int]("inc_val_5(inc_val_5(?))", 10))
     expect(List(10, "x:x"))(Query("in_out(?, ?)", InOutPar(5), InOutPar("x")))
-
   }
 }
