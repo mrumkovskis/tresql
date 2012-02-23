@@ -193,7 +193,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
             m.getName == name && par.length == 1 && par(0).isInstance(p)
           }
           if (ms.length > 0) ms(0).invoke(Functions, List(p).asInstanceOf[List[Object]]: _*)
-          else throw ex
+          else org.tresql.Query.call("{call " + sql + "}", QueryBuilder.this.bindVariables, env)
         }
       }
     }
@@ -231,11 +231,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     def where = filter match {
       case (c@ConstExpr(x)) :: Nil => tables(0).aliasOrName + "." +
-        env.tbl(tables(0).name).key.cols(0) + " = " + c.sql
+        env.table(tables(0).name).key.cols(0) + " = " + c.sql
       case (v@VarExpr(x, _)) :: Nil => tables(0).aliasOrName + "." +
-        env.tbl(tables(0).name).key.cols(0) + " = " + v.sql
+        env.table(tables(0).name).key.cols(0) + " = " + v.sql
       case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
-      case l => tables(0).aliasOrName + "." + env.tbl(tables(0).name).key.cols(0) + " in(" +
+      case l => tables(0).aliasOrName + "." + env.table(tables(0).name).key.cols(0) + " in(" +
         (l map { _.sql }).mkString(",") + ")"
     }
     val queryDepth = QueryBuilder.this.queryDepth
@@ -256,9 +256,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       def sqlJoin(jl: List[Expr]) = (jl map { j =>
         outerJoinSql + " " + (j match {
           case IdentExpr(i, null) => sqlName + " on " + i.mkString(".") + " = " +
-            aliasOrName + "." + env.tbl(name).key.cols.mkString
+            aliasOrName + "." + env.table(name).key.cols.mkString
           case IdentExpr(i, a) => name + " " + a + " on " +
-            i.mkString(".") + " = " + a + "." + env.tbl(name).key.cols.mkString
+            i.mkString(".") + " = " + a + "." + env.table(name).key.cols.mkString
           case e => sqlName + " on " + (e match {
             case ConstExpr("/") => defaultJoin
             case e => e.sql
@@ -329,11 +329,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     lazy val sql = _sql
     def where = filter match {
       case (c@ConstExpr(x)) :: Nil => table.aliasOrName + "." +
-        env.tbl(table.nameStr).key.cols(0) + " = " + c.sql
+        env.table(table.nameStr).key.cols(0) + " = " + c.sql
       case (v@VarExpr(x, _)) :: Nil => table.aliasOrName + "." +
-        env.tbl(table.nameStr).key.cols(0) + " = " + v.sql
+        env.table(table.nameStr).key.cols(0) + " = " + v.sql
       case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
-      case l => table.aliasOrName + "." + env.tbl(table.nameStr).key.cols(0) + " in(" +
+      case l => table.aliasOrName + "." + env.table(table.nameStr).key.cols(0) + " in(" +
         (l map { _.sql }).mkString(",") + ")"
     }
   }

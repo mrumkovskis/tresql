@@ -7,7 +7,6 @@ import sys._
 //Implementation of meta data must be thread safe
 trait MetaData {
   import metadata._
-  protected implicit def conn:java.sql.Connection = null
   def join(table1: String, table2: String) = {
     val t1 = table(table1); val t2 = table(table2)
     (t1.refs(t2.name), t2.refs(t1.name)) match {
@@ -22,16 +21,16 @@ trait MetaData {
   def col(col: String) = table(col.substring(0, col.lastIndexOf('.'))).cols(col.substring(col.lastIndexOf('.') + 1))
 
   def dbName: String
-  //TODO rename tbl->table, table->tableData or something
-  def tbl(name: String) = table(name)
-  def table(name: String)(implicit conn: java.sql.Connection): Table
-
+  def table(name: String): Table
+  def procedure(name: String): Procedure
 }
 
 //TODO db names separation from business names, column types, sizes, nullability etc...
 //TODO pk col storing together with ref col (for multi col key secure support)?
+//TODO PROCEDURE support
 package metadata {
-  case class Table(val name:String, val cols: Map[String, Col], val key: Key, private val rfs: Map[String, List[Ref]]) {
+  case class Table(val name:String, val cols: Map[String, Col], val key: Key,
+    private val rfs: Map[String, List[Ref]]) {
     def refs(table: String) = try { rfs(table) } catch { case _:NoSuchElementException => Nil }
   }
   object Table extends ((Map[String, Any]) => Table) {
@@ -48,5 +47,7 @@ package metadata {
   case class Col(val name: String, val colType: String)
   case class Key(val cols: List[String])
   case class Ref(val cols: List[String])
-
+  case class Procedure(val name: String, val comment: String, val procType: Int,
+    val pars: Map[String, Par])
+  case class Par(val name: String, val comment: String, val parType: Int)
 }

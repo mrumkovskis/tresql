@@ -19,22 +19,5 @@ object Functions {
     res.close
     if (sb.length >= rowSep.length) sb.delete(sb.length - rowSep.length, sb.length).toString
     else sb.toString
-  }
-
-  def postgreNextId(sequence: String) = {
-    val st = Env.conn.prepareStatement("select nextval('" + sequence + "')")
-    val res = st.executeQuery()
-    res.next
-    val id = res.getLong(1)
-    res.close
-    st.close
-    id
   } 
-  
-  def id(res: Result) = {
-    val r = if (res.hasNext) res.next()(0) else null
-    res.close
-    r
-  }
-
 }

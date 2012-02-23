@@ -13,6 +13,11 @@
 			"key": ["id"],
 			"refs": []
 		}
+	},
+	{"procedure": {"name": "nextval",
+	    "comment": "Sequence next value", "type": "procedureReturnsResult",
+	    "pars": [{"name": "seqName", "comment": "sequence name", "type": "string"}] 
+	  }
 	}
 
 ]

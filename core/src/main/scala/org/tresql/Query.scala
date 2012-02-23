@@ -1,7 +1,7 @@
 package org.tresql
 
 import java.sql.{ Array => JArray }
-import java.sql.{ Date, Timestamp, PreparedStatement, ResultSet }
+import java.sql.{ Date, Timestamp, PreparedStatement, CallableStatement, ResultSet }
 import org.tresql.metadata._
 import sys._
 
@@ -89,20 +89,68 @@ object Query {
     }
     r
   }
+  
+  private[tresql] def call(sql: String, bindVariables: List[Expr], env: Env) = {
+    Env log sql
+    val st = statement(sql, env, true).asInstanceOf[CallableStatement]
+    bindVars(st, bindVariables)
+    val result = if(st.execute) {
+      val rs = st.getResultSet
+      val md = rs.getMetaData
+      val res = new Result(rs, Vector(1 to md.getColumnCount map 
+          {i=> Column(i, md.getColumnLabel(i), null)}:_*), env)
+      env update res
+      res
+    }
+    val outs = bindVariables map (_()) filter (_.isInstanceOf[OutPar]) map {x=>
+      val p = x.asInstanceOf[OutPar]
+      p.value = p.value match {
+        case null => st.getObject(p.idx)
+        case i: Int => val x = st.getInt(p.idx); if(st.wasNull) null else x
+        case l: Long => val x = st.getLong(p.idx); if(st.wasNull) null else x
+        case d: Double => val x = st.getDouble(p.idx); if(st.wasNull) null else x
+        case f: Float => val x = st.getFloat(p.idx); if(st.wasNull) null else x
+        // Allow the user to specify how they want the Date handled based on the input type
+        case t: java.sql.Timestamp => st.getTimestamp(p.idx)
+        case d: java.sql.Date => st.getDate(p.idx)
+        case t: java.sql.Time => st.getTime(p.idx)
+        /* java.util.Date has to go last, since the java.sql date/time classes subclass it. By default we
+* assume a Timestamp value */
+        case d: java.util.Date => st.getTimestamp(p.idx)
+        case b: Boolean => st.getBoolean(p.idx)
+        case s: String => st.getString(p.idx)
+        case bn: java.math.BigDecimal => st.getBigDecimal(p.idx)
+        case bd: BigDecimal => val x = st.getBigDecimal(p.idx); if (st.wasNull) null else BigDecimal(x)
+      }
+      p.value
+    }    
+    if (result == () && !env.reusableExpr) {
+      st.close
+      env update (null: PreparedStatement)
+    }
+    result :: outs match {
+      case ()::Nil => ()
+      case List(r:Result) => r
+      case l@List(r:Result, x, _*) => l
+      case ()::l => l
+      case x => error("Knipis: " + x)
+    }
+  }
 
-  private def statement(sql: String, env: Env) = {
+  private def statement(sql: String, env: Env, call: Boolean = false) = {
     val conn = env.conn
     if (conn == null) throw new NullPointerException(
       """Connection not found in environment. Check if "Env update conn" (in this case statement execution must be done in the same thread) or "Env.sharedConn = conn" is called.""")
     if (env.reusableExpr)
       if (env.statement == null) {
-        val s = conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY,
-          ResultSet.CONCUR_READ_ONLY); env.update(s); s
+        val s = if (call) conn.prepareCall(sql) else {
+          conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)
+        }
+        env.update(s)
+        s
       } else env.statement
-    else {
-      val conn = env.conn; conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY,
-        ResultSet.CONCUR_READ_ONLY)
-    }
+    else if (call) conn.prepareCall(sql)
+    else conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)
   }
 
   private def bindVars(st: PreparedStatement, bindVariables: List[Expr]) {
@@ -129,12 +177,43 @@ object Query {
         //array binding
         case i: scala.collection.Traversable[_] => i foreach (bindVar(_)); idx -= 1
         case a: Array[_] => a foreach (bindVar(_)); idx -= 1
+        case p@InOutPar(v) => {
+          bindVar(v)
+          idx -= 1
+          registerOutPar(st.asInstanceOf[CallableStatement], p, idx)
+        }
+        //OutPar must be matched bellow InOutPar since it is superclass of InOutPar
+        case p@OutPar(_) => registerOutPar(st.asInstanceOf[CallableStatement], p, idx)
         //unknown object
         case obj => st.setObject(idx, obj)
       }
       idx += 1
     }
     bindVariables.map(_()).foreach { bindVar(_) }
+  }
+  private def registerOutPar(st: CallableStatement, par: OutPar, idx: Int) {
+    import java.sql.Types._
+    par.idx = idx
+    par.value match {
+      case null => st.registerOutParameter(idx, NULL)
+      case i: Int => st.registerOutParameter(idx, INTEGER)
+      case l: Long => st.registerOutParameter(idx, BIGINT)
+      case d: Double => st.registerOutParameter(idx, DECIMAL)
+      case f: Float => st.registerOutParameter(idx, DECIMAL)
+      // Allow the user to specify how they want the Date handled based on the input type
+      case t: java.sql.Timestamp => st.registerOutParameter(idx, TIMESTAMP)
+      case d: java.sql.Date => st.registerOutParameter(idx, DATE)
+      case t: java.sql.Time => st.registerOutParameter(idx, TIME)
+      /* java.util.Date has to go last, since the java.sql date/time classes subclass it. By default we
+* assume a Timestamp value */
+      case d: java.util.Date => st.registerOutParameter(idx, TIMESTAMP)
+      case b: Boolean => st.registerOutParameter(idx, BOOLEAN)
+      case s: String => st.registerOutParameter(idx, VARCHAR)
+      case bn: java.math.BigDecimal => st.registerOutParameter(idx, DECIMAL, bn.scale)
+      case bd: BigDecimal => st.registerOutParameter(idx, DECIMAL, bd.scale)
+      //unknown object
+      case obj => st.registerOutParameter(idx, OTHER)
+    }
   }
   
   /*---------------- Single value methods -------------*/
@@ -188,4 +267,25 @@ object Query {
       case x => error("Knipis: " + x)
     }
   }  
+}
+
+/** Out parameter box for callable statement */
+class OutPar(var value: Any) {
+  private[tresql] var idx = 0
+  def this() = this(null)
+  override def toString = "OutPar(" + value + ")"
+}
+object OutPar {
+  def apply() = new OutPar()
+  def apply(value: Any) = new OutPar(value)
+  def unapply(par: OutPar): Option[Any] = Some(par.value)
+}
+
+/** In out parameter box for callable statement */
+class InOutPar(v: Any) extends OutPar(v) {
+  override def toString = "InOutPar(" + value + ")"
+}
+object InOutPar {
+  def apply(value: Any) = new InOutPar(value)
+  def unapply(par: InOutPar): Option[Any] = Some(par.value)
 }

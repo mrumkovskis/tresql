@@ -9,7 +9,8 @@ import sys._
 case class JSONMetaData(override val dbName:String,
         val metaData:Map[String, Table]) extends MetaData {
   
-  def table(name: String)(implicit conn: java.sql.Connection) = metaData(name)
+  def table(name: String) = metaData(name)
+  def procedure(name: String) = sys.error("Unsupported method")
 }
 
 object JSONMetaData {

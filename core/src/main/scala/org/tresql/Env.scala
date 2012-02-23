@@ -31,15 +31,15 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
     case x => x
   }
 
-  override implicit def conn = if (provider != null) provider.env.conn else resourceProvider.conn
-
-  def dbName = if (provider != null) provider.env.dbName else metadata.dbName
-
-  override def table(name: String)(implicit conn: java.sql.Connection) = if (provider != null)
-    provider.env.table(name) else metadata.table(name)(conn)
+  def conn: java.sql.Connection = if (provider != null) provider.env.conn else resourceProvider.conn
 
   private def metadata = if (resourceProvider.metaData != null) resourceProvider.metaData
                          else error("Meta data not found. Shortcut syntax not available.")
+  //meta data methods
+  def dbName = if (provider != null) provider.env.dbName else metadata.dbName
+  def table(name: String) = if (provider != null) provider.env.table(name) else metadata.table(name)
+  def procedure(name: String) = if (provider != null) provider.env.procedure(name)
+      else metadata.procedure(name)
 
   def apply(rIdx: Int) = {
     var i = 0
@@ -82,7 +82,7 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
 object Env extends ResourceProvider {
   private var logger: (=> String, Int) => Unit = null
   //meta data object must be thread safe!
-  private var md: MetaData = metadata.JDBCMetaData("", null)
+  private var md: MetaData = metadata.JDBCMetaData("")
   private val threadConn = new ThreadLocal[java.sql.Connection]
   //this is for scala interperter since it executes every command in separate thread from console thread
   var sharedConn: java.sql.Connection = null

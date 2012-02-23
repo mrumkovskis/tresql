@@ -15,7 +15,7 @@ class QueryTest extends Suite {
   Env update conn
   Env update ((msg, level) => println (msg))
   //create test db script
-  new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split(";").foreach {
+  new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
     sql => val st = conn.createStatement; st.execute(sql); st.close
   }
     
@@ -91,5 +91,8 @@ class QueryTest extends Suite {
     expect("ACCOUNTING")(Query.unique[String]("dept[10]{dname}#(deptno)"))
     expect("1981-11-17")(Query.unique[java.sql.Date]("emp[sal = 5000]{hiredate}").toString)    
     expect(BigDecimal(10))(Query.unique[BigDecimal]("dept[10]{deptno}#(deptno)"))
+    expect(5)(Query.unique[Int]("inc_val_5(?)", 0))
+    expect(List(10, "x:x"))(Query("in_out(?, ?)", InOutPar(5), InOutPar("x")))
+
   }
 }
