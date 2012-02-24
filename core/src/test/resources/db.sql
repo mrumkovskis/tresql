@@ -36,8 +36,8 @@ CREATE FUNCTION inc_val_5 (x INTEGER)
   RETURNS INTEGER
   RETURN x + 5
 //  
-CREATE PROCEDURE in_out(INOUT newid INTEGER, INOUT newstring VARCHAR(100))
+CREATE PROCEDURE in_out(INOUT newid INTEGER, OUT outstring VARCHAR(100), IN instring VARCHAR(100))
 BEGIN ATOMIC
   SET newid = newid + 5;
-  SET newstring = newstring + ':' + newstring;
+  SET outstring = instring;
 END
