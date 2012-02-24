@@ -33,10 +33,12 @@ object QueryParser extends JavaTokenParsers {
     ("\"" + """([^"\p{Cntrl}\\]|\\[\\/bfnrt"]|\\u[a-fA-F0-9]{4})*""" + "\"").r ^^
       (s => s.substring(1, s.length - 1).replace("\\\"", "\""))
   override def stringLiteral: Parser[String] = quotedStringLiteral | doubleQuotedStringLiteral
+  val KEYWORDS = Set("in", "null")
   def excludeKeywordsIdent = new Parser[String] {
     def apply(in: Input) = {
       ident(in) match {
-        case s@Success(r, i) => if (r != "in") s else Failure("cannot be in in identifier", i)
+        case s@Success(r, i) => if (!KEYWORDS.contains(r)) s 
+            else Failure("illegal identifier: " + r, i)
         case r => r
       }
     }

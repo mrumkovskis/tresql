@@ -21,6 +21,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   private def this(env: Env) = this(env, 0, 0)
 
+  //context stack as buildInternal method is called
+  private var ctxStack = List[String]()
+  /* Is set to true when optional variable is not found in environment. Is used when building
+   * select expression. If filter clause is null because of absence of optional variable(s) and
+   * given expression is subquery it is removed from enclosing filter clause */
+  private var hasUnboundVariables = false
   //bind variables for jdbc prepared statement 
   private val _bindVariables = scala.collection.mutable.ListBuffer[Expr]()
   private lazy val bindVariables = _bindVariables.toList
@@ -355,16 +361,16 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     override def close = env.closeStatement
   }
-
+  
+  //DML statements are defined outsided buildInternal method since they are called from other QueryBuilder
   private def buildInsert(table: List[String], cols: List[Col], vals: List[Any]) = {
     new InsertExpr(new IdentExpr(table, null), cols map { c =>
       new IdentExpr(c.col.asInstanceOf[Obj].obj.asInstanceOf[Ident].ident, null)
-    },
-      vals map { buildInternal(_, VALUES_CTX) })
+    }, vals map { buildInternal(_, VALUES_CTX) })
   }
   private def buildUpdate(table: List[String], filter: Arr, cols: List[Col], vals: List[Any]) = {
-    new UpdateExpr(new IdentExpr(table, null),
-      if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null,
+    new UpdateExpr(new IdentExpr(table, null), if (filter != null)
+      filter.elements map { buildInternal(_, WHERE_CTX) } else null,
       cols map { c => new IdentExpr(c.col.asInstanceOf[Obj].obj.asInstanceOf[Ident].ident, null) },
       vals map { buildInternal(_, VALUES_CTX) })
   }
@@ -374,17 +380,31 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
 
   private def buildInternal(parsedExpr: Any, parseCtx: String = ROOT_CTX): Expr = {
-    def buildSelect(q: Query) = new SelectExpr(q.tables map buildTable, //tables
-      if (q.filter != null) { //filter
-        val f = (q.filter.elements map { buildInternal(_, WHERE_CTX) }).filter(_ != null)
-        if (f.length > 0) f else null
-      } else null,
-      if (q.cols != null) q.cols map { buildInternal(_, COL_CTX).asInstanceOf[ColExpr] } //cols 
-      else List(new ColExpr(AllExpr(), null)),
-      q.distinct, buildInternal(q.group),//distinct, group
-      if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null,//order
-      buildInternal(q.offset, LIMIT_CTX), buildInternal(q.limit, LIMIT_CTX))//offset, limit
-
+    def buildSelect(q: Query) = {
+      val curHasUnboundVariables = hasUnboundVariables
+      //set flag to false, so select expression is not removed if filter is null by definition
+      hasUnboundVariables = false
+      val sel = new SelectExpr(q.tables map buildTable, //tables
+        if (q.filter != null) { //filter
+          val f = (q.filter.elements map { buildInternal(_, WHERE_CTX) }).filter(_ != null)
+          if (f.length > 0) f else null
+        } else null,
+        if (q.cols != null) q.cols map { buildInternal(_, COL_CTX).asInstanceOf[ColExpr] } //cols 
+        else List(new ColExpr(AllExpr(), null)),
+        q.distinct, buildInternal(q.group), //distinct, group
+        if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null, //order
+        buildInternal(q.offset, LIMIT_CTX), buildInternal(q.limit, LIMIT_CTX)) //offset, limit
+      //select expr is not returned if it is subquery, has unbound optional variables and filter
+      //clause is null.
+      //NOTE! Limitation is that select is not returned if filter clause is absent by definition and
+      //unbound variables appear in some other parts of select
+      val subquery = ctxStack.exists(_ == WHERE_CTX)
+      if (subquery && hasUnboundVariables && sel.filter == null) null else {
+        //set flag back to its value combining with subquery flag for security
+        hasUnboundVariables = curHasUnboundVariables && subquery
+        sel
+      }
+    }
     def buildTable(t: Obj) = t match {
       case Obj(Ident(i), a, j, o) => new Table(i, a, buildJoin(j), o)
       case Obj(q, a, j, o) => new Table(buildInternal(q, TABLE_CTX), a, buildJoin(j), o)
@@ -399,101 +419,107 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case Obj(Ident(i), a, _, _) => new IdentExpr(i, a)
       case o => error("unsupported column definition at this place: " + o)
     }
-
-    parsedExpr match {
-      case x: Number => ConstExpr(x)
-      case x: String => ConstExpr(x)
-      case x: Boolean => ConstExpr(x)
-      case Null() => ConstExpr(null)
-      //variable assignment
-      case BinOp("=", Variable(n, o), v) if (parseCtx == ROOT_CTX) =>
-        new AssignExpr(n, buildInternal(v, parseCtx))
-      //insert
-      case BinOp("+", Query(Obj(Ident(t), _, null, null) :: Nil, null, c@(Col(Obj(Ident(_), _,
-        null, null), _) :: l), _, null, null, _, _), Arr(v)) => parseCtx match {
-        case ROOT_CTX => {
-          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-          val ex = b.buildInsert(t, c, v)
-          this.bindIdx = b.bindIdx; ex
+    ctxStack ::= parseCtx
+    try {
+      parsedExpr match {
+        case x: Number => ConstExpr(x)
+        case x: String => ConstExpr(x)
+        case x: Boolean => ConstExpr(x)
+        case Null() => ConstExpr(null)
+        //variable assignment
+        case BinOp("=", Variable(n, o), v) if (parseCtx == ROOT_CTX) =>
+          new AssignExpr(n, buildInternal(v, parseCtx))
+        //insert
+        case BinOp("+", Query(Obj(Ident(t), _, null, null) :: Nil, null, c @ (Col(Obj(Ident(_), _,
+          null, null), _) :: l), _, null, null, _, _), Arr(v)) => parseCtx match {
+          case ROOT_CTX => {
+            val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+            val ex = b.buildInsert(t, c, v)
+            this.bindIdx = b.bindIdx; ex
+          }
+          case _ => buildInsert(t, c, v)
         }
-        case _ => buildInsert(t, c, v)
-      }
-      //update
-      case BinOp("=", Query(Obj(Ident(t), _, null, null) :: Nil, f, c@(Col(Obj(Ident(_), _,
-        null, null), _) :: l), _, null, null, _, _), Arr(v)) => parseCtx match {
-        case ROOT_CTX => {
-          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-          val ex = b.buildUpdate(t, f, c, v)
-          this.bindIdx = b.bindIdx; ex
+        //update
+        case BinOp("=", Query(Obj(Ident(t), _, null, null) :: Nil, f, c @ (Col(Obj(Ident(_), _,
+          null, null), _) :: l), _, null, null, _, _), Arr(v)) => parseCtx match {
+          case ROOT_CTX => {
+            val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+            val ex = b.buildUpdate(t, f, c, v)
+            this.bindIdx = b.bindIdx; ex
+          }
+          case _ => buildUpdate(t, f, c, v)
         }
-        case _ => buildUpdate(t, f, c, v)
-      }
-      //delete
-      case BinOp("-", Obj(Ident(t), _, null, null), f@Arr(_)) => parseCtx match {
-        case ROOT_CTX => {
-          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-          val ex = b.buildDelete(t, f)
-          this.bindIdx = b.bindIdx; ex
+        //delete
+        case BinOp("-", Obj(Ident(t), _, null, null), f @ Arr(_)) => parseCtx match {
+          case ROOT_CTX => {
+            val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+            val ex = b.buildDelete(t, f)
+            this.bindIdx = b.bindIdx; ex
+          }
+          case _ => buildDelete(t, f)
         }
-        case _ => buildDelete(t, f)
-      }
-      //child query
-      case UnOp("|", oper) => {
-        val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth + 1, bindIdx)
-        val ex = b.buildInternal(oper, QUERY_CTX)
-        this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
-      }
-      case t: Obj => parseCtx match {
-        case ROOT_CTX => {
-          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-          val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
+        //child query
+        case UnOp("|", oper) => {
+          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth + 1, bindIdx)
+          val ex = b.buildInternal(oper, QUERY_CTX)
+          this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
         }
-        case QUERY_CTX | TABLE_CTX => new SelectExpr(List(buildTable(t)), null, 
-                List(new ColExpr(AllExpr(), null)), false, null, null, null, null)
-        case _ => buildIdent(t)
-      }
-      case q: Query => parseCtx match {
-        case ROOT_CTX => {
-          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-          val ex = b.buildInternal(q, QUERY_CTX); this.bindIdx = b.bindIdx; ex
+        case t: Obj => parseCtx match {
+          case ROOT_CTX => {
+            val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+            val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
+          }
+          case QUERY_CTX | TABLE_CTX => new SelectExpr(List(buildTable(t)), null,
+            List(new ColExpr(AllExpr(), null)), false, null, null, null, null)
+          case _ => buildIdent(t)
         }
-        case _ => buildSelect(q)
-      }
-      case UnOp(op, oper) => {
-        val o = buildInternal(oper, parseCtx)
-        if (o == null) null else new UnExpr(op, o)
-      }
-      case e@BinOp(op, lop, rop) => parseCtx match {
-        case ROOT_CTX => {
-          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-          val ex = b.buildInternal(e, QUERY_CTX); this.bindIdx = b.bindIdx; ex            
+        case q: Query => parseCtx match {
+          case ROOT_CTX => {
+            val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+            val ex = b.buildInternal(q, QUERY_CTX); this.bindIdx = b.bindIdx; ex
+          }
+          case _ => buildSelect(q)
         }
-        case ctx => {
-          val l = buildInternal(lop, ctx)
-          val r = buildInternal(rop, ctx)
-          if (l != null && r != null) new BinExpr(op, l, r) else if (op == "&" || op == "|")
-            if (l != null) l else if (r != null) r else null
-          else null  
+        case UnOp(op, oper) => {
+          val o = buildInternal(oper, parseCtx)
+          if (o == null) null else new UnExpr(op, o)
         }
+        case e @ BinOp(op, lop, rop) => parseCtx match {
+          case ROOT_CTX => {
+            val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+            val ex = b.buildInternal(e, QUERY_CTX); this.bindIdx = b.bindIdx; ex
+          }
+          case ctx => {
+            val l = buildInternal(lop, ctx)
+            val r = buildInternal(rop, ctx)
+            if (l != null && r != null) new BinExpr(op, l, r) else if (op == "&" || op == "|")
+              if (l != null) l else if (r != null) r else null
+            else null
+          }
+        }
+        case Fun(n, pl: List[_]) => new FunExpr(n, pl map { buildInternal(_, parseCtx) })
+        case Arr(l: List[_]) => new ArrExpr(l map { buildInternal(_, parseCtx) })
+        case Variable("?", o) => this.bindIdx += 1; new VarExpr(this.bindIdx.toString, o)
+        case Variable(n, o) => if (!env.reusableExpr && o && !(env contains n)) {
+          hasUnboundVariables = true
+          null
+        } else new VarExpr(n, o)
+        case Result(r, c) => new ResExpr(r, c)
+        case Col(c, a) => { separateQueryFlag = false; new ColExpr(buildInternal(c, parseCtx), a) }
+        case Grp(cols, having) => new Group(cols map { buildInternal(_, GROUP_CTX) },
+          buildInternal(having, HAVING_CTX))
+        case Ord(cols, asc) => new Order(cols map { buildInternal(_, parseCtx) }, asc)
+        case All() => AllExpr()
+        case null => null
+        case Braces(expr) => {
+          val e = buildInternal(expr, parseCtx)
+          if (e == null) null else new BracesExpr(e)
+        }
+        case x => ConstExpr(x)
       }
-      case Fun(n, pl: List[_]) => new FunExpr(n, pl map { buildInternal(_, parseCtx) })
-      case Arr(l: List[_]) => new ArrExpr(l map { buildInternal(_, parseCtx) })
-      case Variable("?", o) => this.bindIdx += 1; new VarExpr(this.bindIdx.toString, o)
-      case Variable(n, o) => if (!env.reusableExpr && o && !(env contains n)) null else new VarExpr(n, o)
-      case Result(r, c) => new ResExpr(r, c)
-      case Col(c, a) => { separateQueryFlag = false; new ColExpr(buildInternal(c, parseCtx), a) }
-      case Grp(cols, having) => new Group(cols map { buildInternal(_, GROUP_CTX) },
-        buildInternal(having, HAVING_CTX))
-      case Ord(cols, asc) => new Order(cols map { buildInternal(_, parseCtx) }, asc)
-      case All() => AllExpr()
-      case null => null
-      case Braces(expr) => {
-        val e = buildInternal(expr, parseCtx)
-        if (e == null) null else new BracesExpr(e)
-      }
-      case x => ConstExpr(x)
+    } finally {
+      ctxStack = ctxStack.tail
     }
-
   }
 
   private def build(parsedExpr: Any): Expr = {

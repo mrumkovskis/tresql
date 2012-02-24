@@ -43,6 +43,7 @@ dept[:id] {deptno} #(deptno) --> id=10 --> [[10]]
 
 //in subselect
 dept [deptno in (emp{deptno})]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
+dept [deptno in (emp[ename ~~ ?]{deptno}) | deptno = 40]#(deptno) --> 'KIN% --> [[10, "ACCOUNTING", "NEW YORK"], [40, "OPERATIONS", "BOSTON"]]
 
 //exists correlated subselect
 dept d[(emp e[e.deptno = d.deptno])]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
@@ -62,6 +63,7 @@ dept[deptno = ? & dname ~~ :name] --> name='acc%;10 --> [[10, "ACCOUNTING", "NEW
 
 //in subselect with binding
 dept[deptno in (emp[sal >= ?]{deptno})] {dname} --> 5000 --> [["ACCOUNTING"]]
+dept d[d.deptno in (emp e[e.deptno in (dept d1[:id?]{d1.deptno})]{e.deptno})]{deptno}#(deptno) --> id=10 --> [[10]]
 
 //group by, having
 emp[sal >= hisal & sal <= losal]salgrade {grade, hisal, losal, count(empno)} (grade, hisal, losal) #(1) --> [[1, 700, 1200, 3], [2, 1201, 1400, 3], [3, 1401, 2000, 2], [4, 2001, 3000, 5], [5, 3001, 9999, 1]]
@@ -102,6 +104,12 @@ dept[:id?] {deptno} #(deptno) --> id=10 --> [[10]]
 dept[:id?] {deptno} #(deptno) --> [[10], [20], [30], [40]]
 dept[:id? & dname ~~ :name? & loc ~~ :loc?] --> loc = 'bost% --> [[40, "OPERATIONS", "BOSTON"]]
 dept[(:id? & (dname ~~ :name? & (loc ~~ :loc?)))] --> loc = 'bost% --> [[40, "OPERATIONS", "BOSTON"]]
+dept [deptno in (emp[ename ~~ :n?]{deptno})]{deptno}#(deptno) --> [[10], [20], [30], [40]]
+dept [deptno in (emp[ename ~~ :n?]{deptno}) | deptno = 40]#(deptno) --> [[40, "OPERATIONS", "BOSTON"]]
+dept [deptno in (emp[ename ~~ :n?]{deptno}) | deptno = 40 | deptno in (emp{deptno})]{deptno}#(deptno) --> [[10], [20], [30], [40]]
+dept [deptno in (emp[ename ~~ :n?]{deptno})]{deptno}#(deptno),dept [deptno in (emp{deptno})]{deptno}#(deptno) --> [[[10], [20], [30], [40]], [[10], [20], [30]]]
+dept d[d.deptno in (emp e[e.deptno in (dept d1[:id?]{d1.deptno})]{e.deptno})]{deptno}#(deptno) --> [[10], [20], [30], [40]]
+dept d[d.deptno in (emp e[e.deptno in (dept d1[:id?]{d1.deptno})]{e.deptno}) & d.deptno in (emp e{e.deptno})]{deptno}#(deptno) --> [[10], [20], [30]]
 
 //distinct
 /(dept{deptno} ++ dept{deptno})#{deptno}#(1) --> [[10], [20], [30], [40]]
