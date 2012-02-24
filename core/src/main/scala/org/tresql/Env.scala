@@ -86,6 +86,8 @@ object Env extends ResourceProvider {
   private val threadConn = new ThreadLocal[java.sql.Connection]
   //this is for scala interperter since it executes every command in separate thread from console thread
   var sharedConn: java.sql.Connection = null
+  //available functions
+  private var functions = Functions.getClass.getDeclaredMethods map (_.getName) toSet
   def apply(params: Map[String, Any], reusableExpr: Boolean): Env = {
     new Env(params, Env, reusableExpr)
   }
@@ -94,6 +96,8 @@ object Env extends ResourceProvider {
   def update(md: MetaData) = this.md = md
   def update(conn: java.sql.Connection) = this.threadConn set conn
   def update(logger: (=> String, Int) => Unit) = this.logger = logger
+  def availableFunctions(list: Traversable[String]) = functions = list.toSet
+  def isDefined(functionName: String) = functions.contains(functionName) 
   def log(msg: => String, level: Int = 0): Unit = if (logger != null) logger(msg, level)
 }
 

@@ -125,6 +125,7 @@ salgrade[?] {grade} + dummy, "A" + " " + "B", dept[dname ~~ ?]{deptno} + dummy, 
 //merging of two results with variables
 :r1 = /(dept[dname ~~ ?]{deptno} + dummy)#(1), :r2 = salgrade[?] {grade} + dummy, :r1 | :r2 --> 'acc%; -1 --> [[], [], [[0, 0], [10]]]
 
-//----DB PROCEDURE CALL
+//----Scala and DB PROCEDURE CALL
 inc_val_5(5) --> [[10]]
 inc_val_5(?) --> 10 --> [[15]]
+mkString(emp{ename}#(ename), " ", ",") --> ADAMS,ALLEN,BLAKE,CLARK,FORD,JAMES,JONES,KING,MARTIN,MILLER,SCOTT,SMITH,TURNER,WARD

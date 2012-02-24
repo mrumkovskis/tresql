@@ -178,24 +178,25 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     } else classOf[ConstExpr]
   }
 
-  //TODO extend function location beyond Functions object
   case class FunExpr(val name: String, val params: List[Expr]) extends BaseExpr {
     override def apply() = {
       val p = params map (_())
       val ts = p map (_.asInstanceOf[AnyRef].getClass)
-      try {
-        val m = Functions.getClass.getMethod(name, ts: _*)
-        m.invoke(Functions, p.asInstanceOf[List[Object]]: _*)
-      } catch {
-        case ex: NoSuchMethodException => {
-          val ms = Functions.getClass.getMethods filter { m =>
-            val par = m.getParameterTypes
-            m.getName == name && par.length == 1 && par(0).isInstance(p)
+      if (Env.isDefined(name)) {
+        try {
+          val m = Functions.getClass.getMethod(name, ts: _*)
+          m.invoke(Functions, p.asInstanceOf[List[Object]]: _*)
+        } catch {
+          case ex: NoSuchMethodException => {
+            val ms = Functions.getClass.getMethods filter { m =>
+              val par = m.getParameterTypes
+              m.getName == name && par.length == 1 && par(0).isInstance(p)
+            }
+            if (ms.length > 0) ms(0).invoke(Functions, List(p).asInstanceOf[List[Object]]: _*)
+            else org.tresql.Query.call("{call " + sql + "}", QueryBuilder.this.bindVariables, env)
           }
-          if (ms.length > 0) ms(0).invoke(Functions, List(p).asInstanceOf[List[Object]]: _*)
-          else org.tresql.Query.call("{call " + sql + "}", QueryBuilder.this.bindVariables, env)
         }
-      }
+      } else org.tresql.Query.call("{call " + sql + "}", QueryBuilder.this.bindVariables, env)
     }
     def sql = name + (params map (_.sql)).mkString("(", ",", ")")
     override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
