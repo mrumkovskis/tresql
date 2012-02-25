@@ -41,6 +41,10 @@ emp e/dept d [d.deptno = 20]{empno, ename, dname}#(empno) --> [[7369, "SMITH", "
 //implicit search by primary key
 dept[:id] {deptno} #(deptno) --> id=10 --> [[10]]
 
+//order
+dept/emp[sal >= hisal & sal <= losal]salgrade {deptno, grade, empno, sal}#(deptno, grade)~#(sal) --> [[10, 2, 7934, 1300.00], [10, 4, 7782, 2450.00], [10, 5, 7839, 5000.00], [20, 1, 7876, 1100.00], [20, 1, 7369, 800.00], [20, 4, 7788, 3000.00], [20, 4, 7902, 3000.00], [20, 4, 7566, 2975.00], [30, 1, 7900, 950.00], [30, 2, 7521, 1250.00], [30, 2, 7654, 1250.00], [30, 3, 7499, 1600.00], [30, 3, 7844, 1500.00], [30, 4, 7698, 2850.00]]
+dept/emp[sal >= hisal & sal <= losal]salgrade {deptno, grade, empno, sal}#(null deptno, grade)~#(sal, 3 null) --> [[10, 2, 7934, 1300.00], [10, 4, 7782, 2450.00], [10, 5, 7839, 5000.00], [20, 1, 7369, 800.00], [20, 1, 7876, 1100.00], [20, 4, 7566, 2975.00], [20, 4, 7902, 3000.00], [20, 4, 7788, 3000.00], [30, 1, 7900, 950.00], [30, 2, 7654, 1250.00], [30, 2, 7521, 1250.00], [30, 3, 7844, 1500.00], [30, 3, 7499, 1600.00], [30, 4, 7698, 2850.00]]
+
 //in subselect
 dept [deptno in (emp{deptno})]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
 dept [deptno in (emp[ename ~~ ?]{deptno}) | deptno = 40]#(deptno) --> 'KIN% --> [[10, "ACCOUNTING", "NEW YORK"], [40, "OPERATIONS", "BOSTON"]]

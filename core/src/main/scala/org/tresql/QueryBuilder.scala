@@ -305,8 +305,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def nameStr = name.mkString(".")
     def aliasOrName = if (alias != null) alias else nameStr
   }
-  class Order(val ordExprs: List[Expr], val asc: Boolean) extends Expr {
-    def sql = (ordExprs map (_.sql)).mkString(",") + (if (asc) " asc" else " desc")
+  class Order(val ordExprs: (Null, List[Expr], Null), val asc: Boolean) extends Expr {
+    def sql = (ordExprs._2 map (_.sql)).mkString(",") + (if (asc) " asc" else " desc") +
+      (if (ordExprs._1 != null) " nulls first" else if (ordExprs._3 != null) " nulls last" else "")
   }
   class Group(val groupExprs: List[Expr], val having: Expr) extends Expr {
     def sql = (groupExprs map (_.sql)).mkString(",") +
@@ -507,7 +508,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case Col(c, a) => { separateQueryFlag = false; new ColExpr(buildInternal(c, parseCtx), a) }
         case Grp(cols, having) => new Group(cols map { buildInternal(_, GROUP_CTX) },
           buildInternal(having, HAVING_CTX))
-        case Ord(cols, asc) => new Order(cols map { buildInternal(_, parseCtx) }, asc)
+        case Ord(cols, asc) => new Order((cols._1, cols._2 map { buildInternal(_, parseCtx) },
+          cols._3), asc)
         case All() => AllExpr()
         case null => null
         case Braces(expr) => {

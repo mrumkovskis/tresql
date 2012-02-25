@@ -17,7 +17,8 @@ object QueryParser extends JavaTokenParsers {
   case class Col(col: Any, alias: String)
   case class Cols(distinct: Boolean, cols: List[Col])
   case class Grp(cols: List[Any], having: Any)
-  case class Ord(cols: List[Any], asc: Boolean)
+  //cols expression is tuple in the form - ([<nulls first>], <order col list>, [<nulls last>])
+  case class Ord(cols: (Null, List[Any], Null), asc: Boolean)
   case class Query(tables: List[Obj], filter: Arr, cols: List[Col], distinct: Boolean,
     group: Grp, order: List[Ord], offset: Any, limit: Any)
   case class Arr(elements: List[Any])
@@ -95,8 +96,12 @@ object QueryParser extends JavaTokenParsers {
   }
   def group: Parser[Grp] = ("(" ~> rep1sep(expr, ",") <~ ")") ~
     opt(("^" ~ "(") ~> expr <~ ")") ^^ { case g ~ h => Grp(g, if (h == None) null else h.get) }
-  def orderAsc: Parser[Ord] = ("#" ~ "(") ~> rep1sep(expr, ",") <~ ")" ^^ (Ord(_, true))
-  def orderDesc: Parser[Ord] = ("~#" ~ "(") ~> rep1sep(expr, ",") <~ ")" ^^ (Ord(_, false))
+  def orderCore: Parser[(Null, List[Any], Null)] = opt(NULL) ~ rep1sep(expr, ",") ~ opt(NULL) ^^ {
+    case Some(nf) ~ e ~ Some(nl) => error("Cannot be nulls first and nulls last at the same time")
+    case nf ~ e ~ nl => (if(nf == None) null else nf.get, e, if(nl == None) null else nl.get)
+  }
+  def orderAsc: Parser[Ord] = ("#" ~ "(") ~> orderCore <~ ")" ^^ (Ord(_, true))
+  def orderDesc: Parser[Ord] = ("~#" ~ "(") ~> orderCore <~ ")" ^^ (Ord(_, false))
   def order: Parser[List[Ord]] = rep1(orderAsc | orderDesc)
   def offsetLimit: Parser[(Any, Any)] = ("@" ~ "(") ~> ("[0-9]+".r | variable) ~
     opt("[0-9]+".r | variable) <~ ")" ^^ {
@@ -165,7 +170,7 @@ object QueryParser extends JavaTokenParsers {
         case Col(c, _) => bindVars(c)
         case Cols(_, cols) => cols foreach (bindVars(_))
         case Grp(cols, hv) => cols foreach (bindVars(_)); bindVars(hv)
-        case Ord(cols, _) => cols foreach (bindVars(_))
+        case Ord(cols, _) => cols._2 foreach (bindVars(_))
         case Query(objs, filter, cols, _, gr, ord, _, _) => {
           objs foreach (bindVars(_)); bindVars(filter)
           if (cols != null) cols foreach (bindVars(_))
