@@ -51,6 +51,9 @@ dept d[(emp e[e.deptno = d.deptno])]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"
 //outer join
 dept d/emp? e[e.deptno != null]#{d.deptno}#(deptno) --> [[10], [20], [30]]
 
+//from clause select
+dept[deptno in (/(dept[:id]){deptno})]{deptno}#(1) --> id=10 --> [[10]]
+
 //array binding
 emp [empno in(?)]{empno, ename, job}#(empno) --> [7839, 7782] --> [[7782, "CLARK", "MANAGER"], [7839, "KING", "PRESIDENT"]]
 emp [ename ~~ ? & empno in(?) & mgr = null & sal = ?]{empno, ename, job} --> 'kin%; [7839, 7782]; 5000  --> [[7839, "KING", "PRESIDENT"]]
@@ -110,6 +113,9 @@ dept [deptno in (emp[ename ~~ :n?]{deptno}) | deptno = 40 | deptno in (emp{deptn
 dept [deptno in (emp[ename ~~ :n?]{deptno})]{deptno}#(deptno),dept [deptno in (emp{deptno})]{deptno}#(deptno) --> [[[10], [20], [30], [40]], [[10], [20], [30]]]
 dept d[d.deptno in (emp e[e.deptno in (dept d1[:id?]{d1.deptno})]{e.deptno})]{deptno}#(deptno) --> [[10], [20], [30], [40]]
 dept d[d.deptno in (emp e[e.deptno in (dept d1[:id?]{d1.deptno})]{e.deptno}) & d.deptno in (emp e{e.deptno})]{deptno}#(deptno) --> [[10], [20], [30]]
+dept[deptno in (/(dept[:id?]{deptno}){deptno})]{deptno}#(1) --> [[10], [20], [30], [40]]
+dept[deptno in (/(salgrade[:id?]{grade} + dept[:id?]{deptno}){*})]{deptno}#(1) --> [[10], [20], [30], [40]]
+dept[deptno in (/(salgrade[:id?]{grade} + dept[10]{deptno}){*})]{deptno}#(1) --> [[10]]
 
 //distinct
 /(dept{deptno} ++ dept{deptno})#{deptno}#(1) --> [[10], [20], [30], [40]]

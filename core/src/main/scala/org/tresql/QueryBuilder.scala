@@ -56,11 +56,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def sql = {
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       if (!env.reusableExpr && (env contains name)) {
-          env(name) match {
-            case l:scala.collection.Traversable[_] => "?," * (l size) dropRight 1
-            case a:Array[_] => "?," * (a size) dropRight 1
-            case _ => "?"
-          }
+        env(name) match {
+          case l: scala.collection.Traversable[_] => "?," * (l size) dropRight 1
+          case a: Array[_] => "?," * (a size) dropRight 1
+          case _ => "?"
+        }
       } else "?"
     }
     override def toString = if (env contains name) name + " = " + env(name) else name
@@ -237,9 +237,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case _ => error("Knipis")
     }
     def where = filter match {
-      case (c@ConstExpr(x)) :: Nil => tables(0).aliasOrName + "." +
+      case (c @ ConstExpr(x)) :: Nil => tables(0).aliasOrName + "." +
         env.table(tables(0).name).key.cols(0) + " = " + c.sql
-      case (v@VarExpr(x, _)) :: Nil => tables(0).aliasOrName + "." +
+      case (v @ VarExpr(x, _)) :: Nil => tables(0).aliasOrName + "." +
         env.table(tables(0).name).key.cols(0) + " = " + v.sql
       case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
       case l => tables(0).aliasOrName + "." + env.table(tables(0).name).key.cols(0) + " in(" +
@@ -335,9 +335,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       (if (filter == null) "" else " where " + where)
     lazy val sql = _sql
     def where = filter match {
-      case (c@ConstExpr(x)) :: Nil => table.aliasOrName + "." +
+      case (c @ ConstExpr(x)) :: Nil => table.aliasOrName + "." +
         env.table(table.nameStr).key.cols(0) + " = " + c.sql
-      case (v@VarExpr(x, _)) :: Nil => table.aliasOrName + "." +
+      case (v @ VarExpr(x, _)) :: Nil => table.aliasOrName + "." +
         env.table(table.nameStr).key.cols(0) + " = " + v.sql
       case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
       case l => table.aliasOrName + "." + env.table(table.nameStr).key.cols(0) + " in(" +
@@ -353,7 +353,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   abstract class BaseExpr extends Expr {
     override def apply(params: List[Any]): Any = {
-      apply(params.zipWithIndex.map(t=>(t._2 + 1).toString->t._1).toMap)
+      apply(params.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap)
     }
     override def apply(params: Map[String, Any]): Any = {
       env update params
@@ -361,7 +361,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     override def close = env.closeStatement
   }
-  
+
   //DML statements are defined outsided buildInternal method since they are called from other QueryBuilder
   private def buildInsert(table: List[String], cols: List[Col], vals: List[Any]) = {
     new InsertExpr(new IdentExpr(table, null), cols map { c =>
@@ -398,10 +398,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       //clause is null.
       //NOTE! Limitation is that select is not returned if filter clause is absent by definition and
       //unbound variables appear in some other parts of select
-      val subquery = ctxStack.exists(_ == WHERE_CTX)
-      if (subquery && hasUnboundVariables && sel.filter == null) null else {
+      if (ctxStack.head == WHERE_CTX && hasUnboundVariables && sel.filter == null) null else {
         //set flag back to its value combining with subquery flag for security
-        hasUnboundVariables = curHasUnboundVariables && subquery
+        hasUnboundVariables = curHasUnboundVariables && ctxStack.head == WHERE_CTX
         sel
       }
     }
@@ -608,7 +607,7 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
       case x => select(x)
     }
     else select(params)) foreach f
-  }  
+  }
   def close: Unit = error("Must be implemented in subclass")
   def exprType: Class[_] = this.getClass
   override def toString = sql
