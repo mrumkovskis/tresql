@@ -116,8 +116,8 @@ dept d[d.deptno in (emp e[e.deptno in (dept d1[:id?]{d1.deptno})]{e.deptno}) & d
 dept[deptno in (/(dept[:id?]{deptno}){deptno})]{deptno}#(1) --> [[10], [20], [30], [40]]
 dept[deptno in (/(salgrade[:id?]{grade} + dept[:id?]{deptno}){*})]{deptno}#(1) --> [[10], [20], [30], [40]]
 dept[deptno in (/(salgrade[:id?]{grade} + dept[10]{deptno}){*})]{deptno}#(1) --> [[10]]
-dept[deptno in (emp e/dept[e.deptno = :id?]{e.deptno})]{deptno}#(1) --> [[10], [20], [30], [40]]
-dept[deptno in (emp e/dept[e.deptno = :id?]{e.deptno})]{deptno}#(1) --> id=10 --> [[10]]
+dept[deptno in (emp/dept[dname ~~ :n?]{deptno})]{deptno}#(1) --> [[10], [20], [30], [40]]
+dept[deptno in (emp/dept[dname ~~ :n?]{deptno})]{deptno}#(1) --> n='acc% --> [[10]]
 
 //distinct
 /(dept{deptno} ++ dept{deptno})#{deptno}#(1) --> [[10], [20], [30], [40]]
