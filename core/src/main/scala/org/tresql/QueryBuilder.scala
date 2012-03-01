@@ -23,10 +23,6 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   //context stack as buildInternal method is called
   private var ctxStack = List[String]()
-  /* Is set to true when optional variable is not found in environment. Is used when building
-   * select expression. If filter clause is null because of absence of optional variable(s) and
-   * given expression is subquery it is removed from enclosing filter clause */
-  private var hasUnboundVariables = false
   //bind variables for jdbc prepared statement 
   private val _bindVariables = scala.collection.mutable.ListBuffer[Expr]()
   private lazy val bindVariables = _bindVariables.toList
@@ -379,9 +375,6 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   private def buildInternal(parsedExpr: Any, parseCtx: String = ROOT_CTX): Expr = {
     def buildSelect(q: Query) = {
-      val curHasUnboundVariables = hasUnboundVariables
-      //set flag to false, so select expression is not removed if filter is null by definition
-      hasUnboundVariables = false
       val sel = new SelectExpr(q.tables map buildTable, //tables
         if (q.filter != null) { //filter
           val f = (q.filter.elements map { buildInternal(_, WHERE_CTX) }).filter(_ != null)
@@ -392,15 +385,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         q.distinct, buildInternal(q.group), //distinct, group
         if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null, //order
         buildInternal(q.offset, LIMIT_CTX), buildInternal(q.limit, LIMIT_CTX)) //offset, limit
-      //select expr is not returned if it is subquery, has unbound optional variables and filter
-      //clause is null.
-      //NOTE! Limitation is that select is not returned if filter clause is absent by definition and
-      //unbound variables appear in some other parts of select
-      if (ctxStack.head == WHERE_CTX && hasUnboundVariables && sel.filter == null) null else {
-        //set flag back to its value combining with subquery flag for security
-        hasUnboundVariables = curHasUnboundVariables && ctxStack.head == WHERE_CTX
-        sel
-      }
+      //if select expression is subquery in others expression where clause, had where clause itself
+      //and where clause was removed due to unbound optional variables remove subquery itself
+      if (ctxStack.head == WHERE_CTX && q.filter != null && q.filter.elements != Nil &&
+        sel.filter == null) null else sel
     }
     def buildTable(t: Obj) = t match {
       case Obj(Ident(i), a, j, o) => new Table(i, a, buildJoin(j), o)
@@ -500,10 +488,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         }
         case Arr(l: List[_]) => new ArrExpr(l map { buildInternal(_, parseCtx) })
         case Variable("?", o) => this.bindIdx += 1; new VarExpr(this.bindIdx.toString, o)
-        case Variable(n, o) => if (!env.reusableExpr && o && !(env contains n)) {
-          hasUnboundVariables = true
-          null
-        } else new VarExpr(n, o)
+        case Variable(n, o) => if (!env.reusableExpr && o && !(env contains n)) null else new VarExpr(n, o)
         case Result(r, c) => new ResExpr(r, c)
         case Col(c, a) => { separateQueryFlag = false; new ColExpr(buildInternal(c, parseCtx), a) }
         case Grp(cols, having) => new Group(cols map { buildInternal(_, GROUP_CTX) },
