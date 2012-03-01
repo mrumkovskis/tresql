@@ -7,23 +7,10 @@ import sys._
 
 object Query {
 
-  def apply(expr: String, params: Any*): Any = if (params.size == 1) params(0) match {
-    case l:List[_] => apply(expr, l)
-    case m:Map[String, _] => apply(expr, m)
-    case x => apply(expr, List(x))
-  } else apply(expr, params.toList)
-
-  def apply(expr: String, params: List[Any]): Any = {
-    apply(expr, params.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap)
-  }
+  def apply(expr: String, params: Any*): Any = apply(expr, normalizePars(params))
 
   def apply(expr: String, params: Map[String, Any]): Any = {
     val exp = QueryBuilder(expr, Env(params, false))
-    exp()
-  }
-
-  def apply(expr: Any) = {
-    val exp = QueryBuilder(expr, Env(Map(), false))
     exp()
   }
 
@@ -32,28 +19,24 @@ object Query {
   def build(expr: Any): Expr = QueryBuilder(expr, Env(Map(), true))
 
   def select(expr: String, params: Any*) = {
-    apply(expr, params.toList).asInstanceOf[Result]
-  }
-
-  def select(expr: String, params: List[Any]) = {
-    apply(expr, params).asInstanceOf[Result]
+    apply(expr, normalizePars(params)).asInstanceOf[Result]
   }
 
   def select(expr: String, params: Map[String, Any]) = {
     apply(expr, params).asInstanceOf[Result]
   }
 
-  def select(expr: String) = {
-    apply(expr).asInstanceOf[Result]
-  }
-
   def foreach(expr: String, params: Any*)(f: (RowLike) => Unit = (row) => ()) {
-    (if (params.size == 1) params(0) match {
-      case l: List[_] => select(expr, l)
-      case m: Map[String, _] => select(expr, m)
-      case x => select(expr, x)
-    }
-    else select(expr, params)) foreach f
+    select(expr, normalizePars(params)) foreach f
+  }
+  
+  private[tresql] def normalizePars(pars: Seq[Any]):Map[String, Any] = {
+    def map(p:Seq[Any]) = p.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
+    if (pars.size == 1) pars(0) match {
+      case l:Seq[_] => map(l)
+      case m:Map[String, _] => m
+      case x => map(pars)
+    } else map(pars)    
   }
 
   private[tresql] def select(sql: String, cols: List[QueryBuilder#ColExpr],
@@ -215,35 +198,20 @@ object Query {
       case obj => st.registerOutParameter(idx, OTHER)
     }
   }
-  
+
   /*---------------- Single value methods -------------*/
-  def head[T](expr: String, params: Any*)(implicit m:scala.reflect.Manifest[T]): T = {
-    if (params.size == 1) params(0) match {
-      case l: List[_] => typedValue[T](select(expr, l), HEAD)
-      case map: Map[String, _] => typedValue[T](select(expr, map), HEAD)
-      case x => typedValue[T](select(expr, x), HEAD)
-    }
-    else typedValue[T](select(expr, params), HEAD)
+  def head[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]): T = {
+    typedValue[T](select(expr, normalizePars(params)), HEAD)
   }
-  def headOption[T](expr: String, params: Any*)(implicit m:scala.reflect.Manifest[T]): Option[T] = {
+  def headOption[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]): Option[T] = {
     try {
-      if (params.size == 1) params(0) match {
-        case l: List[_] => Some(typedValue(select(expr, l), HEAD_OPTION))
-        case map: Map[String, _] => Some(typedValue(select(expr, map), HEAD_OPTION))
-        case x => Some(typedValue(select(expr, x), HEAD_OPTION))
-      }
-      else Some(typedValue[T](select(expr, params), HEAD_OPTION))
+      Some(typedValue[T](select(expr, normalizePars(params)), HEAD_OPTION))
     } catch {
       case e: NoSuchElementException => None
     }
   }
-  def unique[T](expr: String, params: Any*)(implicit m:scala.reflect.Manifest[T]): T = {
-    if (params.size == 1) params(0) match {
-      case l: List[_] => typedValue[T](select(expr, l), UNIQUE)
-      case map: Map[String, _] => typedValue[T](select(expr, map), UNIQUE)
-      case x => typedValue[T](select(expr, x), UNIQUE)
-    }
-    else typedValue[T](select(expr, params), UNIQUE)
+  def unique[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]): T = {
+    typedValue[T](select(expr, normalizePars(params)), UNIQUE)
   }
 
   private val HEAD = 1
