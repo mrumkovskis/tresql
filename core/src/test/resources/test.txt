@@ -102,6 +102,10 @@ dept[10]{*} --> [[10, "ACCOUNTING", "NEW YORK"]]
 dept[10]{*, |emp[deptno = :1(1)]{ename}} --> [[10, "ACCOUNTING", "NEW YORK", [["KING"], ["CLARK"], ["MILLER"]]]]
 dept[?]{|emp[?]{ename}, *} --> 10;7839 --> [[[["KING"]], 10, "ACCOUNTING", "NEW YORK"]]
 
+//limit offset
+dept#(deptno)@(1 2) --> [[20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
+dept#(deptno)@(? ?) --> 2;3 --> [[30, "SALES", "CHICAGO"], [40, "OPERATIONS", "BOSTON"]]
+
 //single quoted string
 dept[dname ~ 'ACC%'] --> [[10, "ACCOUNTING", "NEW YORK"]]
 
@@ -122,6 +126,12 @@ dept[deptno in (/(salgrade[:id?]{grade} + dept[:id?]{deptno}){*})]{deptno}#(1) -
 dept[deptno in (/(salgrade[:id?]{grade} + dept[10]{deptno}){*})]{deptno}#(1) --> [[10]]
 dept[deptno in (emp/dept[dname ~~ :n?]{deptno})]{deptno}#(1) --> [[10], [20], [30], [40]]
 dept[deptno in (emp/dept[dname ~~ :n?]{deptno})]{deptno}#(1) --> n='acc% --> [[10]]
+dept[10 & dname ~upper(:n?)] {dname} --> [["ACCOUNTING"]]
+dept[10 & dname ~upper(lower(:n?))] {dname} --> [["ACCOUNTING"]]
+  //offset limit optional binding
+dept{deptno}#(deptno)@(:o? :l?) --> [[10], [20], [30], [40]]
+dept{deptno}#(deptno)@(:o? :l?) --> o=3 --> [[40]]
+dept{deptno}#(deptno)@(:o? :l?) --> l=1 --> [[10]]
 
 //distinct
 /(dept{deptno} ++ dept{deptno})#{deptno}#(1) --> [[10], [20], [30], [40]]
@@ -131,6 +141,8 @@ emp[hiredate >= ? & hiredate <= ?]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;
 emp[hiredate >= ? & hiredate <= ?]{sal} ~#(1) --> '1982-01-23;'1982-12-09 --> [[4000.35], [2300.35]]
 emp[?] {ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} = [?, ?, ?, ?, ?, ?, ?] --> 7876; null; null; null; null; null; null; null --> 1
 emp[7876] --> [[7876, null, null, null, null, null, null, null]]
+emp[:id]{ename} = [:n] --> id=7876;n='kuku --> 1
+emp[7876] {ename} --> [["kuku"]]
 
 //----DELETE----
 salgrade - [?] --> 5 --> 1

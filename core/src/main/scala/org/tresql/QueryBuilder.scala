@@ -353,9 +353,6 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
 
   abstract class BaseExpr extends Expr {
-    override def apply(params: List[Any]): Any = {
-      apply(params.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap)
-    }
     override def apply(params: Map[String, Any]): Any = {
       env update params
       apply()
@@ -497,7 +494,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
             else null
           }
         }
-        case Fun(n, pl: List[_]) => new FunExpr(n, pl map { buildInternal(_, parseCtx) })
+        case Fun(n, pl: List[_]) => {
+          val pars = pl map { buildInternal(_, parseCtx) }
+          if (pars.exists(_ == null)) null else new FunExpr(n, pars)  
+        }
         case Arr(l: List[_]) => new ArrExpr(l map { buildInternal(_, parseCtx) })
         case Variable("?", o) => this.bindIdx += 1; new VarExpr(this.bindIdx.toString, o)
         case Variable(n, o) => if (!env.reusableExpr && o && !(env contains n)) {
@@ -597,11 +597,10 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
   }
   def sql: String
   def apply(): Any = error("Must be implemented in subclass")
-  def apply(params: List[Any]): Any = error("Must be implemented in subclass")
+  def apply(params: Seq[Any]): Any = apply(org.tresql.Query.normalizePars(params))
   def apply(params: Map[String, Any]): Any = error("Must be implemented in subclass")
-  def select(params: Any*) = apply(params.toList).asInstanceOf[Result]
-  def select(params: List[Any]) = apply(params).asInstanceOf[Result]
-  def select(params: Map[String, Any]) = apply(params).asInstanceOf[Result]
+  def select(params: Any*): Result = select(org.tresql.Query.normalizePars(params))
+  def select(params: Map[String, Any]): Result = apply(params).asInstanceOf[Result]
   def foreach(params: Any*)(f: (RowLike) => Unit = (row) => ()) {
     (if (params.size == 1) params(0) match {
       case l: List[_] => select(l)
