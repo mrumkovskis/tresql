@@ -30,17 +30,17 @@ trait MetaData {
 //TODO PROCEDURE support
 package metadata {
   case class Table(val name:String, val cols: Map[String, Col], val key: Key,
-    private val rfs: Map[String, List[Ref]]) {
+    rfs: Map[String, List[Ref]], dbname: String) {
     def refs(table: String) = try { rfs(table) } catch { case _:NoSuchElementException => Nil }
   }
-  object Table extends ((Map[String, Any]) => Table) {
+  object Table {
     def apply(t: Map[String, Any]): Table = {
       Table(t("name").asInstanceOf[String], t("cols") match {
         case l:List[Map[String, String]] => (l map {c => (c("name"), Col(c("name"), c("type")))}).toMap
       }, t("key") match { case l:List[String] => Key(l) }, t("refs") match {
         case l:List[Map[String, Any]] => (l map {r => (r("table").asInstanceOf[String], r("refs") match {
           case l:List[List[String]] => l map (Ref(_))
-        })}).toMap }
+        })}).toMap }, if (t.get("dbname") == None) null else t("dbname").asInstanceOf[String]
       )
     }
   }

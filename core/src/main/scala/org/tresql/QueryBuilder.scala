@@ -258,8 +258,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def sqlJoin(joinTable: Table) = {
       def sqlJoin(jl: List[Expr]) = (jl map { j =>
         outerJoinSql + " " + (j match {
-          case IdentExpr(i, null) => sqlName + " on " + i.mkString(".") + " = " +
+          case i@IdentExpr(_, null) => sqlName + " on " + i.sql + " = " +
             aliasOrName + "." + env.table(name).key.cols.mkString
+          //FIXME ident expr should not be here because alias does not refer to i
           case IdentExpr(i, a) => name + " " + a + " on " +
             i.mkString(".") + " = " + a + "." + env.table(name).key.cols.mkString
           case e => sqlName + " on " + (e match {

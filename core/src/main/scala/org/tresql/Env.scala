@@ -34,7 +34,7 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
   def conn: java.sql.Connection = if (provider != null) provider.env.conn else resourceProvider.conn
 
   private def metadata = if (resourceProvider.metaData != null) resourceProvider.metaData
-                         else error("Meta data not found. Shortcut syntax not available.")
+                         else error("Meta data not set. Shortcut syntax not available.")
   //meta data methods
   def dbName = if (provider != null) provider.env.dbName else metadata.dbName
   def table(name: String) = if (provider != null) provider.env.table(name) else metadata.table(name)

@@ -1,10 +1,11 @@
 [
 	{"table": {"name": "emp",
-			"cols": [{"name":"id", "type":"number"}, {"name":"name", "type":"string"}, 
+			"cols": [{"name":"id", "type":"number"}, {"name":"name", "type":"string", "dbname" : "vards"}, 
 				{"name":"surname", "type":"string"}, {"name":"age", "type":"number"},
 				{"name":"salary", "type":"decimal"}, {"name":"dept_id", "type":"number"}],
 			"key": ["id"],
-			"refs": [{"table": "dept", "refs": [["dept_id"]]}]
+			"refs": [{"table": "dept", "refs": [["dept_id"]]}],
+			"dbname": "darbji"
 		}
 	},
 	{"table": {"name": "dept",

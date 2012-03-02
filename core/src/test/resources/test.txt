@@ -37,6 +37,7 @@ dummy --> [[0]]
 
 emp {count(*)} --> [[14]]
 emp e/dept d [d.deptno = 20]{empno, ename, dname}#(empno) --> [[7369, "SMITH", "RESEARCH"], [7566, "JONES", "RESEARCH"], [7788, "SCOTT", "RESEARCH"], [7876, "ADAMS", "RESEARCH"], [7902, "FORD", "RESEARCH"]]
+emp e[e.deptno d1, e.deptno d2]dept{d1.deptno, d2.deptno, e.empno}#(1,2,3) --> [[10, 10, 7782], [10, 10, 7839], [10, 10, 7934], [20, 20, 7369], [20, 20, 7566], [20, 20, 7788], [20, 20, 7876], [20, 20, 7902], [30, 30, 7499], [30, 30, 7521], [30, 30, 7654], [30, 30, 7698], [30, 30, 7844], [30, 30, 7900]]
 
 //implicit search by primary key
 dept[:id] {deptno} #(deptno) --> id=10 --> [[10]]
