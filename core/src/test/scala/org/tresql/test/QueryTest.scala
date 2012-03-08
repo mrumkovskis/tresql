@@ -98,6 +98,5 @@ class QueryTest extends Suite {
     expect(List(10, "x"))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x"))
     expect("x")(op.value)
     expect(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)", 10, "ACC%"))
-    expect(Some(10))(Query.headOption[Option[Long]]("dept[?]{deptno} #(1)", 10))
   }
 }

@@ -117,9 +117,8 @@ object QueryParser extends JavaTokenParsers {
     opt(offsetLimit) ^^ {
       case (t :: Nil) ~ None ~ None ~ None ~ None ~ None => t
       case t ~ f ~ c ~ g ~ o ~ l => Query(t, if (f == None) null else f.get,
-        if (c == None) null else c.get.cols, if (c == None) false else c.get.distinct,
-        if (g == None) null else g.get, if (o == None) null else o.get,
-        if (l == None) null else l.get._1, if (l == None) null else l.get._2)
+        c.map(_.cols) orNull, c.map(_.distinct) getOrElse false,
+        g.orNull, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
     }
 
   //operation parsers
