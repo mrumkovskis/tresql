@@ -79,6 +79,7 @@ emp[sal >= hisal & sal <= losal]salgrade {grade, hisal, losal, count(*)} (grade,
 
 //two level query: salgrade -> emp
 salgrade[?] {grade, hisal, losal, |emp[sal >= :1(2) & sal <= :1(3)]{ename, sal}} --> 5 --> [[5, 3001, 9999, [["KING", 5000.00]]]]
+salgrade[?] {grade, hisal, losal l, |emp[sal >= :1('hisal') & sal <= :1('l')]{ename, sal}} --> 5 --> [[5, 3001, 9999, [["KING", 5000.00]]]]
 
 //three level query: dept -> salgrade -> emp
 dept{deptno, dname, |emp[sal >= hisal & sal <= losal]salgrade[deptno = :1(1)] {grade, hisal, losal, count(empno) empcount, |emp/dept[sal >= :1(2) & sal <= :1(3) & emp.deptno = :2(1)]{ename, emp.deptno, dname, sal}#(empno) emps} (grade, hisal, losal) #(1) salgrades}#(deptno) --> [[10, "ACCOUNTING", [[2, 1201, 1400, 1, [["MILLER", 10, "ACCOUNTING", 1300.00]]], [4, 2001, 3000, 1, [["CLARK", 10, "ACCOUNTING", 2450.00]]], [5, 3001, 9999, 1, [["KING", 10, "ACCOUNTING", 5000.00]]]]], [20, "RESEARCH", [[1, 700, 1200, 2, [["SMITH", 20, "RESEARCH", 800.00], ["ADAMS", 20, "RESEARCH", 1100.00]]], [4, 2001, 3000, 3, [["JONES", 20, "RESEARCH", 2975.00], ["SCOTT", 20, "RESEARCH", 3000.00], ["FORD", 20, "RESEARCH", 3000.00]]]]], [30, "SALES", [[1, 700, 1200, 1, [["JAMES", 30, "SALES", 950.00]]], [2, 1201, 1400, 2, [["WARD", 30, "SALES", 1250.00], ["MARTIN", 30, "SALES", 1250.00]]], [3, 1401, 2000, 2, [["ALLEN", 30, "SALES", 1600.00], ["TURNER", 30, "SALES", 1500.00]]], [4, 2001, 3000, 1, [["BLAKE", 30, "SALES", 2850.00]]]]], [40, "OPERATIONS", []]]
