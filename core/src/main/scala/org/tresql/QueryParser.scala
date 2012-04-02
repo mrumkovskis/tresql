@@ -56,9 +56,14 @@ object QueryParser extends JavaTokenParsers {
     case "?" => Variable("?", false)
     case (i: String) ~ o => Variable(i, o != None)
   }
-  def result: Parser[Result] = (":" ~> "[0-9]+".r <~ "(") ~ ("[0-9]+".r | stringLiteral) <~ ")" ^^ {
-    case r ~ c => Result(r.toInt, try { c.toInt } catch { case _: NumberFormatException => c })
-  }
+  def result: Parser[Result] = (":" ~> "[0-9]+".r <~ "(") ~ ("[0-9]+".r | stringLiteral |
+    qualifiedIdent) <~ ")" ^^ {
+      case r ~ c => Result(r.toInt,
+        c match {
+          case s: String => try { s.toInt } catch { case _: NumberFormatException => s }
+          case Ident(i) => i
+        })
+    }
   def bracesExp: Parser[Braces] = "(" ~> expr <~ ")" ^^ (Braces(_))
   /* Important is that function parser is applied before query because of the longest token
      * matching, otherwise qualifiedIdent of query will match earlier.
