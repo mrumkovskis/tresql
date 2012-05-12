@@ -356,6 +356,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       apply()
     }
     override def close = env.closeStatement
+    override def builder = QueryBuilder.this
   }
 
   //DML statements are defined outsided buildInternal method since they are called from other QueryBuilder
@@ -598,5 +599,6 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
   }
   def close: Unit = error("Must be implemented in subclass")
   def exprType: Class[_] = this.getClass
+  def builder: QueryBuilder = error("Must be implemented in subclass")
   override def toString = sql
 }

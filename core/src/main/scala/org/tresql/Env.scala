@@ -84,6 +84,7 @@ object Env extends ResourceProvider {
   //meta data object must be thread safe!
   private var md: MetaData = metadata.JDBCMetaData("")
   private val threadConn = new ThreadLocal[java.sql.Connection]
+  private var dialect: Expr => String = null
   //this is for scala interperter since it executes every command in separate thread from console thread
   var sharedConn: java.sql.Connection = null
   //available functions
@@ -96,6 +97,7 @@ object Env extends ResourceProvider {
   def update(md: MetaData) = this.md = md
   def update(conn: java.sql.Connection) = this.threadConn set conn
   def update(logger: (=> String, Int) => Unit) = this.logger = logger
+  def update(dialect: Expr => String) = this.dialect = dialect 
   def availableFunctions(list: Traversable[String]) = functions = list.toSet
   def isDefined(functionName: String) = functions.contains(functionName) 
   def log(msg: => String, level: Int = 0): Unit = if (logger != null) logger(msg, level)
