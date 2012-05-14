@@ -34,7 +34,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   case class ConstExpr(val value: Any) extends BaseExpr {
     override def apply() = value
-    def sql = value match {
+    def defaultSQL = value match {
       case v: Number => v.toString
       case v: String => "'" + v + "'"
       case v: Boolean => v.toString
@@ -42,14 +42,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
   }
 
-  case class AllExpr() extends Expr {
-    def sql = "*"
+  case class AllExpr() extends PrimitiveExpr {
+    def defaultSQL = "*"
   }
 
   case class VarExpr(val name: String, val opt: Boolean) extends BaseExpr {
     override def apply() = env(name)
     var binded = false
-    def sql = {
+    def defaultSQL = {
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       if (!env.reusableExpr && (env contains name)) {
         env(name) match {
@@ -62,7 +62,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def toString = if (env contains name) name + " = " + env(name) else name
   }
 
-  class ResExpr(val nr: Int, val col: Any) extends Expr {
+  class ResExpr(val nr: Int, val col: Any) extends PrimitiveExpr {
     override def apply() = col match {
       case c: List[_] => env(nr)(c.mkString("."))
       case c: String => env(nr)(c)
@@ -70,7 +70,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case c: Int => error("column index in result expression must be greater than 0. Is: " + c)
     }
     var binded = false
-    def sql = {
+    def defaultSQL = {
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       "?"
     }
@@ -84,7 +84,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       env(variable) = value()
       env(variable)
     }
-    def sql = error("Cannot construct sql statement from assignment expression")
+    def defaultSQL = error("Cannot construct sql statement from assignment expression")
     override def toString = variable + " = " + value
   }
 
@@ -95,7 +95,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case "|" => operand()
       case _ => error("unknown unary operation " + op)
     }
-    def sql = op match {
+    def defaultSQL = op match {
       case "-" => "-" + operand.sql
       case "!" =>
         (if (operand.exprType == classOf[SelectExpr]) "not exists " else "not ") +
@@ -141,7 +141,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case _ => error("unknown operation " + op)
       }
     }
-    def sql = op match {
+    def defaultSQL = op match {
       case "*" => lop.sql + " * " + rop.sql
       case "/" => lop.sql + " / " + rop.sql
       case "||" => lop.sql + " || " + rop.sql
@@ -201,13 +201,13 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         }
       } else org.tresql.Query.call("{call " + sql + "}", QueryBuilder.this.bindVariables, env)
     }
-    def sql = name + (params map (_.sql)).mkString("(", ",", ")")
+    def defaultSQL = name + (params map (_.sql)).mkString("(", ",", ")")
     override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
   }
 
   class ArrExpr(val elements: List[Expr]) extends BaseExpr {
     override def apply() = elements map (_())
-    def sql = elements map { _.sql } mkString ("(", ", ", ")")
+    def defaultSQL = elements map { _.sql } mkString ("(", ", ", ")")
     override def toString = elements map { _.toString } mkString ("[", ", ", "]")
   }
 
@@ -218,7 +218,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       org.tresql.Query.select(sql, cols, QueryBuilder.this.bindVariables, env,
         QueryBuilder.this.allCols)
     }
-    lazy val sql = "select " + (if (distinct) "distinct " else "") +
+    lazy val defaultSQL = "select " + (if (distinct) "distinct " else "") +
       (if (cols == null) "*" else sqlCols) + " from " + join +
       (if (filter == null) "" else " where " + where) +
       (if (group == null) "" else " group by " + group.sql) +
@@ -288,27 +288,27 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }
     }
   }
-  class ColExpr(val col: Expr, val alias: String) extends Expr {
+  class ColExpr(val col: Expr, val alias: String) extends PrimitiveExpr {
     val separateQuery = QueryBuilder.this.separateQueryFlag
     if (!QueryBuilder.this.allCols) QueryBuilder.this.allCols = col.isInstanceOf[AllExpr]
     def aliasOrName = if (alias != null) alias else col match {
       case IdentExpr(n, a) => if (a == null) n(n.length - 1) else a
       case _ => null
     }
-    def sql = col.sql + (if (alias != null) " " + alias else "")
+    def defaultSQL = col.sql + (if (alias != null) " " + alias else "")
     override def toString = col.toString + (if (alias != null) " " + alias else "")
   }
-  case class IdentExpr(val name: List[String], val alias: String) extends Expr {
-    def sql = name.mkString(".") + (if (alias == null) "" else " " + alias)
+  case class IdentExpr(val name: List[String], val alias: String) extends PrimitiveExpr {
+    def defaultSQL = name.mkString(".") + (if (alias == null) "" else " " + alias)
     def nameStr = name.mkString(".")
     def aliasOrName = if (alias != null) alias else nameStr
   }
-  class Order(val ordExprs: (Null, List[Expr], Null), val asc: Boolean) extends Expr {
-    def sql = (ordExprs._2 map (_.sql)).mkString(",") + (if (asc) " asc" else " desc") +
+  class Order(val ordExprs: (Null, List[Expr], Null), val asc: Boolean) extends PrimitiveExpr {
+    def defaultSQL = (ordExprs._2 map (_.sql)).mkString(",") + (if (asc) " asc" else " desc") +
       (if (ordExprs._1 != null) " nulls first" else if (ordExprs._3 != null) " nulls last" else "")
   }
-  class Group(val groupExprs: List[Expr], val having: Expr) extends Expr {
-    def sql = (groupExprs map (_.sql)).mkString(",") +
+  class Group(val groupExprs: List[Expr], val having: Expr) extends PrimitiveExpr {
+    def defaultSQL = (groupExprs map (_.sql)).mkString(",") +
       (if (having != null) " having " + having.sql else "")
   }
 
@@ -332,7 +332,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def apply() = org.tresql.Query.update(sql, QueryBuilder.this.bindVariables, env)
     protected def _sql = "delete from " + table.sql +
       (if (filter == null) "" else " where " + where)
-    lazy val sql = _sql
+    lazy val defaultSQL = _sql
     def where = filter match {
       case (c @ ConstExpr(x)) :: Nil => table.aliasOrName + "." +
         env.table(table.nameStr).key.cols(0) + " = " + c.sql
@@ -346,17 +346,20 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   class BracesExpr(val expr: Expr) extends BaseExpr {
     override def apply() = expr()
-    def sql = "(" + expr.sql + ")"
+    def defaultSQL = "(" + expr.sql + ")"
     override def exprType = expr.exprType
   }
 
-  abstract class BaseExpr extends Expr {
+  abstract class BaseExpr extends PrimitiveExpr {
     override def apply(params: Map[String, Any]): Any = {
       env update params
       apply()
     }
     override def close = env.closeStatement
-    override def builder = QueryBuilder.this
+  }
+  
+  abstract class PrimitiveExpr extends Expr {
+    def builder = QueryBuilder.this    
   }
 
   //DML statements are defined outsided buildInternal method since they are called from other QueryBuilder
@@ -521,7 +524,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case x => error(x.toString)
     }
   }
-
+  
   override def toString = "QueryBuilder: " + queryDepth
 
 }
@@ -583,7 +586,11 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
       case _ => false
     }
   }
-  def sql: String
+
+  def defaultSQL: String
+  def builder: QueryBuilder
+  def sql = if(builder.env.dialect != null) builder.env.dialect(this) else defaultSQL
+
   def apply(): Any = error("Must be implemented in subclass")
   def apply(params: Seq[Any]): Any = apply(org.tresql.Query.normalizePars(params))
   def apply(params: Map[String, Any]): Any = error("Must be implemented in subclass")
@@ -599,6 +606,5 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
   }
   def close: Unit = error("Must be implemented in subclass")
   def exprType: Class[_] = this.getClass
-  def builder: QueryBuilder = error("Must be implemented in subclass")
-  override def toString = sql
+  override def toString = defaultSQL
 }

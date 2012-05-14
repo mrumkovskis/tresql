@@ -146,6 +146,7 @@ dept{deptno}#(deptno)@(:o? :l?) --> l=1 --> [[10]]
 //distinct
 /(dept{deptno} ++ dept{deptno})#{deptno}#(1) --> [[10], [20], [30], [40]]
 
+
 //----UPDATE----
 emp[hiredate >= ? & hiredate <= ?]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;1000.35 --> 2
 emp[hiredate >= ? & hiredate <= ?]{sal} ~#(1) --> '1982-01-23;'1982-12-09 --> [[4000.35], [2300.35]]
@@ -171,3 +172,7 @@ salgrade[?] {grade} + dummy, "A" + " " + "B", dept[dname ~~ ?]{deptno} + dummy, 
 inc_val_5(5) --> [[10]]
 inc_val_5(?) --> 10 --> [[15]]
 mkString(emp{ename}#(ename), " ", ",") --> ADAMS,ALLEN,BLAKE,CLARK,FORD,JAMES,JONES,KING,MARTIN,MILLER,SCOTT,SMITH,TURNER,WARD
+
+//----insensitive comparison function test using dialect----
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [9999, "MĀRTIŅŠ ŽVŪKŠĶIS",  "CLERK", 7788, "1983-01-12", 1100, null, 20] --> 1
+emp[cmp_i(ename, ?)]{ename} --> 'zvuksk --> x
