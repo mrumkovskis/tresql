@@ -13,7 +13,8 @@ class QueryTest extends Suite {
   Class.forName("org.hsqldb.jdbc.JDBCDriver")
   val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
   Env update conn
-  Env update dialects.InsensitiveCmp("ēūīāšģķļžčņ", "euiasgklzcn")
+  Env update dialects.InsensitiveCmp("ĒŪĪĀŠĢĶĻŽČŅēūīāšģķļžčņ", "EUIASGKLZCNeuiasgklzcn",
+      dialects.HSQLDialect)
   Env update ((msg, level) => println (msg))
   //create test db script
   new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
@@ -53,8 +54,9 @@ class QueryTest extends Suite {
     }
     println("------------------------ Test TreSQL statements ----------------------")
     var nr = 0
-    new scala.io.BufferedSource(getClass.getResourceAsStream("/test.txt")).getLines.foreach {
-      case l if (l.trim.startsWith("//")) => 
+    new scala.io.BufferedSource(getClass.getResourceAsStream("/test.txt"))(
+        new scala.io.Codec(java.nio.charset.Charset.forName("UTF-8"))).getLines.foreach {
+      case l if (l.trim.startsWith("//")) =>
       case l if (l.trim.length > 0) => {
         nr += 1
         val (st, params, patternRes) = l.split("-->") match {
@@ -77,7 +79,7 @@ class QueryTest extends Suite {
             println("Result: " + rs)
             assert(JSON.parseFull(rs).get === JSON.parseFull(patternRes).get)
           }
-        }         
+        }
       }
       case _ =>
     }

@@ -175,4 +175,9 @@ mkString(emp{ename}#(ename), " ", ",") --> ADAMS,ALLEN,BLAKE,CLARK,FORD,JAMES,JO
 
 //----insensitive comparison function test using dialect----
 EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [9999, "MĀRTIŅŠ ŽVŪKŠĶIS",  "CLERK", 7788, "1983-01-12", 1100, null, 20] --> 1
-emp[cmp_i(ename, ?)]{ename} --> 'zvuksk --> x
+emp[cmp_i(ename, ?)]{ename} --> 'zvuksk --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
+emp[cmp_i_any(ename, ?)]{ename} --> 'zvuksk --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
+emp[cmp_i_start(ename, ?)]{ename} --> 'mar --> [["MARTIN"], ["MĀRTIŅŠ ŽVŪKŠĶIS"]]
+emp[cmp_i_end(ename, ?)]{ename} --> 'kskis --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
+emp[cmp_i(ename, ?)]{ename} --> 'ZVUKSK --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
+emp[cmp_i_start(ename, ?)]{ename} --> 'MĀR --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]

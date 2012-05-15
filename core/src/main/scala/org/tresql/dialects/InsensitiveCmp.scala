@@ -5,7 +5,7 @@ import org.tresql.QueryBuilder
 
 object InsensitiveCmp extends (Expr => String) {
 
-  private var accents = ("", "", Map[Char, Char]())
+  private var accents = ("", "", Map[Char, Char](), null: Expr => String)
 
   private val cmp_i = new ThreadLocal[Boolean]
   cmp_i set false
@@ -14,33 +14,39 @@ object InsensitiveCmp extends (Expr => String) {
   private val caseFlag = new ThreadLocal[Boolean]
   caseFlag set false
 
-  def apply(acc: String, normalized: String) = {
-    accents = (acc, normalized, (acc.toLowerCase.toList.zip(normalized.toLowerCase.toList).toMap))
+  private val COL = "'[COL]'"
+
+  def apply(acc: String, normalized: String, dialect: Expr => String = null) = {
+    accents = (acc, normalized, (acc.toList.zip(normalized.toList).toMap),
+      dialect)
     this
   }
 
   def apply(e: Expr) = e match {
-    case e.builder.FunExpr(mode@("cmp_i" | "cmp_i_start" | "cmp_i_end" | "cmp_i_any" | "cmp_i_exact"),
-        List(col, value)) => {
+    case e.builder.FunExpr(mode @ ("cmp_i" | "cmp_i_start" | "cmp_i_end" | "cmp_i_any" | "cmp_i_exact"),
+      List(col, value)) => {
       cleanup()
+      //set thread indication that cmp_i function is in the stack. This is checked in VarExpr pattern guard
       cmp_i set true
+      //obtain value sql statement. acc, upp flags should be set if necessary
       val v = value.sql
       var (acc, upp) = (accFlag.get, caseFlag.get)
-      val sql = (if(!acc) "translate(" else "") + 
-      (if(!upp) "lower(" else "") + 
-      col.sql + 
-      (if(!upp) ")" else "") +
-      (if(!acc) ", '" + accents._1 + "', '" + accents._2 + "')" else "") + " like " + (mode match {
-        case "cmp_i" | "cmp_i_any" => "'%' || " + v + " || '%'"
-        case "cmp_i_start" => v + " || '%'"
-        case "cmp_i_end" => "'%' || " + v
-        case _ => v
-      })
+      val sql = QueryBuilder((if (!acc) "translate(" else "") +
+        (if (!upp) "lower(" else "") +
+        COL +
+        (if (!upp) ")" else "") +
+        (if (!acc) ", '" + accents._1 + "', '" + accents._2 + "')" else ""),
+        e.builder.env).sql.replace(COL, col.sql) + " like " +
+        (mode match {
+          case "cmp_i" | "cmp_i_any" => "'%' || " + v + " || '%'"
+          case "cmp_i_start" => v + " || '%'"
+          case "cmp_i_end" => "'%' || " + v
+          case _ => v
+        })
       cleanup()
-      println("SQL: " + sql + " " + acc + upp)
       sql
     }
-    case v@e.builder.VarExpr(_, _) if(cmp_i.get) => {
+    case v @ e.builder.VarExpr(_, _) if (cmp_i.get) => {
       var (acc, upp) = (false, false)
       v().toString.dropWhile(c => {
         if (!acc) acc = accents._3.contains(c)
@@ -49,9 +55,14 @@ object InsensitiveCmp extends (Expr => String) {
       })
       accFlag set acc
       caseFlag set upp
-      v.defaultSQL
+      if (accents._4 == null) v.defaultSQL else accents._4(e)
     }
-    case _ => e.defaultSQL
+    case e.builder.FunExpr("translate", List(arg, from, to)) if (accents._4 == null) => {
+      "translate(" + arg.sql + ", " + from.sql + ", " + to.sql + ")"
+    }
+    case e.builder.FunExpr("lower", List(arg)) if (accents._4 == null) => "lower(" + arg.sql + ")"
+    case _ if (accents._4 == null) => e.defaultSQL
+    case _ => accents._4(e)
   }
 
   private def cleanup() {
