@@ -181,3 +181,5 @@ emp[cmp_i_start(ename, ?)]{ename} --> 'mar --> [["MARTIN"], ["MĀRTIŅŠ ŽVŪK�
 emp[cmp_i_end(ename, ?)]{ename} --> 'kskis --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
 emp[cmp_i(ename, ?)]{ename} --> 'ZVUKSK --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
 emp[cmp_i_start(ename, ?)]{ename} --> 'MĀR --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
+emp[cmp_i_start(ename, ?)]{ename} --> 'mār --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
+emp[cmp_i_exact(ename, ?)]{ename} --> 'martins zvukskis --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
