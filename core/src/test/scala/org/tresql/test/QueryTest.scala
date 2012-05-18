@@ -54,8 +54,7 @@ class QueryTest extends Suite {
     }
     println("------------------------ Test TreSQL statements ----------------------")
     var nr = 0
-    new scala.io.BufferedSource(getClass.getResourceAsStream("/test.txt"))(
-        new scala.io.Codec(java.nio.charset.Charset.forName("UTF-8"))).getLines.foreach {
+    new scala.io.BufferedSource(getClass.getResourceAsStream("/test.txt"))("UTF-8").getLines.foreach {
       case l if (l.trim.startsWith("//")) =>
       case l if (l.trim.length > 0) => {
         nr += 1
