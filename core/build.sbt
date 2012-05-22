@@ -4,7 +4,7 @@ organization := "org.tresql"
 
 scalaVersion := "2.9.1"
 
-scalacOptions += "-deprecation"
+scalacOptions ++= Seq("-deprecation", "-Xexperimental")
 
 libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "1.7.1" % "test", 
                             "org.hsqldb" % "hsqldb" % "2.2.8" % "test")

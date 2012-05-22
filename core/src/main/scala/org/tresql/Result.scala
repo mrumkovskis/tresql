@@ -191,21 +191,128 @@ trait RowLike {
   def typed[T](name: String)(implicit m:scala.reflect.Manifest[T]): T
   def int(idx: Int) = typed[Int](idx)
   def int(name: String) = typed[Int](name)
+  def int = new DynamicInt(this)
+  def i = int
   def long(idx: Int) = typed[Long](idx)
   def long(name: String) = typed[Long](name)
+  def long = new DynamicLong(this)
+  def l = long
   def double(idx: Int) = typed[Double](idx)
   def double(name: String) = typed[Double](name)
+  def double = new DynamicDouble(this)
+  def dbl = double
   def bigdecimal(idx: Int) = typed[BigDecimal](idx)
   def bigdecimal(name: String) = typed[BigDecimal](name)
+  def bigdecimal = new DynamicBigDecimal(this)
+  def bd = bigdecimal
   def string(idx: Int) = typed[String](idx)
   def string(name: String) = typed[String](name)
+  def string = new DynamicString(this)
+  def s = string
   def date(idx: Int) = typed[java.sql.Date](idx)
   def date(name: String) = typed[java.sql.Date](name)
+  def date = new DynamicDate(this)
+  def d = date
   def timestamp(idx: Int) = typed[java.sql.Timestamp](idx)
   def timestamp(name: String) = typed[java.sql.Timestamp](name)
+  def timestamp = new DynamicTimestamp(this)
+  def t = timestamp
   def columnCount: Int
   def content: Seq[Any]
   def column(idx: Int): Column
 }
 
 case class Column(val idx: Int, val name: String, private[tresql] val expr: Expr)
+
+/* Dynamic classes */
+/**
+ * Wrapper for dynamical result column access as Int
+ * This uses scala.Dynamic feature.
+ * Example usages:
+ * {{{
+ * val result: RowLike = ...
+ * println(result.i.salary)
+ * }}}
+ *
+*/
+class DynamicInt(row:RowLike) extends Dynamic {
+  def applyDynamic(col:String)(args: Any*) = row.int(col)
+}
+/**
+ * Wrapper for dynamical result column access as Long
+ * This uses scala.Dynamic feature.
+ * Example usages:
+ * {{{
+ * val result: RowLike = ...
+ * println(result.l.salary)
+ * }}}
+ *
+*/
+class DynamicLong(row:RowLike) extends Dynamic {
+  def applyDynamic(col:String)(args: Any*) = row.long(col)
+}
+/**
+ * Wrapper for dynamical result column access as Double
+ * This uses scala.Dynamic feature.
+ * Example usages:
+ * {{{
+ * val result: RowLike = ...
+ * println(result.dbl.salary)
+ * }}}
+ *
+*/
+class DynamicDouble(row:RowLike) extends Dynamic {
+  def applyDynamic(col:String)(args: Any*) = row.double(col)
+}
+/**
+ * Wrapper for dynamical result column access as BigDecimal
+ * This uses scala.Dynamic feature.
+ * Example usages:
+ * {{{
+ * val result: RowLike = ...
+ * println(result.bd.salary)
+ * }}}
+ *
+*/
+class DynamicBigDecimal(row: RowLike) extends Dynamic {
+  def applyDynamic(col:String)(args: Any*) = row.bigdecimal(col)
+}
+/**
+ * Wrapper for dynamical result column access as String
+ * This uses scala.Dynamic feature.
+ * Example usages:
+ * {{{
+ * val result: RowLike = ...
+ * println(result.s.salary)
+ * }}}
+ *
+*/
+class DynamicString(row:RowLike) extends Dynamic {
+  def applyDynamic(col:String)(args: Any*) = row.string(col)
+}
+/**
+ * Wrapper for dynamical result column access as java.sql.Date
+ * This uses scala.Dynamic feature.
+ * Example usages:
+ * {{{
+ * val result: RowLike = ...
+ * println(result.d.salary)
+ * }}}
+ *
+*/
+class DynamicDate(row:RowLike) extends Dynamic {
+  def applyDynamic(col:String)(args: Any*) = row.date(col)
+}
+/**
+ * Wrapper for dynamical result column access as java.sql.Timestamp
+ * This uses scala.Dynamic feature.
+ * Example usages:
+ * {{{
+ * val result: RowLike = ...
+ * println(result.t.salary)
+ * }}}
+ *
+*/
+class DynamicTimestamp(row:RowLike) extends Dynamic {
+  def applyDynamic(col:String)(args: Any*) = row.timestamp(col)
+}
