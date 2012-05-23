@@ -30,6 +30,13 @@ object Query {
     select(expr, normalizePars(params)) foreach f
   }
   
+  def first[A](expr: String, params: Any*)(f: (RowLike) => A): Option[A] = {
+    val r = select(expr, normalizePars(params))
+    val result = if (r.hasNext) Some(f(r.next)) else None
+    r.close
+    result
+  }
+  
   private[tresql] def normalizePars(pars: Seq[Any]):Map[String, Any] = {
     def map(p:Seq[Any]) = p.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
     if (pars.size == 1) pars(0) match {

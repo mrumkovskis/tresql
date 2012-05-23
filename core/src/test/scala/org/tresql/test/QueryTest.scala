@@ -100,7 +100,9 @@ class QueryTest extends Suite {
     expect(List(10, "x"))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x"))
     expect("x")(op.value)
     expect(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)", 10, "ACC%"))
+    expect(None)(Query.first("dept[?]", -1){r => 0})
     //dynamic tests
+    expect("ACCOUNTING")(Query.first("dept[10]")(r => r.dname) orNull)
     expect(1900)(Query.select("salgrade[1] {hisal, losal}").foldLeft(0)((x, r) => x + 
         r.i.hisal + r.i.losal))
     expect(1900)(Query.select("salgrade[1] {hisal, losal}").foldLeft(0L)((x, r) => x + 
