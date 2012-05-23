@@ -184,10 +184,12 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   }
 }
 
-trait RowLike {
+trait RowLike extends Dynamic {
   def apply(idx: Int): Any
   def typed[T](idx: Int)(implicit m:scala.reflect.Manifest[T]): T
   def apply(name: String): Any
+  def selectDynamic(name:String) = apply(name)
+  def applyDynamic(name:String)(args: Any*) = selectDynamic(name) 
   def typed[T](name: String)(implicit m:scala.reflect.Manifest[T]): T
   def int(idx: Int) = typed[Int](idx)
   def int(name: String) = typed[Int](name)
@@ -236,7 +238,8 @@ case class Column(val idx: Int, val name: String, private[tresql] val expr: Expr
  *
 */
 class DynamicInt(row:RowLike) extends Dynamic {
-  def applyDynamic(col:String)(args: Any*) = row.int(col)
+  def selectDynamic(col:String) = row.int(col)
+  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
 }
 /**
  * Wrapper for dynamical result column access as Long
@@ -249,7 +252,8 @@ class DynamicInt(row:RowLike) extends Dynamic {
  *
 */
 class DynamicLong(row:RowLike) extends Dynamic {
-  def applyDynamic(col:String)(args: Any*) = row.long(col)
+  def selectDynamic(col:String) = row.long(col)
+  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
 }
 /**
  * Wrapper for dynamical result column access as Double
@@ -262,7 +266,8 @@ class DynamicLong(row:RowLike) extends Dynamic {
  *
 */
 class DynamicDouble(row:RowLike) extends Dynamic {
-  def applyDynamic(col:String)(args: Any*) = row.double(col)
+  def selectDynamic(col:String) = row.double(col)
+  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
 }
 /**
  * Wrapper for dynamical result column access as BigDecimal
@@ -275,7 +280,8 @@ class DynamicDouble(row:RowLike) extends Dynamic {
  *
 */
 class DynamicBigDecimal(row: RowLike) extends Dynamic {
-  def applyDynamic(col:String)(args: Any*) = row.bigdecimal(col)
+  def selectDynamic(col:String) = row.bigdecimal(col)
+  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
 }
 /**
  * Wrapper for dynamical result column access as String
@@ -283,12 +289,13 @@ class DynamicBigDecimal(row: RowLike) extends Dynamic {
  * Example usages:
  * {{{
  * val result: RowLike = ...
- * println(result.s.salary)
+ * println(result.s.name)
  * }}}
  *
 */
 class DynamicString(row:RowLike) extends Dynamic {
-  def applyDynamic(col:String)(args: Any*) = row.string(col)
+  def selectDynamic(col:String) = row.string(col)
+  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
 }
 /**
  * Wrapper for dynamical result column access as java.sql.Date
@@ -296,12 +303,13 @@ class DynamicString(row:RowLike) extends Dynamic {
  * Example usages:
  * {{{
  * val result: RowLike = ...
- * println(result.d.salary)
+ * println(result.d.birthdate)
  * }}}
  *
 */
 class DynamicDate(row:RowLike) extends Dynamic {
-  def applyDynamic(col:String)(args: Any*) = row.date(col)
+  def selectDynamic(col:String) = row.date(col)
+  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
 }
 /**
  * Wrapper for dynamical result column access as java.sql.Timestamp
@@ -309,10 +317,11 @@ class DynamicDate(row:RowLike) extends Dynamic {
  * Example usages:
  * {{{
  * val result: RowLike = ...
- * println(result.t.salary)
+ * println(result.t.eventTime)
  * }}}
  *
 */
 class DynamicTimestamp(row:RowLike) extends Dynamic {
-  def applyDynamic(col:String)(args: Any*) = row.timestamp(col)
+  def selectDynamic(col:String) = row.timestamp(col)
+  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
 }

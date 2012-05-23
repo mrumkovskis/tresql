@@ -115,5 +115,8 @@ class QueryTest extends Suite {
         r.d.hiredate.toString))
     expect("1982-12-09 00:00:00.0")(Query.select("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) => 
         r.t.hiredate.toString))
+    expect("KING PRESIDENT")(Query.select("emp[7839] {ename, job}").foldLeft("")((x, r) => 
+        r.ename + " " + r.job))
+    
   }
 }
