@@ -39,7 +39,7 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     case "java.lang.String" => string(columnIndex).asInstanceOf[T]
     case "java.sql.Date" => date(columnIndex).asInstanceOf[T]
     case "java.sql.Timestamp" => timestamp(columnIndex).asInstanceOf[T]
-    case x => asAny(cols(columnIndex).idx).asInstanceOf[T]
+    case x => apply(columnIndex).asInstanceOf[T]
   }
   def apply(columnLabel: String) = {
     try {
@@ -219,6 +219,10 @@ trait RowLike extends Dynamic {
   def timestamp(name: String) = typed[java.sql.Timestamp](name)
   def timestamp = new DynamicTimestamp(this)
   def t = timestamp
+  def result(idx: Int) = typed[Result](idx)
+  def result(name: String) = typed[Result](name)
+  def result = new DynamicResult(this)
+  def r = result
   def columnCount: Int
   def content: Seq[Any]
   def column(idx: Int): Column
@@ -323,5 +327,19 @@ class DynamicDate(row:RowLike) extends Dynamic {
 */
 class DynamicTimestamp(row:RowLike) extends Dynamic {
   def selectDynamic(col:String) = row.timestamp(col)
+  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+}
+/**
+ * Wrapper for dynamical result column access as org.tresql.Result
+ * This uses scala.Dynamic feature.
+ * Example usages:
+ * {{{
+ * val result: RowLike = ...
+ * println(result.r.childResult)
+ * }}}
+ *
+*/
+class DynamicResult(row:RowLike) extends Dynamic {
+  def selectDynamic(col:String) = row.result(col)
   def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
 }
