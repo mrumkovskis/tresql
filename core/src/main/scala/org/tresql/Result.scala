@@ -98,7 +98,7 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   }
   override def bigdecimal(columnLabel: String): BigDecimal = {
     try {
-      int(colMap(columnLabel))
+      bigdecimal(colMap(columnLabel))
     } catch { case _: NoSuchElementException => bigdecimal(rs.findColumn(columnLabel)) }
   }
   override def string(columnIndex: Int): String = {
