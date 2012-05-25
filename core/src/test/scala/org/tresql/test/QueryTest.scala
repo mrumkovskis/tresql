@@ -121,5 +121,8 @@ class QueryTest extends Suite {
     expect(("MILLER", BigDecimal(2300.35)))(Query.first("emp[hiredate = '1982-01-23']{ename, sal}")
         {r => (r.ename, r.bd.sal)}.get)
     expect("ACCOUNTING")(Query.first("dept[10]")(r => r.dname) orNull)
+    expect(("ACCOUNTING", "KING,CLARK,MILLER"))(
+      Query.first("dept[10]{deptno, dname, |emp[deptno = :1(1)]{ename} emps}") 
+        { r => (r.dname, r.r.emps.map(r => r.ename).mkString(",")) }.get)
   }
 }
