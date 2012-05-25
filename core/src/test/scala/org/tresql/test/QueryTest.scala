@@ -102,7 +102,6 @@ class QueryTest extends Suite {
     expect(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)", 10, "ACC%"))
     expect(None)(Query.first("dept[?]", -1){r => 0})
     //dynamic tests
-    expect("ACCOUNTING")(Query.first("dept[10]")(r => r.dname) orNull)
     expect(1900)(Query.select("salgrade[1] {hisal, losal}").foldLeft(0)((x, r) => x + 
         r.i.hisal + r.i.losal))
     expect(1900)(Query.select("salgrade[1] {hisal, losal}").foldLeft(0L)((x, r) => x + 
@@ -118,7 +117,9 @@ class QueryTest extends Suite {
     expect("1982-12-09 00:00:00.0")(Query.select("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) => 
         r.t.hiredate.toString))
     expect("KING PRESIDENT")(Query.select("emp[7839] {ename, job}").foldLeft("")((x, r) => 
-        r.ename + " " + r.job))
-    
+        r.ename + " " + r.job))    
+    expect(("MILLER", BigDecimal(2300.35)))(Query.first("emp[hiredate = '1982-01-23']{ename, sal}")
+        {r => (r.ename, r.bd.sal)}.get)
+    expect("ACCOUNTING")(Query.first("dept[10]")(r => r.dname) orNull)
   }
 }
