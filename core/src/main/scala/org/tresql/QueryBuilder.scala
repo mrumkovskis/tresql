@@ -21,6 +21,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   private def this(env: Env) = this(env, 0, 0)
 
+  //children - expressions built from query builders created during building of this expression
+  //children are created for example with | operator and are used typically for executing child
+  //inserts or updates
+  private val children = scala.collection.mutable.ListBuffer[Expr]()
+  
   //context stack as buildInternal method is called
   private var ctxStack = List[String]()
   //bind variables for jdbc prepared statement 
@@ -426,7 +431,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           case ROOT_CTX => {
             val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
             val ex = b.buildInsert(t, c, v)
-            this.bindIdx = b.bindIdx; ex
+            this.bindIdx = b.bindIdx; this.children += ex; ex
           }
           case _ => buildInsert(t, c, v)
         }
@@ -436,7 +441,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           case ROOT_CTX => {
             val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
             val ex = b.buildUpdate(t, f, c, v)
-            this.bindIdx = b.bindIdx; ex
+            this.bindIdx = b.bindIdx; this.children += ex; ex
           }
           case _ => buildUpdate(t, f, c, v)
         }
@@ -445,7 +450,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           case ROOT_CTX => {
             val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
             val ex = b.buildDelete(t, f)
-            this.bindIdx = b.bindIdx; ex
+            this.bindIdx = b.bindIdx; this.children += ex; ex
           }
           case _ => buildDelete(t, f)
         }
@@ -453,12 +458,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case UnOp("|", oper) => {
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth + 1, bindIdx)
           val ex = b.buildInternal(oper, QUERY_CTX)
-          this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
+          this.separateQueryFlag = true; this.bindIdx = b.bindIdx; this.children += ex; ex
         }
         case t: Obj => parseCtx match {
           case ROOT_CTX => {
             val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-            val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
+            val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; this.children += ex; ex
           }
           case QUERY_CTX | TABLE_CTX => new SelectExpr(List(buildTable(t)), null,
             List(new ColExpr(AllExpr(), null)), false, null, null, null, null)
@@ -467,7 +472,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case q: Query => parseCtx match {
           case ROOT_CTX => {
             val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-            val ex = b.buildInternal(q, QUERY_CTX); this.bindIdx = b.bindIdx; ex
+            val ex = b.buildInternal(q, QUERY_CTX); this.bindIdx = b.bindIdx; this.children += ex; ex
           }
           case _ => buildSelect(q)
         }
@@ -478,7 +483,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case e @ BinOp(op, lop, rop) => parseCtx match {
           case ROOT_CTX => {
             val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-            val ex = b.buildInternal(e, QUERY_CTX); this.bindIdx = b.bindIdx; ex
+            val ex = b.buildInternal(e, QUERY_CTX); this.bindIdx = b.bindIdx; this.children += ex; ex
           }
           case ctx => {
             val l = buildInternal(lop, ctx)
