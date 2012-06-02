@@ -41,3 +41,5 @@ BEGIN ATOMIC
   SET newid = newid + 5;
   SET outstring = instring;
 END
+
+CREATE SEQUENCE seq START WITH 10000

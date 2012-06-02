@@ -173,6 +173,9 @@ inc_val_5(5) --> [[10]]
 inc_val_5(?) --> 10 --> [[15]]
 mkString(emp{ename}#(ename), " ", ",") --> ADAMS,ALLEN,BLAKE,CLARK,FORD,JAMES,JONES,KING,MARTIN,MILLER,SCOTT,SMITH,TURNER,WARD
 
+//sequence test
+nextval("seq") --> [[10000]]
+
 //----insensitive comparison function test using dialect----
 EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [9999, "MĀRTIŅŠ ŽVŪKŠĶIS",  "CLERK", 7788, "1983-01-12", 1100, null, 20] --> 1
 emp[cmp_i(ename, ?)]{ename} --> 'zvuksk --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]

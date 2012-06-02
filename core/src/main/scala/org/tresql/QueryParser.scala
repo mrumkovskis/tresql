@@ -8,6 +8,8 @@ object QueryParser extends JavaTokenParsers {
 
   case class Ident(ident: List[String])
   case class Variable(variable: String, opt: Boolean)
+  case class Id(name: String)
+  case class IdRef(name: String)
   case class Result(rNr: Int, col: Any)
   case class UnOp(operation: String, operand: Any)
   case class Fun(name: String, parameters: List[Any])
@@ -56,6 +58,8 @@ object QueryParser extends JavaTokenParsers {
     case "?" => Variable("?", false)
     case (i: String) ~ o => Variable(i, o != None)
   }
+  def id: Parser[Id] = "#" ~> ident ^^ (Id(_))
+  def idref: Parser[IdRef] = ":#" ~> ident ^^ (IdRef(_))
   def result: Parser[Result] = (":" ~> "[0-9]+".r <~ "(") ~ ("[0-9]+".r | stringLiteral |
     qualifiedIdent) <~ ")" ^^ {
       case r ~ c => Result(r.toInt,
@@ -73,7 +77,7 @@ object QueryParser extends JavaTokenParsers {
      * of the query.
      * Also important is that variable parser is after query parser since ? mark matches variable */
   def operand: Parser[Any] = (TRUE | FALSE | NULL | ALL | decimalNr |
-    stringLiteral | function | bracesExp | query | variable | result | array)
+    stringLiteral | function | bracesExp | query | variable | id | idref | result | array)
   def negation: Parser[UnOp] = "-" ~> operand ^^ (UnOp("-", _))
   def not: Parser[UnOp] = "!" ~> operand ^^ (UnOp("!", _))
   //is used within column clause to indicate separate query

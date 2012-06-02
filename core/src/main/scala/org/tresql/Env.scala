@@ -19,6 +19,8 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
   private def vars = _vars.get
   private val res = new ThreadLocal[Result]
   private val st = new ThreadLocal[java.sql.PreparedStatement]
+  private val ids = new ThreadLocal[scala.collection.mutable.Map[String, Any]]
+  ids set scala.collection.mutable.Map[String, Any]()
 
   def this(provider: EnvProvider, reusableExpr: Boolean) = this(provider, null, reusableExpr)
   def this(vars: Map[String, Any], resourceProvider: ResourceProvider, reusableExpr: Boolean) = {
@@ -76,6 +78,14 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
     }
     this.providedEnvs foreach (_.closeStatement)
   }
+  
+  def nextId(seqName: String): Any = if (provider != null) provider.env.nextId(seqName) else {
+    //TODO perhaps built expressions can be used?
+    val id = Query.unique[Any](resourceProvider.idExpr(seqName))
+    ids.get(seqName) = id
+    id
+  }
+  def currId(seqName: String): Any = if (provider != null) provider.env.currId(seqName) else ids.get()(seqName)
 
 }
 
@@ -85,6 +95,7 @@ object Env extends ResourceProvider {
   private var md: MetaData = metadata.JDBCMetaData("")
   private val threadConn = new ThreadLocal[java.sql.Connection]
   private var sqlDialect: Expr => String = null
+  private var _idExpr: String => String = s => "nextval('" + s + "')" 
   //this is for scala interperter since it executes every command in separate thread from console thread
   var sharedConn: java.sql.Connection = null
   //available functions
@@ -95,10 +106,12 @@ object Env extends ResourceProvider {
   def conn = { val c = threadConn.get; if (c == null) sharedConn else c }
   def metaData = md
   def dialect = sqlDialect
+  def idExpr = _idExpr 
   def update(md: MetaData) = this.md = md
   def update(conn: java.sql.Connection) = this.threadConn set conn
   def update(logger: (=> String, Int) => Unit) = this.logger = logger
-  def update(dialect: Expr => String) = this.sqlDialect = dialect 
+  def update(dialect: Expr => String) = this.sqlDialect = dialect
+  def updateIdExpr(idExpr: String => String) = this._idExpr = idExpr
   def availableFunctions(list: Traversable[String]) = functions = list.toSet
   def isDefined(functionName: String) = functions.contains(functionName) 
   def log(msg: => String, level: Int = 0): Unit = if (logger != null) logger(msg, level)
@@ -112,4 +125,5 @@ trait ResourceProvider {
   def conn: java.sql.Connection
   def metaData: MetaData
   def dialect: Expr => String
+  def idExpr: String => String
 }

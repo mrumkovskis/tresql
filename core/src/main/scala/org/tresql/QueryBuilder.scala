@@ -64,7 +64,25 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     override def toString = if (env contains name) name + " = " + env(name) else name
   }
+  
+  case class IdExpr(val seqName: String) extends BaseExpr {
+    override def apply() = env.nextId(seqName)
+    var binded = false
+    def defaultSQL = {
+      if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
+      "?"
+    }
+  }
 
+  case class IdRefExpr(val seqName: String) extends BaseExpr {
+    override def apply() = env.currId(seqName)
+    var binded = false
+    def defaultSQL = {
+      if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
+      "?"
+    }
+  }
+  
   class ResExpr(val nr: Int, val col: Any) extends PrimitiveExpr {
     override def apply() = col match {
       case c: List[_] => env(nr)(c.mkString("."))
@@ -527,6 +545,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case Arr(l: List[_]) => new ArrExpr(l map { buildInternal(_, parseCtx) })
         case Variable("?", o) => this.bindIdx += 1; new VarExpr(this.bindIdx.toString, o)
         case Variable(n, o) => if (!env.reusableExpr && o && !(env contains n)) null else new VarExpr(n, o)
+        case Id(seq) => IdExpr(seq)
+        case IdRef(seq) => IdRefExpr(seq)
         case Result(r, c) => new ResExpr(r, c)
         case Col(c, a) => { separateQueryFlag = false; new ColExpr(buildInternal(c, parseCtx), a) }
         case Grp(cols, having) => new Group(cols map { buildInternal(_, GROUP_CTX) },
