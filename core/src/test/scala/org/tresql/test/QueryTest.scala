@@ -124,5 +124,24 @@ class QueryTest extends Suite {
     expect(("ACCOUNTING", "KING,CLARK,MILLER"))(
       Query.first("dept[10]{deptno, dname, |emp[deptno = :1(1)]{ename} emps}") 
         { r => (r.dname, r.r.emps.map(r => r.ename).mkString(",")) }.get)
+    //bind variables test
+    val ex = Query.build("dept[?]{deptno}")
+    expect(List(10, 20, 30, 40))(List(10, 20, 30, 40) flatMap {ex.select(_).map(_.deptno)})
+    ex.close
+    //hierarchical inserts, updates test
+    expect(List(1, List(List(1, 1))))(Query(
+      """dept{deptno, dname, loc, |(emp {empno, ename, deptno} + [:empno, :ename, :deptno]) emps} +
+        [:deptno, :dname, :loc]""",
+      Map("deptno" -> 50, "dname" -> "LAW", "loc" -> "DALLAS",
+        "emps" -> List(Map("empno" -> 1111, "ename" -> "SMITH", "deptno" -> 50),
+          Map("empno" -> 2222, "ename" -> "LEWIS", "deptno" -> 50)))))
+    expect(List(1, List(2, List(1, 1))))(Query(
+      """dept[:deptno]{deptno, dname, loc,
+               |(emp - [deptno = :deptno]),
+               |(emp {empno, ename, deptno} + [:empno, :ename, :deptno]) emps} =
+        [:deptno, :dname, :loc]""",
+      Map("deptno" -> 50, "dname" -> "LAW", "loc" -> "FLORIDA",
+        "emps" -> List(Map("empno" -> 1111, "ename" -> "BROWN", "deptno" -> 50),
+          Map("empno" -> 2222, "ename" -> "CHRIS", "deptno" -> 50)))))
   }
 }

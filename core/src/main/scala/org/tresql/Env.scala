@@ -16,7 +16,7 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
   }
 
   private val _vars = new ThreadLocal[scala.collection.mutable.Map[String, Any]]
-  private def vars = if (_vars.get != null) _vars.get else error("Bind variables not set")
+  private def vars = _vars.get
   private val res = new ThreadLocal[Result]
   private val st = new ThreadLocal[java.sql.PreparedStatement]
 
@@ -26,7 +26,7 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
     update(vars)
   }
 
-  def apply(name: String):Any = if (provider != null) provider.env(name) else vars(name) match {
+  def apply(name: String):Any = if (vars != null) vars(name) else provider.env(name) match {
     case e: Expr => e()
     case x => x
   }
@@ -54,16 +54,15 @@ class Env(private val provider: EnvProvider, private val resourceProvider: Resou
 
   def statement = this.st.get
 
-  def contains(name: String): Boolean = if (provider != null) provider.env.contains(name)
-  else vars.contains(name)
+  def contains(name: String): Boolean = if (vars != null) vars.contains(name)
+  else provider.env.contains(name)
 
   def update(name: String, value: Any) {
-    if (provider != null) provider.env(name) = value else this.vars(name) = value
+    this.vars(name) = value
   }
 
   def update(vars: Map[String, Any]) {
-    if (provider != null) provider.env.update(vars)
-    else this._vars set scala.collection.mutable.Map(vars.toList: _*)
+    this._vars set scala.collection.mutable.Map(vars.toList: _*)
   }
 
   def update(r: Result) = this.res set r
