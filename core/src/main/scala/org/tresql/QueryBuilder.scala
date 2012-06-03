@@ -407,20 +407,16 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   //DML statements are defined outsided buildInternal method since they are called from other QueryBuilder
   private def buildInsert(table: List[String], cols: List[Col], vals: List[Any]) = {
     new InsertExpr(new IdentExpr(table, null), cols map (buildInternal(_, COL_CTX)) filter {
-      _ match {
         case e:ColExpr if (e.separateQuery) => this.childUpdates += {(e.col, e.alias)}; false
         case e => true
-      }
     }, vals map { buildInternal(_, VALUES_CTX) })
   }
   private def buildUpdate(table: List[String], filter: Arr, cols: List[Col], vals: List[Any]) = {
     new UpdateExpr(new IdentExpr(table, null), if (filter != null)
       filter.elements map { buildInternal(_, WHERE_CTX) } else null,
       cols map (buildInternal(_, COL_CTX)) filter {
-        _ match {
           case e: ColExpr if (e.separateQuery) => this.childUpdates += { (e.col, e.alias) }; false
           case e => true
-        }
       },
       vals map { buildInternal(_, VALUES_CTX) })
   }
