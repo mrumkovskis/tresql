@@ -147,7 +147,7 @@ class QueryTest extends Suite {
     expect(List(1, List(List(1, 1))))(Query(
       """dept{deptno, dname, loc, +emp {empno, ename, deptno} [:empno, :ename, :#seq] emps} +
         [#seq, :dname, :loc]""",
-      Map("dname" -> "LAW", "loc" -> "DALLAS", "emps" -> List(
-          Map("empno" -> 1111, "ename" -> "SMITH"), Map("empno" -> 2222, "ename" -> "LEWIS")))))
+      Map("dname" -> "LAW", "loc" -> "DALLAS", "emps" -> scala.Array(
+        Map("empno" -> 1111, "ename" -> "SMITH"), Map("empno" -> 2222, "ename" -> "LEWIS")))))
   }
 }

@@ -399,6 +399,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case (ex, n) => env(n) match {
         case m: Map[String, _] => ex(m)
         case t: scala.collection.Traversable[Map[String, _]] => t map {ex(_)}
+        case a: Array[Map[String, _]] => (a map {ex(_)}).toList
         case x => ex()
       }
     }.toList
