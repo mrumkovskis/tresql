@@ -23,6 +23,9 @@ object QueryParser extends JavaTokenParsers {
   case class Ord(cols: (Null, List[Any], Null), asc: Boolean)
   case class Query(tables: List[Obj], filter: Arr, cols: List[Col], distinct: Boolean,
     group: Grp, order: List[Ord], offset: Any, limit: Any)
+  case class Insert(table: Ident, cols: List[Col], vals: List[Arr])
+  case class Update(table: Ident, filter: Arr, cols: List[Col], vals: Arr)
+  case class Delete(table: Ident, filter: Arr)
   case class Arr(elements: List[Any])
   case class All()
   case class Null()
@@ -75,9 +78,11 @@ object QueryParser extends JavaTokenParsers {
      * match down to query.
      * Also important is that array parser is applied after query parser because it matches join parser
      * of the query.
-     * Also important is that variable parser is after query parser since ? mark matches variable */
+     * Also important is that variable parser is after query parser since ? mark matches variable
+     * Also important that insert, delete, update parsers are before query parser */
   def operand: Parser[Any] = (TRUE | FALSE | NULL | ALL | decimalNr |
-    stringLiteral | function | bracesExp | query | variable | id | idref | result | array)
+    stringLiteral | function | insert | update | bracesExp | query | variable | id | 
+    idref | result | array)
   def negation: Parser[UnOp] = "-" ~> operand ^^ (UnOp("-", _))
   def not: Parser[UnOp] = "!" ~> operand ^^ (UnOp("!", _))
   //is used within column clause to indicate separate query
@@ -129,9 +134,20 @@ object QueryParser extends JavaTokenParsers {
         c.map(_.cols) orNull, c.map(_.distinct) getOrElse false,
         g.orNull, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
     }
-
+  def insert: Parser[Insert] = (("+" ~> qualifiedIdent ~ columns ~ rep1sep(array, ",")) | 
+      ((qualifiedIdent ~ columns <~ "+") ~ rep1sep(array, ","))) ^^ {
+    case t ~ Cols(_, c) ~ v => Insert(t, c, v)
+  }
+  def update: Parser[Update] = (("=" ~> qualifiedIdent ~ opt(filter) ~ columns ~ array) | 
+      ((qualifiedIdent ~ opt(filter) ~ columns <~ "=") ~ array)) ^^ {
+    case t ~ f ~ Cols(_, c) ~ v => Update(t, f orNull, c, v)
+  }
+  def delete: Parser[Delete] = (("-" ~> qualifiedIdent ~ filter) | ((qualifiedIdent <~ "-") ~ filter)) ^^ {
+    case t ~ f => Delete(t, f)
+  }
   //operation parsers
-  def unaryExpr = negation | not | operand | sep
+  //delete must be before negation since it can start with - sign!
+  def unaryExpr = delete | negation | not | operand | sep
   def mulDiv: Parser[Any] = unaryExpr ~ rep("*" ~ unaryExpr | "/" ~ unaryExpr) ^^ (p => binOp(p))
   def plusMinus: Parser[Any] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ (p => binOp(p))
   def comp: Parser[Any] = plusMinus ~
@@ -171,21 +187,31 @@ object QueryParser extends JavaTokenParsers {
       parsedExpr match {
         case Variable("?", _) => bindIdx += 1; vars += bindIdx.toString
         case Variable(n, _) => vars += n
-        case Fun(_, pars) => pars foreach (bindVars(_))
+        case Fun(_, pars) => pars foreach bindVars
         case UnOp(_, operand) => bindVars(operand)
         case BinOp(_, lop, rop) => bindVars(lop); bindVars(rop)
         case Obj(t, _, j, _) => bindVars(j); bindVars(t)
         case Col(c, _) => bindVars(c)
-        case Cols(_, cols) => cols foreach (bindVars(_))
-        case Grp(cols, hv) => cols foreach (bindVars(_)); bindVars(hv)
-        case Ord(cols, _) => cols._2 foreach (bindVars(_))
+        case Cols(_, cols) => cols foreach bindVars
+        case Grp(cols, hv) => cols foreach bindVars; bindVars(hv)
+        case Ord(cols, _) => cols._2 foreach bindVars
         case Query(objs, filter, cols, _, gr, ord, _, _) => {
-          objs foreach (bindVars(_)); bindVars(filter)
-          if (cols != null) cols foreach (bindVars(_))
+          objs foreach bindVars; bindVars(filter)
+          if (cols != null) cols foreach bindVars
           bindVars(gr);
-          if (ord != null) ord foreach (bindVars(_))
+          if (ord != null) ord foreach bindVars
         }
-        case Arr(els) => els foreach (bindVars(_))
+        case Insert(_, cols, vals) => {
+          cols foreach bindVars
+          vals foreach bindVars
+        }
+        case Update(_, filter, cols, vals) => {
+          if (filter != null) bindVars(filter)
+          cols foreach bindVars
+          bindVars(vals)          
+        }
+        case Delete(_, filter) => bindVars(filter)
+        case Arr(els) => els foreach bindVars
         case Braces(expr) => bindVars(expr)
         case _ =>
       }

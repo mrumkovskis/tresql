@@ -309,7 +309,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }
     }
   }
-  class ColExpr(val col: Expr, val alias: String) extends PrimitiveExpr {
+  case class ColExpr(val col: Expr, val alias: String) extends PrimitiveExpr {
     val separateQuery = QueryBuilder.this.separateQueryFlag
     if (!QueryBuilder.this.allCols) QueryBuilder.this.allCols = col.isInstanceOf[AllExpr]
     def aliasOrName = if (alias != null) alias else col match {
@@ -335,11 +335,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   class InsertExpr(table: IdentExpr, val cols: List[Expr], val vals: List[Expr])
     extends DeleteExpr(table, null) {
-    if (cols.length != vals.length) error("insert statement columns and values count differ: " +
-      cols.length + "," + vals.length)
     override protected def _sql = "insert into " + table.sql +
-      "(" + cols.map(_.sql).mkString(",") + ")" +
-      " values (" + vals.map(_.sql).mkString(",") + ")"
+      "(" + cols.map(_.sql).mkString(",") + ")" + (vals match {
+      case v :: Nil => " values " + v.sql
+      case _ => " values (" + vals.map(_.sql).mkString(",") + ")" 
+    })
   }
   class UpdateExpr(table: IdentExpr, filter: List[Expr], val cols: List[Expr],
     val vals: List[Expr]) extends DeleteExpr(table, filter) {
@@ -358,7 +358,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }
     }
     protected def _sql = "delete from " + table.sql +
-      (if (filter == null) "" else " where " + where)
+      (if (filter == null || filter.size == 0) "" else " where " + where)
     lazy val defaultSQL = _sql
     def where = filter match {
       case (c @ ConstExpr(x)) :: Nil => table.aliasOrName + "." +
@@ -405,23 +405,23 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
 
   //DML statements are defined outsided buildInternal method since they are called from other QueryBuilder
-  private def buildInsert(table: List[String], cols: List[Col], vals: List[Any]) = {
-    new InsertExpr(new IdentExpr(table, null), cols map (buildInternal(_, COL_CTX)) filter {
-        case e:ColExpr if (e.separateQuery) => this.childUpdates += {(e.col, e.alias)}; false
-        case e => true
+  private def buildInsert(table: Ident, cols: List[Col], vals: List[Arr]) = {
+    new InsertExpr(IdentExpr(table.ident, null), cols map (buildInternal(_, COL_CTX)) filter {
+      case ColExpr(IdentExpr(_, _), _) => true
+      case e: ColExpr => this.childUpdates += { (e.col, e.alias) }; false
     }, vals map { buildInternal(_, VALUES_CTX) })
   }
-  private def buildUpdate(table: List[String], filter: Arr, cols: List[Col], vals: List[Any]) = {
-    new UpdateExpr(new IdentExpr(table, null), if (filter != null)
+  private def buildUpdate(table: Ident, filter: Arr, cols: List[Col], vals: Arr) = {
+    new UpdateExpr(new IdentExpr(table.ident, null), if (filter != null)
       filter.elements map { buildInternal(_, WHERE_CTX) } else null,
       cols map (buildInternal(_, COL_CTX)) filter {
-          case e: ColExpr if (e.separateQuery) => this.childUpdates += { (e.col, e.alias) }; false
-          case e => true
+        case ColExpr(IdentExpr(_, _), _) => true
+        case e: ColExpr => this.childUpdates += { (e.col, e.alias) }; false
       },
-      vals map { buildInternal(_, VALUES_CTX) })
+      vals.elements map { buildInternal(_, VALUES_CTX) })
   }
-  private def buildDelete(table: List[String], filter: Arr) = {
-    new DeleteExpr(new IdentExpr(table, null),
+  private def buildDelete(table: Ident, filter: Arr) = {
+    new DeleteExpr(new IdentExpr(table.ident, null),
       if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null)
   }
 
@@ -467,33 +467,22 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case BinOp("=", Variable(n, o), v) if (parseCtx == ROOT_CTX) =>
           new AssignExpr(n, buildInternal(v, parseCtx))
         //insert
-        case BinOp("+", Query(Obj(Ident(t), _, null, null) :: Nil, null, c @ (Col(_, _) :: l), _, 
-            null, null, _, _), Arr(v)) => parseCtx match {
-          case ROOT_CTX => {
-            val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-            val ex = b.buildInsert(t, c, v)
-            this.bindIdx = b.bindIdx; ex
-          }
-          case _ => buildInsert(t, c, v)
+        case Insert(t, c, v) => {
+          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+          val ex = b.buildInsert(t, c, v)
+          this.bindIdx = b.bindIdx; ex
         }
         //update
-        case BinOp("=", Query(Obj(Ident(t), _, null, null) :: Nil, f, c @ (Col(_, _) :: l), _,
-            null, null, _, _), Arr(v)) => parseCtx match {
-          case ROOT_CTX => {
-            val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-            val ex = b.buildUpdate(t, f, c, v)
-            this.bindIdx = b.bindIdx; ex
-          }
-          case _ => buildUpdate(t, f, c, v)
+        case Update(t, f, c, v) => {
+          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+          val ex = b.buildUpdate(t, f, c, v)
+          this.bindIdx = b.bindIdx; ex
         }
         //delete
-        case BinOp("-", Obj(Ident(t), _, null, null), f @ Arr(_)) => parseCtx match {
-          case ROOT_CTX => {
-            val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-            val ex = b.buildDelete(t, f)
-            this.bindIdx = b.bindIdx; ex
-          }
-          case _ => buildDelete(t, f)
+        case Delete(t, f) => {
+          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+          val ex = b.buildDelete(t, f)
+          this.bindIdx = b.bindIdx; ex
         }
         //child query
         case UnOp("|", oper) => {
