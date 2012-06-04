@@ -2,10 +2,7 @@
 //<statement> --> [<semicolon separated bind params (array elements are comma separated)>] --> <result as returned from method uniso.query.result.Jsonizer.jsonize(..., Jsonizer.Arrays)>
 //INSERT
 //DEPTS
-DEPT {DEPTNO, DNAME, LOC} + [10, "ACCOUNTING", "NEW YORK"] --> 1
-DEPT {DEPTNO, DNAME, LOC} + [20, "RESEARCH",   "DALLAS"] --> 1
-DEPT {DEPTNO, DNAME, LOC} + [30, "SALES",      "CHICAGO"] --> 1
-DEPT {DEPTNO, DNAME, LOC} + [40, "OPERATIONS", "BOSTON"] --> 1
+DEPT {DEPTNO, DNAME, LOC} + [10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"], [40, "OPERATIONS", "BOSTON"] --> 4
 //EMPS
 EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7839, "KING",   "PRESIDENT", null, "1981-11-17", 5000, null, 10] --> 1
 EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7698, "BLAKE",  "MANAGER",   7839, "1981-05-01",  2850, null, 30] --> 1
