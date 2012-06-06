@@ -240,19 +240,16 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         QueryBuilder.this.allCols)
     }
     lazy val defaultSQL = "select " + (if (distinct) "distinct " else "") +
-      (if (cols == null) "*" else sqlCols) + " from " + join +
+      (if (cols == null) "*" else sqlCols) + " from " + tables.head.sqlName + join(tables) +
       (if (filter == null) "" else " where " + where) +
       (if (group == null) "" else " group by " + group.sql) +
       (if (order == null) "" else " order by " + (order map (_.sql)).mkString(", ")) +
       (if (offset == null) "" else " offset " + offset.sql) +
       (if (limit == null) "" else " limit " + limit.sql)
     def sqlCols = cols.filter(!_.separateQuery).map(_.sql).mkString(",")
-    def join = tables match {
-      case t :: Nil => t.sqlName
-      case t :: l =>
-        var pt = t; t.sqlName + " " +
-          (l map { ct => val v = pt; pt = ct; ct.sqlJoin(v) }).mkString(" ")
-      case _ => error("Knipis")
+    def join(tables: List[Table]): String = (tables: @unchecked) match {
+      case t :: Nil => ""
+      case t :: l => " " + l.head.sqlJoin(t) + join(l)
     }
     def where = filter match {
       case (c @ ConstExpr(x)) :: Nil => tables(0).aliasOrName + "." +

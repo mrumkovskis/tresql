@@ -1,4 +1,10 @@
       -- HSQL DB CREATE SCRIPT --
+
+CREATE TABLE WORK
+ (WDATE DATE NOT NULL,
+  EMPNO INTEGER NOT NULL,
+  HOURS INTEGER)
+//
       
 CREATE TABLE EMP
  (EMPNO INTEGER NOT NULL,
@@ -31,6 +37,8 @@ alter table emp add foreign key (deptno) references dept(deptno)
 alter table emp add foreign key (mgr) references emp(empno)
 //
 alter table salgrade add primary key (grade)
+//
+alter table work add foreign key (empno) references emp(empno)
 //
 CREATE FUNCTION inc_val_5 (x INTEGER)
   RETURNS INTEGER

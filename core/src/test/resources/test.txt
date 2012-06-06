@@ -20,6 +20,9 @@ EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [?, ?, ?, ?, ?, ?, ?
 //SALGRADES
 SALGRADE {GRADE, HISAL, LOSAL} + [1, 700, 1200],[2, 1201, 1400],[3, 1401, 2000],[4, 2001, 3000],[5, 3001, 9999] --> 5
 
+//WORK
+WORK {WDATE, EMPNO, HOURS} + ["2012-06-06", 7839, 3], ["2012-06-07", 7839, 4], ["2012-06-06", 7788, 5], ["2012-06-07", 7788, 8] --> 4
+
 //DUMMY
 DUMMY {DUMMY} + [0] --> 1
 
@@ -35,6 +38,8 @@ dept[:id] {deptno} #(deptno) --> id=10 --> [[10]]
 
 //join
 emp e/dept[sal >= hisal & sal <= losal]salgrade {ename, dname, grade} #(empno) --> [["SMITH", "RESEARCH", 1], ["ALLEN", "SALES", 3], ["WARD", "SALES", 2], ["JONES", "RESEARCH", 4], ["MARTIN", "SALES", 2], ["BLAKE", "SALES", 4], ["CLARK", "ACCOUNTING", 4], ["SCOTT", "RESEARCH", 4], ["KING", "ACCOUNTING", 5], ["TURNER", "SALES", 3], ["ADAMS", "RESEARCH", 1], ["JAMES", "SALES", 1], ["FORD", "RESEARCH", 4], ["MILLER", "ACCOUNTING", 2]]
+work/emp/dept {wdate, ename, dname} #(1,2,3) --> [["2012-06-06", "KING", "ACCOUNTING"], ["2012-06-06", "SCOTT", "RESEARCH"], ["2012-06-07", "KING", "ACCOUNTING"], ["2012-06-07", "SCOTT", "RESEARCH"]]
+
 //alias join shortcut syntax
 emp e[e.deptno d]dept {ename, dname} #(ename) --> [["ADAMS", "RESEARCH"], ["ALLEN", "SALES"], ["BLAKE", "SALES"], ["CLARK", "ACCOUNTING"], ["FORD", "RESEARCH"], ["JAMES", "SALES"], ["JONES", "RESEARCH"], ["KING", "ACCOUNTING"], ["MARTIN", "SALES"], ["MILLER", "ACCOUNTING"], ["SCOTT", "RESEARCH"], ["SMITH", "RESEARCH"], ["TURNER", "SALES"],["WARD", "SALES"]]
 
