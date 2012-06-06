@@ -98,12 +98,13 @@ object QueryParser extends JavaTokenParsers {
   def obj: Parser[Obj] = opt(join) ~ opt("?") ~ (qualifiedIdent | bracesExp) ~
     opt("?") ~ opt(excludeKeywordsIdent) ^^ {
       case a ~ Some(b) ~ c ~ Some(d) ~ e => error("Cannot be right and left join at the same time")
-      case a ~ b ~ c ~ d ~ e => Obj(c, if (e == None) null else e.get, if (a == None) null
-      else a.get, if (b != None) "r" else if (d != None) "l" else null)
+      case a ~ b ~ c ~ d ~ e => Obj(c, e.orNull, a.orNull,
+          if (b != None) "r" else if (d != None) "l" else null)
     }
   def objs: Parser[List[Obj]] = rep1(obj)
   def column: Parser[Col] = expr ~ opt(stringLiteral | qualifiedIdent) ^^ {
-    case e ~ a => Col(e, if (a == None) null else a.get match { case Ident(i) => i.mkString; case s => "\"" + s + "\"" })
+    case (o@Obj(_, a, _, _)) ~ None => Col(o, a)
+    case e ~ a => Col(e, a map { case Ident(i) => i.mkString; case s => "\"" + s + "\"" } orNull)
   }
   def columns: Parser[Cols] = (opt("#") <~ "{") ~ rep1sep(column, ",") <~ "}" ^^ {
     case d ~ c => Cols(d != None, c)

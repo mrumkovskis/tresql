@@ -15,7 +15,7 @@ object Query {
   }
 
   def parse(expr: String) = QueryParser.parseAll(expr)
-  def build(expr: String): Expr = QueryBuilder(expr, Env(Map(), true))
+  def build(expr: String): Expr = QueryBuilder(expr)
   def build(expr: Any): Expr = QueryBuilder(expr, Env(Map(), true))
 
   def select(expr: String, params: Any*) = {
@@ -53,8 +53,8 @@ object Query {
     bindVars(st, bindVariables)
     var i = 0
     val rs = st.executeQuery
-    def rcol(c: QueryBuilder#ColExpr) = if (c.separateQuery) Column(-1, c.aliasOrName, c.col) else {
-      i += 1; Column(i, c.aliasOrName, null)
+    def rcol(c: QueryBuilder#ColExpr) = if (c.separateQuery) Column(-1, c.name, c.col) else {
+      i += 1; Column(i, c.name, null)
     }
     val r = new Result(rs, Vector((if (!allCols) cols.map { rcol(_) }
     else cols.flatMap { c =>
