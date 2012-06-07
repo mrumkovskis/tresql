@@ -158,6 +158,7 @@ emp[7876] {ename} --> [["kuku"]]
 
 //----DELETE----
 salgrade - [?] --> 5 --> 1
+dummy - [], DUMMY {DUMMY} + [0], -dummy[], DUMMY {DUMMY} + [0] --> [1, 1, 1, 1]
 
 //--ASSIGN EXPR
 :v = 5, :s = "kuku" --> [5, "kuku"]

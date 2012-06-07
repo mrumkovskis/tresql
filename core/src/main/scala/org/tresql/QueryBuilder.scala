@@ -276,7 +276,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         outerJoinSql + " " + (j match {
           case i@IdentExpr(_) => sqlName + " on " + i.sql + " = " +
             aliasOrName + "." + env.table(name).key.cols.mkString
-          //FIXME ident expr should not be here because alias does not refer to i
+          //alias join shortcut syntax
           case AliasIdentExpr(i, a) => name + " " + a + " on " +
             i.mkString(".") + " = " + a + "." + env.table(name).key.cols.mkString
           case e => sqlName + " on " + (e match {
