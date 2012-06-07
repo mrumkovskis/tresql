@@ -15,7 +15,8 @@ object QueryParser extends JavaTokenParsers {
   case class Fun(name: String, parameters: List[Any])
   case class BinOp(op: String, lop: Any, rop: Any)
 
-  case class Obj(obj: Any, alias: String, join: Any, outerJoin: String)
+  case class Join(default: Boolean, expr: Any, noJoin: Boolean)
+  case class Obj(obj: Any, alias: String, join: Join, outerJoin: String)
   case class Col(col: Any, alias: String)
   case class Cols(distinct: Boolean, cols: List[Col])
   case class Grp(cols: List[Any], having: Any)
@@ -93,7 +94,13 @@ object QueryParser extends JavaTokenParsers {
   def array: Parser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ (Arr(_))
 
   //query parsers
-  def join: Parser[Any] = ("[" ~> repsep(expr, ",") <~ "]") | "/"
+  def join: Parser[Join] = (("[" ~> repsep(expr, ",") <~ "]") | 
+      ("/" ~ opt("[" ~> expr <~ "]")) | ";") ^^ {
+    case ";" => Join(false, null, true)
+    case "/" ~ Some(e) => Join(true, e, false)
+    case "/" ~ None => Join(true, null, false)
+    case l:List[_] => Join(false, l, false)
+  }
   def filter: Parser[Arr] = array
   def obj: Parser[Obj] = opt(join) ~ opt("?") ~ (qualifiedIdent | bracesExp) ~
     opt("?") ~ opt(excludeKeywordsIdent) ^^ {
@@ -199,7 +206,7 @@ object QueryParser extends JavaTokenParsers {
         case Query(objs, filter, cols, _, gr, ord, _, _) => {
           objs foreach bindVars; bindVars(filter)
           if (cols != null) cols foreach bindVars
-          bindVars(gr);
+          bindVars(gr)
           if (ord != null) ord foreach bindVars
         }
         case Insert(_, cols, vals) => {

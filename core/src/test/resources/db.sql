@@ -3,7 +3,8 @@
 CREATE TABLE WORK
  (WDATE DATE NOT NULL,
   EMPNO INTEGER NOT NULL,
-  HOURS INTEGER)
+  HOURS INTEGER NOT NULL,
+  EMPNO_MGR INTEGER)
 //
       
 CREATE TABLE EMP
@@ -40,6 +41,9 @@ alter table salgrade add primary key (grade)
 //
 alter table work add foreign key (empno) references emp(empno)
 //
+alter table work add foreign key (empno_mgr) references emp(empno)
+//
+
 CREATE FUNCTION inc_val_5 (x INTEGER)
   RETURNS INTEGER
   RETURN x + 5

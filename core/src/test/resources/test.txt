@@ -21,7 +21,7 @@ EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [?, ?, ?, ?, ?, ?, ?
 SALGRADE {GRADE, HISAL, LOSAL} + [1, 700, 1200],[2, 1201, 1400],[3, 1401, 2000],[4, 2001, 3000],[5, 3001, 9999] --> 5
 
 //WORK
-WORK {WDATE, EMPNO, HOURS} + ["2012-06-06", 7839, 3], ["2012-06-07", 7839, 4], ["2012-06-06", 7788, 5], ["2012-06-07", 7788, 8] --> 4
+WORK {WDATE, EMPNO, HOURS, EMPNO_MGR} + ["2012-06-06", 7839, 3, null], ["2012-06-07", 7839, 4, null], ["2012-06-06", 7788, 5, 7566], ["2012-06-07", 7788, 8, 7782] --> 4
 
 //DUMMY
 DUMMY {DUMMY} + [0] --> 1
@@ -38,10 +38,18 @@ dept[:id] {deptno} #(deptno) --> id=10 --> [[10]]
 
 //join
 emp e/dept[sal >= hisal & sal <= losal]salgrade {ename, dname, grade} #(empno) --> [["SMITH", "RESEARCH", 1], ["ALLEN", "SALES", 3], ["WARD", "SALES", 2], ["JONES", "RESEARCH", 4], ["MARTIN", "SALES", 2], ["BLAKE", "SALES", 4], ["CLARK", "ACCOUNTING", 4], ["SCOTT", "RESEARCH", 4], ["KING", "ACCOUNTING", 5], ["TURNER", "SALES", 3], ["ADAMS", "RESEARCH", 1], ["JAMES", "SALES", 1], ["FORD", "RESEARCH", 4], ["MILLER", "ACCOUNTING", 2]]
-work/emp/dept {wdate, ename, dname} #(1,2,3) --> [["2012-06-06", "KING", "ACCOUNTING"], ["2012-06-06", "SCOTT", "RESEARCH"], ["2012-06-07", "KING", "ACCOUNTING"], ["2012-06-07", "SCOTT", "RESEARCH"]]
+work[empno]emp/dept {wdate, ename, dname} #(1,2,3) --> [["2012-06-06", "KING", "ACCOUNTING"], ["2012-06-06", "SCOTT", "RESEARCH"], ["2012-06-07", "KING", "ACCOUNTING"], ["2012-06-07", "SCOTT", "RESEARCH"]]
+
+//default join with additional expression
+dept d/[job = 'PRESIDENT']emp? e {dname, ename}#(1, 2 null) --> [["ACCOUNTING", "KING"], ["OPERATIONS", null], ["RESEARCH", null], ["SALES", null]]
+dept d/emp? e [job = 'PRESIDENT']{dname, ename}#(1, 2) --> [["ACCOUNTING", "KING"]]
+
+//primary key join shortcut syntax
+emp e[e.deptno d]dept {ename, dname} #(ename) --> [["ADAMS", "RESEARCH"], ["ALLEN", "SALES"], ["BLAKE", "SALES"], ["CLARK", "ACCOUNTING"], ["FORD", "RESEARCH"], ["JAMES", "SALES"], ["JONES", "RESEARCH"], ["KING", "ACCOUNTING"], ["MARTIN", "SALES"], ["MILLER", "ACCOUNTING"], ["SCOTT", "RESEARCH"], ["SMITH", "RESEARCH"], ["TURNER", "SALES"],["WARD", "SALES"]]
+work w[w.empno e, w.empno_mgr m]emp {e.ename, m.ename, hours} #(1,2,3) --> [["SCOTT", "CLARK", 8], ["SCOTT", "JONES", 5]]
 
 //alias join shortcut syntax
-emp e[e.deptno d]dept {ename, dname} #(ename) --> [["ADAMS", "RESEARCH"], ["ALLEN", "SALES"], ["BLAKE", "SALES"], ["CLARK", "ACCOUNTING"], ["FORD", "RESEARCH"], ["JAMES", "SALES"], ["JONES", "RESEARCH"], ["KING", "ACCOUNTING"], ["MARTIN", "SALES"], ["MILLER", "ACCOUNTING"], ["SCOTT", "RESEARCH"], ["SMITH", "RESEARCH"], ["TURNER", "SALES"],["WARD", "SALES"]]
+emp e[e.empno = w.empno]work w;e/dept [ename = 'SCOTT']{hours, ename, dname} #(hours) --> [[5, "SCOTT", "RESEARCH"], [8, "SCOTT", "RESEARCH"]]
 
 //outer join
 dept d/emp? e[e.deptno != null]#{d.deptno}#(deptno) --> [[10], [20], [30]]

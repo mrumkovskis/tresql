@@ -226,7 +226,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
   }
 
-  class ArrExpr(val elements: List[Expr]) extends BaseExpr {
+  case class ArrExpr(val elements: List[Expr]) extends BaseExpr {
     override def apply() = elements map (_())
     def defaultSQL = elements map { _.sql } mkString ("(", ", ", ")")
     override def toString = elements map { _.toString } mkString ("[", ", ", "]")
@@ -235,6 +235,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   class SelectExpr(val tables: List[Table], val filter: List[Expr], val cols: List[ColExpr],
     val distinct: Boolean, val group: Expr, val order: List[Expr],
     offset: Expr, limit: Expr) extends BaseExpr {
+    val aliases: Map[Any, Table] = {
+      var al = Set[String]()
+      tables.map(t => (t match {
+        case Table(IdentExpr(t), null, _, _) => val s = t.mkString("."); if (al(s)) null else s
+        case Table(t, null, _, _) => null
+        case Table(t, a, _, _) => al += a; a
+      }, t)).filter(_._1 != null).toMap
+    }
     override def apply() = {
       org.tresql.Query.select(sql, cols, QueryBuilder.this.bindVariables, env,
         QueryBuilder.this.allCols)
@@ -247,9 +255,16 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       (if (offset == null) "" else " offset " + offset.sql) +
       (if (limit == null) "" else " limit " + limit.sql)
     def sqlCols = cols.filter(!_.separateQuery).map(_.sql).mkString(",")
-    def join(tables: List[Table]): String = (tables: @unchecked) match {
-      case t :: Nil => ""
-      case t :: l => " " + l.head.sqlJoin(t) + join(l)
+    def join(tables: List[Table]): String = {
+      //used to find table if alias join is used
+      def find(t: Table) = t match {
+        case t@Table(IdentExpr(n), null, _, _) => aliases.getOrElse(n.mkString("."), t)
+        case t => t
+      }
+      (tables: @unchecked) match {
+        case t :: Nil => ""
+        case t :: l => " " + l.head.sqlJoin(find(t)) + join(l)
+      }
     }
     def where = filter match {
       case (c @ ConstExpr(x)) :: Nil => tables(0).aliasOrName + "." +
@@ -267,29 +282,27 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }.mkString
       else "")
   }
-  class Table(val table: Expr, val alias: String, val join: List[Expr], val outerJoin: String) {
+  case class Table(val table: Expr, val alias: String, val join: TableJoin, val outerJoin: String) {
     def name = table.sql
     def sqlName = name + (if (alias != null) " " + alias else "")
     def aliasOrName = if (alias != null) alias else name
     def sqlJoin(joinTable: Table) = {
       def sqlJoin(jl: List[Expr]) = (jl map { j =>
-        outerJoinSql + " " + (j match {
+        joinPrefix + (j match {
+          //primary key join shortcut syntax
           case i@IdentExpr(_) => sqlName + " on " + i.sql + " = " +
             aliasOrName + "." + env.table(name).key.cols.mkString
-          //alias join shortcut syntax
+          //primary key join shortcut syntax
           case AliasIdentExpr(i, a) => name + " " + a + " on " +
             i.mkString(".") + " = " + a + "." + env.table(name).key.cols.mkString
-          case e => sqlName + " on " + (e match {
-            case ConstExpr("/") => defaultJoin
-            case e => e.sql
-          })
+          case e => sqlName + " on " + e.sql
         })
       }) mkString " "
-      def outerJoinSql = (outerJoin match {
+      def joinPrefix = (outerJoin match {
         case "l" => "left "
         case "r" => "right "
         case null => ""
-      }) + "join"
+      }) + "join "
       def defaultJoin = {
         val j = env.join(name, joinTable.name)
         (j._1 zip j._2 map { t =>
@@ -298,11 +311,21 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         }) mkString " and "
       }
       join match {
-        case Nil => ", " + sqlName
-        case l => sqlJoin(l)
+        //no join (used for table alias join)
+        case TableJoin(_, _, true) => ""
+        //product join
+        case TableJoin(false, ArrExpr(Nil), _) => ", " + sqlName
+        //normal join, primary key join shortcut syntax
+        case TableJoin(false, ArrExpr(l), _) => sqlJoin(l)
+        //default join
+        case TableJoin(true, null, _) => joinPrefix + sqlName + " on " + defaultJoin
+        //default join with additional expression
+        case TableJoin(true, j: Expr, _) => joinPrefix + sqlName + " on " + defaultJoin +
+          " and " + j.sql
       }
     }
   }
+  case class TableJoin(val default: Boolean, val expr: Expr, val noJoin: Boolean)
   case class ColExpr(val col: Expr, val alias: String) extends PrimitiveExpr {
     val separateQuery = QueryBuilder.this.separateQueryFlag
     if (!QueryBuilder.this.allCols) QueryBuilder.this.allCols = col.isInstanceOf[AllExpr]    
@@ -318,7 +341,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
   //this is used for alias join shortcut syntax
   case class AliasIdentExpr(val name: List[String], val alias: String) extends PrimitiveExpr {
-    def defaultSQL = error("sql not available for AliasIdentExpr")
+    def defaultSQL = "AliasIdentExpr(" + name + ", " + alias + ")"
   }
   class Order(val ordExprs: (Null, List[Expr], Null), val asc: Boolean) extends PrimitiveExpr {
     def defaultSQL = (ordExprs._2 map (_.sql)).mkString(",") + (if (asc) " asc" else " desc") +
@@ -439,12 +462,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       if (ctxStack.head == WHERE_CTX && q.filter != null && q.filter.elements != Nil &&
         sel.filter == null) null else sel
     }
-    def buildJoin(j: Any) = j match {
-      case l: List[_] => l map { buildInternal(_, JOIN_CTX) }
-      case e => buildInternal(e, JOIN_CTX) :: Nil
-    }
-    def buildTable(t: Obj) = new Table(buildInternal(t.obj, TABLE_CTX), t.alias, buildJoin(t.join),
-      t.outerJoin)
+    def buildTable(t: Obj) = new Table(buildInternal(t.obj, TABLE_CTX), t.alias,
+      if (t.join != null) TableJoin(t.join.default, t.join.expr match {
+        case l: List[_] => ArrExpr(l.map(buildInternal(_, JOIN_CTX)))
+        case e => buildInternal(e, JOIN_CTX)
+      }, t.join.noJoin)
+      else null, t.outerJoin)
     def buildColumnIdent(c: Obj) = c match {
       case Obj(Ident(i), _, _, _) => IdentExpr(i)
       case o => error("unsupported column definition at this place: " + o)
