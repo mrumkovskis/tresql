@@ -42,6 +42,7 @@ work[empno]emp/dept {wdate, ename, dname} #(1,2,3) --> [["2012-06-06", "KING", "
 
 //default join with additional expression
 dept d/[job = 'PRESIDENT']emp? e {dname, ename}#(1, 2 null) --> [["ACCOUNTING", "KING"], ["OPERATIONS", null], ["RESEARCH", null], ["SALES", null]]
+dept d[job = 'PRESIDENT']/emp? e {dname, ename}#(1, 2 null) --> [["ACCOUNTING", "KING"], ["OPERATIONS", null], ["RESEARCH", null], ["SALES", null]]
 dept d/emp? e [job = 'PRESIDENT']{dname, ename}#(1, 2) --> [["ACCOUNTING", "KING"]]
 
 //primary key join shortcut syntax

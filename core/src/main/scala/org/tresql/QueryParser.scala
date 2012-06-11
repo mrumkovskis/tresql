@@ -94,11 +94,13 @@ object QueryParser extends JavaTokenParsers {
   def array: Parser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ (Arr(_))
 
   //query parsers
-  def join: Parser[Join] = (("[" ~> repsep(expr, ",") <~ "]") | 
-      ("/" ~ opt("[" ~> expr <~ "]")) | ";") ^^ {
+  def join: Parser[Join] = (("/" ~ opt("[" ~> expr <~ "]")) | 
+      (opt("[" ~> expr <~ "]") ~ "/") | ";" | ("[" ~> repsep(expr, ",") <~ "]")) ^^ {
     case ";" => Join(false, null, true)
     case "/" ~ Some(e) => Join(true, e, false)
     case "/" ~ None => Join(true, null, false)
+    case Some(e) ~ "/" => Join(true, e, false)
+    case None ~ "/" => Join(true, null, false)
     case l:List[_] => Join(false, l, false)
   }
   def filter: Parser[Arr] = array
