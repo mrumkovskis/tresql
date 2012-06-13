@@ -237,11 +237,18 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     offset: Expr, limit: Expr) extends BaseExpr {
     val aliases: Map[Any, Table] = {
       var al = Set[String]()
-      tables.map(t => (t match {
-        case Table(IdentExpr(t), null, _, _) => val s = t.mkString("."); if (al(s)) null else s
-        case Table(t, null, _, _) => null
-        case Table(t, a, _, _) => al += a; a
-      }, t)).filter(_._1 != null).toMap
+      tables.flatMap(tb => tb match {
+        //primary key shortcut join aliases checked
+        case Table(id@IdentExpr(t), null, tj@TableJoin(_, ArrExpr(l), _), oj) => {
+          l map { 
+            case AliasIdentExpr(_, a) => al += a; a -> Table(id, a, tj, oj)
+            case _ => val s = t.mkString("."); (if (al(s)) null else s) -> tb
+          }
+        }
+        case Table(IdentExpr(t), null, _, _) => val s = t.mkString("."); List((if (al(s)) null else s) -> tb)
+        case Table(t, null, _, _) => List((null, tb))
+        case Table(t, a, _, _) => al += a; List(a -> tb)
+      }).filter(_._1 != null).toMap
     }
     override def apply() = {
       org.tresql.Query.select(sql, cols, QueryBuilder.this.bindVariables, env,
@@ -249,6 +256,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     lazy val defaultSQL = "select " + (if (distinct) "distinct " else "") +
       (if (cols == null) "*" else sqlCols) + " from " + tables.head.sqlName + join(tables) +
+      //(filter map where).getOrElse("")
       (if (filter == null) "" else " where " + where) +
       (if (group == null) "" else " group by " + group.sql) +
       (if (order == null) "" else " order by " + (order map (_.sql)).mkString(", ")) +
