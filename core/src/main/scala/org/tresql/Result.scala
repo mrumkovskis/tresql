@@ -56,10 +56,10 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     if (closed) return
     val st = rs.getStatement
     rs.close
-    env update (null: Result)
+    env.result = null
     if (!env.reusableExpr) {
       st.close
-      env update (null: java.sql.PreparedStatement)
+      env.statement = null
     }
   }
 

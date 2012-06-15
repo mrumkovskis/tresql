@@ -239,9 +239,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       var al = Set[String]()
       tables.flatMap {
         //primary key shortcut join aliases checked
-        case tb@Table(id@IdentExpr(t), null, tj@TableJoin(_, ArrExpr(l), _), oj) => {
+        case tb@Table(IdentExpr(t), null, TableJoin(_, ArrExpr(l), _), _) => {
           l map { 
-            case AliasIdentExpr(_, a) => al += a; a -> Table(id, a, tj, oj)
+            case AliasIdentExpr(_, a) => al += a; a -> tb.copy(alias = a)
             case _ => val s = t.mkString("."); (if (al(s)) null else s) -> tb
           }
         }
@@ -582,13 +582,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
   }
 
-  private def build(parsedExpr: Any): Expr = {
-    buildInternal(parsedExpr)
-  }
-
   private def build(ex: String): Expr = {
     parseAll(ex) match {
-      case Success(r, _) => build(r)
+      case Success(r, _) => buildInternal(r)
       case x => error(x.toString)
     }
   }
@@ -598,12 +594,6 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 }
 
 object QueryBuilder {
-  import metadata._
-
-  def apply(parsedExpr: Any, env: Env): Expr = {
-    new QueryBuilder(env).build(parsedExpr)
-  }
-
   def apply(ex: String, env: Env = Env(Map(), true)): Expr = {
     new QueryBuilder(env).build(ex)
   }

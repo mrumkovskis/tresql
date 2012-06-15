@@ -12,8 +12,8 @@ class QueryTest extends Suite {
   //initialize environment
   Class.forName("org.hsqldb.jdbc.JDBCDriver")
   val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
-  Env update conn
-  Env update dialects.InsensitiveCmp("ĒŪĪĀŠĢĶĻŽČŅēūīāšģķļžčņ", "EUIASGKLZCNeuiasgklzcn",
+  Env.conn = conn
+  Env.dialect = dialects.InsensitiveCmp("ĒŪĪĀŠĢĶĻŽČŅēūīāšģķļžčņ", "EUIASGKLZCNeuiasgklzcn",
       dialects.HSQLDialect)
   Env update ((msg, level) => println (msg))
   //create test db script

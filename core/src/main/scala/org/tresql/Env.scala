@@ -3,127 +3,128 @@ package org.tresql
 import sys._
 
 /* Environment for expression building and execution */
-/* TODO provider vs resourceProvider? Some clarification or reorganization needed perhaps. */
-class Env(private val provider: EnvProvider, private val resourceProvider: ResourceProvider,
-  val reusableExpr: Boolean) extends MetaData {
+class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolean)
+  extends MetaData with Resources {
 
+  def this(provider: EnvProvider, reusableExpr: Boolean) = this(provider, Env, reusableExpr)
+  def this(resources: Resources, reusableExpr: Boolean) = this(null, resources, reusableExpr)
+  def this(params: Map[String, Any], reusableExpr: Boolean) = {
+    this(null, Env, reusableExpr)
+    update(params)
+  }
+  
   private var providedEnvs: List[Env] = Nil
+  private val provider: Option[EnvProvider] = if(_provider == null) None else Some(_provider)
 
   if (provider != null) {
-    def rootEnv(e: Env): Env = if (e.provider == null) e else rootEnv(e.provider.env)
+    def rootEnv(e: Env): Env = e.provider.map(_.env).getOrElse(e)
     val root = rootEnv(this)
     root.providedEnvs = this :: root.providedEnvs
   }
+  
+  private var vars: Option[scala.collection.mutable.Map[String, Any]] = None
+  private val ids = scala.collection.mutable.Map[String, Any]()
+  private var _result: Result = null
+  private var _statement: java.sql.PreparedStatement = null
 
-  private val _vars = new ThreadLocal[scala.collection.mutable.Map[String, Any]]
-  private def vars = _vars.get
-  private val res = new ThreadLocal[Result]
-  private val st = new ThreadLocal[java.sql.PreparedStatement]
-  private val ids = new ThreadLocal[scala.collection.mutable.Map[String, Any]]
-  ids set scala.collection.mutable.Map[String, Any]()
-
-  def this(provider: EnvProvider, reusableExpr: Boolean) = this(provider, null, reusableExpr)
-  def this(vars: Map[String, Any], resourceProvider: ResourceProvider, reusableExpr: Boolean) = {
-    this(null.asInstanceOf[EnvProvider], resourceProvider, reusableExpr)
-    update(vars)
-  }
-
-  def apply(name: String):Any = if (vars != null) vars(name) else provider.env(name) match {
+  def apply(name: String):Any = vars.map(_(name)) getOrElse provider.get.env(name) match {
     case e: Expr => e()
     case x => x
   }
 
-  def conn: java.sql.Connection = if (provider != null) provider.env.conn else resourceProvider.conn
-  def dialect: Expr => String = if (provider != null) provider.env.dialect else resourceProvider.dialect
+  def contains(name: String): Boolean = vars.map(_.contains(name)) getOrElse
+    provider.map(_.env.contains(name)).getOrElse(false)
 
-  private def metadata = if (resourceProvider.metaData != null) resourceProvider.metaData
-                         else error("Meta data not set. Shortcut syntax not available.")
-  //meta data methods
-  def dbName = if (provider != null) provider.env.dbName else metadata.dbName
-  def table(name: String) = if (provider != null) provider.env.table(name) else metadata.table(name)
-  def procedure(name: String) = if (provider != null) provider.env.procedure(name)
-      else metadata.procedure(name)
+  private[tresql] def update(name: String, value: Any) {
+    vars.get(name) = value
+  }
 
+  private[tresql] def update(vars: Map[String, Any]) {
+    this.vars = Some(scala.collection.mutable.Map(vars.toList: _*))
+  }
+  
   def apply(rIdx: Int) = {
     var i = 0
     var e: Env = this
     while (i < rIdx && e != null) {
-      if (e.provider != null) e = e.provider.env else e = null
+      e = e.provider.map(_.env).orNull
       i += 1
     }
-    if (i == rIdx && e != null) e.res.get else error("Result not available at index: " + rIdx)
+    if (i == rIdx && e != null) e.result else error("Result not available at index: " + rIdx)
   }
 
-  def statement = this.st.get
+  private[tresql] def statement = _statement
+  private[tresql] def statement_=(st: java.sql.PreparedStatement) = _statement = st
 
-  def contains(name: String): Boolean = if (vars != null) vars.contains(name)
-  else provider.env.contains(name)
-
-  def update(name: String, value: Any) {
-    this.vars(name) = value
-  }
-
-  def update(vars: Map[String, Any]) {
-    this._vars set scala.collection.mutable.Map(vars.toList: _*)
-  }
-
-  def update(r: Result) = this.res set r
-  def update(st: java.sql.PreparedStatement) = this.st set st
-
-  def closeStatement {
-    val st = this.st.get
-    if (st != null) {
-      this.st set null
-      st.close
-    }
+  private[tresql] def result = _result
+  private[tresql] def result_=(r: Result) = _result = r 
+    
+  private[tresql] def closeStatement {
+    if (statement != null) statement.close
     this.providedEnvs foreach (_.closeStatement)
   }
   
-  def nextId(seqName: String): Any = if (provider != null) provider.env.nextId(seqName) else {
+  private[tresql] def nextId(seqName: String): Any = provider.map(_.env.nextId(seqName)).getOrElse {
     //TODO perhaps built expressions can be used?
-    val id = Query.unique[Any](resourceProvider.idExpr(seqName))
-    ids.get(seqName) = id
+    val id = Query.unique[Any](resources.idExpr(seqName))
+    ids(seqName) = id
     id
   }
-  def currId(seqName: String): Any = if (provider != null) provider.env.currId(seqName) else ids.get()(seqName)
-
+  private[tresql] def currId(seqName: String): Any = provider.map(_.env.currId(seqName)).getOrElse(ids(seqName))
+  
+  //resources methods
+  def conn: java.sql.Connection = provider.map(_.env.conn).getOrElse(resources.conn)
+  override def metaData = provider.map(_.env.metaData).getOrElse(resources.metaData)
+  override def dialect: Expr => String = provider.map(_.env.dialect).getOrElse(resources.dialect)
+  override def idExpr = provider.map(_.env.idExpr).getOrElse(resources.idExpr)
+  
+  //meta data methods
+  def dbName = metaData.dbName
+  def table(name: String) = metaData.table(name)
+  def procedure(name: String) = metaData.procedure(name)
+  
 }
 
-object Env extends ResourceProvider {
-  private var logger: (=> String, Int) => Unit = null
-  //meta data object must be thread safe!
-  private var md: MetaData = metadata.JDBCMetaData("")
+object Env extends Resources {
   private val threadConn = new ThreadLocal[java.sql.Connection]
-  private var sqlDialect: Expr => String = null
-  private var _idExpr: String => String = s => "nextval('" + s + "')" 
-  //this is for scala interperter since it executes every command in separate thread from console thread
+  //this is for single thread usage
   var sharedConn: java.sql.Connection = null
+  //meta data object must be thread safe!
+  private var _metaData: Option[MetaData] = None
+  private var _dialect: Option[Expr => String] = None
+  private var _idExpr: Option[String => String] = None
   //available functions
   private var functions = Functions.getClass.getDeclaredMethods map (_.getName) toSet
-  def apply(params: Map[String, Any], reusableExpr: Boolean): Env = {
-    new Env(params, Env, reusableExpr)
-  }
+
+  private var logger: (=> String, Int) => Unit = null
+  
+  def apply(reusableExpr: Boolean): Env = new Env(null, Env, reusableExpr)
+  def apply(params: Map[String, Any], reusableExpr: Boolean) = new Env(params, reusableExpr)
   def conn = { val c = threadConn.get; if (c == null) sharedConn else c }
-  def metaData = md
-  def dialect = sqlDialect
-  def idExpr = _idExpr 
-  def update(md: MetaData) = this.md = md
-  def update(conn: java.sql.Connection) = this.threadConn set conn
-  def update(logger: (=> String, Int) => Unit) = this.logger = logger
-  def update(dialect: Expr => String) = this.sqlDialect = dialect
-  def updateIdExpr(idExpr: String => String) = this._idExpr = idExpr
+  override def metaData = _metaData.getOrElse(super.metaData)
+  override def dialect = _dialect.getOrElse(super.dialect)
+  override def idExpr = _idExpr.getOrElse(super.idExpr)
+  
+  def conn_=(conn: java.sql.Connection) = this.threadConn set conn
+  def metaData_=(metaData: MetaData) = this._metaData = Some(metaData)
+  def dialect_=(dialect: Expr => String) = this._dialect = Some(dialect)
+  def idExpr_=(idExpr: String => String) = this._idExpr = Some(idExpr)
+  
   def availableFunctions(list: Traversable[String]) = functions = list.toSet
   def isDefined(functionName: String) = functions.contains(functionName) 
+  
   def log(msg: => String, level: Int = 0): Unit = if (logger != null) logger(msg, level)
+  def update(logger: (=> String, Int) => Unit) = this.logger = logger
+}
+
+trait Resources {
+  private val _metaData = metadata.JDBCMetaData("")
+  def conn: java.sql.Connection
+  def metaData: MetaData = _metaData
+  def dialect: Expr => String = null
+  def idExpr: String => String = s => "nextval('" + s + "')"
 }
 
 trait EnvProvider {
   def env: Env
-}
-
-trait ResourceProvider {
-  def conn: java.sql.Connection
-  def metaData: MetaData
-  def dialect: Expr => String
-  def idExpr: String => String
 }

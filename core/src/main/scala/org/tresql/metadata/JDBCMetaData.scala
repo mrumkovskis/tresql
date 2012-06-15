@@ -8,13 +8,14 @@ import java.sql.ResultSet
 
 //TODO all names perhaps should be stored in upper case?
 //This class is thread safe i.e. instance can be used across multiple threads
-class JDBCMetaData(private val db: String, private val defaultSchema: String = null)
+class JDBCMetaData(private val db: String, private val defaultSchema: String = null,
+    resources: Resources = Env)
   extends MetaData {
   val tables = new java.util.concurrent.ConcurrentHashMap[String, Table]
   val procedures = new java.util.concurrent.ConcurrentHashMap[String, Procedure]
   def dbName = db
   def table(name: String) = {
-    val conn = Env.conn
+    val conn = resources.conn
     try {
       tables(name)
     } catch {
@@ -126,10 +127,7 @@ class JDBCMetaData(private val db: String, private val defaultSchema: String = n
 }
 
 object JDBCMetaData {
-  def apply(db: String) = {
-    new JDBCMetaData(db)
-  }
-  def apply(db: String, defaultSchema: String) = {
-    new JDBCMetaData(db, defaultSchema)
+  def apply(db: String, defaultSchema: String = null, resources: Resources = Env) = {
+    new JDBCMetaData(db, defaultSchema, resources)
   }
 }

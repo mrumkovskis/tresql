@@ -4,6 +4,7 @@ import java.sql.{ Array => JArray }
 import java.sql.{ Date, Timestamp, PreparedStatement, CallableStatement, ResultSet }
 import org.tresql.metadata._
 import sys._
+import java.sql.Connection
 
 object Query {
 
@@ -15,9 +16,12 @@ object Query {
   }
 
   def parse(expr: String) = QueryParser.parseAll(expr)
-  def build(expr: String): Expr = QueryBuilder(expr)
-  def build(expr: Any): Expr = QueryBuilder(expr, Env(Map(), true))
-
+  def build(expr: String, connection: java.sql.Connection = null): Expr = if (connection == null)
+    QueryBuilder(expr) else build(expr, new Resources { def conn = connection
+      override def metaData = metadata.JDBCMetaData("", resources = this)})
+  def build(expr: String, resources: Resources): Expr = 
+    QueryBuilder(expr, new Env(null, resources, true)) 
+  
   def select(expr: String, params: Any*) = {
     apply(expr, normalizePars(params)).asInstanceOf[Result]
   }
@@ -64,7 +68,7 @@ object Query {
         l.reverse
       } else List(rcol(c)))
     }): _*), env)
-    env update r
+    env.result = r
     r
   }
 
@@ -75,7 +79,7 @@ object Query {
     val r = st.executeUpdate
     if (!env.reusableExpr) {
       st.close
-      env update (null: PreparedStatement)
+      env.statement = null
     }
     r
   }
@@ -89,7 +93,7 @@ object Query {
       val md = rs.getMetaData
       val res = new Result(rs, Vector(1 to md.getColumnCount map 
           {i=> Column(i, md.getColumnLabel(i), null)}:_*), env)
-      env update res
+      env.result = res
       res
     }
     val outs = bindVariables map (_()) filter (_.isInstanceOf[OutPar]) map {x=>
@@ -116,7 +120,7 @@ object Query {
     }    
     if (result == () && !env.reusableExpr) {
       st.close
-      env update (null: PreparedStatement)
+      env.statement = null
     }
     result :: outs match {
       case ()::Nil => ()
@@ -136,7 +140,7 @@ object Query {
         val s = if (call) conn.prepareCall(sql) else {
           conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)
         }
-        env.update(s)
+        env.statement = s
         s
       } else env.statement
     else if (call) conn.prepareCall(sql)
