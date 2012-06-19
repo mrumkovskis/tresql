@@ -10,25 +10,15 @@ object Query {
 
   def apply(expr: String, params: Any*): Any = apply(expr, normalizePars(params))
 
-  def apply(expr: String, params: Map[String, Any]): Any = {
-    val exp = QueryBuilder(expr, Env(params, false))
-    exp()
-  }
-
-  def parse(expr: String) = QueryParser.parseAll(expr)
-  def build(expr: String, connection: java.sql.Connection = null): Expr = if (connection == null)
-    QueryBuilder(expr) else build(expr, new Resources { def conn = connection
-      override def metaData = metadata.JDBCMetaData("", resources = this)})
-  def build(expr: String, resources: Resources): Expr = 
-    QueryBuilder(expr, new Env(null, resources, true)) 
+  def apply(expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection =
+    null): Any = build(expr, params, false)(tresqlConn)()
   
   def select(expr: String, params: Any*) = {
     apply(expr, normalizePars(params)).asInstanceOf[Result]
   }
 
-  def select(expr: String, params: Map[String, Any]) = {
-    apply(expr, params).asInstanceOf[Result]
-  }
+  def select(expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection = 
+    null) = apply(expr, params)(tresqlConn).asInstanceOf[Result]
 
   def foreach(expr: String, params: Any*)(f: (RowLike) => Unit = (row) => ()) {
     select(expr, normalizePars(params)) foreach f
@@ -39,6 +29,20 @@ object Query {
     val result = if (r.hasNext) Some(f(r.next)) else None
     r.close
     result
+  }
+
+  def build(expr: String, params: Map[String, Any] = null, reusableExpr: Boolean = true)
+    (implicit tresqlConn: java.sql.Connection = null): Expr = 
+        build(expr, if (tresqlConn == null) Env else resources(tresqlConn), params, reusableExpr)
+    
+  def build(expr: String, resources: Resources, params: Map[String, Any], reusableExpr: Boolean): Expr = 
+    QueryBuilder(expr, new Env(params, resources, reusableExpr))
+       
+  def parse(expr: String) = QueryParser.parseAll(expr)
+
+  private def resources(connection: java.sql.Connection) = new Resources {
+    def conn = connection
+    override def metaData = metadata.JDBCMetaData("", resources = this)
   }
   
   private[tresql] def normalizePars(pars: Seq[Any]):Map[String, Any] = {

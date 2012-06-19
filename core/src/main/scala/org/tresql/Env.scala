@@ -7,9 +7,9 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   extends MetaData with Resources {
 
   def this(provider: EnvProvider, reusableExpr: Boolean) = this(provider, Env, reusableExpr)
-  def this(resources: Resources, reusableExpr: Boolean) = this(null, resources, reusableExpr)
-  def this(params: Map[String, Any], reusableExpr: Boolean) = {
-    this(null, Env, reusableExpr)
+  def this(resources: Resources, reusableExpr: Boolean) = this(null: EnvProvider, resources, reusableExpr)
+  def this(params: Map[String, Any], resources: Resources, reusableExpr: Boolean) = {
+    this(null: EnvProvider, resources, reusableExpr)
     update(params)
   }
   
@@ -40,7 +40,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   }
 
   private[tresql] def update(vars: Map[String, Any]) {
-    this.vars = Some(scala.collection.mutable.Map(vars.toList: _*))
+    this.vars = if (vars == null) None else Some(scala.collection.mutable.Map(vars.toList: _*))
   }
   
   def apply(rIdx: Int) = {
@@ -98,8 +98,7 @@ object Env extends Resources {
 
   private var logger: (=> String, Int) => Unit = null
   
-  def apply(reusableExpr: Boolean): Env = new Env(null, Env, reusableExpr)
-  def apply(params: Map[String, Any], reusableExpr: Boolean) = new Env(params, reusableExpr)
+  def apply(params: Map[String, Any], reusableExpr: Boolean) = new Env(params, this, reusableExpr)
   def conn = { val c = threadConn.get; if (c == null) sharedConn else c }
   override def metaData = _metaData.getOrElse(super.metaData)
   override def dialect = _dialect.getOrElse(super.dialect)
