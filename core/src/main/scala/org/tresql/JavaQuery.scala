@@ -5,7 +5,7 @@ import scala.collection.JavaConversions._
 object JavaQuery {
 
   def ids(expr: String, params: JMap[String, Any]): JList[java.lang.Long] = {
-    resultToIds(Query(expr, asScalaMap(params).toMap))
+    resultToIds(Query(expr, mapAsScalaMap(params).toMap))
   }
 
   def ids(expr: String, params: JList[Any]): JList[java.lang.Long] = {
@@ -16,7 +16,7 @@ object JavaQuery {
   private def countExpr(expr: String) = "/(" + expr + ") {count(*)}"
 
   def count(expr: String, params: JMap[String, Any]): java.lang.Long = {
-    resultToCount(Query(countExpr(expr), asScalaMap(params).toMap))
+    resultToCount(Query(countExpr(expr), mapAsScalaMap(params).toMap))
   }
 
   def count(expr: String, params: JList[Any]): java.lang.Long = {
