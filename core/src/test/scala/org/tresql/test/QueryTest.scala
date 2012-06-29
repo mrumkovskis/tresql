@@ -15,6 +15,7 @@ class QueryTest extends Suite {
   Env.conn = conn
   Env.dialect = dialects.InsensitiveCmp("ĒŪĪĀŠĢĶĻŽČŅēūīāšģķļžčņ", "EUIASGKLZCNeuiasgklzcn",
       dialects.HSQLDialect)
+  Env.idExpr = s => "nextval('seq')"
   Env update ((msg, level) => println (msg))
   //create test db script
   new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
@@ -145,9 +146,17 @@ class QueryTest extends Suite {
           Map("empno" -> 2222, "ename" -> "CHRIS", "deptno" -> 50)))))
     expect(List(2, 1))(Query("emp - [deptno = 50], dept - [50]"))
     expect(List(1, List(List(1, 1))))(Query(
-      """dept{deptno, dname, loc, +emp {empno, ename, deptno} [:empno, :ename, :#seq] emps} +
-        [#seq, :dname, :loc]""",
+      """dept{deptno, dname, loc, +emp {empno, ename, deptno} [#emp, :ename, :#dept] emps} +
+        [#dept, :dname, :loc]""",
       Map("dname" -> "LAW", "loc" -> "DALLAS", "emps" -> scala.Array(
-        Map("empno" -> 1111, "ename" -> "SMITH"), Map("empno" -> 2222, "ename" -> "LEWIS")))))
+        Map("ename" -> "SMITH"), Map("ename" -> "LEWIS")))))
+        
+    println("----------- ORT tests ------------")
+    val obj = Map("deptno" -> null, "dname" -> "LAW", "loc" -> "DALLAS",
+      "emp" -> scala.Array(Map("empno" -> null, "ename" -> "SMITH", "deptno" -> null),
+        Map("empno" -> null, "ename" -> "LEWIS", "deptno" -> null)))
+    println("--- inserts ---")
+    expect(List(1, List(List(1, 1))))(ORT.insert("dept", obj))
+    
   }
 }
