@@ -3,7 +3,9 @@ package org.tresql
 object ORT {
   
   def insert(name:String, obj:Map[String, _])(implicit resources:Resources = Env):Any = {
-    Query.build(insert_tresql(name, obj, null)(resources), resources, obj, false)()
+    val insert = insert_tresql(name, obj, null)(resources)
+    Env log insert
+    Query.build(insert, resources, obj, false)()
   }
   def update(name:String, obj:Map[String, _])(implicit resources:Resources = Env):Any = {}
   def delete(name:String, id:Any):Any = {}
