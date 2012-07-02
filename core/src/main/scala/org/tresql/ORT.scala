@@ -64,4 +64,8 @@ object ORT {
         "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") + 
         (if(parent != null) " " + name else "")
   }
+  
+  def fill_tresql(name:String, obj:Map[String, _], parent:String, resources:Resources):String = {
+    ""
+  }
 }

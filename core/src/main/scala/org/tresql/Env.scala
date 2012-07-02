@@ -141,10 +141,10 @@ trait NameMap {
   def tableName(objectName:String):String = objectName
   def colName(objectName:String, propertyName:String):String = propertyName
   /** TreSQL expression returning table record "name". Typically it is a concatenation of row
-   * fields plus fields from joined (lookup) tables. Expression must contain at least one
-   * column with a name "name" and one unnamed binding variable.
-   * Example - emp table name:
-   * emp/dept[empno = ?]{ename + ', ' + dname 'name'}*/
+   * fields plus fields from joined (lookup) tables. Expression must contain one unnamed binding variable
+   * one column of text type and return one row.
+   * Example - name of the table emp:
+   * emp/dept[?]{ename + ', ' + dname 'name'}*/
   def nameExpr(objectName:String):Option[String] = None  
 }
 
