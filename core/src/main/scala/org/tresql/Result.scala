@@ -168,6 +168,30 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     }
   }
 
+  /*---------------- Single value methods -------------*/
+  def head[T](implicit m: scala.reflect.Manifest[T]): T = {
+    hasNext match {
+      case true => next; val v = typed[T](0); close; v
+      case false => throw new NoSuchElementException("No rows in result")
+    }
+  }
+  def headOption[T](implicit m: scala.reflect.Manifest[T]): Option[T] = {
+    try {
+      Some(head[T])
+    } catch {
+      case e: NoSuchElementException => None
+    }
+  }
+  def unique[T](implicit m: scala.reflect.Manifest[T]): T = {
+    hasNext match {
+      case true =>
+        next; val v = typed[T](0); if (hasNext) {
+          close; error("More than one row for unique result")
+        } else v
+      case false => error("No rows in result")
+    }
+  }
+
   case class Row(row: Seq[Any]) extends RowLike {
     def apply(idx: Int) = row(idx)
     def typed[T](idx: Int)(implicit m:scala.reflect.Manifest[T]) = row(idx).asInstanceOf[T]
