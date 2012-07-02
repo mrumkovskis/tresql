@@ -17,7 +17,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   private val provider: Option[EnvProvider] = if(_provider == null) None else Some(_provider)
 
   if (provider != null) {
-    def rootEnv(e: Env): Env = e.provider.map(_.env).getOrElse(e)
+    def rootEnv(e: Env): Env = e.provider.map(p=>rootEnv(p.env)).getOrElse(e)
     val root = rootEnv(this)
     root.providedEnvs = this :: root.providedEnvs
   }
@@ -140,10 +140,10 @@ trait Resources extends NameMap {
 trait NameMap {
   def tableName(objectName:String):String = objectName
   def colName(objectName:String, propertyName:String):String = propertyName
-  /** TreSQL expression returning table record "name". Typically it is concatenation of row
-   * fields plus fields from joined (lookup) tables. Expression must contain column name and
-   * one unnamed binding variable.
-   * Example:
+  /** TreSQL expression returning table record "name". Typically it is a concatenation of row
+   * fields plus fields from joined (lookup) tables. Expression must contain at least one
+   * column with a name "name" and one unnamed binding variable.
+   * Example - emp table name:
    * emp/dept[empno = ?]{ename + ', ' + dname 'name'}*/
   def nameExpr(objectName:String):Option[String] = None  
 }
