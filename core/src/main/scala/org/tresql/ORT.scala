@@ -8,6 +8,7 @@ object ORT {
     Env log insert
     Query.build(insert, resources, obj, false)()
   }
+  //TODO update where unique key (not only pk specified)
   def update(name:String, obj:Map[String, _])(implicit resources:Resources = Env):Any = {}
   def delete(name:String, id:Any):Any = {}
   def fill(name:String, obj:Map[String, _], fillNames: Boolean = false)

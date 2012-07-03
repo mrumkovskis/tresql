@@ -140,12 +140,17 @@ trait Resources extends NameMap {
 trait NameMap {
   def tableName(objectName:String):String = objectName
   def colName(objectName:String, propertyName:String):String = propertyName
-  /** TreSQL expression returning table record "name". Typically it is a concatenation of row
+  /** TreSQL expression returning entity name. Typically it is a concatenation of table row
    * fields plus fields from joined (lookup) tables. Expression must contain one unnamed binding variable
-   * one column of text type and return one row.
-   * Example - name of the table emp:
-   * emp/dept[?]{ename + ', ' + dname 'name'}*/
-  def nameExpr(objectName:String):Option[String] = None  
+   * or binding variable with name - 'id', one column of text type and return one row.
+   * Examples - name of emp:
+   * emp/dept[empno = :id?]{firstname + ' ' + lastname + ', ' + deptname}
+   */
+  def nameExpr(objectName:String):Option[String] = None
+  /** Example - code of dept:
+   * deptno 
+   */
+  def codeExpr(objectName:String):Option[String] = None
 }
 
 trait EnvProvider {
