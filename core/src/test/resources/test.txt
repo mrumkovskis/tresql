@@ -63,6 +63,9 @@ emp{ename "n"}#(1) --> [["ADAMS"], ["ALLEN"], ["BLAKE"], ["CLARK"], ["FORD"], ["
 emp{ename "select"}#(1) --> [["ADAMS"], ["ALLEN"], ["BLAKE"], ["CLARK"], ["FORD"], ["JAMES"], ["JONES"], ["KING"], ["MARTIN"], ["MILLER"], ["SCOTT"], ["SMITH"], ["TURNER"], ["WARD"]]
 emp{ename 'select'}#(1) --> [["ADAMS"], ["ALLEN"], ["BLAKE"], ["CLARK"], ["FORD"], ["JAMES"], ["JONES"], ["KING"], ["MARTIN"], ["MILLER"], ["SCOTT"], ["SMITH"], ["TURNER"], ["WARD"]]
 
+//select in column clause
+emp[ename ~~ ?]{ename, (dept[?]{dname}) dname, (dept[?]{dname}) dname1} --> 'KIN%; 10; 20 --> [["KING", "ACCOUNTING", "RESEARCH"]]
+
 //order
 dept/emp[sal >= hisal & sal <= losal]salgrade {deptno, grade, empno, sal}#(deptno, grade)~#(sal) --> [[10, 2, 7934, 1300.00], [10, 4, 7782, 2450.00], [10, 5, 7839, 5000.00], [20, 1, 7876, 1100.00], [20, 1, 7369, 800.00], [20, 4, 7788, 3000.00], [20, 4, 7902, 3000.00], [20, 4, 7566, 2975.00], [30, 1, 7900, 950.00], [30, 2, 7521, 1250.00], [30, 2, 7654, 1250.00], [30, 3, 7499, 1600.00], [30, 3, 7844, 1500.00], [30, 4, 7698, 2850.00]]
 dept/emp[sal >= hisal & sal <= losal]salgrade {deptno, grade, empno, sal}#(null deptno, grade)~#(sal, 3 null) --> [[10, 2, 7934, 1300.00], [10, 4, 7782, 2450.00], [10, 5, 7839, 5000.00], [20, 1, 7369, 800.00], [20, 1, 7876, 1100.00], [20, 4, 7566, 2975.00], [20, 4, 7902, 3000.00], [20, 4, 7788, 3000.00], [30, 1, 7900, 950.00], [30, 2, 7654, 1250.00], [30, 2, 7521, 1250.00], [30, 3, 7844, 1500.00], [30, 3, 7499, 1600.00], [30, 4, 7698, 2850.00]]
