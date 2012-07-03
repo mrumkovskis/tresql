@@ -6,32 +6,46 @@ import sys._
 
 object QueryParser extends JavaTokenParsers {
 
-  case class Ident(ident: List[String])
-  case class Variable(variable: String, opt: Boolean)
-  case class Id(name: String)
-  case class IdRef(name: String)
-  case class Result(rNr: Int, col: Any)
-  case class UnOp(operation: String, operand: Any)
-  case class Fun(name: String, parameters: List[Any])
-  case class BinOp(op: String, lop: Any, rop: Any)
+  trait Exp {
+    def tresql:String
+  }
+  
+  case class Ident(ident: List[String]) extends Exp {
+    def tresql = ident.mkString(".")
+  }
+  case class Variable(variable: String, opt: Boolean) extends Exp {
+    def tresql = (if (variable == "?") "?" else ":" + variable) + (if(opt) "?" else "")
+  }
+  case class Id(name: String) extends Exp {
+    def tresql = "#" + name
+  }
+  case class IdRef(name: String) extends Exp {
+    def tresql = ":#" + name
+  }
+  case class Result(rNr: Int, col: Any) extends Exp {
+    def tresql = ":" + rNr + "(" + any2tresql(col) + ")"
+  }
+  case class UnOp(operation: String, operand: Any) extends Exp
+  case class Fun(name: String, parameters: List[Any]) extends Exp
+  case class BinOp(op: String, lop: Any, rop: Any) extends Exp
 
-  case class Join(default: Boolean, expr: Any, noJoin: Boolean)
-  case class Obj(obj: Any, alias: String, join: Join, outerJoin: String)
-  case class Col(col: Any, alias: String)
-  case class Cols(distinct: Boolean, cols: List[Col])
-  case class Grp(cols: List[Any], having: Any)
+  case class Join(default: Boolean, expr: Any, noJoin: Boolean) extends Exp
+  case class Obj(obj: Any, alias: String, join: Join, outerJoin: String) extends Exp
+  case class Col(col: Any, alias: String) extends Exp
+  case class Cols(distinct: Boolean, cols: List[Col]) extends Exp
+  case class Grp(cols: List[Any], having: Any) extends Exp
   //cols expression is tuple in the form - ([<nulls first>], <order col list>, [<nulls last>])
-  case class Ord(cols: (Null, List[Any], Null), asc: Boolean)
+  case class Ord(cols: (Null, List[Any], Null), asc: Boolean) extends Exp
   case class Query(tables: List[Obj], filter: Arr, cols: List[Col], distinct: Boolean,
-    group: Grp, order: List[Ord], offset: Any, limit: Any)
-  case class Insert(table: Ident, cols: List[Col], vals: List[Arr])
-  case class Update(table: Ident, filter: Arr, cols: List[Col], vals: Arr)
-  case class Delete(table: Ident, filter: Arr)
-  case class Arr(elements: List[Any])
-  case class All()
-  case class Null()
+    group: Grp, order: List[Ord], offset: Any, limit: Any) extends Exp
+  case class Insert(table: Ident, cols: List[Col], vals: List[Arr]) extends Exp
+  case class Update(table: Ident, filter: Arr, cols: List[Col], vals: Arr) extends Exp
+  case class Delete(table: Ident, filter: Arr) extends Exp
+  case class Arr(elements: List[Any]) extends Exp
+  case class All() extends Exp
+  case class Null() extends Exp
 
-  case class Braces(expr: Any)
+  case class Braces(expr: Any) extends Exp
 
   def quotedStringLiteral: Parser[String] = 
     ("'" + """([^'\p{Cntrl}\\]|\\[\\/bfnrt']|\\u[a-fA-F0-9]{4})*""" + "'").r ^^
@@ -178,6 +192,13 @@ object QueryParser extends JavaTokenParsers {
   def parseAll(expr: String): ParseResult[Any] = {
     parseAll(exprList, expr)
   }
+  
+  def parseExp(expr:String):Any = {
+    parseAll(expr) match {
+      case Success(r, _) => r
+      case x => error(x.toString)
+    }    
+  }
 
   private def binOp(p: ~[Any, List[~[String, Any]]]): Any = p match {
     case e ~ Nil => e
@@ -188,6 +209,12 @@ object QueryParser extends JavaTokenParsers {
     case (_ ~ e) :: Nil => e
     case (_ ~ e) :: (l@((o ~ _) :: _)) => BinOp(o, e, binOp(l))
     case _ => error("Knipis")
+  }
+  
+  private def any2tresql(any:Any) = any match {
+    case a:String => "'" + a + "'"
+    case e:Exp => e.tresql
+    case x => x.toString
   }
 
   def bindVariables(ex: String): List[String] = {

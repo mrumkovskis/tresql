@@ -65,8 +65,29 @@ object ORT {
         "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") + 
         (if(parent != null) " " + name else "")
   }
-  
-  def fill_tresql(name:String, obj:Map[String, _], parent:String, resources:Resources):String = {
+
+  def fill_tresql(name: String, obj: Map[String, _], parent: String, resources: Resources): String = {
+    val table = resources.metaData.table(resources.tableName(name))
+    var pk: String = null
+    var pkVal: Any = null
+    obj.map(t => {
+      val n = t._1
+      val cn = resources.colName(name, n)
+      t._2 match {
+        //primary key
+        case v if (table.key == metadata.Key(List(cn))) => pk = cn; pkVal = v; pk
+        //foreign key
+        case v if (table.refTable.get(metadata.Ref(List(cn))) != None) => {
+          val reft = table.refTable.get(metadata.Ref(List(cn))).get 
+          resources.nameExpr(reft).map { nexp =>
+            "|"
+          }.getOrElse(v)
+        }
+        case Seq(v: Map[String, _], _*) => "|" + fill_tresql(n, v, name, resources)
+        case Array(v: Map[String, _], _*) => "|" + fill_tresql(n, v, name, resources)
+        case v: Map[String, _] => "|" + fill_tresql(n, v, name, resources)
+      }
+    })
     ""
   }
 }

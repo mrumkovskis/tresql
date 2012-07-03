@@ -1,11 +1,10 @@
 package org.tresql
 
 import sys._
+import QueryParser._
 
 class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private var bindIdx: Int) extends EnvProvider {
-
-  import QueryParser._
 
   val ROOT_CTX = "ROOT"
   val QUERY_CTX = "QUERY"
@@ -583,10 +582,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
 
   private def build(ex: String): Expr = {
-    parseAll(ex) match {
-      case Success(r, _) => buildInternal(r)
-      case x => error(x.toString)
-    }
+    buildInternal(parseExp(ex))
+  }
+  
+  private def build(ex:Exp):Expr = {
+    buildInternal(ex)
   }
   
   override def toString = "QueryBuilder: " + queryDepth
@@ -595,6 +595,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
 object QueryBuilder {
   def apply(ex: String, env: Env = Env(Map(), true)): Expr = {
+    new QueryBuilder(env).build(ex)
+  }
+  def apply(ex:Exp, env:Env):Expr = {
     new QueryBuilder(env).build(ex)
   }
 }
