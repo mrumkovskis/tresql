@@ -129,6 +129,7 @@ dept[?]{|emp[?]{ename}, *} --> 10;7839 --> [[[["KING"]], 10, "ACCOUNTING", "NEW 
 //limit offset
 dept#(deptno)@(1 2) --> [[20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
 dept#(deptno)@(? ?) --> 2;3 --> [[30, "SALES", "CHICAGO"], [40, "OPERATIONS", "BOSTON"]]
+dept#(deptno)@(1) --> [[10, "ACCOUNTING", "NEW YORK"]]
 
 //single quoted string
 dept[dname ~ 'ACC%'] --> [[10, "ACCOUNTING", "NEW YORK"]]
