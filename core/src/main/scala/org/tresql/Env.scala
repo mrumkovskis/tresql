@@ -145,8 +145,9 @@ trait NameMap {
    * Examples:
    * 1. name of entity emp:
    *    <code>emp/dept{firstname + ' ' + lastname + ', ' + deptname}</code>
-   * 2. name of some entity as a column
-   *    registrationNumber
+   * 2. name of some entity as a comma separated list of columns. In this case expression will
+   *    be transformed to: table_name {<column list>}
+   *    registration_number + ", " + name, foundation_date
    */
   def nameExpr(objectName:String):Option[String] = None
 }

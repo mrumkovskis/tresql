@@ -470,10 +470,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         sel.filter == null) null else sel
     }
     def buildTable(t: Obj) = new Table(buildInternal(t.obj, TABLE_CTX), t.alias,
-      if (t.join != null) TableJoin(t.join.default, t.join.expr match {
-        case l: List[_] => ArrExpr(l.map(buildInternal(_, JOIN_CTX)))
-        case e => buildInternal(e, JOIN_CTX)
-      }, t.join.noJoin)
+      if (t.join != null) TableJoin(t.join.default, buildInternal(t.join.expr, JOIN_CTX),
+        t.join.noJoin)
       else null, t.outerJoin)
     def buildColumnIdent(c: Obj) = c match {
       case Obj(Ident(i), _, _, _) => IdentExpr(i)

@@ -25,27 +25,77 @@ object QueryParser extends JavaTokenParsers {
   case class Result(rNr: Int, col: Any) extends Exp {
     def tresql = ":" + rNr + "(" + any2tresql(col) + ")"
   }
-  case class UnOp(operation: String, operand: Any) extends Exp
-  case class Fun(name: String, parameters: List[Any]) extends Exp
-  case class BinOp(op: String, lop: Any, rop: Any) extends Exp
+  case class UnOp(operation: String, operand: Any) extends Exp {
+    def tresql = operation + any2tresql(operand)
+  }
+  case class Fun(name: String, parameters: List[Any]) extends Exp {
+    def tresql = name + "(" + parameters.map(any2tresql(_)).mkString(",") + ")"
+  }
+  case class BinOp(op: String, lop: Any, rop: Any) extends Exp {
+    def tresql = any2tresql(lop) + " " + op + " " + any2tresql(rop)
+  }
 
-  case class Join(default: Boolean, expr: Any, noJoin: Boolean) extends Exp
-  case class Obj(obj: Any, alias: String, join: Join, outerJoin: String) extends Exp
-  case class Col(col: Any, alias: String) extends Exp
-  case class Cols(distinct: Boolean, cols: List[Col]) extends Exp
-  case class Grp(cols: List[Any], having: Any) extends Exp
+  case class Join(default: Boolean, expr: Any, noJoin: Boolean) extends Exp {
+    def tresql = this match {
+      case Join(_, _, true) => ";"
+      case Join(false, a:Arr, false) => a.tresql
+      case Join(true, null, false) => "/"
+      case Join(true, e, false) => "/[" + any2tresql(e) + "]"
+    }
+  }
+  case class Obj(obj: Any, alias: String, join: Join, outerJoin: String) extends Exp {
+    def tresql = (if(join != null) join.tresql else "") + (if (outerJoin == "r") "?" else "") +
+      any2tresql(obj) + (if (outerJoin == "l") "?" else "") + (if(alias != null) " " + alias else "")
+  }
+  case class Col(col: Any, alias: String) extends Exp {
+    def tresql = any2tresql(col) + (if(alias != null) " " + alias else "")
+  }
+  case class Cols(distinct: Boolean, cols: List[Col]) extends Exp {
+    def tresql = error("Not implemented")
+  }
+  case class Grp(cols: List[Any], having: Any) extends Exp {
+    def tresql = "(" + cols.map(any2tresql(_)).mkString(",") + ")" +
+      (if (having != null) "^(" + any2tresql(having) + ")" else "")
+  }
   //cols expression is tuple in the form - ([<nulls first>], <order col list>, [<nulls last>])
-  case class Ord(cols: (Null, List[Any], Null), asc: Boolean) extends Exp
+  case class Ord(cols: (Null, List[Any], Null), asc: Boolean) extends Exp {
+    def tresql = (if (asc) "#" else "~#") + "(" + (if(cols._1 == Null()) "null " else "") +
+      cols._2.map(any2tresql(_)).mkString(",") + (if(cols._3 == Null()) " null" else "") + ")"
+  }
   case class Query(tables: List[Obj], filter: Arr, cols: List[Col], distinct: Boolean,
-    group: Grp, order: List[Ord], offset: Any, limit: Any) extends Exp
-  case class Insert(table: Ident, cols: List[Col], vals: List[Arr]) extends Exp
-  case class Update(table: Ident, filter: Arr, cols: List[Col], vals: Arr) extends Exp
-  case class Delete(table: Ident, filter: Arr) extends Exp
-  case class Arr(elements: List[Any]) extends Exp
-  case class All() extends Exp
-  case class Null() extends Exp
+    group: Grp, order: List[Ord], offset: Any, limit: Any) extends Exp {
+    def tresql = tables.map(any2tresql(_)).mkString + 
+      (if(filter != null) any2tresql(filter) else "") + (if(distinct) "#" else "") + 
+      (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") +
+      (if(group != null) any2tresql(group) else "") +
+      (if(order != null) order.map(_.tresql).mkString else "") + 
+      (if(limit != null) "@(" + (if(offset != null) any2tresql(offset) + " " else "") + 
+          any2tresql(limit) + ")" else "")
+  }
+  case class Insert(table: Ident, cols: List[Col], vals: List[Arr]) extends Exp {
+    def tresql = "+" + table.tresql + cols.map(_.tresql).mkString("{", ",", "}") +
+      vals.map(_.tresql).mkString(",")
+  }
+  case class Update(table: Ident, filter: Arr, cols: List[Col], vals: Arr) extends Exp {
+    def tresql = "=" + table.tresql + (if(filter != null) filter.tresql else "") +
+      cols.map(_.tresql).mkString("{", ",", "}") + vals.tresql
+  }
+  case class Delete(table: Ident, filter: Arr) extends Exp {
+    def tresql = "-" + table.tresql + filter.tresql
+  }
+  case class Arr(elements: List[Any]) extends Exp {
+    def tresql = elements.map(any2tresql(_)).mkString("[", ",", "]")
+  }
+  case class All() extends Exp {
+    def tresql = "*"
+  }
+  case class Null() extends Exp {
+    def tresql = "null"
+  }
 
-  case class Braces(expr: Any) extends Exp
+  case class Braces(expr: Any) extends Exp {
+    def tresql = "(" + any2tresql(expr) + ")"
+  }
 
   def quotedStringLiteral: Parser[String] = 
     ("'" + """([^'\p{Cntrl}\\]|\\[\\/bfnrt']|\\u[a-fA-F0-9]{4})*""" + "'").r ^^
@@ -108,14 +158,14 @@ object QueryParser extends JavaTokenParsers {
   def array: Parser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ (Arr(_))
 
   //query parsers
-  def join: Parser[Join] = (("/" ~ opt("[" ~> expr <~ "]")) | 
-      (opt("[" ~> expr <~ "]") ~ "/") | ";" | ("[" ~> repsep(expr, ",") <~ "]")) ^^ {
+  def join: Parser[Join] = (("/" ~ opt("[" ~> expr <~ "]")) | (opt("[" ~> expr <~ "]") ~ "/") |
+      ";" | array) ^^ {
     case ";" => Join(false, null, true)
     case "/" ~ Some(e) => Join(true, e, false)
     case "/" ~ None => Join(true, null, false)
     case Some(e) ~ "/" => Join(true, e, false)
     case None ~ "/" => Join(true, null, false)
-    case l:List[_] => Join(false, l, false)
+    case a => Join(false, a, false)
   }
   def filter: Parser[Arr] = array
   def obj: Parser[Obj] = opt(join) ~ opt("?") ~ (qualifiedIdent | bracesExp) ~
@@ -154,9 +204,8 @@ object QueryParser extends JavaTokenParsers {
   def query: Parser[Any] = objs ~ opt(filter) ~ opt(columns) ~ opt(group) ~ opt(order) ~
     opt(offsetLimit) ^^ {
       case (t :: Nil) ~ None ~ None ~ None ~ None ~ None => t
-      case t ~ f ~ c ~ g ~ o ~ l => Query(t, if (f == None) null else f.get,
-        c.map(_.cols) orNull, c.map(_.distinct) getOrElse false,
-        g.orNull, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
+      case t ~ f ~ c ~ g ~ o ~ l => Query(t, f.orNull, c.map(_.cols) orNull,
+        c.map(_.distinct) getOrElse false, g.orNull, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
     }
   def insert: Parser[Insert] = (("+" ~> qualifiedIdent ~ columns ~ rep1sep(array, ",")) | 
       ((qualifiedIdent ~ columns <~ "+") ~ rep1sep(array, ","))) ^^ {
@@ -212,8 +261,9 @@ object QueryParser extends JavaTokenParsers {
   }
   
   private def any2tresql(any:Any) = any match {
-    case a:String => "'" + a + "'"
+    case a:String => if (a.contains("'")) "\"" + a + "\"" else "'" + a + "'"
     case e:Exp => e.tresql
+    case null => "null"
     case x => x.toString
   }
 
