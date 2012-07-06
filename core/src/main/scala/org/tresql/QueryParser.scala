@@ -260,7 +260,7 @@ object QueryParser extends JavaTokenParsers {
     case _ => error("Knipis")
   }
   
-  private def any2tresql(any:Any) = any match {
+  def any2tresql(any:Any) = any match {
     case a:String => if (a.contains("'")) "\"" + a + "\"" else "'" + a + "'"
     case e:Exp => e.tresql
     case null => "null"

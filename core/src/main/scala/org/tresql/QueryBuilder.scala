@@ -274,10 +274,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }
     }
     def where = filter match {
-      case (c @ ConstExpr(x)) :: Nil => tables(0).aliasOrName + "." +
-        env.table(tables(0).name).key.cols(0) + " = " + c.sql
-      case (v @ VarExpr(x, _)) :: Nil => tables(0).aliasOrName + "." +
-        env.table(tables(0).name).key.cols(0) + " = " + v.sql
+      case List(_:ConstExpr | _:VarExpr | _:ResExpr) => tables(0).aliasOrName + "." +
+        env.table(tables(0).name).key.cols(0) + " = " + filter(0).sql
       case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
       case l => tables(0).aliasOrName + "." + env.table(tables(0).name).key.cols(0) + " in(" +
         (l map { _.sql }).mkString(",") + ")"

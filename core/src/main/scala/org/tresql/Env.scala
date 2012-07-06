@@ -141,7 +141,7 @@ trait NameMap {
   def tableName(objectName:String):String = objectName
   def colName(objectName:String, propertyName:String):String = propertyName
   /** TreSQL expression returning entity name. Typically it is a query from table referenced
-   * by objectName.
+   * by tableName (NOT objectName!).
    * Examples:
    * 1. name of entity emp:
    *    emp/dept{firstname + ' ' + lastname + ', ' + deptname}
@@ -149,7 +149,7 @@ trait NameMap {
    *    be transformed to: table_name {<column list>}
    *    registration_number + ", " + name, foundation_date
    */
-  def nameExpr(objectName:String):Option[String] = None
+  def nameExpr(tableName:String):Option[String] = None
 }
 
 trait EnvProvider {

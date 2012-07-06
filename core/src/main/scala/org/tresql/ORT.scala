@@ -66,26 +66,51 @@ object ORT {
         (if(parent != null) " " + name else "")
   }
 
-  def fill_tresql(name: String, obj: Map[String, _], parent: String, resources: Resources): String = {
+  def fill_tresql(name: String, obj: Map[String, _], fillNames:Boolean, resources: Resources,
+      parent:String, ids:Seq[_]): String = {
+    def nameExpr(table:String, idVar:String, nameExpr:String) = {
+      import QueryParser._
+      parseExp(nameExpr) match {
+        //replace existing filter with pk filter
+        case q:Query => (q.copy(filter = parseExp("[" + ":" + idVar + "]").asInstanceOf[Arr]) match {
+          //set default aliases for query columns
+          case x@Query(_, _, List(Col(name, null)), _, _, _, _, _) => 
+            x.copy(cols = List(Col(name, "\"name\"")))
+          case x@Query(_, _, cols@List(Col(id, null), Col(name, null)), _, _, _, _, _) =>
+            x.copy(cols = List(Col(name, "\"name\"")))
+          case x@Query(_, _, cols@List(Col(id, null), Col(code, null), Col(name, null)), _, _, _, _, _) =>
+            x.copy(cols = List(Col(code, "\"code\""), Col(name, "\"name\"")))
+          case x => x
+        }).tresql + " '" + idVar + "_name'"
+        case a:Arr => table + "[" + ":" + idVar + "]" + (a match {
+          case Arr(List(name:Exp)) => "{" + name.tresql + " 'name'" + "}"
+          case Arr(List(id:Exp, name:Exp)) => "{" + name.tresql + " 'name'" + "}"
+          case Arr(List(id:Exp, code:Exp, name:Exp)) => "{" + code.tresql + " 'code', " +
+            name.tresql + " 'name'" + "}"
+          case _ => a.elements.map(any2tresql(_)).mkString("{", ", ", "}") 
+        })
+      }
+    }
     val table = resources.metaData.table(resources.tableName(name))
     var pk: String = null
     var pkVal: Any = null
-    obj.map(t => {
+    obj.flatMap(t => {
       val n = t._1
       val cn = resources.colName(name, n)
       t._2 match {
         //primary key
-        case v if (table.key == metadata.Key(List(cn))) => pk = cn; pkVal = v; pk
+        case v if (table.key == metadata.Key(List(cn))) => pk = cn; pkVal = v; List(pk + " '" + n + "'")
         //foreign key
         case v if (table.refTable.get(metadata.Ref(List(cn))) != None) => {
-          val reft = table.refTable.get(metadata.Ref(List(cn))).get 
-          resources.nameExpr(reft).map { nexp =>
-            "|"
-          }.getOrElse(v)
+          val reft = table.refTable.get(metadata.Ref(List(cn))).get
+          (cn + " '" + n + "'") :: (if (fillNames)
+            resources.nameExpr(reft).map(ne => 
+              List("|" + nameExpr(reft, n, ne) + " '" + n + "_name'")).getOrElse(Nil) else Nil)
         }
-        case Seq(v: Map[String, _], _*) => "|" + fill_tresql(n, v, name, resources)
-        case Array(v: Map[String, _], _*) => "|" + fill_tresql(n, v, name, resources)
-        case v: Map[String, _] => "|" + fill_tresql(n, v, name, resources)
+        case s @ Seq(o:Map[String, _], _*) => s.map(fill(n, _, fillNames)(resources))
+        case a @ Array(o:Map[String, _], _*) => a.map(fill(n, _, fillNames)(resources))
+        case v: Map[String, _] => null
+        case _ => List(cn + " '" + n + "'")
       }
     })
     ""
