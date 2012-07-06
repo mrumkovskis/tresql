@@ -10,10 +10,30 @@ object ORT {
   }
   //TODO update where unique key (not only pk specified)
   def update(name:String, obj:Map[String, _])(implicit resources:Resources = Env):Any = {}
-  def delete(name:String, id:Any):Any = {}
+  def delete(name:String, id:Any)(implicit resources:Resources = Env):Any = {
+    val delete = "-" + resources.tableName(name) + "[?]"
+    Env log delete
+    Query.build(delete, resources, Map("1"->id), false)()
+  }
+  /** 
+   * Fills object properties specified by parameter obj from table specified by parameter name.
+   * obj contains table field names to be filled. obj map must contain primary key entry.
+   * 
+   * If parameter fillNames is true, foreign key properties are resolved to names using
+   * resources.nameExpr(tableName). Name expression column aliases are modified according to
+   * the following rules:
+   *     1. if name expression contains one column without column alias column alias is set to "name"
+   *     2. if name expression contains two columns without column aliases, second column is taken
+   *        for the name and alias is set to "name". (first column is interpreted as a primary key) 
+   *     3. if name expression contains three columns without column aliases, second column is taken
+   *        for the code and alias is set to "code", third column is taken for the name and alias
+   *        is set to "name". (first column is interpreted as a primary key)
+   */
   def fill(name:String, obj:Map[String, _], fillNames: Boolean = false)
     (implicit resources:Resources = Env):Map[String, Any] = {
-    Map(""->"")
+    val fill = fill_tresql(name, obj, fillNames, resources)
+    Env log fill
+    Query.select(fill).toListRowAsMap.headOption.getOrElse(Map())
   }
 
   def insert_tresql(name:String, obj:Map[String, _], parent:String, resources:Resources):String = {
@@ -67,52 +87,63 @@ object ORT {
   }
 
   def fill_tresql(name: String, obj: Map[String, _], fillNames:Boolean, resources: Resources,
-      parent:String, ids:Seq[_]): String = {
+      ids:Option[Seq[_]] = None): String = {
     def nameExpr(table:String, idVar:String, nameExpr:String) = {
       import QueryParser._
       parseExp(nameExpr) match {
         //replace existing filter with pk filter
-        case q:Query => (q.copy(filter = parseExp("[" + ":" + idVar + "]").asInstanceOf[Arr]) match {
+        case q:Query => (q.copy(filter = parseExp("[" + ":1('" + idVar + "')]").asInstanceOf[Arr]) match {
           //set default aliases for query columns
           case x@Query(_, _, List(Col(name, null)), _, _, _, _, _) => 
-            x.copy(cols = List(Col(name, "\"name\"")))
-          case x@Query(_, _, cols@List(Col(id, null), Col(name, null)), _, _, _, _, _) =>
-            x.copy(cols = List(Col(name, "\"name\"")))
-          case x@Query(_, _, cols@List(Col(id, null), Col(code, null), Col(name, null)), _, _, _, _, _) =>
-            x.copy(cols = List(Col(code, "\"code\""), Col(name, "\"name\"")))
+            x.copy(cols = List(Col(name, "name")))
+          case x@Query(_, _, List(Col(id, null), Col(name, null)), _, _, _, _, _) =>
+            x.copy(cols = List(Col(name, "name")))
+          case x@Query(_, _, List(Col(id, null), Col(code, null), Col(name, null)), _, _, _, _, _) =>
+            x.copy(cols = List(Col(code, "code"), Col(name, "name")))
           case x => x
-        }).tresql + " '" + idVar + "_name'"
-        case a:Arr => table + "[" + ":" + idVar + "]" + (a match {
-          case Arr(List(name:Exp)) => "{" + name.tresql + " 'name'" + "}"
-          case Arr(List(id:Exp, name:Exp)) => "{" + name.tresql + " 'name'" + "}"
-          case Arr(List(id:Exp, code:Exp, name:Exp)) => "{" + code.tresql + " 'code', " +
-            name.tresql + " 'name'" + "}"
+        }).tresql
+        case a:Arr => table + "[" + ":1('" + idVar + "')]" + (a match {
+          case Arr(List(name:Exp)) => "{" + name.tresql + " name" + "}"
+          case Arr(List(id:Exp, name:Exp)) => "{" + name.tresql + " name" + "}"
+          case Arr(List(id:Exp, code:Exp, name:Exp)) => "{" + code.tresql + " code, " +
+            name.tresql + " name" + "}"
           case _ => a.elements.map(any2tresql(_)).mkString("{", ", ", "}") 
         })
       }
     }
     val table = resources.metaData.table(resources.tableName(name))
-    var pk: String = null
-    var pkVal: Any = null
+    var pk:String = null
+    var pkVal:Any = null
     obj.flatMap(t => {
       val n = t._1
       val cn = resources.colName(name, n)
       t._2 match {
         //primary key
-        case v if (table.key == metadata.Key(List(cn))) => pk = cn; pkVal = v; List(pk + " '" + n + "'")
+        case v if (table.key == metadata.Key(List(cn))) => pk = cn; pkVal = v; List(pk + " " + n)
         //foreign key
         case v if (table.refTable.get(metadata.Ref(List(cn))) != None) => {
           val reft = table.refTable.get(metadata.Ref(List(cn))).get
-          (cn + " '" + n + "'") :: (if (fillNames)
-            resources.nameExpr(reft).map(ne => 
-              List("|" + nameExpr(reft, n, ne) + " '" + n + "_name'")).getOrElse(Nil) else Nil)
+          (cn + " " + n) :: (if (fillNames) resources.nameExpr(reft).map(ne => 
+              List("|" + nameExpr(reft, n, ne) + " " + n + "_name")).getOrElse(Nil) else Nil)
         }
-        case s @ Seq(o:Map[String, _], _*) => s.map(fill(n, _, fillNames)(resources))
-        case a @ Array(o:Map[String, _], _*) => a.map(fill(n, _, fillNames)(resources))
-        case v: Map[String, _] => null
-        case _ => List(cn + " '" + n + "'")
+        //children
+        case s:Seq[Map[String, _]] if(s.size > 0) => {
+          val childTable = resources.metaData.table(resources.tableName(n))
+          List("|" + fill_tresql(n, s(0), fillNames, resources, Some(s.flatMap(_.filter(t=>
+            metadata.Key(List(resources.colName(childTable.name, t._1))) == 
+              childTable.key).map(_._2)))) + " " + n)
+        }
+        //children
+        case a:Array[Map[String, _]] if(a.size > 0) => {
+          val childTable = resources.metaData.table(resources.tableName(n))
+          List("|" + fill_tresql(n, a(0), fillNames, resources, Some(a.flatMap(_.filter(t=>
+            metadata.Key(List(resources.colName(childTable.name, t._1))) == 
+              childTable.key).map(_._2)))) + " " + n)
+        }
+        case v: Map[String, _] => error("not supported yet") 
+        case _ => List(cn + " " + n)
       }
-    })
-    ""
+    }).mkString(table.name + "[" + pk + " in[" + ids.map(_.mkString(", ")).getOrElse(pkVal) +
+        "]]{", ", ", "}")
   }
 }

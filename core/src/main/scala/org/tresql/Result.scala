@@ -130,7 +130,14 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   }
 
   override def toList = { val l = (this map (r => Row(this.content))).toList; close; l }
+  
+  def toListRowAsMap:List[Map[String, _]] = { val l = (this map (r=> rowAsMap)).toList; close; l}
 
+  def rowAsMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
+    case r: Result => r.toListRowAsMap
+    case x => x
+  })).toMap
+  
   def content = {
     val b = new scala.collection.mutable.ListBuffer[Any]
     var i = 0

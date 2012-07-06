@@ -17,6 +17,10 @@ class QueryTest extends Suite {
       dialects.HSQLDialect)
   Env.idExpr = s => "nextval('seq')"
   Env update ((msg, level) => println (msg))
+  Env update (/*object table name map*/Map(), /*property column name map*/Map(), /*table name map*/Map(
+      "work"->"work[empno]emp{ename || ' (' || wdate || ', ' || hours || ')'}",
+      "dept"->"deptno, deptno || ', ' || dname || ' (' || loc || ')'",
+      "emp"->"emp/dept{empno, empno, ename || ' (' || dname || ')'}"))
   //create test db script
   new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
     sql => val st = conn.createStatement; st.execute(sql); st.close
@@ -152,11 +156,31 @@ class QueryTest extends Suite {
         Map("ename" -> "SMITH"), Map("ename" -> "LEWIS")))))
         
     println("----------- ORT tests ------------")
-    val obj = Map("deptno" -> null, "dname" -> "LAW", "loc" -> "DALLAS",
+    var obj:Map[String, Any] = Map("deptno" -> null, "dname" -> "LAW", "loc" -> "DALLAS",
       "emp" -> scala.Array(Map("empno" -> null, "ename" -> "SMITH", "deptno" -> null),
         Map("empno" -> null, "ename" -> "LEWIS", "deptno" -> null)))
     println("--- inserts ---")
     expect(List(1, List(List(1, 1))))(ORT.insert("dept", obj))
     
+    println("--- fill ---")
+    obj = Map("empno"->7788, "ename"->null, "deptno"->null, "mgr"->null)
+    expect(Map("ename" -> "SCOTT", "empno" -> 7788, "deptno" -> 20,
+        "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")), "mgr" -> 7566,
+        "mgr_name" -> List(Map("code" -> 7566, "name" -> "JONES (RESEARCH)"))))(ORT.fill("emp", obj, true))
+    
+    obj = Map("deptno"->20, "dname"->null,
+        "emp"->List(Map("empno"->7788, "ename"->null, "mgr"->null, "deptno"->null), 
+                  Map("empno"->7566, "ename"->null, "mgr"->null, "deptno" -> null)))
+    
+    expect(Map("deptno" -> 20, "dname" -> "RESEARCH",
+        "emp" -> List(
+            Map("empno" -> 7566, "deptno" -> 20, 
+              "mgr_name" -> List(Map("code" -> 7839, "name" -> "KING (ACCOUNTING)")),
+              "ename" -> "JONES", "mgr" -> 7839, "deptno_name" -> 
+              List(Map("name" -> "20, RESEARCH (DALLAS)"))), 
+            Map("empno" -> 7788, "deptno" -> 20, 
+              "mgr_name" -> List(Map("code" -> 7566, "name" -> "JONES (RESEARCH)")),
+              "ename" -> "SCOTT", "mgr" -> 7566, "deptno_name" ->
+              List(Map("name" -> "20, RESEARCH (DALLAS)"))))))(ORT.fill("dept", obj, true))
   }
 }
