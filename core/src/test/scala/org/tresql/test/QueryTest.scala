@@ -207,5 +207,8 @@ class QueryTest extends Suite {
             Map("empno" -> 7788, "mgr_name" -> List(Map("code" -> 7566, "name" -> "JONES (RESEARCH)")),
               "ename" -> "SCOTT", "mgr" -> 7566)),
         "calculated_children"->List(Map("x"->5))))(ORT.fill("dept", obj, true))
+        
+    println("--- delete ---")
+    expect(1)(ORT.delete("emp", 7934))
   }
 }
