@@ -103,7 +103,7 @@ object ORT {
       }
       def childUpdates(n:String, o:Map[String, _]) = {
         resources.metaData.tableOption(resources.tableName(n)).flatMap(childTable => 
-          pkProp.flatMap (pk => {
+          findPkProp.flatMap (pk => {
             val refs = childTable.refs(table.name)
             if (refs.size != 1) error("Cannot update child table " + childTable +
                 ". Must be exactly one reference from child to parent. Instead these refs found: " +

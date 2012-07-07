@@ -214,11 +214,11 @@ class QueryTest extends Suite {
         "calculated_children"->List(Map("x"->5))))(ORT.fill("dept", obj, true))
     
     println("--- update ---")
-    obj = Map("deptno"->40, "dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
+    obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
         "emp"->List(
             Map("empno"->null, "ename"->"ANNA", "mgr"->7788, "mgr_name"->null, "deptno"->40), 
             Map("empno"->null, "ename"->"MARY", "mgr"->7566, "mgr_name"->null, "deptno"->40)),
-        "calculated_children"->List(Map("x"->5)))
+        "calculated_children"->List(Map("x"->5)), "deptno"->40)
     expect(List(1, List(0, List(1, 1))))(ORT.update("dept", obj))
     
     println("--- delete ---")
