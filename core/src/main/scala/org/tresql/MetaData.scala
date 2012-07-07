@@ -17,12 +17,18 @@ trait MetaData {
     }
   }
 
-  def col(table: String, col: String) = this.table(table).cols(col)
-  def col(col: String) = table(col.substring(0, col.lastIndexOf('.'))).cols(col.substring(col.lastIndexOf('.') + 1))
+  def col(table: String, col: String):Col = this.table(table).cols(col)
+  def colOption(table:String, col:String):Option[Col] = this.tableOption(table).flatMap(_.cols.get(col))
+  def col(col: String):Col = 
+    table(col.substring(0, col.lastIndexOf('.'))).cols(col.substring(col.lastIndexOf('.') + 1))
+  def colOption(col: String):Option[Col] = tableOption(col.substring(0, col.lastIndexOf('.'))).flatMap(
+      _.cols.get(col.substring(col.lastIndexOf('.') + 1)))
 
   def dbName: String
   def table(name: String): Table
+  def tableOption(name: String): Option[Table]
   def procedure(name: String): Procedure
+  def procedureOption(name: String): Option[Procedure]
 }
 
 //TODO pk col storing together with ref col (for multi col key secure support)?

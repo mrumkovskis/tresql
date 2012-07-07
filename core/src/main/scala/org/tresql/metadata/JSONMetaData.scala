@@ -10,7 +10,9 @@ case class JSONMetaData(override val dbName:String,
         val metaData:Map[String, Table]) extends MetaData {
   
   def table(name: String) = metaData(name)
+  def tableOption(name:String) = metaData.get(name)
   def procedure(name: String) = sys.error("Unsupported method")
+  def procedureOption(name: String) = sys.error("Unsupported method")
 }
 
 object JSONMetaData {

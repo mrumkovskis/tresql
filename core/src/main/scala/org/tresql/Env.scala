@@ -81,8 +81,9 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   //meta data methods
   def dbName = metaData.dbName
   def table(name: String) = metaData.table(name)
+  def tableOption(name:String) = metaData.tableOption(name)
   def procedure(name: String) = metaData.procedure(name)
-  
+  def procedureOption(name:String) = metaData.procedureOption(name)
 }
 
 object Env extends Resources {
@@ -118,8 +119,13 @@ object Env extends Resources {
 
 trait Resources extends NameMap {
   private val _metaData = metadata.JDBCMetaData("")
-  //1. map: object name -> table name, 2. map: object name -> (property name -> column name), 3. map: object name -> name tresql expression
-  private var _nameMap:Option[(Map[String, String], Map[String, Map[String, String]], Map[String, String])] = None
+  /* 1. map: object name -> table name,
+   * 2. map: object name -> (property name -> column name),
+   * 3. map: table name -> name tresql expression
+   * 4. map: object name -> (property name -> name tresql expression)
+   */
+  private var _nameMap:Option[(Map[String, String], Map[String, Map[String, String]],
+      Map[String, String], Map[String, Map[String, String]])] = None
   def conn: java.sql.Connection
   def metaData: MetaData = _metaData
   def dialect: Expr => String = null
@@ -131,9 +137,13 @@ trait Resources extends NameMap {
   override def colName(objectName: String, propertyName: String): String = 
     _nameMap.flatMap(_._2.get(objectName).flatMap(_.get(propertyName))).getOrElse(super.colName(
         objectName, propertyName))
-  override def nameExpr(objectName:String):Option[String] = _nameMap.flatMap(_._3.get(objectName))
+  override def nameExpr(tableName:String):Option[String] = _nameMap.flatMap(_._3.get(tableName))
+  override def propNameExpr(objectName:String, propertyName:String) = _nameMap.flatMap(
+    _._4.get(objectName)).flatMap(_.get(propertyName)).orElse(
+        super.propNameExpr(objectName, propertyName))
   //set name map
-  def update(map:(Map[String, String], Map[String, Map[String, String]], Map[String, String])) = 
+  def update(map:(Map[String, String], Map[String, Map[String, String]], Map[String, String],
+      Map[String, Map[String, String]])) = 
     _nameMap = Some(map)
 }
 
@@ -141,15 +151,24 @@ trait NameMap {
   def tableName(objectName:String):String = objectName
   def colName(objectName:String, propertyName:String):String = propertyName
   /** TreSQL expression returning entity name. Typically it is a query from table referenced
-   * by tableName (NOT objectName!).
+   * by tableName (NOT objectName!). Name expression is used in ORT.fill method if fillNames
+   * parameter is true when foreign key property of the object is resolved to name.
+   * In this case filter clause of name expression if present is replaced with this one -
+   * [<pk of referenced table> = <foreign key property value>] 
    * Examples:
-   * 1. name of entity emp:
+   * 1. name of entity emp (when used in ORT.fill method
+   *    first table in table clause must be the one which is referenced by object foreign key
+   *    property):
    *    emp/dept{firstname + ' ' + lastname + ', ' + deptname}
    * 2. name of some entity as a comma separated list of columns. In this case expression will
    *    be transformed to: table_name {<column list>}
    *    registration_number + ", " + name, foundation_date
    */
   def nameExpr(tableName:String):Option[String] = None
+  /** TreSQL expression defining property name. This is typically used in ORT.fillMethod if
+   * fillNames parameter is true to resolve foreign key properties to names.
+   */
+  def propNameExpr(objectName:String, propertyName:String):Option[String] = None
 }
 
 trait EnvProvider {

@@ -17,7 +17,11 @@ object ORT {
   }
   /** 
    * Fills object properties specified by parameter obj from table specified by parameter name.
-   * obj contains table field names to be filled. obj map must contain primary key entry.
+   * obj contains property names to be filled from database. obj map must contain primary key entry.
+   * If no corresponding table column to the property is found property value in returned object
+   * remains untouched.
+   * 
+   * Returned object contains exactly the same property set as the one passed as a parameter.
    * 
    * If parameter fillNames is true, foreign key properties are resolved to names using
    * resources.nameExpr(tableName). Name expression column aliases are modified according to
@@ -31,9 +35,25 @@ object ORT {
    */
   def fill(name:String, obj:Map[String, _], fillNames: Boolean = false)
     (implicit resources:Resources = Env):Map[String, Any] = {
+    def merge(obj: Map[String, _], res: Map[String, _]):Map[String, _] = {
+      obj.map(t => t._1 -> res.get(t._1).map({
+        case rs: Seq[Map[String, _]] => t._2 match {
+          case os: Seq[Map[String, _]] => os.zipWithIndex.map(
+            ost => rs.lift(ost._2).map(merge(ost._1, _)).getOrElse(ost._1))
+          case oa: Array[Map[String, _]] => oa.zipWithIndex.map(
+            ost => rs.lift(ost._2).map(merge(ost._1, _)).getOrElse(ost._1))
+          case ox => rs
+        }
+        case rm: Map[String, _] => t._2 match {
+          case om: Map[String, _] => merge(om, rm)
+          case ox => rm
+        }
+        case rx => rx
+      }).getOrElse(t._2))
+    }
     val fill = fill_tresql(name, obj, fillNames, resources)
     Env log fill
-    Query.select(fill).toListRowAsMap.headOption.getOrElse(Map())
+    merge(obj, Query.select(fill).toListRowAsMap.headOption.getOrElse(Map()))
   }
 
   def insert_tresql(name:String, obj:Map[String, _], parent:String, resources:Resources):String = {
@@ -109,6 +129,7 @@ object ORT {
             name.tresql + " name" + "}"
           case _ => a.elements.map(any2tresql(_)).mkString("{", ", ", "}") 
         })
+        case _ => nameExpr
       }
     }
     val table = resources.metaData.table(resources.tableName(name))
@@ -117,33 +138,34 @@ object ORT {
     obj.flatMap(t => {
       val n = t._1
       val cn = resources.colName(name, n)
+      val refTable = table.refTable.get(metadata.Ref(List(cn)))
       t._2 match {
         //primary key
         case v if (table.key == metadata.Key(List(cn))) => pk = cn; pkVal = v; List(pk + " " + n)
         //foreign key
-        case v if (table.refTable.get(metadata.Ref(List(cn))) != None) => {
-          val reft = table.refTable.get(metadata.Ref(List(cn))).get
-          (cn + " " + n) :: (if (fillNames) resources.nameExpr(reft).map(ne => 
-              List("|" + nameExpr(reft, n, ne) + " " + n + "_name")).getOrElse(Nil) else Nil)
+        case v if (refTable != None) => {
+          (cn + " " + n) :: (if (fillNames) resources.propNameExpr(name, n).orElse(
+              resources.nameExpr(refTable.get)).map(ne => 
+              List("|" + nameExpr(refTable.get, n, ne) + " " + n + "_name")).getOrElse(Nil) else Nil)
         }
         //children
         case s:Seq[Map[String, _]] if(s.size > 0) => {
-          val childTable = resources.metaData.table(resources.tableName(n))
-          List("|" + fill_tresql(n, s(0), fillNames, resources, Some(s.flatMap(_.filter(t=>
-            metadata.Key(List(resources.colName(childTable.name, t._1))) == 
-              childTable.key).map(_._2)))) + " " + n)
+          List(resources.metaData.tableOption(resources.tableName(n)).map(cht=>
+          "|" + fill_tresql(n, s(0), fillNames, resources, Some(s.flatMap(_.filter(t=>
+            metadata.Key(List(resources.colName(cht.name, t._1))) == 
+              cht.key).map(_._2)))) + " " + n).orNull)
         }
         //children
         case a:Array[Map[String, _]] if(a.size > 0) => {
-          val childTable = resources.metaData.table(resources.tableName(n))
-          List("|" + fill_tresql(n, a(0), fillNames, resources, Some(a.flatMap(_.filter(t=>
-            metadata.Key(List(resources.colName(childTable.name, t._1))) == 
-              childTable.key).map(_._2)))) + " " + n)
+          List(resources.metaData.tableOption(resources.tableName(n)).map(cht=>
+          "|" + fill_tresql(n, a(0), fillNames, resources, Some(a.flatMap(_.filter(t=>
+            metadata.Key(List(resources.colName(cht.name, t._1))) == 
+              cht.key).map(_._2)))) + " " + n).orNull)
         }
-        case v: Map[String, _] => error("not supported yet") 
-        case _ => List(cn + " " + n)
+        case v: Map[String, _] => sys.error("not supported yet") 
+        case _ => List(table.cols.get(cn).map(_.name + " " + n).orNull)
       }
-    }).mkString(table.name + "[" + pk + " in[" + ids.map(_.mkString(", ")).getOrElse(pkVal) +
-        "]]{", ", ", "}")
+    }).filter(_ != null).mkString(table.name +
+        "[" + pk + " in[" + ids.map(_.mkString(", ")).getOrElse(pkVal) + "]]{", ", ", "}")
   }
 }
