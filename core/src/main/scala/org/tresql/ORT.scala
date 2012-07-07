@@ -1,15 +1,23 @@
 package org.tresql
 
+import sys._
+
 /** Object Relational Transformations - ORT */
 object ORT {
   
   def insert(name:String, obj:Map[String, _])(implicit resources:Resources = Env):Any = {
     val insert = insert_tresql(name, obj, null, resources)
+    if(insert == null) error("Cannot insert data. Table not found for object: " + name)
     Env log insert
     Query.build(insert, resources, obj, false)()
   }
   //TODO update where unique key (not only pk specified)
-  def update(name:String, obj:Map[String, _])(implicit resources:Resources = Env):Any = {}
+  def update(name:String, obj:Map[String, _])(implicit resources:Resources = Env):Any = {
+    val update = update_tresql(name, obj, resources)
+    if(update == null) error("Cannot update data. Table not found for object: " + name)
+    Env log update
+    Query.build(update, resources, obj, false)()    
+  }
   def delete(name:String, id:Any)(implicit resources:Resources = Env):Any = {
     val delete = "-" + resources.tableName(name) + "[?]"
     Env log delete
@@ -56,54 +64,74 @@ object ORT {
     merge(obj, Query.select(fill).toListRowAsMap.headOption.getOrElse(Map()))
   }
 
-  def insert_tresql(name:String, obj:Map[String, _], parent:String, resources:Resources):String = {
+  def insert_tresql(name: String, obj: Map[String, _], parent: String, resources: Resources): String = {
     //insert statement column, value map from obj
-    obj map (t => {
-      val tn = resources.tableName(name)
-      val n = t._1
-      val cn = resources.colName(name, n)
-      val ptn = if (parent != null) resources.tableName(parent) else null
-      t._2 match {
-        //children
-        case Seq(v:Map[String, _], _*) => insert_tresql(n, v, name, resources)->null
-        case Array(v:Map[String, _], _*) => insert_tresql(n, v, name, resources)->null
-        case v:Map[String, _] => insert_tresql(n, v, name, resources)->null
-        //fill pk
-        case null if (resources.metaData.table(tn).key == metadata.Key(List(cn))) => cn -> ("#" + tn)
-        //fill fk
-        case null if (parent != null & resources.metaData.table(tn).refTable.get(
-          metadata.Ref(List(cn))) == Some(ptn)) => cn -> (":#" + ptn)
-        case v => cn -> (":" + n)
-    }})
-  }.unzip match {
-    case (cols:List[_], vals:List[_]) => cols.mkString("+" + resources.tableName(name) + 
-        "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") + 
-        (if(parent != null) " " + name else "")
+    resources.metaData.tableOption(resources.tableName(name)).map(table => {
+      obj.map(t => {
+        val n = t._1
+        val cn = resources.colName(name, n)
+        val ptn = if (parent != null) resources.tableName(parent) else null
+        t._2 match {
+          //children
+          case Seq(v: Map[String, _], _*) => insert_tresql(n, v, name, resources) -> null
+          case Array(v: Map[String, _], _*) => insert_tresql(n, v, name, resources) -> null
+          case v: Map[String, _] => insert_tresql(n, v, name, resources) -> null
+          //fill pk
+          case null if (table.key == metadata.Key(List(cn))) => cn -> ("#" + table.name)
+          //fill fk
+          case null if (parent != null & table.refTable.get(
+            metadata.Ref(List(cn))) == Some(ptn)) => cn -> (":#" + ptn)
+          case v => (table.cols.get(cn).map(_.name).orNull, ":" + n)
+        }
+      }).filter(_._1 != null).unzip match {
+        case (cols: List[_], vals: List[_]) => cols.mkString("+" + table.name +
+          "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") +
+          (if (parent != null) " " + name else "")
+      }
+    }).orNull
   }
-  
-  def update_tresql(name:String, obj:Map[String, _], parent:String, resources:Resources):String = {
-    //update statement column, value map from obj
-    obj map (t => {
-      val tn = resources.tableName(name)
-      val n = t._1
-      val cn = resources.colName(name, n)
-      val ptn = if (parent != null) resources.tableName(parent) else null
-      t._2 match {
-        //children
-        case Seq(v:Map[String, _], _*) => insert_tresql(n, v, name, resources)->null
-        case Array(v:Map[String, _], _*) => insert_tresql(n, v, name, resources)->null
-        case v:Map[String, _] => insert_tresql(n, v, name, resources)->null
-        //fill pk
-        case null if (resources.metaData.table(tn).key == metadata.Key(List(cn))) => cn -> ("#" + tn)
-        //fill fk
-        case null if (parent != null & resources.metaData.table(tn).refTable.get(
-          metadata.Ref(List(cn))) == Some(ptn)) => cn -> (":#" + ptn)
-        case v => cn -> (":" + n)
-    }})
-  }.unzip match {
-    case (cols:List[_], vals:List[_]) => cols.mkString("+" + resources.tableName(name) + 
-        "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") + 
-        (if(parent != null) " " + name else "")
+
+  def update_tresql(name: String, obj: Map[String, _], resources: Resources): String = {
+    //insert statement column, value map from obj
+    var pkProp: Option[String] = None
+    resources.metaData.tableOption(resources.tableName(name)).flatMap(table => {
+      //stupid thing - map find methods conflicting from different traits 
+      def findPkProp = pkProp.orElse {
+        pkProp = obj.asInstanceOf[TraversableOnce[(String, _)]].find(
+          n => table.key == metadata.Key(List(resources.colName(name, n._1)))).map(_._1)
+        pkProp
+      }
+      def childUpdates(n:String, o:Map[String, _]) = {
+        resources.metaData.tableOption(resources.tableName(n)).flatMap(childTable => 
+          pkProp.flatMap (pk => {
+            val refs = childTable.refs(table.name)
+            if (refs.size != 1) error("Cannot update child table " + childTable +
+                ". Must be exactly one reference from child to parent. Instead these refs found: " +
+                refs)
+            val refCol = refs(0).cols(0)
+            Some("-" + childTable.name + "[" + refCol + " = :" + pk + "]" + ", " +
+                insert_tresql(n, o, null, resources) + " " + n)
+        })).orNull
+      }
+      obj.map(t => {
+        val n = t._1
+        val cn = resources.colName(name, n)
+        if (table.key == metadata.Key(List(cn))) pkProp = Some(n)
+        t._2 match {
+          //children
+          case Seq(v: Map[String, _], _*) => (childUpdates(n, v), null)
+          case Array(v: Map[String, _], _*) => (childUpdates(n, v), null)
+          case v: Map[String, _] => (childUpdates(n, v), null)
+          //do not update pkProp
+          case v if (Some(n) == pkProp) => (null, null)
+          case v => (table.cols.get(cn).map(_.name).orNull, ":" + n)
+        }
+      }).filter(_._1 != null).unzip match {
+        case (cols: List[_], vals: List[_]) => pkProp.flatMap(pk =>
+          Some(cols.mkString("=" + table.name + "[" + ":" + pk + "]" + "{", ", ", "}") + 
+            vals.filter(_ != null).mkString(" [", ", ", "]")))
+      }
+    }).orNull
   }
 
   def fill_tresql(name: String, obj: Map[String, _], fillNames:Boolean, resources: Resources,
