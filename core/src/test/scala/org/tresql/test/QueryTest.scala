@@ -15,7 +15,16 @@ class QueryTest extends Suite {
   Env.conn = conn
   Env.dialect = dialects.InsensitiveCmp("ĒŪĪĀŠĢĶĻŽČŅēūīāšģķļžčņ", "EUIASGKLZCNeuiasgklzcn",
       dialects.HSQLDialect)
+  Env.idExpr = s => "nextval('seq')"
   Env update ((msg, level) => println (msg))
+  Env update (/*object table name map*/Map(
+      "emp_dept_view"->"emp"),
+      /*property column name map*/Map(), /*table name map*/Map(
+      "work"->"work[empno]emp{ename || ' (' || wdate || ', ' || hours || ')'}",
+      "dept"->"deptno, deptno || ', ' || dname || ' (' || loc || ')'",
+      "emp"->"emp/dept{empno, empno, ename || ' (' || dname || ')'}"),
+      /*object property name map*/Map(
+      "emp_dept_view"->Map("deptno"->"null")))
   //create test db script
   new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
     sql => val st = conn.createStatement; st.execute(sql); st.close
@@ -145,9 +154,74 @@ class QueryTest extends Suite {
           Map("empno" -> 2222, "ename" -> "CHRIS", "deptno" -> 50)))))
     expect(List(2, 1))(Query("emp - [deptno = 50], dept - [50]"))
     expect(List(1, List(List(1, 1))))(Query(
-      """dept{deptno, dname, loc, +emp {empno, ename, deptno} [:empno, :ename, :#seq] emps} +
-        [#seq, :dname, :loc]""",
+      """dept{deptno, dname, loc, +emp {empno, ename, deptno} [#emp, :ename, :#dept] emps} +
+        [#dept, :dname, :loc]""",
       Map("dname" -> "LAW", "loc" -> "DALLAS", "emps" -> scala.Array(
-        Map("empno" -> 1111, "ename" -> "SMITH"), Map("empno" -> 2222, "ename" -> "LEWIS")))))
+        Map("ename" -> "SMITH"), Map("ename" -> "LEWIS")))))
+        
+    println("----------- ORT tests ------------")
+    println("--- inserts ---")
+    var obj:Map[String, Any] = Map("deptno" -> null, "dname" -> "LAW", "loc" -> "DALLAS",
+      "calculated_field"->333, "another_calculated_field"->"A",
+      "emp" -> scala.Array(Map("empno" -> null, "ename" -> "SMITH", "deptno" -> null,
+          "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)"))),
+        Map("empno" -> null, "ename" -> "LEWIS", "deptno" -> null,
+            "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")))))
+    expect(List(1, List(List(1, 1))))(ORT.insert("dept", obj))
+    intercept[Exception](ORT.insert("no_table", obj))
+    
+    println("--- fill ---")
+    obj = Map("empno"->7788, "ename"->null, "deptno"->null, "deptno_name"->null,
+        "mgr"->null, "mgr_name"->null)
+    expect(Map("ename" -> "SCOTT", "empno" -> 7788, "deptno" -> 20,
+        "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")), "mgr" -> 7566,
+        "mgr_name" -> List(Map("code" -> 7566, "name" -> "JONES (RESEARCH)"))))(ORT.fill("emp", obj, true))
+    obj = Map("empno"->7839, "ename"->null, "deptno"->null, "deptno_name"->null,
+        "mgr"->null, "mgr_name"->null)
+    expect(Map("ename" -> "KING", "empno" -> 7839, "deptno" -> 10,
+        "deptno_name" -> List(Map("name" -> "10, ACCOUNTING (NEW YORK)")), "mgr" -> null,
+        "mgr_name" -> List()))(ORT.fill("emp", obj, true))
+        
+    obj = Map("deptno"->20, "dname"->null, "loc"->null, "calculated_field"-> 222,
+        "emp_dept_view"->List(Map("empno"->7788, "ename"->null, "mgr"->null, "mgr_name"->null,
+            "deptno"->null, "deptno_name"->null), 
+                  Map("empno"->7566, "ename"->null, "mgr"->null, "mgr_name"->null,
+            "deptno"->null, "deptno_name"->null)),
+        "calculated_children"->List(Map("x"->5)))
+    
+    expect(Map("deptno" -> 20, "dname" -> "RESEARCH", "loc"->"DALLAS", "calculated_field"-> 222,
+        "emp_dept_view" -> List(
+            Map("empno" -> 7566, "deptno" -> 20, 
+              "mgr_name" -> List(Map("code" -> 7839, "name" -> "KING (ACCOUNTING)")),
+              "ename" -> "JONES", "mgr" -> 7839, "deptno_name" -> null), 
+            Map("empno" -> 7788, "deptno" -> 20, 
+              "mgr_name" -> List(Map("code" -> 7566, "name" -> "JONES (RESEARCH)")),
+              "ename" -> "SCOTT", "mgr" -> 7566, "deptno_name" -> null)),
+        "calculated_children"->List(Map("x"->5))))(ORT.fill("dept", obj, true))
+        
+    obj = Map("deptno"->20, "dname"->null, "loc"->null, "calculated_field"-> 222,
+        "emp_dept_view"->List(
+            Map("empno"->7788, "ename"->null, "mgr"->null, "mgr_name"->null, "deptno"->20), 
+            Map("empno"->7566, "ename"->null, "mgr"->null, "mgr_name"->null, "deptno"->20)),
+        "calculated_children"->List(Map("x"->5)))
+    
+    expect(Map("deptno" -> 20, "dname" -> "RESEARCH", "loc"->"DALLAS", "calculated_field"-> 222,
+        "emp_dept_view" -> List(
+            Map("empno" -> 7566, "mgr_name" -> List(Map("code" -> 7839, "name" -> "KING (ACCOUNTING)")),
+              "ename" -> "JONES", "mgr" -> 7839, "deptno"->20), 
+            Map("empno" -> 7788, "mgr_name" -> List(Map("code" -> 7566, "name" -> "JONES (RESEARCH)")),
+              "ename" -> "SCOTT", "mgr" -> 7566, "deptno"->20)),
+        "calculated_children"->List(Map("x"->5))))(ORT.fill("dept", obj, true))
+    
+    println("--- update ---")
+    obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
+        "emp"->List(
+            Map("empno"->null, "ename"->"ANNA", "mgr"->7788, "mgr_name"->null, "deptno"->40), 
+            Map("empno"->null, "ename"->"MARY", "mgr"->7566, "mgr_name"->null, "deptno"->40)),
+        "calculated_children"->List(Map("x"->5)), "deptno"->40)
+    expect(List(1, List(0, List(1, 1))))(ORT.update("dept", obj))
+    
+    println("--- delete ---")
+    expect(1)(ORT.delete("emp", 7934))
   }
 }

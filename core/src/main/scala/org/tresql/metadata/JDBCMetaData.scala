@@ -57,7 +57,17 @@ class JDBCMetaData(private val db: String, private val defaultSchema: String = n
       }
     }
   }
+  /* Implemented this way because did not understand scala concurrent compatibilities between
+   * scala versions 2.9 and 2.10 */
+  def tableOption(name:String) = try {
+    Some(table(name))
+  } catch {
+    case _:NoSuchElementException => {
+      None
+    }
+  }
   def procedure(name: String) = sys.error("Method not implemented")
+  def procedureOption(name: String) = sys.error("Method not implemented")
 
   def cols(rs: ResultSet) = {
     import scala.collection.mutable.ListBuffer

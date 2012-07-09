@@ -216,40 +216,14 @@ object Query {
 
   /*---------------- Single value methods -------------*/
   def head[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]): T = {
-    typedValue[T](select(expr, normalizePars(params)), HEAD)
+    select(expr, normalizePars(params)).head[T]
   }
   def headOption[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]): Option[T] = {
-    try {
-      Some(typedValue[T](select(expr, normalizePars(params)), HEAD_OPTION))
-    } catch {
-      case e: NoSuchElementException => None
-    }
+    select(expr, normalizePars(params)).headOption[T]
   }
   def unique[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]): T = {
-    typedValue[T](select(expr, normalizePars(params)), UNIQUE)
+    select(expr, normalizePars(params)).unique[T]
   }
-
-  private val HEAD = 1
-  private val HEAD_OPTION = 2
-  private val UNIQUE = 3
-  private def typedValue[T](r: Result, mode: Int)(implicit m:scala.reflect.Manifest[T]):T = {
-    mode match {
-      case HEAD | HEAD_OPTION => {
-        r hasNext match {
-          case true => r next; val v = r.typed[T](0); r close; v
-          case false => throw new NoSuchElementException("No rows in result")
-        }
-      }
-      case UNIQUE => r hasNext match {
-        case true =>
-          r next; val v = r.typed(0); if (r hasNext) {
-                                  r.close; error("More than one row for unique result")
-                                } else v
-        case false => error("No rows in result")
-      }
-      case x => error("Knipis: " + x)
-    }
-  }  
 }
 
 /** Out parameter box for callable statement */

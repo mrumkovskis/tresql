@@ -130,7 +130,14 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   }
 
   override def toList = { val l = (this map (r => Row(this.content))).toList; close; l }
+  
+  def toListRowAsMap:List[Map[String, _]] = { val l = (this map (r=> rowAsMap)).toList; close; l}
 
+  def rowAsMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
+    case r: Result => r.toListRowAsMap
+    case x => x
+  })).toMap
+  
   def content = {
     val b = new scala.collection.mutable.ListBuffer[Any]
     var i = 0
@@ -165,6 +172,30 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
       case DATE => rs.getDate(pos)
       case TIME | TIMESTAMP => rs.getTimestamp(pos)
       case DOUBLE | FLOAT | REAL => val v = rs.getDouble(pos); if (rs.wasNull) null else v
+    }
+  }
+
+  /*---------------- Single value methods -------------*/
+  def head[T](implicit m: scala.reflect.Manifest[T]): T = {
+    hasNext match {
+      case true => next; val v = typed[T](0); close; v
+      case false => throw new NoSuchElementException("No rows in result")
+    }
+  }
+  def headOption[T](implicit m: scala.reflect.Manifest[T]): Option[T] = {
+    try {
+      Some(head[T])
+    } catch {
+      case e: NoSuchElementException => None
+    }
+  }
+  def unique[T](implicit m: scala.reflect.Manifest[T]): T = {
+    hasNext match {
+      case true =>
+        next; val v = typed[T](0); if (hasNext) {
+          close; error("More than one row for unique result")
+        } else v
+      case false => error("No rows in result")
     }
   }
 

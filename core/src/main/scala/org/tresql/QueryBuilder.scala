@@ -1,11 +1,10 @@
 package org.tresql
 
 import sys._
+import QueryParser._
 
 class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private var bindIdx: Int) extends EnvProvider {
-
-  import QueryParser._
 
   val ROOT_CTX = "ROOT"
   val QUERY_CTX = "QUERY"
@@ -275,10 +274,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }
     }
     def where = filter match {
-      case (c @ ConstExpr(x)) :: Nil => tables(0).aliasOrName + "." +
-        env.table(tables(0).name).key.cols(0) + " = " + c.sql
-      case (v @ VarExpr(x, _)) :: Nil => tables(0).aliasOrName + "." +
-        env.table(tables(0).name).key.cols(0) + " = " + v.sql
+      case List(_:ConstExpr | _:VarExpr | _:ResExpr) => tables(0).aliasOrName + "." +
+        env.table(tables(0).name).key.cols(0) + " = " + filter(0).sql
       case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
       case l => tables(0).aliasOrName + "." + env.table(tables(0).name).key.cols(0) + " in(" +
         (l map { _.sql }).mkString(",") + ")"
@@ -471,10 +468,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         sel.filter == null) null else sel
     }
     def buildTable(t: Obj) = new Table(buildInternal(t.obj, TABLE_CTX), t.alias,
-      if (t.join != null) TableJoin(t.join.default, t.join.expr match {
-        case l: List[_] => ArrExpr(l.map(buildInternal(_, JOIN_CTX)))
-        case e => buildInternal(e, JOIN_CTX)
-      }, t.join.noJoin)
+      if (t.join != null) TableJoin(t.join.default, buildInternal(t.join.expr, JOIN_CTX),
+        t.join.noJoin)
       else null, t.outerJoin)
     def buildColumnIdent(c: Obj) = c match {
       case Obj(Ident(i), _, _, _) => IdentExpr(i)
@@ -583,10 +578,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
 
   private def build(ex: String): Expr = {
-    parseAll(ex) match {
-      case Success(r, _) => buildInternal(r)
-      case x => error(x.toString)
-    }
+    buildInternal(parseExp(ex))
+  }
+  
+  private def build(ex:Exp):Expr = {
+    buildInternal(ex)
   }
   
   override def toString = "QueryBuilder: " + queryDepth
@@ -595,6 +591,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
 object QueryBuilder {
   def apply(ex: String, env: Env = Env(Map(), true)): Expr = {
+    new QueryBuilder(env).build(ex)
+  }
+  def apply(ex:Exp, env:Env):Expr = {
     new QueryBuilder(env).build(ex)
   }
 }
