@@ -433,7 +433,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private def buildInsert(table: Ident, cols: List[Col], vals: List[Arr]) = {
     new InsertExpr(IdentExpr(table.ident), cols map (buildInternal(_, COL_CTX)) filter {
       case x@ColExpr(IdentExpr(_), _) => true
-      case e: ColExpr => this.childUpdates += { (e.col, e.alias) }; false
+      case e: ColExpr => this.childUpdates += { (e.col, e.name) }; false
     }, vals map { buildInternal(_, VALUES_CTX) })
   }
   private def buildUpdate(table: Ident, filter: Arr, cols: List[Col], vals: Arr) = {
@@ -441,7 +441,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       filter.elements map { buildInternal(_, WHERE_CTX) } else null,
       cols map (buildInternal(_, COL_CTX)) filter {
         case ColExpr(IdentExpr(_), _) => true
-        case e: ColExpr => this.childUpdates += { (e.col, e.alias) }; false
+        case e: ColExpr => this.childUpdates += { (e.col, e.name) }; false
       },
       vals.elements map { buildInternal(_, VALUES_CTX) })
   }

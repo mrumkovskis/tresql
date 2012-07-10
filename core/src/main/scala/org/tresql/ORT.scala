@@ -50,6 +50,7 @@ object ORT {
             ost => rs.lift(ost._2).map(merge(ost._1, _)).getOrElse(ost._1))
           case oa: Array[Map[String, _]] => oa.zipWithIndex.map(
             ost => rs.lift(ost._2).map(merge(ost._1, _)).getOrElse(ost._1))
+          case om: Map[String, _] => rs.map(merge(om, _))
           case ox => rs
         }
         case rm: Map[String, _] => t._2 match {
@@ -69,35 +70,38 @@ object ORT {
     val Array(objName, refPropName) = name.split(":").padTo(2, null)
     resources.metaData.tableOption(resources.tableName(objName)).map(table => {
       val ptn = if (parent != null) resources.tableName(parent) else null
-      val refColName = if (parent == null) None else if(refPropName == null) 
-        if (table.refs(ptn).size != 1) None else Some(table.refs(ptn)(0).cols(0)) else Some(resources.colName(objName, refPropName)) 
+      val refColName = if (parent == null) null else if (refPropName == null)
+        if (table.refs(ptn).size != 1) null else table.refs(ptn)(0).cols(0)
+        else resources.colName(objName, refPropName)
       obj.map(t => {
         val n = t._1
         val cn = resources.colName(objName, n)
         t._2 match {
           //children
-          case Seq(v: Map[String, _], _*) => insert_tresql(n, v, objName, resources) -> null
-          case Array(v: Map[String, _], _*) => insert_tresql(n, v, objName, resources) -> null
-          case v: Map[String, _] => insert_tresql(n, v, objName, resources) -> null
+          case Seq() | Array() => (null, null)
+          case Seq(v: Map[String, _], _*) => (insert_tresql(n, v, objName, resources), null)
+          case Array(v: Map[String, _], _*) => (insert_tresql(n, v, objName, resources), null)
+          case v: Map[String, _] => (insert_tresql(n, v, objName, resources), null)
           //fill pk
           case null if (table.key == metadata.Key(List(cn))) => cn -> ("#" + table.name)
           //fill fk
-          case null if (parent != null & table.refTable.get(
-            metadata.Ref(List(cn))) == Some(ptn)) => cn -> (":#" + ptn)
+          case null if ((refPropName != null && refPropName == n) ||
+              (refPropName == null && refColName == cn)) => cn -> (":#" + ptn)
           case v => (table.cols.get(cn).map(_.name).orNull, ":" + n)
         }
       }).filter(_._1 != null).unzip match {
         case (cols: List[_], vals: List[_]) => cols.mkString("+" + table.name +
           "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") +
-          (if (parent != null) " " + name else "")
+          (if (parent != null) " '" + name + "'" else "")
       }
     }).orNull
   }
 
+  //TODO support child merge update i.e. instead of deleting and inserting all children,
+  //separately delete removed children, insert new children and update existing children.
   def update_tresql(name: String, obj: Map[String, _], resources: Resources): String = {
-    //insert statement column, value map from obj
-    var pkProp: Option[String] = None
     resources.metaData.tableOption(resources.tableName(name)).flatMap(table => {
+      var pkProp: Option[String] = None
       //stupid thing - map find methods conflicting from different traits 
       def findPkProp = pkProp.orElse {
         pkProp = obj.asInstanceOf[TraversableOnce[(String, _)]].find(
@@ -105,16 +109,22 @@ object ORT {
         pkProp
       }
       def childUpdates(n:String, o:Map[String, _]) = {
-        resources.metaData.tableOption(resources.tableName(n)).flatMap(childTable => 
+        val Array(objName, refPropName) = n.split(":").padTo(2, null)
+        resources.metaData.tableOption(resources.tableName(objName)).flatMap(childTable => 
           findPkProp.flatMap (pk => {
-            val refs = childTable.refs(table.name)
-            if (refs.size != 1) error("Cannot update child table " + childTable +
-                ". Must be exactly one reference from child to parent. Instead these refs found: " +
-                refs)
-            val refCol = refs(0).cols(0)
-            Some("-" + childTable.name + "[" + refCol + " = :" + pk + "]" + ", " +
-                insert_tresql(n, o, null, resources) + " " + n)
+            Some(childDeletes(childTable, pk, (if(refPropName == null) null 
+                else resources.colName(objName, refPropName))) + (if (o == null) "" else ", " +
+                insert_tresql(n, o, null, resources) + " '" + n + "'"))
         })).orNull
+      }
+      def childDeletes(childTable: metadata.Table, pkCol: String, refCol: String) = {
+        "-" + childTable.name + "[" + (if (refCol != null) refCol else {
+          val refs = childTable.refs(table.name)
+          if (refs.size != 1) error("Cannot update child table '" + childTable.name +
+            "'. Must be exactly one reference from child to parent table '" + table.name +
+            "'. Instead these refs found: " + refs)
+          refs(0).cols(0)
+        }) + " = :" + pkCol + "]"
       }
       obj.map(t => {
         val n = t._1
@@ -122,6 +132,7 @@ object ORT {
         if (table.key == metadata.Key(List(cn))) pkProp = Some(n)
         t._2 match {
           //children
+          case Seq() | Array() => (childUpdates(n, null), null)
           case Seq(v: Map[String, _], _*) => (childUpdates(n, v), null)
           case Array(v: Map[String, _], _*) => (childUpdates(n, v), null)
           case v: Map[String, _] => (childUpdates(n, v), null)
@@ -198,5 +209,5 @@ object ORT {
       }
     }).filter(_ != null).mkString(table.name +
         "[" + pk + " in[" + ids.map(_.mkString(", ")).getOrElse(pkVal) + "]]{", ", ", "}")
-  }
+  }  
 }
