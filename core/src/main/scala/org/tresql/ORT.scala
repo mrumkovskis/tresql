@@ -24,7 +24,7 @@ object ORT {
     Query.build(delete, resources, Map("1"->id), false)()
   }
   /** 
-   * Fills object properties specified by parameter obj from table specified by parameter name.
+   * Fills object properties specified by 'obj' parameter from table specified by 'name' parameter.
    * obj contains property names to be filled from database. obj map must contain primary key entry.
    * If no corresponding table column to the property is found property value in returned object
    * remains untouched.
@@ -64,18 +64,21 @@ object ORT {
     merge(obj, Query.select(fill).toListRowAsMap.headOption.getOrElse(Map()))
   }
 
-  def insert_tresql(name: String, obj: Map[String, _], parent: String, resources: Resources): String = {
+  def insert_tresql(name: String, obj: Map[String, _], parent: String, resources: Resources): String = {    
     //insert statement column, value map from obj
-    resources.metaData.tableOption(resources.tableName(name)).map(table => {
+    val Array(objName, refPropName) = name.split(":").padTo(2, null)
+    resources.metaData.tableOption(resources.tableName(objName)).map(table => {
+      val ptn = if (parent != null) resources.tableName(parent) else null
+      val refColName = if (parent == null) None else if(refPropName == null) 
+        if (table.refs(ptn).size != 1) None else Some(table.refs(ptn)(0).cols(0)) else Some(resources.colName(objName, refPropName)) 
       obj.map(t => {
         val n = t._1
-        val cn = resources.colName(name, n)
-        val ptn = if (parent != null) resources.tableName(parent) else null
+        val cn = resources.colName(objName, n)
         t._2 match {
           //children
-          case Seq(v: Map[String, _], _*) => insert_tresql(n, v, name, resources) -> null
-          case Array(v: Map[String, _], _*) => insert_tresql(n, v, name, resources) -> null
-          case v: Map[String, _] => insert_tresql(n, v, name, resources) -> null
+          case Seq(v: Map[String, _], _*) => insert_tresql(n, v, objName, resources) -> null
+          case Array(v: Map[String, _], _*) => insert_tresql(n, v, objName, resources) -> null
+          case v: Map[String, _] => insert_tresql(n, v, objName, resources) -> null
           //fill pk
           case null if (table.key == metadata.Key(List(cn))) => cn -> ("#" + table.name)
           //fill fk
