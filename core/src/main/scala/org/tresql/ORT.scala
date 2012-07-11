@@ -173,7 +173,7 @@ object ORT {
     val table = resources.metaData.table(resources.tableName(objName))
     var pkProp: Option[String] = None
     //stupid thing - map find methods conflicting from different traits 
-    def findPkProp(objName: String) = pkProp.orElse {
+    def findPkProp = pkProp.orElse {
       pkProp = obj.asInstanceOf[TraversableOnce[(String, _)]].find(
         n => table.key == metadata.Key(List(resources.colName(objName, n._1)))).map(_._1)
       pkProp
@@ -215,9 +215,14 @@ object ORT {
             metadata.Key(List(resources.colName(cht.name, t._1))) == 
               cht.key).map(_._2)))) + " " + n).orNull)
         }
+        //children linked on this table primary key property and child table only foreign key
+        //property or foreign key property specified after colon
         case v: Map[String, _] => {
           val Array(on, rpn) = n.split(":").padTo(2, null)
-          List(resources.metaData.tableOption(resources.tableName(on)).flatMap(cht=>findPkProp.map().orNull)
+          List(resources.metaData.tableOption(resources.tableName(on)).flatMap(
+            cht => findPkProp.flatMap(pkpr => Some("|" +
+              fill_tresql(n, v, fillNames, resources, parent = Some(objName -> pkpr)) +
+              " '" + n + "'"))).orNull)
         } 
         case _ => List(table.cols.get(cn).map(_.name + " " + n).orNull)
       }
@@ -227,7 +232,7 @@ object ORT {
 
   private def importedKey(tableName: String, childTable: metadata.Table) = {
     val refs = childTable.refs(tableName)
-    if (refs.size != 1) error("Cannot update child table '" + childTable.name +
+    if (refs.size != 1) error("Cannot link child table '" + childTable.name +
       "'. Must be exactly one reference from child to parent table '" + tableName +
       "'. Instead these refs found: " + refs)
     refs(0).cols(0)

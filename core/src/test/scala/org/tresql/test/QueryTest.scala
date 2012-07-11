@@ -221,6 +221,21 @@ class QueryTest extends Suite {
               "ename" -> "SCOTT", "mgr" -> 7566, "deptno"->20)),
         "calculated_children"->List(Map("x"->5))))(ORT.fill("dept", obj, true))
     
+    obj = Map("empno"->7788, "mgr"-> null, "mgr_name"->null, "work:empno"-> Map("wdate"->null,
+        "hours"->null, "empno_mgr"->null, "empno_mgr_name"->null))
+    expect(Map("empno" -> 7788, "mgr" -> 7566, "mgr_name" -> List(Map("code" -> 7566,
+      "name" -> "JONES (RESEARCH)")), "work:empno" -> List(Map("wdate" ->
+      Date.valueOf("2012-06-06"), "hours" -> 5, "empno_mgr" -> 7566,
+      "empno_mgr_name" -> List(Map("code" -> 7566, "name" -> "JONES (RESEARCH)"))),
+      Map("wdate" -> Date.valueOf("2012-06-07"), "hours" -> 8, "empno_mgr" -> 7782,
+        "empno_mgr_name" -> List(Map("code" -> 7782, "name" -> "CLARK (ACCOUNTING)"))))))(
+      ORT.fill("emp", obj, true))
+
+    obj = Map("empno"->7788, "mgr"-> null, "mgr_name"->null, "work"-> Map("wdate"->null,
+        "hours"->null, "empno_mgr"->null, "empno_mgr_name"->null))
+    intercept[Exception](ORT.fill("emp", obj, true))
+   
+      
     println("--- update ---")
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
         "emp"->List(
