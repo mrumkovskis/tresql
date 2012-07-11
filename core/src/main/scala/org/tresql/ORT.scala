@@ -103,28 +103,23 @@ object ORT {
     resources.metaData.tableOption(resources.tableName(name)).flatMap(table => {
       var pkProp: Option[String] = None
       //stupid thing - map find methods conflicting from different traits 
-      def findPkProp = pkProp.orElse {
+      def findPkProp(objName:String) = pkProp.orElse {
         pkProp = obj.asInstanceOf[TraversableOnce[(String, _)]].find(
-          n => table.key == metadata.Key(List(resources.colName(name, n._1)))).map(_._1)
+          n => table.key == metadata.Key(List(resources.colName(objName, n._1)))).map(_._1)
         pkProp
       }
       def childUpdates(n:String, o:Map[String, _]) = {
         val Array(objName, refPropName) = n.split(":").padTo(2, null)
         resources.metaData.tableOption(resources.tableName(objName)).flatMap(childTable => 
-          findPkProp.flatMap (pk => {
+          findPkProp(objName).flatMap (pk => {
             Some(childDeletes(childTable, pk, (if(refPropName == null) null 
                 else resources.colName(objName, refPropName))) + (if (o == null) "" else ", " +
                 insert_tresql(n, o, null, resources) + " '" + n + "'"))
         })).orNull
       }
       def childDeletes(childTable: metadata.Table, pkCol: String, refCol: String) = {
-        "-" + childTable.name + "[" + (if (refCol != null) refCol else {
-          val refs = childTable.refs(table.name)
-          if (refs.size != 1) error("Cannot update child table '" + childTable.name +
-            "'. Must be exactly one reference from child to parent table '" + table.name +
-            "'. Instead these refs found: " + refs)
-          refs(0).cols(0)
-        }) + " = :" + pkCol + "]"
+        "-" + childTable.name + "[" + (if (refCol != null) refCol
+            else importedKey(table.name, childTable)) + " = :" + pkCol + "]"
       }
       obj.map(t => {
         val n = t._1
@@ -149,7 +144,7 @@ object ORT {
   }
 
   def fill_tresql(name: String, obj: Map[String, _], fillNames:Boolean, resources: Resources,
-      ids:Option[Seq[_]] = None): String = {
+      ids:Option[Seq[_]] = None, parent:Option[(/*objName*/String, /*pkPropName*/String)] = None): String = {
     def nameExpr(table:String, idVar:String, nameExpr:String) = {
       import QueryParser._
       parseExp(nameExpr) match {
@@ -174,19 +169,35 @@ object ORT {
         case _ => nameExpr
       }
     }
-    val table = resources.metaData.table(resources.tableName(name))
-    var pk:String = null
-    var pkVal:Any = null
+    val Array(objName, refPropName) = name.split(":").padTo(2, null)
+    val table = resources.metaData.table(resources.tableName(objName))
+    var pkProp: Option[String] = None
+    //stupid thing - map find methods conflicting from different traits 
+    def findPkProp(objName: String) = pkProp.orElse {
+      pkProp = obj.asInstanceOf[TraversableOnce[(String, _)]].find(
+        n => table.key == metadata.Key(List(resources.colName(objName, n._1)))).map(_._1)
+      pkProp
+    }
+    var filterCol: String = parent.map(p => if (refPropName != null) 
+      resources.colName(objName, refPropName) else importedKey(resources.tableName(p._1), table)).orNull
+    var filterVal:Any = if(filterCol != null) ":1('" + parent.get._2 + "')" else null
     obj.flatMap(t => {
       val n = t._1
-      val cn = resources.colName(name, n)
+      val cn = resources.colName(objName, n)
       val refTable = table.refTable.get(metadata.Ref(List(cn)))
       t._2 match {
-        //primary key
-        case v if (table.key == metadata.Key(List(cn))) => pk = cn; pkVal = v; List(pk + " " + n)
+        //pk
+        case v if (table.key == metadata.Key(List(cn))) => {
+          if (filterCol == null && v != null) {
+            //set filter column if primary key set
+            filterCol = cn; filterVal = v
+          }
+          pkProp = Some(n)
+          List(filterCol + " " + n)
+        }
         //foreign key
         case v if (refTable != None) => {
-          (cn + " " + n) :: (if (fillNames) resources.propNameExpr(name, n).orElse(
+          (cn + " " + n) :: (if (fillNames) resources.propNameExpr(objName, n).orElse(
               resources.nameExpr(refTable.get)).map(ne => 
               List("|" + nameExpr(refTable.get, n, ne) + " " + n + "_name")).getOrElse(Nil) else Nil)
         }
@@ -204,10 +215,22 @@ object ORT {
             metadata.Key(List(resources.colName(cht.name, t._1))) == 
               cht.key).map(_._2)))) + " " + n).orNull)
         }
-        case v: Map[String, _] => sys.error("not supported yet") 
+        case v: Map[String, _] => {
+          val Array(on, rpn) = n.split(":").padTo(2, null)
+          List(resources.metaData.tableOption(resources.tableName(on)).flatMap(cht=>findPkProp.map().orNull)
+        } 
         case _ => List(table.cols.get(cn).map(_.name + " " + n).orNull)
       }
     }).filter(_ != null).mkString(table.name +
-        "[" + pk + " in[" + ids.map(_.mkString(", ")).getOrElse(pkVal) + "]]{", ", ", "}")
-  }  
+        "[" + filterCol + " in[" + ids.map(_.mkString(", ")).getOrElse(filterVal) + "]]{", ", ", "}")
+  }
+
+  private def importedKey(tableName: String, childTable: metadata.Table) = {
+    val refs = childTable.refs(tableName)
+    if (refs.size != 1) error("Cannot update child table '" + childTable.name +
+      "'. Must be exactly one reference from child to parent table '" + tableName +
+      "'. Instead these refs found: " + refs)
+    refs(0).cols(0)
+  }
+  
 }
