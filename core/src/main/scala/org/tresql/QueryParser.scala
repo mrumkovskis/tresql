@@ -122,7 +122,7 @@ object QueryParser extends JavaTokenParsers {
   def ALL: Parser[All] = "*" ^^^ All()
 
   def qualifiedIdent: Parser[Ident] = rep1sep(excludeKeywordsIdent, ".") ^^ (Ident(_))
-  def variable: Parser[Variable] = ((":" ~> (ident ~ opt("?"))) | "?") ^^ {
+  def variable: Parser[Variable] = ((":" ~> ((ident | stringLiteral) ~ opt("?"))) | "?") ^^ {
     case "?" => Variable("?", false)
     case (i: String) ~ o => Variable(i, o != None)
   }

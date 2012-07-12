@@ -33,8 +33,10 @@ emp {count(*)} --> [[14]]
 emp e/dept d [d.deptno = 20]{empno, ename, dname}#(empno) --> [[7369, "SMITH", "RESEARCH"], [7566, "JONES", "RESEARCH"], [7788, "SCOTT", "RESEARCH"], [7876, "ADAMS", "RESEARCH"], [7902, "FORD", "RESEARCH"]]
 emp e[e.deptno d1, e.deptno d2]dept{d1.deptno, d2.deptno, e.empno}#(1,2,3) --> [[10, 10, 7782], [10, 10, 7839], [10, 10, 7934], [20, 20, 7369], [20, 20, 7566], [20, 20, 7788], [20, 20, 7876], [20, 20, 7902], [30, 30, 7499], [30, 30, 7521], [30, 30, 7654], [30, 30, 7698], [30, 30, 7844], [30, 30, 7900]]
 
-//implicit search by primary key
+//implicit search by primary key with named variable
 dept[:id] {deptno} #(deptno) --> id=10 --> [[10]]
+dept[:'id'] {deptno} #(deptno) --> id=10 --> [[10]]
+dept[:"id"] {deptno} #(deptno) --> id=10 --> [[10]]
 
 //join
 emp e/dept[sal >= hisal & sal <= losal]salgrade {ename, dname, grade} #(empno) --> [["SMITH", "RESEARCH", 1], ["ALLEN", "SALES", 3], ["WARD", "SALES", 2], ["JONES", "RESEARCH", 4], ["MARTIN", "SALES", 2], ["BLAKE", "SALES", 4], ["CLARK", "ACCOUNTING", 4], ["SCOTT", "RESEARCH", 4], ["KING", "ACCOUNTING", 5], ["TURNER", "SALES", 3], ["ADAMS", "RESEARCH", 1], ["JAMES", "SALES", 1], ["FORD", "RESEARCH", 4], ["MILLER", "ACCOUNTING", 2]]
