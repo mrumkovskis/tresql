@@ -114,7 +114,7 @@ object ORT {
           findPkProp(objName).flatMap (pk => {
             Some(childDeletes(childTable, pk, (if(refPropName == null) null 
                 else resources.colName(objName, refPropName))) + (if (o == null) "" else ", " +
-                insert_tresql(n, o, null, resources) + " '" + n + "'"))
+                insert_tresql(n, o, objName, resources)))
         })).orNull
       }
       def childDeletes(childTable: metadata.Table, pkCol: String, refCol: String) = {
@@ -141,6 +141,12 @@ object ORT {
             vals.filter(_ != null).mkString(" [", ", ", "]")))
       }
     }).orNull
+  }
+  
+  def update_merge_tresql(name:String, obj:Map[String, _], resources:Resources):
+	(String, Map[String, _]) = {
+    
+    null
   }
 
   def fill_tresql(name: String, obj: Map[String, _], fillNames:Boolean, resources: Resources,
