@@ -5,6 +5,8 @@ import sys._
 /** Object Relational Transformations - ORT */
 object ORT {
   
+  private val PROP_PATTERN = """(\w+)(:(\w+))?(#(\w+))?"""r
+  
   def insert(name:String, obj:Map[String, _])(implicit resources:Resources = Env):Any = {
     val insert = insert_tresql(name, obj, null, resources)
     if(insert == null) error("Cannot insert data. Table not found for object: " + name)
@@ -142,50 +144,61 @@ object ORT {
       }
     }).orNull
   }
-/*  
-  def del_upd_ins_obj(name:String, obj:Map[String, _], resources:Resources):Map[String, Any] = 
-  resources.metaData.tableOption(resources.tableName(name)).map { table => {
-    var pk = null
+  
+  def del_upd_ins_obj(name:String, obj:Map[String, _], resources:Resources):Map[String, Any] =
+  resources.metaData.tableOption(resources.tableName(name.split(":")(0))).map { table => {
+    var pk:Any = null
     val tresqlObj = obj.flatMap(entry=> {
-      val (prop, col) = entry._1->resources.colName(name, prop)
+      val (prop, col) = entry._1->resources.colName(name, entry._1)
       entry._2 match {
         case x if(table.key == metadata.Key(List(col))) => pk = x; Map(entry)
         //process child table entry
         case cht:List[Map[String, Any]] => cht.foldLeft(Map(
-            name + "#insert" -> List[Map[String, Any]](),
-            name + "#update" -> List[Map[String, Any]](),
-            name + "#delete" -> List[Map[String, Any]]()))((m, v)=> {
+            prop + "#insert" -> List[Any](),
+            prop + "#update" -> List[Any](),
+            prop + "#delete" -> List[Any]()))((m, v)=> {
               val dui = del_upd_ins_obj(prop, v, resources)
               m.map(t=> t._1->(dui.get(t._1).map(_ :: t._2).getOrElse(t._2)))
-            })
+            }).filter(_._2.size > 0)
         //eliminate props not matching col in database
         case x => table.cols.get(col).map(c=> Map(entry)).getOrElse(Map())
       }
     })
-    if (pk == null) M
-  }}.getOrElse(Map[String, Any]())
-*/  
-/*
-  def update_merge_tresql(name: String, obj: Map[String, _], resources: Resources): (String, Map[String, _]) =
-  resources.metaData.tableOption(resources.tableName(name)).map { table => {
-    val tresqlObj = obj.flatMap(e => {
-      val (prop, col) = e._1->resources.colName(name, prop)
-      e._2 match {
-        //remove primary key entry
-        case _ if(table.key == metadata.Key(List(col))) => Map[String, Any]()
-        //process child table entry
-        case cht:List[Map[String, Any]] => resources.metaData.tableOption(resources.tableName(cht)).map {
-          x=> {
-            //split child table values
+    if (pk == null) Map(name + "#insert" -> tresqlObj)
+    else Map(name + "#update" -> tresqlObj, name + "#delete" -> pk) 
+  }}.getOrElse(Map())
+
+  def del_upd_ins_tresql(parentTable:metadata.Table, name:String, obj:List[Any], res:Resources):String = {
+    val PROP_PATTERN(objName, _, refPropName, _, action) = name
+    val table = res.metaData.table(res.tableName(objName))
+    action match {
+      case "delete" => "-" + table.name + "[" + table.key.cols(0) + " !in(:'" + name + "')]"
+      case _ => obj match {
+        case Seq(v:Map[String, Any], _*) => v map {
+          case (n, l:List[_]) => (del_upd_ins_tresql(table, n, l, res), null)
+          case (n, v) => action match {
+            case "insert" => {
+              //pk null
+              //fk null
+              //value
+              (null, null)
+            }
+            case "update" => {
+              //pk
+              //value              
+              (null, null)
+            }
           }
-        }.getOrElse(Map[String, Any]()) //remove not existing child table entry
-        //eliminate
-        case x
+        } filter (_._1 != null) unzip match {
+          case (cols: List[_], vals: List[_]) => action match {
+            case "insert" => ""
+            case "update" => ""
+          }
+        }
       }
-    })
-    null
-  }}.orNull
-*/
+    }
+  }
+  
   def fill_tresql(name: String, obj: Map[String, _], fillNames:Boolean, resources: Resources,
       ids:Option[Seq[_]] = None, parent:Option[(/*objName*/String, /*pkPropName*/String)] = None): String = {
     def nameExpr(table:String, idVar:String, nameExpr:String) = {
