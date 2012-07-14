@@ -25,11 +25,14 @@ object ORT {
   /**
    * Saves object obj specified by parameter name. If object primary key is set object
    * is updated, if object primary key is not set object is inserted. Children are merged
-   * with database i.e. new onies are inserted, existing ones updated, deleted ones deleted.
+   * with database i.e. new ones are inserted, existing ones updated, deleted ones deleted.
+   * Children structure i.e. property set must be identical, since one tresql statement is used
+   * for all of the children
    */
   def save(name:String, obj:Map[String, _])(implicit resources:Resources = Env):Any = {
     val (save, saveable) = save_tresql(name, obj, resources)
     Env log save
+    Env log saveable.toString
     Query.build(save, resources, saveable, false)()
   }
   def delete(name:String, id:Any)(implicit resources:Resources = Env):Any = {
@@ -162,7 +165,6 @@ object ORT {
     val (n:String, saveable:ListMap[String, Any]) = x.get(name + "#insert").map(
         (name + "#insert", _))getOrElse(x.get(name + "#update").map((name + "#update", _)).getOrElse(
             error("Cannot save data. "))).asInstanceOf[(String, ListMap[String, Any])]
-    println(saveable)
     del_upd_ins_tresql(null, n, saveable, resources) -> saveable    
   }
   
