@@ -270,6 +270,22 @@ class QueryTest extends Suite {
             "mgr_name" -> null, "deptno" -> 30)),         
       "calculated_children" -> List(Map("x" -> 5)), "deptno" -> 30)
       expect(List(1, List(4, List(1, 1, 1), List(1))))(ORT.save("dept", obj))
-      
+
+    obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
+        "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->7788, "hours"->10, "empno_mgr"->7839),
+              Map("wdate"->"2012-7-13", "empno"->7788, "hours"->3, "empno_mgr"->7839)),
+        "calculated_children"->List(Map("x"->5)), "deptno"->20)
+    expect(List(1, List(2, List(1, 1))))(ORT.save("emp", obj))    
+    
+    obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
+        "emp"->List(
+            Map("empno"->null, "ename"->"AMY", "mgr"->7788, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
+                "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->null, "hours"->5, "empno_mgr"->7839),
+              Map("wdate"->"2012-7-13", "empno"->null, "hours"->2, "empno_mgr"->7839))), 
+            Map("empno"->null, "ename"->"LENE", "mgr"->7566, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
+                "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->null, "hours"->5, "empno_mgr"->7839),
+              Map("wdate"->"2012-7-13", "empno"->null, "hours"->2, "empno_mgr"->7839)))),
+        "calculated_children"->List(Map("x"->5)), "deptno"->40)
+    expect(List(1, List(2, List(List(1, List(0, List(1, 1))), List(1, List(0, List(1, 1)))))))(ORT.save("dept", obj))      
   }
 }
