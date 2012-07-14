@@ -164,11 +164,19 @@ class QueryTest extends Suite {
     var obj:Map[String, Any] = Map("deptno" -> null, "dname" -> "LAW", "loc" -> "DALLAS",
       "calculated_field"->333, "another_calculated_field"->"A",
       "emp" -> scala.Array(Map("empno" -> null, "ename" -> "SMITH", "deptno" -> null,
-          "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)"))),
+          "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")),
+          "work:empno"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null),
+              Map("wdate"->"2012-7-10", "empno"->null, "hours"->8, "empno_mgr"->null))),
         Map("empno" -> null, "ename" -> "LEWIS", "deptno" -> null,
-            "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")))))
-    expect(List(1, List(List(1, 1))))(ORT.insert("dept", obj))
+            "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")),
+            "work:empno"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))))
+    expect(List(1, List(List(List(1, List(List(1, 1))), List(1, List(List(1)))))))(ORT.insert("dept", obj))
     intercept[Exception](ORT.insert("no_table", obj))
+    
+    obj = Map("empno" -> null, "ename" -> "FAIL", "deptno" -> 30,
+          "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))
+    //fail to link emp->work since work contains two foreign keys to emp. 
+    intercept[Exception](ORT.insert("emp", obj))
     
     println("--- fill ---")
     obj = Map("empno"->7788, "ename"->null, "deptno"->null, "deptno_name"->null,
@@ -213,6 +221,21 @@ class QueryTest extends Suite {
               "ename" -> "SCOTT", "mgr" -> 7566, "deptno"->20)),
         "calculated_children"->List(Map("x"->5))))(ORT.fill("dept", obj, true))
     
+    obj = Map("empno"->7788, "mgr"-> null, "mgr_name"->null, "work:empno"-> Map("wdate"->null,
+        "hours"->null, "empno_mgr"->null, "empno_mgr_name"->null))
+    expect(Map("empno" -> 7788, "mgr" -> 7566, "mgr_name" -> List(Map("code" -> 7566,
+      "name" -> "JONES (RESEARCH)")), "work:empno" -> List(Map("wdate" ->
+      Date.valueOf("2012-06-06"), "hours" -> 5, "empno_mgr" -> 7566,
+      "empno_mgr_name" -> List(Map("code" -> 7566, "name" -> "JONES (RESEARCH)"))),
+      Map("wdate" -> Date.valueOf("2012-06-07"), "hours" -> 8, "empno_mgr" -> 7782,
+        "empno_mgr_name" -> List(Map("code" -> 7782, "name" -> "CLARK (ACCOUNTING)"))))))(
+      ORT.fill("emp", obj, true))
+
+    obj = Map("empno"->7788, "mgr"-> null, "mgr_name"->null, "work"-> Map("wdate"->null,
+        "hours"->null, "empno_mgr"->null, "empno_mgr_name"->null))
+    intercept[Exception](ORT.fill("emp", obj, true))
+   
+      
     println("--- update ---")
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
         "emp"->List(
@@ -220,8 +243,53 @@ class QueryTest extends Suite {
             Map("empno"->null, "ename"->"MARY", "mgr"->7566, "mgr_name"->null, "deptno"->40)),
         "calculated_children"->List(Map("x"->5)), "deptno"->40)
     expect(List(1, List(0, List(1, 1))))(ORT.update("dept", obj))
+    obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
+        "work:empno"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
+              Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
+        "calculated_children"->List(Map("x"->5)), "deptno"->40)
+    expect(List(1, List(2, List(1, 1))))(ORT.update("emp", obj))    
+    obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
+        "work"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
+              Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
+        "calculated_children"->List(Map("x"->5)), "deptno"->40)
+    intercept[Exception](ORT.update("emp", obj))    
     
     println("--- delete ---")
     expect(1)(ORT.delete("emp", 7934))
+    
+    println("--- save ---")
+    obj = Map("dname" -> "SALES", "loc" -> "WASHINGTON", "calculated_field" -> 222,
+      "emp" -> List(
+        Map("empno" -> 7499, "ename" -> "ALLEN SMITH", "job" -> "SALESMAN", "mgr" -> 7698,
+            "mgr_name" -> null, "deptno" -> 30),
+        Map("empno" -> 7654, "ename" -> "MARTIN BLAKE", "job" -> "SALESMAN", "mgr" -> 7698,
+            "mgr_name" -> null, "deptno" -> 30),
+        Map("empno" -> null, "ename" -> "DEISE ROSE", "job" -> "SALESGIRL", "mgr" -> 7698,
+            "mgr_name" -> null, "deptno" -> 30),
+        Map("empno" -> 7698, "ename" -> "BLAKE", "job" -> "SALESMAN", "mgr" -> 7839,
+            "mgr_name" -> null, "deptno" -> 30)),         
+      "calculated_children" -> List(Map("x" -> 5)), "deptno" -> 30)
+      expect(List(1, List(4, List(1, 1, 1), List(1))))(ORT.save("dept", obj))
+
+    obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
+        "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->7788, "hours"->10, "empno_mgr"->7839),
+              Map("wdate"->"2012-7-13", "empno"->7788, "hours"->3, "empno_mgr"->7839)),
+        "calculated_children"->List(Map("x"->5)), "deptno"->20)
+    expect(List(1, List(2, List(1, 1))))(ORT.save("emp", obj))    
+    
+    obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
+        "emp"->List(
+            Map("empno"->null, "ename"->"AMY", "mgr"->7788, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
+                "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->null, "hours"->5, "empno_mgr"->7839),
+              Map("wdate"->"2012-7-13", "empno"->null, "hours"->2, "empno_mgr"->7839))), 
+            Map("empno"->null, "ename"->"LENE", "mgr"->7566, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
+                "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->null, "hours"->5, "empno_mgr"->7839),
+              Map("wdate"->"2012-7-13", "empno"->null, "hours"->2, "empno_mgr"->7839)))),
+        "calculated_children"->List(Map("x"->5)), "deptno"->40)
+    expect(List(1, List(2, List(List(1, List(0, List(1, 1))), List(1, List(0, List(1, 1)))))))(ORT.save("dept", obj))
+    
+    obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
+        "work:empno"->List(), "calculated_children"->List(Map("x"->5)), "deptno"->20)
+    expect(List(1, List(2)))(ORT.save("emp", obj))        
   }
 }
