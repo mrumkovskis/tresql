@@ -256,5 +256,20 @@ class QueryTest extends Suite {
     
     println("--- delete ---")
     expect(1)(ORT.delete("emp", 7934))
+    
+    println("--- save ---")
+    obj = Map("dname" -> "SALES", "loc" -> "WASHINGTON", "calculated_field" -> 222,
+      "emp" -> List(
+        Map("empno" -> 7499, "ename" -> "ALLEN SMITH", "job" -> "SALESMAN", "mgr" -> 7698,
+            "mgr_name" -> null, "deptno" -> 30),
+        Map("empno" -> 7654, "ename" -> "MARTIN BLAKE", "job" -> "SALESMAN", "mgr" -> 7698,
+            "mgr_name" -> null, "deptno" -> 30),
+        Map("empno" -> null, "ename" -> "DEISE ROSE", "job" -> "SALESGIRL", "mgr" -> 7698,
+            "mgr_name" -> null, "deptno" -> 30),
+        Map("empno" -> 7698, "ename" -> "BLAKE", "job" -> "SALESMAN", "mgr" -> 7839,
+            "mgr_name" -> null, "deptno" -> 30)),         
+      "calculated_children" -> List(Map("x" -> 5)), "deptno" -> 30)
+      expect(List(1, List(4, List(1, 1, 1), List(1))))(ORT.save("dept", obj))
+      
   }
 }
