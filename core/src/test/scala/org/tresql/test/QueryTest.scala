@@ -17,13 +17,13 @@ class QueryTest extends Suite {
       dialects.HSQLDialect)
   Env.idExpr = s => "nextval('seq')"
   Env update ((msg, level) => println (msg))
-  Env update (/*object table name map*/Map(
+  Env update (/*object to table name map*/Map(
       "emp_dept_view"->"emp"),
-      /*property column name map*/Map(), /*table name map*/Map(
+      /*property to column name map*/Map(), /*table to name map*/Map(
       "work"->"work[empno]emp{ename || ' (' || wdate || ', ' || hours || ')'}",
       "dept"->"deptno, deptno || ', ' || dname || ' (' || loc || ')'",
       "emp"->"emp/dept{empno, empno, ename || ' (' || dname || ')'}"),
-      /*object property name map*/Map(
+      /*object property to name map*/Map(
       "emp_dept_view"->Map("deptno"->"null")))
   //create test db script
   new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {

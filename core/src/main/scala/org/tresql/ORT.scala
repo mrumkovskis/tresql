@@ -6,7 +6,7 @@ import sys._
 /** Object Relational Transformations - ORT */
 object ORT {
   
-  /** <object name>[:<linked property name>][#(insert | update | delete)] */
+  /** <object name | property name>[:<linked property name>][#(insert | update | delete)] */
   val PROP_PATTERN = """(\w+)(:(\w+))?(#(\w+))?"""r
   
   def insert(name:String, obj:Map[String, _])(implicit resources:Resources = Env):Any = {
