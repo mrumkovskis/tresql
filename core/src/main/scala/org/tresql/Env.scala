@@ -20,7 +20,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   private val provider: Option[EnvProvider] = if(_provider == null) None else Some(_provider)
 
   private def rootEnv(e: Env): Env = e.provider.map(p=>rootEnv(p.env)).getOrElse(e)
-  val root = rootEnv(this)
+  private val root = rootEnv(this)
   root.providedEnvs = this :: root.providedEnvs
   
   private var vars: Option[scala.collection.mutable.Map[String, Any]] = None
@@ -61,7 +61,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   private[tresql] def result_=(r: Result) = _result = r 
     
   private[tresql] def closeStatement {
-    rootEnv(this).providedEnvs foreach (e=> if (e.statement != null) e.statement.close)
+    root.providedEnvs foreach (e=> if (e.statement != null) e.statement.close)
   }
   
   private[tresql] def nextId(seqName: String): Any = provider.map(_.env.nextId(seqName)).getOrElse {
