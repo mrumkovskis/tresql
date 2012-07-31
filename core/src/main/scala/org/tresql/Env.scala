@@ -1,6 +1,7 @@
 package org.tresql
 
 import sys._
+import com.sun.net.ssl.internal.ssl.Provider
 
 /* Environment for expression building and execution */
 class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolean)
@@ -13,14 +14,14 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
     update(params)
   }
   
+  //provided envs are used for statement closing. this list is filled set only if provider is not set.
+  //NOTE: list contains also this environment 
   private var providedEnvs: List[Env] = Nil
   private val provider: Option[EnvProvider] = if(_provider == null) None else Some(_provider)
 
-  if (provider != null) {
-    def rootEnv(e: Env): Env = e.provider.map(p=>rootEnv(p.env)).getOrElse(e)
-    val root = rootEnv(this)
-    root.providedEnvs = this :: root.providedEnvs
-  }
+  private def rootEnv(e: Env): Env = e.provider.map(p=>rootEnv(p.env)).getOrElse(e)
+  val root = rootEnv(this)
+  root.providedEnvs = this :: root.providedEnvs
   
   private var vars: Option[scala.collection.mutable.Map[String, Any]] = None
   private val ids = scala.collection.mutable.Map[String, Any]()
@@ -60,8 +61,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   private[tresql] def result_=(r: Result) = _result = r 
     
   private[tresql] def closeStatement {
-    if (statement != null) statement.close
-    this.providedEnvs foreach (_.closeStatement)
+    rootEnv(this).providedEnvs foreach (e=> if (e.statement != null) e.statement.close)
   }
   
   private[tresql] def nextId(seqName: String): Any = provider.map(_.env.nextId(seqName)).getOrElse {
