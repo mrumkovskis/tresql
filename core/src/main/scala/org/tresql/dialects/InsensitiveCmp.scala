@@ -26,36 +26,44 @@ object InsensitiveCmp extends (Expr => String) {
     case e.builder.FunExpr(mode @ ("cmp_i" | "cmp_i_start" | "cmp_i_end" | "cmp_i_any" | "cmp_i_exact"),
       List(col, value)) => {
       cleanup()
-      //set thread indication that cmp_i function is in the stack. This is checked in VarExpr pattern guard
-      cmp_i set true
-      //obtain value sql statement. acc, upp flags should be set if necessary
-      val v = value.sql
-      var (acc, upp) = (accFlag.get, caseFlag.get)
-      val sql = QueryBuilder((if (!acc) "translate(" else "") +
-        (if (!upp) "lower(" else "") +
-        COL +
-        (if (!upp) ")" else "") +
-        (if (!acc) ", '" + accents._1 + "', '" + accents._2 + "')" else ""),
-        e.builder.env).sql.replace(COL, col.sql) + " like " +
-        (mode match {
-          case "cmp_i" | "cmp_i_any" => "'%' || " + v + " || '%'"
-          case "cmp_i_start" => v + " || '%'"
-          case "cmp_i_end" => "'%' || " + v
-          case _ => v
-        })
-      cleanup()
-      sql
+      try {
+        //set thread indication that cmp_i function is in the stack. This is checked in VarExpr pattern guard
+        cmp_i set true
+        //obtain value sql statement. acc, upp flags should be set if necessary
+        val v = value.sql
+        var (acc, upp) = (accFlag.get, caseFlag.get)
+        val sql = QueryBuilder((if (!acc) "translate(" else "") +
+          (if (!upp) "lower(" else "") +
+          COL +
+          (if (!upp) ")" else "") +
+          (if (!acc) ", '" + accents._1 + "', '" + accents._2 + "')" else ""),
+          e.builder.env).sql.replace(COL, col.sql) + " like " +
+          (mode match {
+            case "cmp_i" | "cmp_i_any" => "'%' || " + v + " || '%'"
+            case "cmp_i_start" => v + " || '%'"
+            case "cmp_i_end" => "'%' || " + v
+            case _ => v
+          })
+        sql
+      } finally {
+        cleanup()
+      }
     }
     case v @ e.builder.VarExpr(_, _) if (cmp_i.get) => {
       var (acc, upp) = (false, false)
-      v().toString.dropWhile(c => {
-        if (!acc) acc = accents._3.contains(c)
-        if (!upp) upp = c.isUpper
-        !acc || !upp
-      })
-      accFlag set acc
-      caseFlag set upp
-      if (accents._4 == null) v.defaultSQL else accents._4(e)
+      v() match {
+        case null => v.defaultSQL
+        case x => {
+          x.toString.dropWhile(c => {
+            if (!acc) acc = accents._3.contains(c)
+            if (!upp) upp = c.isUpper
+            !acc || !upp
+          })
+          accFlag set acc
+          caseFlag set upp
+          if (accents._4 == null) v.defaultSQL else accents._4(e)
+        }
+      }
     }
     case e.builder.FunExpr("translate", List(arg, from, to)) if (accents._4 == null) => {
       "translate(" + arg.sql + ", " + from.sql + ", " + to.sql + ")"
