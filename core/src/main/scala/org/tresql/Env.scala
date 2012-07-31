@@ -14,7 +14,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
     update(params)
   }
   
-  //provided envs are used for statement closing. this list is filled set only if provider is not set.
+  //provided envs are used for statement closing. this list is filled only if provider is not set.
   //NOTE: list contains also this environment 
   private var providedEnvs: List[Env] = Nil
   private val provider: Option[EnvProvider] = if(_provider == null) None else Some(_provider)
