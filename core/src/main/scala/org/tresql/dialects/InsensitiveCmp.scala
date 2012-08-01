@@ -52,7 +52,7 @@ object InsensitiveCmp extends (Expr => String) {
     case v @ e.builder.VarExpr(_, _) if (cmp_i.get) => {
       var (acc, upp) = (false, false)
       v() match {
-        case null => v.defaultSQL
+        case null => if (accents._4 == null) v.defaultSQL else accents._4(e)
         case x => {
           x.toString.dropWhile(c => {
             if (!acc) acc = accents._3.contains(c)
