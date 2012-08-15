@@ -45,6 +45,7 @@ object ORT {
    * obj contains property names to be filled from database. obj map must contain primary key entry.
    * If no corresponding table column to the property is found property value in returned object
    * remains untouched.
+   * If no object is found by primary key None is returned.
    * 
    * Returned object contains exactly the same property set as the one passed as a parameter.
    * 
@@ -59,7 +60,7 @@ object ORT {
    *        is set to "name". (first column is interpreted as a primary key)
    */
   def fill(name:String, obj:Map[String, _], fillNames: Boolean = false)
-    (implicit resources:Resources = Env):Map[String, Any] = {
+    (implicit resources:Resources = Env):Option[Map[String, Any]] = {
     def merge(obj: Map[String, _], res: Map[String, _]):Map[String, _] = {
       obj.map(t => t._1 -> res.get(t._1).map({
         case rs: Seq[Map[String, _]] => t._2 match {
@@ -79,7 +80,7 @@ object ORT {
     }
     val fill = fill_tresql(name, obj, fillNames, resources)
     Env log fill
-    merge(obj, Query.select(fill).toListRowAsMap.headOption.getOrElse(Map()))
+    Query.select(fill).toListRowAsMap.headOption.map(r=> merge(obj, r))
   }
 
   def insert_tresql(name: String, obj: Map[String, _], parent: String, resources: Resources): String = {    
