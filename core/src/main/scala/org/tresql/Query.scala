@@ -224,6 +224,9 @@ object Query {
   def unique[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]): T = {
     select(expr, normalizePars(params)).unique[T]
   }
+  def uniqueOption[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]): Option[T] = {
+    select(expr, normalizePars(params)).uniqueOption[T]
+  }
 }
 
 /** Out parameter box for callable statement */

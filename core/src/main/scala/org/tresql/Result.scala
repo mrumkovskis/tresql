@@ -198,6 +198,15 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
       case false => error("No rows in result")
     }
   }
+  def uniqueOption[T](implicit m: scala.reflect.Manifest[T]): Option[T] = {
+    hasNext match {
+      case true =>
+        next; val v = typed[T](0); if (hasNext) {
+          close; error("More than one row for unique result")
+        } else Some(v)
+      case false => None
+    }
+  }
 
   case class Row(row: Seq[Any]) extends RowLike {
     def apply(idx: Int) = row(idx)
