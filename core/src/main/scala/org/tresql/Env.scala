@@ -1,7 +1,6 @@
 package org.tresql
 
 import sys._
-import com.sun.net.ssl.internal.ssl.Provider
 
 /* Environment for expression building and execution */
 class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolean)
