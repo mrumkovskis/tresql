@@ -33,6 +33,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private var separateQueryFlag = false
   //indicate * in column
   private var allCols = false
+  //indicate table.* in column clause
+  private var identAll = false
 
   case class ConstExpr(val value: Any) extends BaseExpr {
     override def apply() = value
@@ -46,6 +48,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   case class AllExpr() extends PrimitiveExpr {
     def defaultSQL = "*"
+  }
+  case class IdentAllExpr(val name: List[String]) extends PrimitiveExpr {
+    def defaultSQL = name.mkString(".") + ".*"
   }
 
   case class VarExpr(val name: String, val opt: Boolean) extends BaseExpr {
@@ -553,6 +558,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           if (pars.exists(_ == null)) null else new FunExpr(n, pars)  
         }
         case Ident(i) => IdentExpr(i)
+        case IdentAll(i) => {identAll = true; IdentAllExpr(i.ident)}
         case Arr(l: List[_]) => new ArrExpr(l map { buildInternal(_, parseCtx) })
         case Variable("?", o) => this.bindIdx += 1; new VarExpr(this.bindIdx.toString, o)
         case Variable(n, o) => if (!env.reusableExpr && o && !(env contains n)) null else new VarExpr(n, o)
