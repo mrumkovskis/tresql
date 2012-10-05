@@ -182,8 +182,9 @@ object QueryParser extends JavaTokenParsers {
   def column: Parser[Col] = (qualifiedIdentAll | (expr ~ opt(stringLiteral | qualifiedIdent))) ^^ {
     case i:IdentAll => Col(i, null)
     case (o@Obj(_, a, _, _)) ~ None => Col(o, a)
-    case e ~ a => Col(e, /*cast is needed, ugly stuff!*/a.asInstanceOf[Option[Any]] map { 
-      case Ident(i) => i.mkString; case s => "\"" + s + "\"" } orNull)
+    case e ~ Some(x) => Col(e, x match { 
+      case Ident(i) => i.mkString; case s => "\"" + s + "\"" })
+    case e ~ None => Col(e, null)
   }
   def columns: Parser[Cols] = (opt("#") <~ "{") ~ rep1sep(column, ",") <~ "}" ^^ {
     case d ~ c => Cols(d != None, c)
