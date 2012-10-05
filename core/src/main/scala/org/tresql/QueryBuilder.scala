@@ -144,16 +144,16 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case "/" => lop / rop
         case "||" => lop + rop
         case "&&" => org.tresql.Query.select(sql, selCols(lop),
-          QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols)
+          QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols, QueryBuilder.this.identAll)
         case "++" => org.tresql.Query.select(sql, selCols(lop),
-          QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols)
+          QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols, QueryBuilder.this.identAll)
         case "+" => if (exprType == classOf[SelectExpr])
           org.tresql.Query.select(sql, selCols(lop), QueryBuilder.this.bindVariables, env,
-            QueryBuilder.this.allCols)
+            QueryBuilder.this.allCols, QueryBuilder.this.identAll)
         else lop + rop
         case "-" => if (exprType == classOf[SelectExpr])
           org.tresql.Query.select(sql, selCols(lop), QueryBuilder.this.bindVariables, env,
-            QueryBuilder.this.allCols)
+            QueryBuilder.this.allCols, QueryBuilder.this.identAll)
         else lop - rop
         case "=" => lop == rop
         case "!=" => lop != rop
@@ -256,7 +256,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     override def apply() = {
       org.tresql.Query.select(sql, cols, QueryBuilder.this.bindVariables, env,
-        QueryBuilder.this.allCols)
+        QueryBuilder.this.allCols, QueryBuilder.this.identAll)
     }
     lazy val defaultSQL = "select " + (if (distinct) "distinct " else "") +
       (if (cols == null) "*" else sqlCols) + " from " + tables.head.sqlName + join(tables) +

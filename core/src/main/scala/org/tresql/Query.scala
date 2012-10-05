@@ -55,7 +55,7 @@ object Query {
   }
 
   private[tresql] def select(sql: String, cols: List[QueryBuilder#ColExpr],
-    bindVariables: List[Expr], env: Env, allCols: Boolean): Result = {
+    bindVariables: List[Expr], env: Env, allCols: Boolean, identAll: Boolean): Result = {
     Env log sql
     val st = statement(sql, env)
     bindVars(st, bindVariables)
@@ -64,14 +64,15 @@ object Query {
     def rcol(c: QueryBuilder#ColExpr) = if (c.separateQuery) Column(-1, c.name, c.col) else {
       i += 1; Column(i, c.name, null)
     }
-    val r = new Result(rs, Vector((if (!allCols) cols.map { rcol(_) }
-    else cols.flatMap { c =>
-      (if (c.col.isInstanceOf[QueryBuilder#AllExpr]) {
-        var (md, l) = (rs.getMetaData, List[Column]())
-        1 to md.getColumnCount foreach { j => i += 1; l = Column(i, md.getColumnLabel(j), null) :: l }
-        l.reverse
-      } else List(rcol(c)))
-    }): _*), env)
+    def rcols = {
+      var (md, l) = (rs.getMetaData, List[Column]())
+      1 to md.getColumnCount foreach { j => i += 1; l = Column(i, md.getColumnLabel(j), null) :: l }
+      l.reverse      
+    }
+    val r = new Result(rs, Vector((if (allCols) cols.flatMap { 
+      c => (if (c.col.isInstanceOf[QueryBuilder#AllExpr]) rcols else List(rcol(c)))
+    } else if (identAll) rcols ++ (cols.filter(_.separateQuery) map rcol)
+    else cols.map { rcol(_) }): _*), env)
     env.result = r
     r
   }
