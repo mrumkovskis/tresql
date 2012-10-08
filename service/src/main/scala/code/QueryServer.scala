@@ -188,8 +188,8 @@ object QueryServer extends RestHelper {
     }
 
     try {
-      Env update md
-      Env update conn
+      Env.metaData = md
+      Env.conn = conn
       if (debug) Env update {(msg, level) => 
         {writer.write(msg + "\n"); println(msg)}} 
       else Env update {(msg, level) => ()} 

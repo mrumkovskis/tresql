@@ -55,7 +55,7 @@ object Query {
   }
 
   private[tresql] def select(sql: String, cols: List[QueryBuilder#ColExpr],
-    bindVariables: List[Expr], env: Env, allCols: Boolean): Result = {
+    bindVariables: List[Expr], env: Env, allCols: Boolean, identAll: Boolean): Result = {
     Env log sql
     val st = statement(sql, env)
     bindVars(st, bindVariables)
@@ -64,14 +64,15 @@ object Query {
     def rcol(c: QueryBuilder#ColExpr) = if (c.separateQuery) Column(-1, c.name, c.col) else {
       i += 1; Column(i, c.name, null)
     }
-    val r = new Result(rs, Vector((if (!allCols) cols.map { rcol(_) }
-    else cols.flatMap { c =>
-      (if (c.col.isInstanceOf[QueryBuilder#AllExpr]) {
-        var (md, l) = (rs.getMetaData, List[Column]())
-        1 to md.getColumnCount foreach { j => i += 1; l = Column(i, md.getColumnLabel(j), null) :: l }
-        l.reverse
-      } else List(rcol(c)))
-    }): _*), env)
+    def rcols = {
+      var (md, l) = (rs.getMetaData, List[Column]())
+      1 to md.getColumnCount foreach { j => i += 1; l = Column(i, md.getColumnLabel(j), null) :: l }
+      l.reverse      
+    }
+    val r = new Result(rs, Vector((if (allCols) cols.flatMap { 
+      c => (if (c.col.isInstanceOf[QueryBuilder#AllExpr]) rcols else List(rcol(c)))
+    } else if (identAll) rcols ++ (cols.filter(_.separateQuery) map rcol)
+    else cols.map { rcol(_) }): _*), env)
     env.result = r
     r
   }
@@ -138,7 +139,7 @@ object Query {
   private def statement(sql: String, env: Env, call: Boolean = false) = {
     val conn = env.conn
     if (conn == null) throw new NullPointerException(
-      """Connection not found in environment. Check if "Env update conn" (in this case statement execution must be done in the same thread) or "Env.sharedConn = conn" is called.""")
+      """Connection not found in environment. Check if "Env.conn = conn" (in this case statement execution must be done in the same thread) or "Env.sharedConn = conn" is called.""")
     if (env.reusableExpr)
       if (env.statement == null) {
         val s = if (call) conn.prepareCall(sql) else {
@@ -223,6 +224,9 @@ object Query {
   }
   def unique[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]): T = {
     select(expr, normalizePars(params)).unique[T]
+  }
+  def uniqueOption[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]): Option[T] = {
+    select(expr, normalizePars(params)).uniqueOption[T]
   }
 }
 

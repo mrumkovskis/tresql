@@ -89,6 +89,9 @@ object QueryParser extends JavaTokenParsers {
   case class All() extends Exp {
     def tresql = "*"
   }
+  case class IdentAll(ident: Ident) extends Exp {
+    def tresql = ident.ident.mkString(".") + ".*"
+  }
   case class Null() extends Exp {
     def tresql = "null"
   }
@@ -122,6 +125,7 @@ object QueryParser extends JavaTokenParsers {
   def ALL: Parser[All] = "*" ^^^ All()
 
   def qualifiedIdent: Parser[Ident] = rep1sep(excludeKeywordsIdent, ".") ^^ (Ident(_))
+  def qualifiedIdentAll: Parser[IdentAll] = qualifiedIdent <~ ".*" ^^ (IdentAll(_))
   def variable: Parser[Variable] = ((":" ~> ((ident | stringLiteral) ~ opt("?"))) | "?") ^^ {
     case "?" => Variable("?", false)
     case (i: String) ~ o => Variable(i, o != None)
@@ -175,9 +179,12 @@ object QueryParser extends JavaTokenParsers {
           if (b != None) "r" else if (d != None) "l" else null)
     }
   def objs: Parser[List[Obj]] = rep1(obj)
-  def column: Parser[Col] = expr ~ opt(stringLiteral | qualifiedIdent) ^^ {
+  def column: Parser[Col] = (qualifiedIdentAll | (expr ~ opt(stringLiteral | qualifiedIdent))) ^^ {
+    case i:IdentAll => Col(i, null)
     case (o@Obj(_, a, _, _)) ~ None => Col(o, a)
-    case e ~ a => Col(e, a map { case Ident(i) => i.mkString; case s => "\"" + s + "\"" } orNull)
+    case e ~ Some(x) => Col(e, x match { 
+      case Ident(i) => i.mkString; case s => "\"" + s + "\"" })
+    case e ~ None => Col(e, null)
   }
   def columns: Parser[Cols] = (opt("#") <~ "{") ~ rep1sep(column, ",") <~ "}" ^^ {
     case d ~ c => Cols(d != None, c)
