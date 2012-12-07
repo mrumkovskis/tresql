@@ -5,6 +5,7 @@ import org.tresql._
 import scala.collection.JavaConversions._
 import java.sql.{ Connection => C }
 import java.sql.ResultSet
+import java.sql.DatabaseMetaData
 
 //TODO all names perhaps should be stored in upper case?
 //This class is thread safe i.e. instance can be used across multiple threads
@@ -46,7 +47,7 @@ class JDBCMetaData(private val db: String, private val defaultSchema: String = n
           }
           val tableType = rs.getString("TABLE_TYPE")
           val remarks = rs.getString("REMARKS")
-          val mdh = Map("name" -> tableName,
+          val mdh = Map("name" -> tableName, "comments" -> remarks,
             "cols" -> cols(dmd.getColumns(null, schema, tableName, null)),
             "key" -> key(dmd.getPrimaryKeys(null, schema, tableName)),
             "refs" -> refs(dmd.getImportedKeys(null, schema, tableName)))
@@ -71,16 +72,17 @@ class JDBCMetaData(private val db: String, private val defaultSchema: String = n
 
   def cols(rs: ResultSet) = {
     import scala.collection.mutable.ListBuffer
-    val l: ListBuffer[Map[String, String]] = ListBuffer()
+    val l: ListBuffer[Map[String, Any]] = ListBuffer()
     while (rs.next) {
       val name = rs.getString("COLUMN_NAME")
       val typeInt = rs.getInt("DATA_TYPE")
       val typeName = rs.getString("TYPE_NAME")
       val size = rs.getInt("COLUMN_SIZE")
       val decDig = rs.getInt("DECIMAL_DIGITS")
-      val nullable = rs.getInt("NULLABLE")
+      val nullable = rs.getInt("NULLABLE") == DatabaseMetaData.columnNullable
       val comments = rs.getString("REMARKS")
-      l += Map("name" -> name, "type" -> typeName)
+      l += Map("name" -> name, "sqlType" -> typeInt, "typeName" -> typeName, "size" -> size,
+          "decimalDigits" -> decDig, "nullable" -> nullable, "comments" -> comments)
     }
     rs.close
     l.toList
