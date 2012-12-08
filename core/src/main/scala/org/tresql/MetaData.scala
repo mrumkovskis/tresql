@@ -34,16 +34,19 @@ trait MetaData {
 //TODO pk col storing together with ref col (for multi col key secure support)?
 //TODO PROCEDURE support
 package metadata {
-  case class Table(val name:String, val cols: Map[String, Col], val key: Key,
+  case class Table(val name:String, val comments: String, val cols: Map[String, Col], val key: Key,
     rfs: Map[String, List[Ref]], dbname: String) {
     val refTable:Map[Ref, String] = rfs.flatMap(t=> t._2.map(_ -> t._1))
     def refs(table: String) = rfs.get(table).getOrElse(Nil)
   }
   object Table {
     def apply(t: Map[String, Any]): Table = {
-      Table(t("name").asInstanceOf[String].toLowerCase, t("cols") match {
+      Table(t("name").toString.toLowerCase, t("comments").asInstanceOf[String], t("cols") match {
         case l:List[Map[String, String]] => (l map {c => (c("name").toLowerCase,
-            Col(c("name").toLowerCase, c("type").toLowerCase))}).toMap
+            Col(c("name").toString.toLowerCase, c("sqlType").asInstanceOf[Int],
+                c("typeName").toString.toLowerCase, c("nullable").asInstanceOf[Boolean],
+                c("size").asInstanceOf[Int], c("decimalDigits").asInstanceOf[Int],
+                c("comments").asInstanceOf[String]))}).toMap
       }, t("key") match { case l:List[String] => Key(l map (_.toLowerCase)) }, t("refs") match {
         case l:List[Map[String, Any]] => (l map {r => (r("table").asInstanceOf[String].toLowerCase,
             r("refs") match {
@@ -52,7 +55,8 @@ package metadata {
       )
     }
   }
-  case class Col(val name: String, val colType: String)
+  case class Col(val name: String, val sqlType: Int, val typeName: String, val nullable: Boolean,
+      size: Int, decimalDigits: Int, comments: String)
   case class Key(val cols: List[String])
   case class Ref(val cols: List[String])
   case class Procedure(val name: String, val comment: String, val procType: Int,

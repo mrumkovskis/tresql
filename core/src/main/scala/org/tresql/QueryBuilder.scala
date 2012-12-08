@@ -88,11 +88,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
   
   class ResExpr(val nr: Int, val col: Any) extends PrimitiveExpr {
-    override def apply() = col match {
-      case c: List[_] => env(nr)(c.mkString("."))
-      case c: String => env(nr)(c)
-      case c: Int if (c > 0) => env(nr)(c - 1)
-      case c: Int => error("column index in result expression must be greater than 0. Is: " + c)
+    override def apply() = env(nr) match {
+      case null => error("Ancestor result with number " + nr + " not found for expression " + this)
+      case r => col match {
+        case c: List[_] => r(c.mkString("."))
+        case c: String => r(c)
+        case c: Int if (c > 0) => r(c - 1)
+        case c: Int => error("column index in result expression must be greater than 0. Is: " + c)
+      }
     }
     var binded = false
     def defaultSQL = {
