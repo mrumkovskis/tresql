@@ -12,13 +12,13 @@ import java.sql.DatabaseMetaData
 class JDBCMetaData(private val db: String, private val defaultSchema: String = null,
     resources: Resources = Env)
   extends MetaData {
-  val tables = new java.util.concurrent.ConcurrentHashMap[String, Table]
-  val procedures = new java.util.concurrent.ConcurrentHashMap[String, Procedure]
+  private val tableCache = new java.util.concurrent.ConcurrentHashMap[String, Table]
+  private val procedureCache = new java.util.concurrent.ConcurrentHashMap[String, Procedure]
   def dbName = db
   def table(name: String) = {
     val conn = resources.conn
     try {
-      tables(name)
+      tableCache(name)
     } catch {
       case _: NoSuchElementException => {
         if (conn == null) throw new NullPointerException(
@@ -39,7 +39,7 @@ class JDBCMetaData(private val db: String, private val defaultSchema: String = n
           val tableName = rs.getString("TABLE_NAME")
           m += Option(schema).getOrElse("<null>") -> tableName
           if (m.size > 1) {
-            tables -= name
+            tableCache -= name
             rs.close
             throw new RuntimeException(
               "Ambiguous table name: " + name + "." + " Both " +
@@ -51,10 +51,10 @@ class JDBCMetaData(private val db: String, private val defaultSchema: String = n
             "cols" -> cols(dmd.getColumns(null, schema, tableName, null)),
             "key" -> key(dmd.getPrimaryKeys(null, schema, tableName)),
             "refs" -> refs(dmd.getImportedKeys(null, schema, tableName)))
-          tables += (name -> Table(mdh))
+          tableCache += (name -> Table(mdh))
         }
         rs.close
-        tables(name)
+        tableCache(name)
       }
     }
   }
