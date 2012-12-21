@@ -18,7 +18,8 @@ object ORT {
   //TODO update where unique key (not only pk specified)
   def update(name:String, obj:Map[String, _])(implicit resources:Resources = Env):Any = {
     val update = update_tresql(name, obj, resources)
-    if(update == null) error("Cannot update data. Table not found for object: " + name)
+    if(update == null) error("Cannot update data. Table not found or primary key not found " +
+    		"for the object: " + name)
     Env log update
     Query.build(update, resources, obj, false)()    
   }

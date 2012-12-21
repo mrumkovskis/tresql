@@ -140,7 +140,7 @@ trait Resources extends NameMap {
 
   def nameMap = _delegateNameMap getOrElse this
   def nameMap_=(map:NameMap) = _delegateNameMap = if (map == null || map == this) None else Some(map)
-  /** Set name map for this NameMap implementations
+  /** Set name map for this NameMap implementation
    * 1. map: object name -> table name,
    * 2. map: object name -> (property name -> column name),
    * 3. map: table name -> name tresql expression
