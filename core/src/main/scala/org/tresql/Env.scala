@@ -129,7 +129,6 @@ trait Resources extends NameMap {
   def metaData: MetaData = _metaData
   def dialect: Expr => String = null
   def idExpr: String => String = s => "nextval('" + s + "')"
-  def nameMap:NameMap = this
   //name map methods
   override def tableName(objectName:String):String = _nameMap.flatMap(_._1.get(objectName)).getOrElse(
       super.tableName(objectName))
@@ -142,8 +141,7 @@ trait Resources extends NameMap {
         super.propNameExpr(objectName, propertyName))
   //set name map
   def update(map:(Map[String, String], Map[String, Map[String, String]], Map[String, String],
-      Map[String, Map[String, String]])) = 
-    _nameMap = Some(map)
+      Map[String, Map[String, String]])) = _nameMap = if (map == null) None else Some(map)
 }
 
 trait NameMap {
@@ -172,8 +170,8 @@ trait NameMap {
   def propNameExpr(objectName:String, propertyName:String):Option[String] =
     _delegate.flatMap(_.propNameExpr(objectName, propertyName))
   
-  def delegateNameMap = _delegate
-  def delegateNameMap_=(nameMap:NameMap) = _delegate = if (nameMap == null) None else Some(nameMap)
+  def nameMap = _delegate getOrElse this
+  def nameMap_=(map:NameMap) = _delegate = if (map == null) None else Some(map)
 }
 
 trait EnvProvider {
