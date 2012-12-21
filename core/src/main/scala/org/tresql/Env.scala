@@ -118,32 +118,36 @@ object Env extends Resources {
 
 trait Resources extends NameMap {
   private val _metaData = metadata.JDBCMetaData("")
-  /* 1. map: object name -> table name,
-   * 2. map: object name -> (property name -> column name),
-   * 3. map: table name -> name tresql expression
-   * 4. map: object name -> (property name -> name tresql expression)
-   */
   private var _nameMap:Option[(Map[String, String], Map[String, Map[String, String]],
       Map[String, String], Map[String, Map[String, String]])] = None
+  private var _delegateNameMap:Option[NameMap] = None
+
   def conn: java.sql.Connection
   def metaData: MetaData = _metaData
   def dialect: Expr => String = null
   def idExpr: String => String = s => "nextval('" + s + "')"
-  def nameMap:NameMap = this
   //name map methods
-  override def tableName(objectName:String):String = _nameMap.flatMap(_._1.get(objectName)).getOrElse(
-      super.tableName(objectName))
-  override def colName(objectName: String, propertyName: String): String = 
-    _nameMap.flatMap(_._2.get(objectName).flatMap(_.get(propertyName))).getOrElse(super.colName(
-        objectName, propertyName))
-  override def nameExpr(tableName:String):Option[String] = _nameMap.flatMap(_._3.get(tableName))
-  override def propNameExpr(objectName:String, propertyName:String) = _nameMap.flatMap(
-    _._4.get(objectName)).flatMap(_.get(propertyName)).orElse(
-        super.propNameExpr(objectName, propertyName))
-  //set name map
+  override def tableName(objectName: String): String = _delegateNameMap.map(_.tableName(
+      objectName)).getOrElse(_nameMap.flatMap(_._1.get(objectName)).getOrElse(objectName))
+  override def colName(objectName: String, propertyName: String): String = _delegateNameMap.map(
+      _.colName(objectName, propertyName)).getOrElse(_nameMap.flatMap(_._2.get(objectName).flatMap(
+          _.get(propertyName))).getOrElse(propertyName))
+  override def nameExpr(tableName: String): Option[String] =
+    _delegateNameMap.flatMap(_.nameExpr(tableName)).orElse(_nameMap.flatMap(_._3.get(tableName)))
+  override def propNameExpr(objectName: String, propertyName: String) =
+    _delegateNameMap.flatMap(_.propNameExpr(objectName, propertyName)).orElse(
+        _nameMap.flatMap(_._4.get(objectName)).flatMap(_.get(propertyName)))
+
+  def nameMap = _delegateNameMap getOrElse this
+  def nameMap_=(map:NameMap) = _delegateNameMap = if (map == null || map == this) None else Some(map)
+  /** Set name map for this NameMap implementations
+   * 1. map: object name -> table name,
+   * 2. map: object name -> (property name -> column name),
+   * 3. map: table name -> name tresql expression
+   * 4. map: object name -> (property name -> name tresql expression)
+   */
   def update(map:(Map[String, String], Map[String, Map[String, String]], Map[String, String],
-      Map[String, Map[String, String]])) = 
-    _nameMap = Some(map)
+      Map[String, Map[String, String]])) = _nameMap = if (map == null) None else Some(map)
 }
 
 trait NameMap {
@@ -168,6 +172,7 @@ trait NameMap {
    * fillNames parameter is true to resolve foreign key properties to names.
    */
   def propNameExpr(objectName:String, propertyName:String):Option[String] = None
+  
 }
 
 trait EnvProvider {
