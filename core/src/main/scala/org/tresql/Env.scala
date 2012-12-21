@@ -147,8 +147,10 @@ trait Resources extends NameMap {
 }
 
 trait NameMap {
-  def tableName(objectName:String):String = objectName
-  def colName(objectName:String, propertyName:String):String = propertyName
+  private var _delegate:Option[NameMap] = None
+  def tableName(objectName:String):String = _delegate.map(_.tableName(objectName)).getOrElse(objectName)
+  def colName(objectName:String, propertyName:String):String =
+    _delegate.map(_.colName(objectName, propertyName)).getOrElse(propertyName)
   /** TreSQL expression returning entity name. Typically it is a query from table referenced
    * by tableName (NOT objectName!). Name expression is used in ORT.fill method if fillNames
    * parameter is true when foreign key property of the object is resolved to name.
@@ -163,11 +165,15 @@ trait NameMap {
    *    be transformed to: table_name {<column list>}
    *    registration_number + ", " + name, foundation_date
    */
-  def nameExpr(tableName:String):Option[String] = None
+  def nameExpr(tableName:String):Option[String] = _delegate.flatMap(_.nameExpr(tableName))
   /** TreSQL expression defining property name. This is typically used in ORT.fillMethod if
    * fillNames parameter is true to resolve foreign key properties to names.
    */
-  def propNameExpr(objectName:String, propertyName:String):Option[String] = None
+  def propNameExpr(objectName:String, propertyName:String):Option[String] =
+    _delegate.flatMap(_.propNameExpr(objectName, propertyName))
+  
+  def delegateNameMap = _delegate
+  def delegateNameMap_=(nameMap:NameMap) = _delegate = if (nameMap == null) None else Some(nameMap)
 }
 
 trait EnvProvider {
