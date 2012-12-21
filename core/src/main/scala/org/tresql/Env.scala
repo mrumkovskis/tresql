@@ -118,11 +118,6 @@ object Env extends Resources {
 
 trait Resources extends NameMap {
   private val _metaData = metadata.JDBCMetaData("")
-  /* 1. map: object name -> table name,
-   * 2. map: object name -> (property name -> column name),
-   * 3. map: table name -> name tresql expression
-   * 4. map: object name -> (property name -> name tresql expression)
-   */
   private var _nameMap:Option[(Map[String, String], Map[String, Map[String, String]],
       Map[String, String], Map[String, Map[String, String]])] = None
   private var _delegateNameMap:Option[NameMap] = None
@@ -145,7 +140,12 @@ trait Resources extends NameMap {
 
   def nameMap = _delegateNameMap getOrElse this
   def nameMap_=(map:NameMap) = _delegateNameMap = if (map == null || map == this) None else Some(map)
-  //set name map for this NameMap implementations
+  /** Set name map for this NameMap implementations
+   * 1. map: object name -> table name,
+   * 2. map: object name -> (property name -> column name),
+   * 3. map: table name -> name tresql expression
+   * 4. map: object name -> (property name -> name tresql expression)
+   */
   def update(map:(Map[String, String], Map[String, Map[String, String]], Map[String, String],
       Map[String, Map[String, String]])) = _nameMap = if (map == null) None else Some(map)
 }
