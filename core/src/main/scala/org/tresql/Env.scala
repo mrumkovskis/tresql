@@ -132,14 +132,14 @@ trait Resources extends NameMap {
   def dialect: Expr => String = null
   def idExpr: String => String = s => "nextval('" + s + "')"
   //name map methods
-  def tableName(objectName: String): String = _delegateNameMap.map(_.tableName(
+  override def tableName(objectName: String): String = _delegateNameMap.map(_.tableName(
       objectName)).getOrElse(_nameMap.flatMap(_._1.get(objectName)).getOrElse(objectName))
-  def colName(objectName: String, propertyName: String): String = _delegateNameMap.map(
+  override def colName(objectName: String, propertyName: String): String = _delegateNameMap.map(
       _.colName(objectName, propertyName)).getOrElse(_nameMap.flatMap(_._2.get(objectName).flatMap(
           _.get(propertyName))).getOrElse(propertyName))
-  def nameExpr(tableName: String): Option[String] =
+  override def nameExpr(tableName: String): Option[String] =
     _delegateNameMap.flatMap(_.nameExpr(tableName)).orElse(_nameMap.flatMap(_._3.get(tableName)))
-  def propNameExpr(objectName: String, propertyName: String) =
+  override def propNameExpr(objectName: String, propertyName: String) =
     _delegateNameMap.flatMap(_.propNameExpr(objectName, propertyName)).orElse(
         _nameMap.flatMap(_._4.get(objectName)).flatMap(_.get(propertyName)))
 
@@ -151,8 +151,8 @@ trait Resources extends NameMap {
 }
 
 trait NameMap {
-  def tableName(objectName:String):String
-  def colName(objectName:String, propertyName:String):String
+  def tableName(objectName:String):String = objectName
+  def colName(objectName:String, propertyName:String):String = propertyName
   /** TreSQL expression returning entity name. Typically it is a query from table referenced
    * by tableName (NOT objectName!). Name expression is used in ORT.fill method if fillNames
    * parameter is true when foreign key property of the object is resolved to name.
@@ -167,11 +167,11 @@ trait NameMap {
    *    be transformed to: table_name {<column list>}
    *    registration_number + ", " + name, foundation_date
    */
-  def nameExpr(tableName:String):Option[String]
+  def nameExpr(tableName:String):Option[String] = None
   /** TreSQL expression defining property name. This is typically used in ORT.fillMethod if
    * fillNames parameter is true to resolve foreign key properties to names.
    */
-  def propNameExpr(objectName:String, propertyName:String):Option[String]
+  def propNameExpr(objectName:String, propertyName:String):Option[String] = None
   
 }
 
