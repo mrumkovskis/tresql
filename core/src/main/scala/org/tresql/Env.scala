@@ -142,9 +142,9 @@ trait Resources extends NameMap {
   def nameMap_=(map:NameMap) = _delegateNameMap = if (map == null || map == this) None else Some(map)
   /** Set name map for this NameMap implementation
    * 1. map: object name -> table name,
-   * 2. map: object name -> (property name -> column name),
+   * 2. map: object name -> map: (property name -> column name),
    * 3. map: table name -> name tresql expression
-   * 4. map: object name -> (property name -> name tresql expression)
+   * 4. map: object name -> map: (property name -> name tresql expression)
    */
   def update(map:(Map[String, String], Map[String, Map[String, String]], Map[String, String],
       Map[String, Map[String, String]])) = _nameMap = if (map == null) None else Some(map)
