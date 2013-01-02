@@ -133,7 +133,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def exprType: Class[_] = if ("-" == op) operand.exprType else classOf[ConstExpr]
   }
 
-  class BinExpr(val op: String, val lop: Expr, val rop: Expr) extends BaseExpr {
+  case class BinExpr(val op: String, val lop: Expr, val rop: Expr) extends BaseExpr {
     override def apply() = {
       def selCols(ex: Expr): List[QueryBuilder#ColExpr] = {
         ex match {
