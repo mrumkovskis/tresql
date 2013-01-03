@@ -176,7 +176,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case "++" => lop.sql + " union all " + rop.sql
       case "&&" => lop.sql + " intersect " + rop.sql
       case "+" => lop.sql + (if (exprType == classOf[SelectExpr]) " union " else " + ") + rop.sql
-      case "-" => lop.sql + (if (exprType == classOf[SelectExpr]) " minus " else " - ") + rop.sql
+      case "-" => lop.sql + (if (exprType == classOf[SelectExpr]) " except " else " - ") + rop.sql
       case "=" => rop match {
         case ConstExpr(null) => lop.sql + " is " + rop.sql
         case _: ArrExpr => lop.sql + " in " + rop.sql
