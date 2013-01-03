@@ -87,7 +87,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
   }
   
-  class ResExpr(val nr: Int, val col: Any) extends PrimitiveExpr {
+  case class ResExpr(val nr: Int, val col: Any) extends PrimitiveExpr {
     override def apply() = env(nr) match {
       case null => error("Ancestor result with number " + nr + " not found for expression " + this)
       case r => col match {
@@ -105,7 +105,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def toString = nr + "(" + col + ")"
   }
 
-  class AssignExpr(val variable: String, val value: Expr) extends BaseExpr {
+  case class AssignExpr(val variable: String, val value: Expr) extends BaseExpr {
     //add variable to environment so that variable is found when referenced in further expressions
     env(variable) = null
     override def apply() = {
@@ -116,7 +116,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def toString = variable + " = " + value
   }
 
-  class UnExpr(val op: String, val operand: Expr) extends BaseExpr {
+  case class UnExpr(val op: String, val operand: Expr) extends BaseExpr {
     override def apply() = op match {
       case "-" => -operand().asInstanceOf[Number]
       case "!" => !operand().asInstanceOf[Boolean]
@@ -133,7 +133,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def exprType: Class[_] = if ("-" == op) operand.exprType else classOf[ConstExpr]
   }
 
-  class BinExpr(val op: String, val lop: Expr, val rop: Expr) extends BaseExpr {
+  case class BinExpr(val op: String, val lop: Expr, val rop: Expr) extends BaseExpr {
     override def apply() = {
       def selCols(ex: Expr): List[QueryBuilder#ColExpr] = {
         ex match {
@@ -239,7 +239,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def toString = elements map { _.toString } mkString ("[", ", ", "]")
   }
 
-  class SelectExpr(val tables: List[Table], val filter: List[Expr], val cols: List[ColExpr],
+  case class SelectExpr(val tables: List[Table], val filter: List[Expr], val cols: List[ColExpr],
     val distinct: Boolean, val group: Expr, val order: List[Expr],
     offset: Expr, limit: Expr) extends BaseExpr {
     val aliases: Map[Any, Table] = {
@@ -356,11 +356,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   case class AliasIdentExpr(val name: List[String], val alias: String) extends PrimitiveExpr {
     def defaultSQL = "AliasIdentExpr(" + name + ", " + alias + ")"
   }
-  class Order(val ordExprs: (Null, List[Expr], Null), val asc: Boolean) extends PrimitiveExpr {
+  case class Order(val ordExprs: (Null, List[Expr], Null), val asc: Boolean) extends PrimitiveExpr {
     def defaultSQL = (ordExprs._2 map (_.sql)).mkString(",") + (if (asc) " asc" else " desc") +
       (if (ordExprs._1 != null) " nulls first" else if (ordExprs._3 != null) " nulls last" else "")
   }
-  class Group(val groupExprs: List[Expr], val having: Expr) extends PrimitiveExpr {
+  case class Group(val groupExprs: List[Expr], val having: Expr) extends PrimitiveExpr {
     def defaultSQL = (groupExprs map (_.sql)).mkString(",") +
       (if (having != null) " having " + having.sql else "")
   }
@@ -403,7 +403,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
   }
 
-  class BracesExpr(val expr: Expr) extends BaseExpr {
+  case class BracesExpr(val expr: Expr) extends BaseExpr {
     override def apply() = expr()
     def defaultSQL = "(" + expr.sql + ")"
     override def exprType = expr.exprType
