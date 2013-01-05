@@ -53,6 +53,7 @@ work w[w.empno e, w.empno_mgr m]emp {e.ename, m.ename, hours} #(1,2,3) --> [["SC
 
 //alias join shortcut syntax
 emp e[e.empno = w.empno]work w;e/dept [ename = 'SCOTT']{hours, ename, dname} #(hours) --> [[5, "SCOTT", "RESEARCH"], [8, "SCOTT", "RESEARCH"]]
+emp[emp.empno = w.empno]work w;emp/dept [ename = 'SCOTT']{hours, ename, dname} #(hours) --> [[5, "SCOTT", "RESEARCH"], [8, "SCOTT", "RESEARCH"]]
 work w[w.empno e, w.empno_mgr m]emp;e/dept d;m/dept md {e.ename, d.dname, hours, m.ename, md.dname} #(1,2,3) --> [["SCOTT", "RESEARCH", 5, "JONES", "RESEARCH"], ["SCOTT", "RESEARCH", 8, "CLARK", "ACCOUNTING"]]
 
 //outer join
