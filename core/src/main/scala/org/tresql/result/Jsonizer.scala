@@ -101,7 +101,7 @@ object Jsonizer {
   def jsonizeArray(result: Iterable[_], buf: Writer, rType: ResultType = Objects) {
     buf append '['
     var i = 0
-    result foreach { r =>
+    result foreach { r: Any =>
       if (i > 0) buf append ", "
       // name
       if (rType != Arrays) {
