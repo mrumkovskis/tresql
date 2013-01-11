@@ -2,13 +2,16 @@ name := "tresql"
 
 organization := "org.tresql"
 
-scalaVersion := "2.9.1"
+scalaVersion := "2.10.0"
 
-crossScalaVersions := Seq("2.9.1", "2.9.2")
+crossScalaVersions := Seq("2.9.1", "2.9.2", "2.10.0")
 
 scalacOptions ++= Seq("-deprecation", "-Xexperimental")
 
-libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "1.7.1" % "test", 
+scalacOptions <<= (scalaVersion, scalacOptions) map 
+  {(v, o)=> if(v.startsWith("2.10")) o ++ Seq("-language:dynamics") else o}
+
+libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "1.9.1" % "test", 
                             "org.hsqldb" % "hsqldb" % "2.2.8" % "test")
 
 publishTo <<= version { v: String =>

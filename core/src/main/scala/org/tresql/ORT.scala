@@ -63,7 +63,7 @@ object ORT {
   def fill(name:String, obj:Map[String, _], fillNames: Boolean = false)
     (implicit resources:Resources = Env):Option[Map[String, Any]] = {
     def merge(obj: Map[String, _], res: Map[String, _]):Map[String, _] = {
-      obj.map(t => t._1 -> res.get(t._1).map({
+      obj.map((t: (String, _)) => t._1 -> res.get(t._1).map({
         case rs: Seq[Map[String, _]] => t._2 match {
           case os: Seq[Map[String, _]] => os.zipWithIndex.map(
             ost => rs.lift(ost._2).map(merge(ost._1, _)).getOrElse(ost._1))
@@ -92,7 +92,7 @@ object ORT {
       val refColName = if (parent == null) null else if (refPropName == null)
         if (table.refs(ptn).size != 1) null else table.refs(ptn)(0).cols(0)
         else resources.colName(objName, refPropName)
-      obj.map(t => {
+      obj.map((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(objName, n)
         t._2 match {
@@ -140,7 +140,7 @@ object ORT {
         "-" + childTable.name + "[" + (if (refCol != null) refCol
             else importedKey(table.name, childTable)) + " = :" + pkCol + "]"
       }
-      obj.map(t => {
+      obj.map((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(name, n)
         if (table.key == metadata.Key(List(cn))) pkProp = Some(n)
@@ -286,7 +286,7 @@ object ORT {
     var filterCol: String = parent.map(p => if (refPropName != null) 
       resources.colName(objName, refPropName) else importedKey(resources.tableName(p._1), table)).orNull
     var filterVal:Any = if(filterCol != null) ":1('" + parent.get._2 + "')" else null
-    obj.flatMap(t => {
+    obj.flatMap((t: (String, _)) => {
       val n = t._1
       val cn = resources.colName(objName, n)
       val refTable = table.refTable.get(metadata.Ref(List(cn)))
