@@ -242,7 +242,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   case class SelectExpr(val tables: List[Table], val filter: List[Expr], val cols: List[ColExpr],
     val distinct: Boolean, val group: Expr, val order: List[Expr],
     offset: Expr, limit: Expr) extends BaseExpr {
-    val aliases: Map[Any, Table] = {
+    val aliases: Map[String, Table] = {
       var al = Set[String]()
       tables.flatMap {
         //primary key shortcut join aliases checked
