@@ -32,7 +32,6 @@ trait MetaData {
 }
 
 //TODO pk col storing together with ref col (for multi col key secure support)?
-//TODO PROCEDURE support
 package metadata {
   case class Table(val name:String, val comments: String, val cols: Map[String, Col], val key: Key,
     rfs: Map[String, List[Ref]], dbname: String) {
@@ -59,7 +58,8 @@ package metadata {
       size: Int, decimalDigits: Int, comments: String)
   case class Key(val cols: List[String])
   case class Ref(val cols: List[String])
-  case class Procedure(val name: String, val comment: String, val procType: Int,
-    val pars: Map[String, Par])
-  case class Par(val name: String, val comment: String, val parType: Int)
+  case class Procedure(val name: String, val comments: String, val procType: Int,
+    val pars: List[Par], val returnSqlType: Int, val returnTypeName: String)
+  case class Par(val name: String, val comments: String, val parType: Int, val sqlType: Int,
+      val typeName: String)
 }

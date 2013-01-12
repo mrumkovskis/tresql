@@ -60,15 +60,78 @@ class JDBCMetaData(private val db: String, private val defaultSchema: String = n
   }
   /* Implemented this way because did not understand scala concurrent compatibilities between
    * scala versions 2.9 and 2.10 */
-  def tableOption(name:String) = try {
+  def tableOption(name: String) = try {
     Some(table(name))
   } catch {
     case _:NoSuchElementException => {
       None
     }
   }
-  def procedure(name: String) = sys.error("Method not implemented")
-  def procedureOption(name: String) = sys.error("Method not implemented")
+  def procedure(name: String) = {
+    import org.tresql.metadata._
+    val conn = resources.conn
+    try {
+      procedureCache(name)
+    } catch {
+      case _: NoSuchElementException => {
+        if (conn == null) throw new NullPointerException(
+          """Connection not found in environment. Check if "Env.conn = conn" (in this case statement execution must be done in the same thread) or "Env.sharedConn = conn" is called.""")
+        val dmd = conn.getMetaData
+        val rs = (if (dmd.storesUpperCaseIdentifiers) name.toUpperCase
+        else name).split("\\.") match {
+          case Array(p) => dmd.getProcedures(null,
+            if (dmd.storesUpperCaseIdentifiers &&
+              defaultSchema != null) defaultSchema.toUpperCase
+            else defaultSchema, p)
+          case Array(s, p) => dmd.getProcedures(null, s, p)
+          case Array(c, s, p) => dmd.getProcedures(c, s, p)
+        }
+        var m = Set[(String, String)]()
+        while (rs.next) {
+          val schema = rs.getString("PROCEDURE_SCHEM")
+          val procedureName = rs.getString("PROCEDURE_NAME")
+          m += Option(schema).getOrElse("<null>") -> procedureName
+          if (m.size > 1) {
+            procedureCache -= name
+            rs.close
+            throw new RuntimeException(
+              "Ambiguous procedure name: " + name + "." + " Both " +
+                m.map((t) => t._1 + "." + t._2).mkString(" and ") + " match")
+          }
+          val procedureType = rs.getInt("PROCEDURE_TYPE")
+          val remarks = rs.getString("REMARKS")
+          var pars = List[Par]()
+          val parsRs = dmd.getProcedureColumns(null, schema, procedureName, null)
+          import parsRs._
+          while(next) {
+            pars = Par(getString("COLUMN_NAME").toLowerCase,
+                getString("REMARKS"),
+                getInt("COLUMN_TYPE"),
+                getInt("DATA_TYPE"),
+                getString("TYPE_NAME"))::pars
+          }
+          parsRs.close
+          val returnPar = pars.filter(_.parType == DatabaseMetaData.procedureColumnReturn) match {
+            case par::Nil => (par.sqlType, par.typeName)
+            case _ => (-1, null)
+          }
+          procedureCache += (name -> Procedure(procedureName.toLowerCase, remarks, procedureType,
+              pars.reverse, returnPar._1, returnPar._2))
+        }
+        rs.close
+        procedureCache(name)
+      }
+    }    
+  }
+  /* Implemented this way because did not understand scala concurrent compatibilities between
+   * scala versions 2.9 and 2.10 */
+  def procedureOption(name: String) = try {
+    Some(procedure(name))
+  } catch {
+    case _:NoSuchElementException => {
+      None
+    }
+  }
 
   def cols(rs: ResultSet) = {
     import scala.collection.mutable.ListBuffer
