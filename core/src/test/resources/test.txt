@@ -33,7 +33,7 @@ emp {count(*)} --> [[14]]
 emp e/dept d [d.deptno = 20]{empno, ename, dname}#(empno) --> [[7369, "SMITH", "RESEARCH"], [7566, "JONES", "RESEARCH"], [7788, "SCOTT", "RESEARCH"], [7876, "ADAMS", "RESEARCH"], [7902, "FORD", "RESEARCH"]]
 emp e[e.deptno d1, e.deptno d2]dept{d1.deptno, d2.deptno, e.empno}#(1,2,3) --> [[10, 10, 7782], [10, 10, 7839], [10, 10, 7934], [20, 20, 7369], [20, 20, 7566], [20, 20, 7788], [20, 20, 7876], [20, 20, 7902], [30, 30, 7499], [30, 30, 7521], [30, 30, 7654], [30, 30, 7698], [30, 30, 7844], [30, 30, 7900]]
 
-//implicit search by primary key with named variable
+//search by primary key shortcut syntax with named variable
 dept[:id] {deptno} #(deptno) --> id=10 --> [[10]]
 dept[:'id'] {deptno} #(deptno) --> id=10 --> [[10]]
 dept[:"id"] {deptno} #(deptno) --> id=10 --> [[10]]
@@ -46,6 +46,8 @@ work[empno]emp/dept {wdate, ename, dname} #(1,2,3) --> [["2012-06-06", "KING", "
 dept d/[job = 'PRESIDENT']emp? e {dname, ename}#(1, 2 null) --> [["ACCOUNTING", "KING"], ["OPERATIONS", null], ["RESEARCH", null], ["SALES", null]]
 dept d[job = 'PRESIDENT']/emp? e {dname, ename}#(1, 2 null) --> [["ACCOUNTING", "KING"], ["OPERATIONS", null], ["RESEARCH", null], ["SALES", null]]
 dept d/emp? e [job = 'PRESIDENT']{dname, ename}#(1, 2) --> [["ACCOUNTING", "KING"]]
+emp[?]/dept{ename, dname} --> 7369 --> [["SMITH", "RESEARCH"]]
+emp/[?]dept{ename, dname} --> 7369 --> [["SMITH", "RESEARCH"]]
 
 //primary key join shortcut syntax
 emp e[e.deptno d]dept {ename, dname} #(ename) --> [["ADAMS", "RESEARCH"], ["ALLEN", "SALES"], ["BLAKE", "SALES"], ["CLARK", "ACCOUNTING"], ["FORD", "RESEARCH"], ["JAMES", "SALES"], ["JONES", "RESEARCH"], ["KING", "ACCOUNTING"], ["MARTIN", "SALES"], ["MILLER", "ACCOUNTING"], ["SCOTT", "RESEARCH"], ["SMITH", "RESEARCH"], ["TURNER", "SALES"],["WARD", "SALES"]]
@@ -138,9 +140,9 @@ dept[10]{*, |emp[deptno = :1(1)]{ename}} --> [[10, "ACCOUNTING", "NEW YORK", [["
 dept[?]{|emp[?]{ename}, *} --> 10;7839 --> [[[["KING"]], 10, "ACCOUNTING", "NEW YORK"]]
 
 //all cols from one table
-dept/emp[10] {deptno, dname, emp.*, |emp[deptno = :1(deptno)]{ename}#(ename)}#(empno) --> [[10, "ACCOUNTING", 7782, "CLARK", "MANAGER", 7839, "1981-06-09", 2450.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7839, "KING", "PRESIDENT", null, "1981-11-17", 5000.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7934, "MILLER", "CLERK", 7782, "1982-01-23", 1300.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]]]
+emp/dept[10] {deptno, dname, emp.*, |emp[deptno = :1(deptno)]{ename}#(ename)}#(empno) --> [[10, "ACCOUNTING", 7782, "CLARK", "MANAGER", 7839, "1981-06-09", 2450.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7839, "KING", "PRESIDENT", null, "1981-11-17", 5000.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7934, "MILLER", "CLERK", 7782, "1982-01-23", 1300.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]]]
 //NOTE: child query allways stays last in result when all cols from one table is used 
-dept/emp[10] {|emp[deptno = :1(deptno)]{ename}#(ename), deptno, dname, emp.*}#(empno) --> [[10, "ACCOUNTING", 7782, "CLARK", "MANAGER", 7839, "1981-06-09", 2450.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7839, "KING", "PRESIDENT", null, "1981-11-17", 5000.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7934, "MILLER", "CLERK", 7782, "1982-01-23", 1300.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]]]
+emp/dept[10] {|emp[deptno = :1(deptno)]{ename}#(ename), deptno, dname, emp.*}#(empno) --> [[10, "ACCOUNTING", 7782, "CLARK", "MANAGER", 7839, "1981-06-09", 2450.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7839, "KING", "PRESIDENT", null, "1981-11-17", 5000.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7934, "MILLER", "CLERK", 7782, "1982-01-23", 1300.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]]]
 
 //limit offset
 dept#(deptno)@(1 2) --> [[20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]

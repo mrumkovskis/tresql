@@ -282,11 +282,15 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }
     }
     def where = filter match {
-      case List(_:ConstExpr | _:VarExpr | _:ResExpr) => tables(0).aliasOrName + "." +
-        env.table(tables(0).name).key.cols(0) + " = " + filter(0).sql
+      //primary key equals search
+      case List(_:ConstExpr | _:VarExpr | _:ResExpr) => tables(tables.size - 1).aliasOrName + "." +
+        env.table(tables(tables.size -1).name).key.cols(0) + " = " + filter(0).sql
+      //normal filter expression
       case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
-      case l => tables(0).aliasOrName + "." + env.table(tables(0).name).key.cols(0) + " in(" +
-        (l map { _.sql }).mkString(",") + ")"
+      //primary key in search
+      case l => tables(tables.size - 1).aliasOrName + "." +
+        env.table(tables(tables.size - 1).name).key.cols(0) +
+        " in(" + (l map { _.sql }).mkString(",") + ")"
     }
     val queryDepth = QueryBuilder.this.queryDepth
     override def toString = sql + " (" + QueryBuilder.this + ")\n" +
@@ -334,7 +338,16 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case TableJoin(true, null, _) => joinPrefix + sqlName + " on " + defaultJoin
         //default join with additional expression
         case TableJoin(true, j: Expr, _) => joinPrefix + sqlName + " on " + defaultJoin +
-          " and " + j.sql
+          " and " + (j match {
+            //primary key equals search
+            case _:ConstExpr | _:VarExpr | _:ResExpr => joinTable.aliasOrName + "." +
+              env.table(joinTable.name).key.cols(0) + " = " + j.sql
+            //primary key in search
+            case ArrExpr(l) => joinTable.aliasOrName + "." +
+              env.table(joinTable.name).key.cols(0) + (l map (_.sql) mkString(" in(", ", ", ")"))
+            //normal join expression
+            case e => (if (e.exprType == classOf[SelectExpr]) "exists " else "") + e.sql
+          })
       }
     }
   }
