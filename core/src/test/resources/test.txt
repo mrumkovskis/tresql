@@ -59,8 +59,11 @@ emp e[e.empno = w.empno]work w;e/dept [ename = 'SCOTT']{hours, ename, dname} #(h
 emp[emp.empno = w.empno]work w;emp/dept [ename = 'SCOTT']{hours, ename, dname} #(hours) --> [[5, "SCOTT", "RESEARCH"], [8, "SCOTT", "RESEARCH"]]
 work w[w.empno e, w.empno_mgr m]emp;e/dept d;m/dept md {e.ename, d.dname, hours, m.ename, md.dname} #(1,2,3) --> [["SCOTT", "RESEARCH", 5, "JONES", "RESEARCH"], ["SCOTT", "RESEARCH", 8, "CLARK", "ACCOUNTING"]]
 
-//outer join
+//left outer join
 dept d/emp? e[e.deptno != null]#{d.deptno}#(deptno) --> [[10], [20], [30]]
+
+//right outer join
+emp e/?dept d[e.deptno != null]#{d.deptno}#(deptno) --> [[10], [20], [30]]
 
 //column aliases
 emp{ename n}#(1) --> [["ADAMS"], ["ALLEN"], ["BLAKE"], ["CLARK"], ["FORD"], ["JAMES"], ["JONES"], ["KING"], ["MARTIN"], ["MILLER"], ["SCOTT"], ["SMITH"], ["TURNER"], ["WARD"]]
