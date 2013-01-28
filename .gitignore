@@ -7,6 +7,7 @@ class/
 bin/
 .settings/
 .cache
+.worksheet/
 lib/
 jetty-env.xml
 
