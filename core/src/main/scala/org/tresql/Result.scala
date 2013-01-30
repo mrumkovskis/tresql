@@ -8,12 +8,13 @@ import sys._
 class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   extends Iterator[RowLike] with RowLike {
   private[this] val md = rs.getMetaData
-  private[this] val cwi = cols.zipWithIndex
-  private[this] val colMap = cwi.filter(_._1.name != null).map(t => t._1.name -> t._2).toMap
-  private[this] val exprCols = cwi.filter(_._1.expr != null)
   private[this] val row = new Array[Any](cols.length)
   private[this] var rsHasNext = true; private[this] var nextCalled = true
   private[this] var closed = false
+  private[this] val (colMap, exprCols) = {
+    val cwi = cols.zipWithIndex
+    (cwi.filter(_._1.name != null).map(t => t._1.name -> t._2).toMap, cwi.filter(_._1.expr != null))
+  }
   /** calls jdbc result set next method. after jdbc result set next method returns false closes this result */
   def hasNext = {
     if (rsHasNext && nextCalled) {
