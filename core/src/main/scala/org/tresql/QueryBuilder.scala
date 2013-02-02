@@ -458,7 +458,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }, vals map { buildInternal(_, VALUES_CTX) })
   }
   private def buildUpdate(table: Ident, filter: Arr, cols: List[Col], vals: Arr) = {
-    new UpdateExpr(new IdentExpr(table.ident), if (filter != null)
+    new UpdateExpr(IdentExpr(table.ident), if (filter != null)
       filter.elements map { buildInternal(_, WHERE_CTX) } else null,
       cols map (buildInternal(_, COL_CTX)) filter {
         case ColExpr(IdentExpr(_), _, _) => true
@@ -467,13 +467,13 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       vals.elements map { buildInternal(_, VALUES_CTX) })
   }
   private def buildDelete(table: Ident, filter: Arr) = {
-    new DeleteExpr(new IdentExpr(table.ident),
+    new DeleteExpr(IdentExpr(table.ident),
       if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null)
   }
 
   private def buildInternal(parsedExpr: Any, parseCtx: String = ROOT_CTX): Expr = {
     def buildSelect(q: Query) = {
-      val sel = new SelectExpr(q.tables map buildTable, //tables
+      val sel = SelectExpr(q.tables map buildTable, //tables
         if (q.filter != null) { //filter
           val f = (q.filter.elements map { buildInternal(_, WHERE_CTX) }).filter(_ != null)
           if (f.length > 0) f else null
@@ -488,7 +488,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       if (ctxStack.head == WHERE_CTX && q.filter != null && q.filter.elements != Nil &&
         sel.filter == null) null else sel
     }
-    def buildTable(t: Obj) = new Table(buildInternal(t.obj, TABLE_CTX), t.alias,
+    def buildTable(t: Obj) = Table(buildInternal(t.obj, TABLE_CTX), t.alias,
       if (t.join != null) TableJoin(t.join.default, buildInternal(t.join.expr, JOIN_CTX),
         t.join.noJoin)
       else null, t.outerJoin)
@@ -510,7 +510,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case Null() => ConstExpr(null)
         //variable assignment
         case BinOp("=", Variable(n, o), v) if (parseCtx == ROOT_CTX) =>
-          new AssignExpr(n, buildInternal(v, parseCtx))
+          AssignExpr(n, buildInternal(v, parseCtx))
         //insert
         case Insert(t, c, v) => {
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
@@ -540,7 +540,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
             val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
             val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
           }
-          case QUERY_CTX | TABLE_CTX => new SelectExpr(List(buildTable(t)), null,
+          case QUERY_CTX | TABLE_CTX => SelectExpr(List(buildTable(t)), null,
             List(ColExpr(AllExpr(), null, null)), false, null, null, null, null)
           case COL_CTX => buildColumnIdent(t)
           case _ => buildIdent(t)
@@ -554,7 +554,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         }
         case UnOp(op, oper) => {
           val o = buildInternal(oper, parseCtx)
-          if (o == null) null else new UnExpr(op, o)
+          if (o == null) null else UnExpr(op, o)
         }
         case e @ BinOp(op, lop, rop) => parseCtx match {
           case ROOT_CTX => {
@@ -564,33 +564,33 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           case ctx => {
             val l = buildInternal(lop, ctx)
             val r = buildInternal(rop, ctx)
-            if (l != null && r != null) new BinExpr(op, l, r) else if (op == "&" || op == "|")
+            if (l != null && r != null) BinExpr(op, l, r) else if (op == "&" || op == "|")
               if (l != null) l else if (r != null) r else null
             else null
           }
         }
         case Fun(n, pl: List[_]) => {
           val pars = pl map { buildInternal(_, parseCtx) }
-          if (pars.exists(_ == null)) null else new FunExpr(n, pars)  
+          if (pars.exists(_ == null)) null else FunExpr(n, pars)  
         }
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => {identAll = true; IdentAllExpr(i.ident)}
-        case Arr(l: List[_]) => new ArrExpr(l map { buildInternal(_, parseCtx) })
-        case Variable("?", o) => this.bindIdx += 1; new VarExpr(this.bindIdx.toString, o)
-        case Variable(n, o) => if (!env.reusableExpr && o && !(env contains n)) null else new VarExpr(n, o)
+        case Arr(l: List[_]) => ArrExpr(l map { buildInternal(_, parseCtx) })
+        case Variable("?", o) => this.bindIdx += 1; VarExpr(this.bindIdx.toString, o)
+        case Variable(n, o) => if (!env.reusableExpr && o && !(env contains n)) null else VarExpr(n, o)
         case Id(seq) => IdExpr(seq)
         case IdRef(seq) => IdRefExpr(seq)
-        case Result(r, c) => new ResExpr(r, c)
-        case Col(c, a, t) => { separateQueryFlag = false; new ColExpr(buildInternal(c, parseCtx), a, t) }
-        case Grp(cols, having) => new Group(cols map { buildInternal(_, GROUP_CTX) },
+        case Result(r, c) => ResExpr(r, c)
+        case Col(c, a, t) => { separateQueryFlag = false; ColExpr(buildInternal(c, parseCtx), a, t) }
+        case Grp(cols, having) => Group(cols map { buildInternal(_, GROUP_CTX) },
           buildInternal(having, HAVING_CTX))
-        case Ord(cols, asc) => new Order((cols._1, cols._2 map { buildInternal(_, parseCtx) },
+        case Ord(cols, asc) => Order((cols._1, cols._2 map { buildInternal(_, parseCtx) },
           cols._3), asc)
         case All() => AllExpr()
         case null => null
         case Braces(expr) => {
           val e = buildInternal(expr, parseCtx)
-          if (e == null) null else new BracesExpr(e)
+          if (e == null) null else BracesExpr(e)
         }
         case x => ConstExpr(x)
       }
