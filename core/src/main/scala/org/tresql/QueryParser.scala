@@ -48,7 +48,7 @@ object QueryParser extends JavaTokenParsers {
       any2tresql(obj) + (if (outerJoin == "l") "?" else "") + (if(alias != null) " " + alias else "")
   }
   case class Col(col: Any, alias: String, typ: String) extends Exp {
-    def tresql = any2tresql(col) + (if(typ != null) " " + typ else "") +
+    def tresql = any2tresql(col) + (if(typ != null) " :" + typ else "") +
       (if(alias != null) " " + alias else "")
   }
   case class Cols(distinct: Boolean, cols: List[Col]) extends Exp {
