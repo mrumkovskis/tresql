@@ -256,12 +256,12 @@ object ORT {
         //replace existing filter with pk filter
         case q:Query => (q.copy(filter = parseExp("[" + ":1('" + idVar + "')]").asInstanceOf[Arr]) match {
           //set default aliases for query columns
-          case x@Query(_, _, List(Col(name, null)), _, _, _, _, _) => 
-            x.copy(cols = List(Col(name, "name")))
-          case x@Query(_, _, List(Col(id, null), Col(name, null)), _, _, _, _, _) =>
-            x.copy(cols = List(Col(name, "name")))
-          case x@Query(_, _, List(Col(id, null), Col(code, null), Col(name, null)), _, _, _, _, _) =>
-            x.copy(cols = List(Col(code, "code"), Col(name, "name")))
+          case x@Query(_, _, List(c@Col(_, null, _)), _, _, _, _, _) => 
+            x.copy(cols = List(c.copy(alias = "name")))
+          case x@Query(_, _, List(Col(_, null, _), c2@Col(_, null, _)), _, _, _, _, _) =>
+            x.copy(cols = List(c2.copy(alias = "name")))
+          case x@Query(_, _, List(Col(_, null, _), c2@Col(_, null, _), c3@Col(_, null, _)), _, _, _, _, _) =>
+            x.copy(cols = List(c2.copy(alias = "code"), c3.copy(alias = "name")))
           case x => x
         }).tresql
         case a:Arr => table + "[" + ":1('" + idVar + "')]" + (a match {

@@ -352,7 +352,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
   }
   case class TableJoin(val default: Boolean, val expr: Expr, val noJoin: Boolean)
-  case class ColExpr(val col: Expr, val alias: String) extends PrimitiveExpr {
+  case class ColExpr(val col: Expr, val alias: String, val typ: String) extends PrimitiveExpr {
     val separateQuery = QueryBuilder.this.separateQueryFlag
     if (!QueryBuilder.this.allCols) QueryBuilder.this.allCols = col.isInstanceOf[AllExpr]    
     def defaultSQL = col.sql + (if (alias != null) " " + alias else "")
@@ -453,7 +453,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   //DML statements are defined outsided buildInternal method since they are called from other QueryBuilder
   private def buildInsert(table: Ident, cols: List[Col], vals: List[Arr]) = {
     new InsertExpr(IdentExpr(table.ident), cols map (buildInternal(_, COL_CTX)) filter {
-      case x@ColExpr(IdentExpr(_), _) => true
+      case x@ColExpr(IdentExpr(_), _, _) => true
       case e: ColExpr => this.childUpdates += { (e.col, e.name) }; false
     }, vals map { buildInternal(_, VALUES_CTX) })
   }
@@ -461,7 +461,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     new UpdateExpr(new IdentExpr(table.ident), if (filter != null)
       filter.elements map { buildInternal(_, WHERE_CTX) } else null,
       cols map (buildInternal(_, COL_CTX)) filter {
-        case ColExpr(IdentExpr(_), _) => true
+        case ColExpr(IdentExpr(_), _, _) => true
         case e: ColExpr => this.childUpdates += { (e.col, e.name) }; false
       },
       vals.elements map { buildInternal(_, VALUES_CTX) })
@@ -479,7 +479,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           if (f.length > 0) f else null
         } else null,
         if (q.cols != null) q.cols map { buildInternal(_, COL_CTX).asInstanceOf[ColExpr] } //cols 
-        else List(new ColExpr(AllExpr(), null)),
+        else List(ColExpr(AllExpr(), null, null)),
         q.distinct, buildInternal(q.group), //distinct, group
         if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null, //order
         buildInternal(q.offset, LIMIT_CTX), buildInternal(q.limit, LIMIT_CTX)) //offset, limit
@@ -541,7 +541,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
             val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
           }
           case QUERY_CTX | TABLE_CTX => new SelectExpr(List(buildTable(t)), null,
-            List(new ColExpr(AllExpr(), null)), false, null, null, null, null)
+            List(ColExpr(AllExpr(), null, null)), false, null, null, null, null)
           case COL_CTX => buildColumnIdent(t)
           case _ => buildIdent(t)
         }
@@ -581,7 +581,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case Id(seq) => IdExpr(seq)
         case IdRef(seq) => IdRefExpr(seq)
         case Result(r, c) => new ResExpr(r, c)
-        case Col(c, a) => { separateQueryFlag = false; new ColExpr(buildInternal(c, parseCtx), a) }
+        case Col(c, a, t) => { separateQueryFlag = false; new ColExpr(buildInternal(c, parseCtx), a, t) }
         case Grp(cols, having) => new Group(cols map { buildInternal(_, GROUP_CTX) },
           buildInternal(having, HAVING_CTX))
         case Ord(cols, asc) => new Order((cols._1, cols._2 map { buildInternal(_, parseCtx) },

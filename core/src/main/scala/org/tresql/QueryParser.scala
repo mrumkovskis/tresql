@@ -47,8 +47,9 @@ object QueryParser extends JavaTokenParsers {
     def tresql = (if(join != null) join.tresql else "") + (if (outerJoin == "r") "?" else "") +
       any2tresql(obj) + (if (outerJoin == "l") "?" else "") + (if(alias != null) " " + alias else "")
   }
-  case class Col(col: Any, alias: String) extends Exp {
-    def tresql = any2tresql(col) + (if(alias != null) " " + alias else "")
+  case class Col(col: Any, alias: String, typ: String) extends Exp {
+    def tresql = any2tresql(col) + (if(typ != null) " " + typ else "") +
+      (if(alias != null) " " + alias else "")
   }
   case class Cols(distinct: Boolean, cols: List[Col]) extends Exp {
     def tresql = error("Not implemented")
@@ -179,12 +180,12 @@ object QueryParser extends JavaTokenParsers {
           if (b != None) "r" else if (d != None) "l" else null)
     }
   def objs: Parser[List[Obj]] = rep1(obj)
-  def column: Parser[Col] = (qualifiedIdentAll | (expr ~ opt(stringLiteral | qualifiedIdent))) ^^ {
-    case i:IdentAll => Col(i, null)
-    case (o@Obj(_, a, _, _)) ~ None => Col(o, a)
-    case e ~ Some(x) => Col(e, x match { 
-      case Ident(i) => i.mkString; case s => "\"" + s + "\"" })
-    case e ~ None => Col(e, null)
+  def column: Parser[Col] = (qualifiedIdentAll |
+      (expr ~ opt(":" ~> ident) ~ opt(stringLiteral | qualifiedIdent))) ^^ {
+    case i:IdentAll => Col(i, null, null)
+    case (o@Obj(_, a, _, _)) ~ (typ: Option[String]) ~ None => Col(o, a, typ orNull)
+    case e ~ (typ: Option[String]) ~ (a: Option[_]) => Col(e, a map { 
+      case Ident(i) => i.mkString; case s => "\"" + s + "\"" } orNull, typ orNull)
   }
   def columns: Parser[Cols] = (opt("#") <~ "{") ~ rep1sep(column, ",") <~ "}" ^^ {
     case d ~ c => Cols(d != None, c)
@@ -285,7 +286,7 @@ object QueryParser extends JavaTokenParsers {
         case UnOp(_, operand) => bindVars(operand)
         case BinOp(_, lop, rop) => bindVars(lop); bindVars(rop)
         case Obj(t, _, j, _) => bindVars(j); bindVars(t)
-        case Col(c, _) => bindVars(c)
+        case Col(c, _, _) => bindVars(c)
         case Cols(_, cols) => cols foreach bindVars
         case Grp(cols, hv) => cols foreach bindVars; bindVars(hv)
         case Ord(cols, _) => cols._2 foreach bindVars
