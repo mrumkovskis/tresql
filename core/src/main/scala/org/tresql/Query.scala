@@ -156,7 +156,7 @@ object Query {
     Env.log(bindVariables.map(_.toString).mkString("Bind vars: ", ", ", ""), 1)
     var idx = 1
     def bindVar(p: Any) {
-      p match {
+      try p match {
         case null => st.setNull(idx, java.sql.Types.NULL)
         case i: Int => st.setInt(idx, i)
         case l: Long => st.setLong(idx, l)
@@ -185,6 +185,12 @@ object Query {
         case p@OutPar(_) => registerOutPar(st.asInstanceOf[CallableStatement], p, idx)
         //unknown object
         case obj => st.setObject(idx, obj)
+      } catch {
+        case e:Exception => throw new RuntimeException("Failed to bind variable at index " +
+            (idx - 1) + ". Value: " + (String.valueOf(p) match {
+              case x if x.length > 100 => x.substring(0, 100) + "..."
+              case x => x 
+            }) + " of class " + (if (p == null) "null" else p.getClass),e)
       }
       idx += 1
     }
