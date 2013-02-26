@@ -108,6 +108,8 @@ class QueryTest extends Suite {
     expectResult(5)(Query.unique[Int]("inc_val_5(?)", 0))
     expectResult(20)(Query.unique[Int]("inc_val_5(inc_val_5(?))", 10))
     expectResult(15)(Query.unique[Long]("inc_val_5(inc_val_5(?))", 5))
+    intercept[Exception](Query.head[Int]("emp[?]{empno}", 'z'))
+    
     var op = OutPar()
     expectResult(List(10, "x"))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x"))
     expectResult("x")(op.value)
