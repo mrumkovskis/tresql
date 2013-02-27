@@ -27,7 +27,7 @@ CREATE TABLE DEPT
 CREATE TABLE CAR
  (NR VARCHAR(10) NOT NULL,
   NAME VARCHAR(20) NOT NULL,
-  DEPTNO INTEGER)
+  DEPTNR INTEGER)
 //
 CREATE TABLE SALGRADE
  (GRADE INTEGER,
@@ -52,7 +52,7 @@ alter table work add foreign key (empno_mgr) references emp(empno)
 //
 alter table car add primary key (nr)
 //
-alter table car add foreign key (deptno) references dept(deptno)
+alter table car add foreign key (deptnr) references dept(deptno)
 //
 CREATE FUNCTION inc_val_5 (x INTEGER)
   RETURNS INTEGER
