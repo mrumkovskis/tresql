@@ -44,6 +44,9 @@ dept[:"id"] {deptno} #(deptno) --> id=10 --> [[10]]
 //join
 emp e/dept[sal >= hisal & sal <= losal]salgrade {ename, dname, grade} #(empno) --> [["SMITH", "RESEARCH", 1], ["ALLEN", "SALES", 3], ["WARD", "SALES", 2], ["JONES", "RESEARCH", 4], ["MARTIN", "SALES", 2], ["BLAKE", "SALES", 4], ["CLARK", "ACCOUNTING", 4], ["SCOTT", "RESEARCH", 4], ["KING", "ACCOUNTING", 5], ["TURNER", "SALES", 3], ["ADAMS", "RESEARCH", 1], ["JAMES", "SALES", 1], ["FORD", "RESEARCH", 4], ["MILLER", "ACCOUNTING", 2]]
 work[empno]emp/dept {wdate, ename, dname} #(1,2,3) --> [["2012-06-06", "KING", "ACCOUNTING"], ["2012-06-06", "SCOTT", "RESEARCH"], ["2012-06-07", "KING", "ACCOUNTING"], ["2012-06-07", "SCOTT", "RESEARCH"]]
+dept/car[2222]#(nr) --> [[20, "RESEARCH", "DALLAS", "2222", "BMW", 20]]
+car/dept[20]#(nr) --> [["2222", "BMW", 20, 20, "RESEARCH", "DALLAS"], ["3333", "MERCEDES", 20, 20, "RESEARCH", "DALLAS"]]
+car[2222]/dept#(nr) --> [["2222", "BMW", 20, 20, "RESEARCH", "DALLAS"]]
 
 //foreigh key join
 emp/car[2222]{ename, name}#(1,2) --> [["ADAMS", "BMW"], ["FORD", "BMW"], ["JONES", "BMW"], ["SCOTT", "BMW"], ["SMITH", "BMW"]]
