@@ -322,7 +322,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }) + "join "
       def defaultJoin = {
         val j = env.join(joinTable.name, name)
-        (j._1 zip j._2 map { t =>
+        (j._2 zip j._1 map { t =>
           aliasOrName + "." + t._1 + " = " +
             joinTable.aliasOrName + "." + t._2
         }) mkString " and "
