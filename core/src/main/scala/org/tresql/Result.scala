@@ -54,6 +54,7 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   def close {
     if (rs.isClosed) return
     val st = rs.getStatement
+    //close result set in the case statement close does not work according to jdbc specification
     rs.close
     env.result = null
     if (!env.reusableExpr) {
@@ -128,9 +129,9 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     } catch { case _: NoSuchElementException => timestamp(rs.findColumn(columnLabel)) }
   }
 
-  override def toList = { val l = (this map (r => Row(this.content))).toList; close; l }
+  override def toList = this.map(r => Row(this.content)).toList
   
-  def toListRowAsMap:List[Map[String, _]] = { val l = (this map (r=> rowAsMap)).toList; close; l}
+  def toListRowAsMap:List[Map[String, _]] = this.map(r=> rowAsMap).toList
 
   def rowAsMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
     case r: Result => r.toListRowAsMap
@@ -234,34 +235,50 @@ trait RowLike extends Dynamic {
   def int(name: String) = typed[Int](name)
   def int = new DynamicInt(this)
   def i = int
+  def i(idx: Int) = int(idx)
+  def i(name: String) = int(name)
   def long(idx: Int) = typed[Long](idx)
   def long(name: String) = typed[Long](name)
   def long = new DynamicLong(this)
   def l = long
+  def l(idx: Int) = long(idx)
+  def l(name: String) = long(name)
   def double(idx: Int) = typed[Double](idx)
   def double(name: String) = typed[Double](name)
   def double = new DynamicDouble(this)
   def dbl = double
+  def dbl(idx: Int) = double(idx)
+  def dbl(name: String) = double(name)
   def bigdecimal(idx: Int) = typed[BigDecimal](idx)
   def bigdecimal(name: String) = typed[BigDecimal](name)
   def bigdecimal = new DynamicBigDecimal(this)
   def bd = bigdecimal
+  def bd(idx: Int) = bigdecimal(idx)
+  def bd(name: String) = bigdecimal(name)
   def string(idx: Int) = typed[String](idx)
   def string(name: String) = typed[String](name)
   def string = new DynamicString(this)
   def s = string
+  def s(idx: Int) = string(idx)
+  def s(name: String) = string(name)
   def date(idx: Int) = typed[java.sql.Date](idx)
   def date(name: String) = typed[java.sql.Date](name)
   def date = new DynamicDate(this)
   def d = date
+  def d(idx: Int) = date(idx)
+  def d(name: String) = date(name)
   def timestamp(idx: Int) = typed[java.sql.Timestamp](idx)
   def timestamp(name: String) = typed[java.sql.Timestamp](name)
   def timestamp = new DynamicTimestamp(this)
   def t = timestamp
+  def t(idx: Int) = timestamp(idx)
+  def t(name: String) = timestamp(name)
   def result(idx: Int) = typed[Result](idx)
   def result(name: String) = typed[Result](name)
   def result = new DynamicResult(this)
   def r = result
+  def r(idx: Int) = result(idx)
+  def r(name: String) = result(name)
   def columnCount: Int
   def content: Seq[Any]
   def column(idx: Int): Column
