@@ -3,7 +3,6 @@ package org.tresql
 import java.sql.ResultSet
 import java.sql.ResultSetMetaData
 import sys._
-import org.omg.PortableServer.POAPackage.NoServant
 
 class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   extends Iterator[RowLike] with RowLike {
