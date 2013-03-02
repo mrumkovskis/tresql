@@ -165,7 +165,7 @@ class QueryTest extends Suite {
     expectResult(List(1, 4, 127, -128, 57))(
         Query.select("car_image[carnr = ?] {image}", 1111).flatMap(_.b.image).toList)
     expectResult(List[Byte](0, 32, 100, 99)) {
-      val res = Query.select("car_image[carnr = ?] {image}", 2222).map(_.bs.image).toList(0)
+      val res = Query.select("car_image[carnr = ?] {image}", 2222).map(_.bs(0)).toList(0)
       val bytes = new scala.Array[Byte](4)
       res.read(bytes)
       bytes.toList
