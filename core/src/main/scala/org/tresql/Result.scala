@@ -2,8 +2,8 @@ package org.tresql
 
 import java.sql.ResultSet
 import java.sql.ResultSetMetaData
-
 import sys._
+import org.omg.PortableServer.POAPackage.NoServant
 
 class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   extends Iterator[RowLike] with RowLike {
@@ -54,7 +54,6 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   def close {
     if (rs.isClosed) return
     val st = rs.getStatement
-    //close result set in the case statement close does not work according to jdbc specification
     rs.close
     env.result = null
     if (!env.reusableExpr) {
@@ -68,67 +67,68 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     if (cols(columnIndex).idx != -1) rs.getInt(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[Int]
   }
-  override def int(columnLabel: String): Int = {
-    try {
-      int(colMap(columnLabel))
-    } catch { case _: NoSuchElementException => int(rs.findColumn(columnLabel)) }
+  override def int(columnLabel: String): Int = try int(colMap(columnLabel)) catch {
+    case _: NoSuchElementException => int(rs.findColumn(columnLabel))
   }
   override def long(columnIndex: Int): Long = {
     if (cols(columnIndex).idx != -1) rs.getLong(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[Long]
   }
-  override def long(columnLabel: String): Long = {
-    try {
-      long(colMap(columnLabel))
-    } catch { case _: NoSuchElementException => long(rs.findColumn(columnLabel)) }
+  override def long(columnLabel: String): Long = try long(colMap(columnLabel)) catch {
+    case _: NoSuchElementException => long(rs.findColumn(columnLabel))
   }
   override def double(columnIndex: Int): Double = {
     if (cols(columnIndex).idx != -1) rs.getDouble(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[Double]
   }
-  override def double(columnLabel: String): Double = {
-    try {
-      double(colMap(columnLabel))
-    } catch { case _: NoSuchElementException => double(rs.findColumn(columnLabel)) }
+  override def double(columnLabel: String): Double = try double(colMap(columnLabel)) catch {
+    case _: NoSuchElementException => double(rs.findColumn(columnLabel))
   }
   override def bigdecimal(columnIndex: Int): BigDecimal = {
     if (cols(columnIndex).idx != -1) {
       val bd = rs.getBigDecimal(cols(columnIndex).idx); if (rs.wasNull) null else BigDecimal(bd)
     } else row(columnIndex).asInstanceOf[BigDecimal]
   }
-  override def bigdecimal(columnLabel: String): BigDecimal = {
-    try {
-      bigdecimal(colMap(columnLabel))
-    } catch { case _: NoSuchElementException => bigdecimal(rs.findColumn(columnLabel)) }
+  override def bigdecimal(columnLabel: String): BigDecimal = try bigdecimal(colMap(columnLabel)) catch {
+    case _: NoSuchElementException => bigdecimal(rs.findColumn(columnLabel))
   }
   override def string(columnIndex: Int): String = {
     if (cols(columnIndex).idx != -1) rs.getString(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[String]
   }
-  override def string(columnLabel: String): String = {
-    try {
-      string(colMap(columnLabel))
-    } catch { case _: NoSuchElementException => string(rs.findColumn(columnLabel)) }
+  override def string(columnLabel: String): String = try string(colMap(columnLabel)) catch {
+    case _: NoSuchElementException => string(rs.findColumn(columnLabel))
   }
   override def date(columnIndex: Int): java.sql.Date = {
     if (cols(columnIndex).idx != -1) rs.getDate(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[java.sql.Date]
   }
-  override def date(columnLabel: String): java.sql.Date = {
-    try {
-      date(colMap(columnLabel))
-    } catch { case _: NoSuchElementException => date(rs.findColumn(columnLabel)) }
+  override def date(columnLabel: String): java.sql.Date = try date(colMap(columnLabel)) catch {
+    case _: NoSuchElementException => date(rs.findColumn(columnLabel))
   }
   override def timestamp(columnIndex: Int): java.sql.Timestamp = {
     if (cols(columnIndex).idx != -1) rs.getTimestamp(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[java.sql.Timestamp]
   }
-  override def timestamp(columnLabel: String): java.sql.Timestamp = {
-    try {
-      timestamp(colMap(columnLabel))
-    } catch { case _: NoSuchElementException => timestamp(rs.findColumn(columnLabel)) }
+  override def timestamp(columnLabel: String): java.sql.Timestamp =
+    try timestamp(colMap(columnLabel)) catch {
+      case _: NoSuchElementException => timestamp(rs.findColumn(columnLabel))
+    }
+  override def bytes(columnIndex: Int): Array[Byte] = {
+    if (cols(columnIndex).idx != -1) rs.getBytes(cols(columnIndex).idx)
+    else row(columnIndex).asInstanceOf[Array[Byte]] 
+  } 
+  override def bytes(columnLabel: String) = try bytes(colMap(columnLabel)) catch {
+    case _: NoSuchElementException => bytes(rs.findColumn(columnLabel))
   }
-
+  override def stream(columnIndex: Int) = {
+    if(cols(columnIndex).idx != -1) rs.getBinaryStream(cols(columnIndex).idx)
+    else row(columnIndex).asInstanceOf[java.io.InputStream]
+  }
+  override def stream(columnLabel: String) = try stream(colMap(columnLabel)) catch {
+    case _: NoSuchElementException => stream(rs.findColumn(columnLabel))
+  }
+  
   override def toList = this.map(r => Row(this.content)).toList
   
   def toListRowAsMap:List[Map[String, _]] = this.map(r=> rowAsMap).toList
@@ -273,6 +273,18 @@ trait RowLike extends Dynamic {
   def t = timestamp
   def t(idx: Int) = timestamp(idx)
   def t(name: String) = timestamp(name)
+  def bytes(idx: Int) = typed[Array[Byte]](idx)
+  def bytes(name: String) = typed[Array[Byte]](name)
+  def bytes = new DynamicByteArray(this)
+  def b = bytes
+  def b(idx: Int) = bytes(idx)
+  def b(name: String) = bytes(name)
+  def stream(idx: Int) = typed[java.io.InputStream](idx)
+  def stream(name: String) = typed[java.io.InputStream](name)
+  def stream = new DynamicStream(this)
+  def bs = stream
+  def bs(idx: Int) = stream(idx)
+  def bs(name: String) = stream(name)
   def result(idx: Int) = typed[Result](idx)
   def result(name: String) = typed[Result](name)
   def result = new DynamicResult(this)
@@ -398,4 +410,13 @@ class DynamicTimestamp(row:RowLike) extends Dynamic {
 class DynamicResult(row:RowLike) extends Dynamic {
   def selectDynamic(col:String) = row.result(col)
   def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+}
+//wrappers for array and stream
+class DynamicByteArray(row: RowLike) extends Dynamic {
+  def selectDynamic(col:String) = row.bytes(col)
+  def applyDynamic(col:String)(args: Any*) = selectDynamic(col)   
+}
+class DynamicStream(row: RowLike) extends Dynamic {
+  def selectDynamic(col:String) = row.stream(col)
+  def applyDynamic(col:String)(args: Any*) = selectDynamic(col)   
 }
