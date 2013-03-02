@@ -158,6 +158,18 @@ class QueryTest extends Suite {
       ex.close
       res
     }
+    //arrays, streams test
+    expectResult(2)(Query("car_image{carnr, image} + [?, ?], [?, ?]", 1111,
+        new java.io.ByteArrayInputStream(scala.Array[Byte](1, 4, 127, -128, 57)), 2222,
+        new java.io.ByteArrayInputStream(scala.Array[Byte](0, 32, 100, 99))))
+    expectResult(List(1, 4, 127, -128, 57))(
+        Query.select("car_image[carnr = ?] {image}", 1111).flatMap(_.b.image).toList)
+    expectResult(List[Byte](0, 32, 100, 99)) {
+      val res = Query.select("car_image[carnr = ?] {image}", 2222).map(_.bs.image).toList(0)
+      val bytes = new scala.Array[Byte](4)
+      res.read(bytes)
+      bytes.toList
+    }
     //hierarchical inserts, updates test
     expectResult(List(1, List(List(1, 1))))(Query(
       """dept{deptno, dname, loc, +emp {empno, ename, deptno}[:empno, :ename, :deptno] emps} +
