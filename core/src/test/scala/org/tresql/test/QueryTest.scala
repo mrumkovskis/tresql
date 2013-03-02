@@ -109,6 +109,19 @@ class QueryTest extends Suite {
     expectResult(20)(Query.unique[Int]("inc_val_5(inc_val_5(?))", 10))
     expectResult(15)(Query.unique[Long]("inc_val_5(inc_val_5(?))", 5))
     intercept[Exception](Query.head[Int]("emp[?]{empno}", 'z'))
+    //result closing
+    intercept[SQLException] {
+      val res = Query.select("emp")
+      res.toList
+      res(0)
+    }
+    //expression closing
+    intercept[SQLException] {
+      val ex = Query.build("emp")
+      ex.select().toList
+      ex.close
+      ex.select().toList
+    }
     
     var op = OutPar()
     expectResult(List(10, "x"))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x"))
