@@ -17,7 +17,7 @@ object InsensitiveCmp extends (Expr => String) {
   private val COL = "'[COL]'"
 
   def apply(acc: String, normalized: String, dialect: Expr => String = null) = {
-    accents = (acc, normalized, (acc.toList.zip(normalized.toList).toMap),
+    accents = (acc, normalized, (acc.zip(normalized).toMap),
       dialect)
     this
   }
