@@ -248,7 +248,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         //primary key shortcut join aliases checked
         case tb@Table(IdentExpr(t), null, TableJoin(_, ArrExpr(l), _), _) => {
           l map { 
-            case AliasIdentExpr(_, a) => al += a; a -> tb.copy(alias = a)
+            case AliasIdentExpr(_, a, _) => al += a; a -> tb.copy(alias = a)
             case _ => val s = t.mkString("."); (if (al(s)) null else s) -> tb
           }
         }
@@ -305,20 +305,27 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def aliasOrName = if (alias != null) alias else name
     def sqlJoin(joinTable: Table) = {
       def sqlJoin(jl: List[Expr]) = (jl map { j =>
-        joinPrefix + (j match {
+        joinPrefix(j) + (j match {
           //primary key join shortcut syntax
           case i@IdentExpr(_) => sqlName + " on " + i.sql + " = " +
             aliasOrName + "." + env.table(name).key.cols.mkString
-          //primary key join shortcut syntax
-          case AliasIdentExpr(i, a) => name + " " + a + " on " +
+          //primary key alias join shortcut syntax
+          case AliasIdentExpr(i, a, _) => name + " " + a + " on " +
             i.mkString(".") + " = " + a + "." + env.table(name).key.cols.mkString
           case e => sqlName + " on " + e.sql
         })
       }) mkString " "
-      def joinPrefix = (outerJoin match {
+      def joinPrefix(e: Expr) = (outerJoin match {
         case "l" => "left "
         case "r" => "right "
-        case null => ""
+        case null => Option(e) match {
+          case Some(AliasIdentExpr(_, _, oj)) => oj match {
+            case "l" => "left "
+            case "r" => "right "
+            case null => ""             
+          }
+          case _ => ""
+        }
       }) + "join "
       def defaultJoin = {
         val j = env.join(name, joinTable.name)
@@ -335,9 +342,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         //normal join, primary key join shortcut syntax
         case TableJoin(false, ArrExpr(l), _) => sqlJoin(l)
         //default join
-        case TableJoin(true, null, _) => joinPrefix + sqlName + " on " + defaultJoin
+        case TableJoin(true, null, _) => joinPrefix(null) + sqlName + " on " + defaultJoin
         //default join with additional expression
-        case TableJoin(true, j: Expr, _) => joinPrefix + sqlName + " on " + defaultJoin +
+        case TableJoin(true, j: Expr, _) => joinPrefix(null) + sqlName + " on " + defaultJoin +
           " and " + (j match {
             //primary key equals search
             case _:ConstExpr | _:VarExpr | _:ResExpr => joinTable.aliasOrName + "." +
@@ -365,8 +372,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   case class IdentExpr(val name: List[String]) extends PrimitiveExpr {
     def defaultSQL = name.mkString(".")
   }
-  //this is used for alias join shortcut syntax
-  case class AliasIdentExpr(val name: List[String], val alias: String) extends PrimitiveExpr {
+  //this is used for primary key alias join shortcut syntax
+  case class AliasIdentExpr(val name: List[String], val alias: String, outerJoin: String)
+    extends PrimitiveExpr {
     def defaultSQL = "AliasIdentExpr(" + name + ", " + alias + ")"
   }
   case class Order(val ordExprs: (Null, List[Expr], Null), val asc: Boolean) extends PrimitiveExpr {
@@ -498,7 +506,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     def buildIdent(i: Obj) = i match {
       case Obj(Ident(i), null, _, _) => IdentExpr(i)
-      case Obj(Ident(i), a, _, _) => AliasIdentExpr(i, a)
+      case Obj(Ident(i), a, _, j) => AliasIdentExpr(i, a, j)
       case o => error("unsupported column definition at this place: " + o)
     }
     ctxStack ::= parseCtx

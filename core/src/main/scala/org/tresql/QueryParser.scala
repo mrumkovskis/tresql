@@ -174,10 +174,11 @@ object QueryParser extends JavaTokenParsers {
   }
   def filter: Parser[Arr] = array
   def obj: Parser[Obj] = opt(join) ~ opt("?") ~ (qualifiedIdent | bracesExp) ~
-    opt("?") ~ opt(excludeKeywordsIdent) ^^ {
-      case a ~ Some(b) ~ c ~ Some(d) ~ e => error("Cannot be right and left join at the same time")
-      case a ~ b ~ c ~ d ~ e => Obj(c, e.orNull, a.orNull,
-          if (b != None) "r" else if (d != None) "l" else null)
+    opt("?") ~ opt(excludeKeywordsIdent) ~ opt("?") ^^ {
+      case a ~ Some(b) ~ c ~ Some(d) ~ e ~ f => error("Cannot be right and left join at the same time")
+      case a ~ Some(b) ~ c ~ d ~ e ~ Some(f) => error("Cannot be right and left join at the same time")
+      case a ~ b ~ c ~ d ~ e ~ f => Obj(c, e.orNull, a.orNull,
+          b.map(x=> "r") orElse d.orElse(f).map(x=> "l") orNull)
     }
   def objs: Parser[List[Obj]] = rep1(obj)
   def column: Parser[Col] = (qualifiedIdentAll |
