@@ -7,8 +7,10 @@ import sys._
 class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   extends Iterator[RowLike] with RowLike {
   private[this] val md = rs.getMetaData
+  private[this] val st = rs.getStatement
   private[this] val row = new Array[Any](cols.length)
   private[this] var rsHasNext = true; private[this] var nextCalled = true
+  private[this] var closed = false
   private[this] val (colMap, exprCols) = {
     val cwi = cols.zipWithIndex
     (cwi.filter(_._1.name != null).map(t => t._1.name -> t._2).toMap, cwi.filter(_._1.expr != null))
@@ -51,14 +53,11 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   def column(idx: Int) = cols(idx)
   def jdbcResult = rs
   def close {
-    if (rs.isClosed) return
-    val st = rs.getStatement
+    if (closed) return
     rs.close
     env.result = null
-    if (!env.reusableExpr) {
-      if (!st.isClosed) st.close
-      env.statement = null
-    }
+    if (!env.reusableExpr && st != null) st.close
+    closed = true
   }
 
   //concrete type return methods
