@@ -109,6 +109,19 @@ class QueryTest extends Suite {
     expectResult(20)(Query.unique[Int]("inc_val_5(inc_val_5(?))", 10))
     expectResult(15)(Query.unique[Long]("inc_val_5(inc_val_5(?))", 5))
     intercept[Exception](Query.head[Int]("emp[?]{empno}", 'z'))
+    //result closing
+    intercept[SQLException] {
+      val res = Query.select("emp")
+      res.toList
+      res(0)
+    }
+    //expression closing
+    intercept[SQLException] {
+      val ex = Query.build("emp")
+      ex.select().toList
+      ex.close
+      ex.select().toList
+    }
     
     var op = OutPar()
     expectResult(List(10, "x"))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x"))
@@ -139,9 +152,28 @@ class QueryTest extends Suite {
       Query.first("dept[10]{deptno, dname, |emp[deptno = :1(1)]{ename} emps}") 
         { r => (r.dname, r.r.emps.map(r => r.ename).mkString(",")) }.get)
     //bind variables test
-    val ex = Query.build("dept[?]{deptno}")
-    expectResult(List(10, 20, 30, 40))(List(10, 20, 30, 40) flatMap {ex.select(_).map(_.deptno)})
-    ex.close
+    expectResult(List(10, 20, 30, 40)){
+      val ex = Query.build("dept[?]{deptno}")
+      val res = List(10, 20, 30, 40) flatMap {ex.select(_).map(_.deptno)}
+      ex.close
+      res
+    }
+    //arrays, streams test
+    expectResult(2)(Query("car_image{carnr, image} + [?, ?], [?, ?]", 1111,
+        new java.io.ByteArrayInputStream(scala.Array[Byte](1, 4, 127, -128, 57)), 2222,
+        new java.io.ByteArrayInputStream(scala.Array[Byte](0, 32, 100, 99))))
+    expectResult(List(1, 4, 127, -128, 57))(
+        Query.select("car_image[carnr = ?] {image}", 1111).flatMap(_.b.image).toList)
+    expectResult(List[Byte](0, 32, 100, 99)) {
+      val res = Query.select("car_image[carnr = ?] {image}", 2222).map(_.bs(0)).toList(0)
+      val bytes = new scala.Array[Byte](4)
+      res.read(bytes)
+      bytes.toList
+    }
+    expectResult(1)(Query("car_image[carnr = ?]{image} = [?]", 2222,
+        new java.io.ByteArrayInputStream(scala.Array[Byte](1, 2, 3, 4, 5, 6, 7))))
+    expectResult(List(1, 2, 3, 4, 5, 6, 7))(
+        Query.select("car_image[carnr = ?] {image}", 2222).flatMap(_.b("image")).toList)
     //hierarchical inserts, updates test
     expectResult(List(1, List(List(1, 1))))(Query(
       """dept{deptno, dname, loc, +emp {empno, ename, deptno}[:empno, :ename, :deptno] emps} +

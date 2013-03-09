@@ -44,8 +44,11 @@ dept[:"id"] {deptno} #(deptno) --> id=10 --> [[10]]
 //join
 emp e/dept[sal >= hisal & sal <= losal]salgrade {ename, dname, grade} #(empno) --> [["SMITH", "RESEARCH", 1], ["ALLEN", "SALES", 3], ["WARD", "SALES", 2], ["JONES", "RESEARCH", 4], ["MARTIN", "SALES", 2], ["BLAKE", "SALES", 4], ["CLARK", "ACCOUNTING", 4], ["SCOTT", "RESEARCH", 4], ["KING", "ACCOUNTING", 5], ["TURNER", "SALES", 3], ["ADAMS", "RESEARCH", 1], ["JAMES", "SALES", 1], ["FORD", "RESEARCH", 4], ["MILLER", "ACCOUNTING", 2]]
 work[empno]emp/dept {wdate, ename, dname} #(1,2,3) --> [["2012-06-06", "KING", "ACCOUNTING"], ["2012-06-06", "SCOTT", "RESEARCH"], ["2012-06-07", "KING", "ACCOUNTING"], ["2012-06-07", "SCOTT", "RESEARCH"]]
+dept/car[2222]#(nr) --> [[20, "RESEARCH", "DALLAS", "2222", "BMW", 20]]
+car/dept[20]#(nr) --> [["2222", "BMW", 20, 20, "RESEARCH", "DALLAS"], ["3333", "MERCEDES", 20, 20, "RESEARCH", "DALLAS"]]
+car[2222]/dept#(nr) --> [["2222", "BMW", 20, 20, "RESEARCH", "DALLAS"]]
 
-//foreigh key join
+//foreign key default join
 emp/car[2222]{ename, name}#(1,2) --> [["ADAMS", "BMW"], ["FORD", "BMW"], ["JONES", "BMW"], ["SCOTT", "BMW"], ["SMITH", "BMW"]]
 
 //default join with additional expression
@@ -56,9 +59,11 @@ emp[?]/dept{ename, dname} --> 7369 --> [["SMITH", "RESEARCH"]]
 emp/[?]dept{ename, dname} --> 7369 --> [["SMITH", "RESEARCH"]]
 emp[?]/dept[?]{ename, dname} --> 7369; 40 --> []
 
-//primary key join shortcut syntax
+//foreign key alias join shortcut syntax
 emp e[e.deptno d]dept {ename, dname} #(ename) --> [["ADAMS", "RESEARCH"], ["ALLEN", "SALES"], ["BLAKE", "SALES"], ["CLARK", "ACCOUNTING"], ["FORD", "RESEARCH"], ["JAMES", "SALES"], ["JONES", "RESEARCH"], ["KING", "ACCOUNTING"], ["MARTIN", "SALES"], ["MILLER", "ACCOUNTING"], ["SCOTT", "RESEARCH"], ["SMITH", "RESEARCH"], ["TURNER", "SALES"],["WARD", "SALES"]]
 work w[w.empno e, w.empno_mgr m]emp {e.ename, m.ename, hours} #(1,2,3) --> [["SCOTT", "CLARK", 8], ["SCOTT", "JONES", 5]]
+//foreign key alias outer shortcut join syntax
+work w[w.empno e, w.empno_mgr m?]emp {e.ename, m.ename, hours} #(1,2,3) --> [["KING", null, 3], ["KING", null, 4], ["SCOTT", "CLARK", 8], ["SCOTT", "JONES", 5]]
 
 //alias join shortcut syntax
 emp e[e.empno = w.empno]work w;e/dept [ename = 'SCOTT']{hours, ename, dname} #(hours) --> [[5, "SCOTT", "RESEARCH"], [8, "SCOTT", "RESEARCH"]]
