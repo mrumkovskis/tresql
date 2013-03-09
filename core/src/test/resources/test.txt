@@ -48,7 +48,7 @@ dept/car[2222]#(nr) --> [[20, "RESEARCH", "DALLAS", "2222", "BMW", 20]]
 car/dept[20]#(nr) --> [["2222", "BMW", 20, 20, "RESEARCH", "DALLAS"], ["3333", "MERCEDES", 20, 20, "RESEARCH", "DALLAS"]]
 car[2222]/dept#(nr) --> [["2222", "BMW", 20, 20, "RESEARCH", "DALLAS"]]
 
-//foreigh key join
+//foreign key default join
 emp/car[2222]{ename, name}#(1,2) --> [["ADAMS", "BMW"], ["FORD", "BMW"], ["JONES", "BMW"], ["SCOTT", "BMW"], ["SMITH", "BMW"]]
 
 //default join with additional expression
@@ -59,10 +59,10 @@ emp[?]/dept{ename, dname} --> 7369 --> [["SMITH", "RESEARCH"]]
 emp/[?]dept{ename, dname} --> 7369 --> [["SMITH", "RESEARCH"]]
 emp[?]/dept[?]{ename, dname} --> 7369; 40 --> []
 
-//primary key alias join shortcut syntax
+//foreign key alias join shortcut syntax
 emp e[e.deptno d]dept {ename, dname} #(ename) --> [["ADAMS", "RESEARCH"], ["ALLEN", "SALES"], ["BLAKE", "SALES"], ["CLARK", "ACCOUNTING"], ["FORD", "RESEARCH"], ["JAMES", "SALES"], ["JONES", "RESEARCH"], ["KING", "ACCOUNTING"], ["MARTIN", "SALES"], ["MILLER", "ACCOUNTING"], ["SCOTT", "RESEARCH"], ["SMITH", "RESEARCH"], ["TURNER", "SALES"],["WARD", "SALES"]]
 work w[w.empno e, w.empno_mgr m]emp {e.ename, m.ename, hours} #(1,2,3) --> [["SCOTT", "CLARK", 8], ["SCOTT", "JONES", 5]]
-//primary key alias outer shortcut join syntax
+//foreign key alias outer shortcut join syntax
 work w[w.empno e, w.empno_mgr m?]emp {e.ename, m.ename, hours} #(1,2,3) --> [["KING", null, 3], ["KING", null, 4], ["SCOTT", "CLARK", 8], ["SCOTT", "JONES", 5]]
 
 //alias join shortcut syntax

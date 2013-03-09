@@ -245,7 +245,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     val aliases: Map[String, Table] = {
       var al = Set[String]()
       tables.flatMap {
-        //primary key shortcut join aliases checked
+        //foreign key shortcut join aliases checked
         case tb@Table(IdentExpr(t), null, TableJoin(_, ArrExpr(l), _), _) => {
           l map { 
             case AliasIdentExpr(_, a, _) => al += a; a -> tb.copy(alias = a)
@@ -306,10 +306,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def sqlJoin(joinTable: Table) = {
       def sqlJoin(jl: List[Expr]) = (jl map { j =>
         joinPrefix(j) + (j match {
-          //primary key join shortcut syntax
+          //foreign key join shortcut syntax
           case i@IdentExpr(_) => sqlName + " on " + i.sql + " = " +
             aliasOrName + "." + env.table(name).key.cols.mkString
-          //primary key alias join shortcut syntax
+          //foreign key alias join shortcut syntax
           case AliasIdentExpr(i, a, _) => name + " " + a + " on " +
             i.mkString(".") + " = " + a + "." + env.table(name).key.cols.mkString
           case e => sqlName + " on " + e.sql
@@ -339,7 +339,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case TableJoin(_, _, true) => ""
         //product join
         case TableJoin(false, ArrExpr(Nil), _) => ", " + sqlName
-        //normal join, primary key join shortcut syntax
+        //normal join, foreign key alias join shortcut syntax
         case TableJoin(false, ArrExpr(l), _) => sqlJoin(l)
         //default join
         case TableJoin(true, null, _) => joinPrefix(null) + sqlName + " on " + defaultJoin
@@ -372,7 +372,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   case class IdentExpr(val name: List[String]) extends PrimitiveExpr {
     def defaultSQL = name.mkString(".")
   }
-  //this is used for primary key alias join shortcut syntax
+  //this is used for foreign key alias join shortcut syntax
   case class AliasIdentExpr(val name: List[String], val alias: String, outerJoin: String)
     extends PrimitiveExpr {
     def defaultSQL = "AliasIdentExpr(" + name + ", " + alias + ")"
