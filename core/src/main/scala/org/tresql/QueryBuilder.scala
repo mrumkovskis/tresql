@@ -278,7 +278,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }
       (tables: @unchecked) match {
         case t :: Nil => ""
-        case t :: l => " " + l.head.sqlJoin(find(t)) + join(l)
+        case t :: l => (Option(" " + l.head.sqlJoin(find(t))) filter (_.size > 1) getOrElse "") + join(l)
       }
     }
     def where = filter match {
