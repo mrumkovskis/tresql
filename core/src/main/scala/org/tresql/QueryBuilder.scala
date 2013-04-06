@@ -22,7 +22,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   //used for non flat updates, i.e. hierarhical object.
   private val childUpdates = scala.collection.mutable.ListBuffer[(Expr, String)]()
-  
+
   //context stack as buildInternal method is called
   private var ctxStack = List[String]()
   //bind variables for jdbc prepared statement 
@@ -68,7 +68,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     override def toString = if (env contains name) name + " = " + env(name) else name
   }
-  
+
   case class IdExpr(val seqName: String) extends BaseExpr {
     override def apply() = env.nextId(seqName)
     var binded = false
@@ -86,7 +86,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       "?"
     }
   }
-  
+
   case class ResExpr(val nr: Int, val col: Any) extends PrimitiveExpr {
     override def apply() = env(nr) match {
       case null => error("Ancestor result with number " + nr + " not found for expression " + this)
@@ -246,15 +246,17 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       var al = Set[String]()
       tables.flatMap {
         //foreign key shortcut join aliases checked
-        case tb@Table(IdentExpr(t), null, TableJoin(_, ArrExpr(l), _), _) => {
-          l map { 
-            case AliasIdentExpr(_, a, _) => al += a; a -> tb.copy(alias = a)
+        case tb @ Table(IdentExpr(t), null, TableJoin(_, ArrExpr(l), _), _) => {
+          l map {
+            case AliasIdentExpr(_, a, _) =>
+              al += a; a -> tb.copy(alias = a)
             case _ => val s = t.mkString("."); (if (al(s)) null else s) -> tb
           }
         }
-        case tb@Table(IdentExpr(t), null, _, _) => val s = t.mkString("."); List((if (al(s)) null else s) -> tb)
-        case tb@Table(t, null, _, _) => List((null, tb))
-        case tb@Table(t, a, _, _) => al += a; List(a -> tb)
+        case tb @ Table(IdentExpr(t), null, _, _) =>
+          val s = t.mkString("."); List((if (al(s)) null else s) -> tb)
+        case tb @ Table(t, null, _, _) => List((null, tb))
+        case tb @ Table(t, a, _, _) => al += a; List(a -> tb)
       }.filter(_._1 != null).toMap
     }
     override def apply() = {
@@ -273,7 +275,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def join(tables: List[Table]): String = {
       //used to find table if alias join is used
       def find(t: Table) = t match {
-        case t@Table(IdentExpr(n), null, _, _) => aliases.getOrElse(n.mkString("."), t)
+        case t @ Table(IdentExpr(n), null, _, _) => aliases.getOrElse(n.mkString("."), t)
         case t => t
       }
       (tables: @unchecked) match {
@@ -283,8 +285,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     def where = filter match {
       //primary key equals search
-      case List(_:ConstExpr | _:VarExpr | _:ResExpr) => tables(tables.size - 1).aliasOrName + "." +
-        env.table(tables(tables.size -1).name).key.cols(0) + " = " + filter(0).sql
+      case List(_: ConstExpr | _: VarExpr | _: ResExpr) => tables(tables.size - 1).aliasOrName + "." +
+        env.table(tables(tables.size - 1).name).key.cols(0) + " = " + filter(0).sql
       //normal filter expression
       case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
       //primary key in search
@@ -307,7 +309,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       def sqlJoin(jl: List[Expr]) = (jl map { j =>
         joinPrefix(j) + (j match {
           //foreign key join shortcut syntax
-          case i@IdentExpr(_) => sqlName + " on " + i.sql + " = " +
+          case i @ IdentExpr(_) => sqlName + " on " + i.sql + " = " +
             aliasOrName + "." + env.table(name).key.cols.mkString
           //foreign key alias join shortcut syntax
           case AliasIdentExpr(i, a, _) => name + " " + a + " on " +
@@ -322,7 +324,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           case Some(AliasIdentExpr(_, _, oj)) => oj match {
             case "l" => "left "
             case "r" => "right "
-            case null => ""             
+            case null => ""
           }
           case _ => ""
         }
@@ -347,11 +349,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case TableJoin(true, j: Expr, _) => joinPrefix(null) + sqlName + " on " + defaultJoin +
           " and " + (j match {
             //primary key equals search
-            case _:ConstExpr | _:VarExpr | _:ResExpr => joinTable.aliasOrName + "." +
+            case _: ConstExpr | _: VarExpr | _: ResExpr => joinTable.aliasOrName + "." +
               env.table(joinTable.name).key.cols(0) + " = " + j.sql
             //primary key in search
             case ArrExpr(l) => joinTable.aliasOrName + "." +
-              env.table(joinTable.name).key.cols(0) + (l map (_.sql) mkString(" in(", ", ", ")"))
+              env.table(joinTable.name).key.cols(0) + (l map (_.sql) mkString (" in(", ", ", ")"))
             //normal join expression
             case e => (if (e.exprType == classOf[SelectExpr]) "exists " else "") + e.sql
           })
@@ -361,12 +363,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   case class TableJoin(val default: Boolean, val expr: Expr, val noJoin: Boolean)
   case class ColExpr(val col: Expr, val alias: String, val typ: String) extends PrimitiveExpr {
     val separateQuery = QueryBuilder.this.separateQueryFlag
-    if (!QueryBuilder.this.allCols) QueryBuilder.this.allCols = col.isInstanceOf[AllExpr]    
+    if (!QueryBuilder.this.allCols) QueryBuilder.this.allCols = col.isInstanceOf[AllExpr]
     def defaultSQL = col.sql + (if (alias != null) " " + alias else "")
     def name = if (alias != null) alias.stripPrefix("\"").stripSuffix("\"") else col match {
       case IdentExpr(n) => n(n.length - 1)
       case _ => null
-    }    
+    }
     override def toString = col.toString + (if (alias != null) " " + alias else "")
   }
   case class IdentExpr(val name: List[String]) extends PrimitiveExpr {
@@ -390,9 +392,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     extends DeleteExpr(table, null) {
     override protected def _sql = "insert into " + table.sql +
       "(" + cols.map(_.sql).mkString(",") + ")" + (vals match {
-      case v :: Nil => " values " + v.sql
-      case _ => " values (" + vals.map(_.sql).mkString(",") + ")" 
-    })
+        case v :: Nil => " values " + v.sql
+        case _ => " values (" + vals.map(_.sql).mkString(",") + ")"
+      })
   }
   class UpdateExpr(table: IdentExpr, filter: List[Expr], val cols: List[Expr],
     val vals: List[Expr]) extends DeleteExpr(table, filter) {
@@ -437,12 +439,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     override def close = {
       env.closeStatement
-      childUpdates foreach {t => t._1.close}
+      childUpdates foreach { t => t._1.close }
     }
   }
-  
+
   abstract class PrimitiveExpr extends Expr {
-    def builder = QueryBuilder.this    
+    def builder = QueryBuilder.this
   }
 
   private def executeChildren = {
@@ -451,8 +453,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case (ex, n) if (!env.contains(n)) => ex()
       case (ex, n) => env(n) match {
         case m: Map[String, _] => ex(m)
-        case t: scala.collection.Traversable[Map[String, _]] => t map {ex(_)}
-        case a: Array[Map[String, _]] => (a map {ex(_)}).toList
+        case t: scala.collection.Traversable[Map[String, _]] => t map { ex(_) }
+        case a: Array[Map[String, _]] => (a map { ex(_) }).toList
         case x => ex()
       }
     }.toList
@@ -461,7 +463,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   //DML statements are defined outsided buildInternal method since they are called from other QueryBuilder
   private def buildInsert(table: Ident, cols: List[Col], vals: List[Arr]) = {
     new InsertExpr(IdentExpr(table.ident), cols map (buildInternal(_, COL_CTX)) filter {
-      case x@ColExpr(IdentExpr(_), _, _) => true
+      case x @ ColExpr(IdentExpr(_), _, _) => true
       case e: ColExpr => this.childUpdates += { (e.col, e.name) }; false
     }, vals map { buildInternal(_, VALUES_CTX) })
   }
@@ -520,71 +522,62 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case BinOp("=", Variable(n, o), v) if (parseCtx == ROOT_CTX) =>
           AssignExpr(n, buildInternal(v, parseCtx))
         //insert
-        case Insert(t, c, v) => {
+        case Insert(t, c, v) =>
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildInsert(t, c, v)
           this.bindIdx = b.bindIdx; ex
-        }
         //update
-        case Update(t, f, c, v) => {
+        case Update(t, f, c, v) =>
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildUpdate(t, f, c, v)
           this.bindIdx = b.bindIdx; ex
-        }
         //delete
-        case Delete(t, f) => {
+        case Delete(t, f) =>
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildDelete(t, f)
           this.bindIdx = b.bindIdx; ex
-        }
         //child query
-        case UnOp("|", oper) => {
+        case UnOp("|", oper) =>
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth + 1, bindIdx)
           val ex = b.buildInternal(oper, QUERY_CTX)
           this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
-        }
         case t: Obj => parseCtx match {
-          case ROOT_CTX => {
+          case ROOT_CTX =>
             val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
             val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
-          }
           case QUERY_CTX | TABLE_CTX => SelectExpr(List(buildTable(t)), null,
             List(ColExpr(AllExpr(), null, null)), false, null, null, null, null)
           case COL_CTX => buildColumnIdent(t)
           case _ => buildIdent(t)
         }
         case q: Query => parseCtx match {
-          case ROOT_CTX => {
+          case ROOT_CTX =>
             val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
             val ex = b.buildInternal(q, QUERY_CTX); this.bindIdx = b.bindIdx; ex
-          }
           case _ => buildSelect(q)
         }
-        case UnOp(op, oper) => {
+        case UnOp(op, oper) =>
           val o = buildInternal(oper, parseCtx)
           if (o == null) null else UnExpr(op, o)
-        }
         case e @ BinOp(op, lop, rop) => parseCtx match {
-          case ROOT_CTX => {
+          case ROOT_CTX =>
             val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
             val ex = b.buildInternal(e, QUERY_CTX); this.bindIdx = b.bindIdx; ex
-          }
-          case ctx => {
+          case ctx =>
             val l = buildInternal(lop, ctx)
             val r = buildInternal(rop, ctx)
             if (l != null && r != null) BinExpr(op, l, r) else if (op == "&" || op == "|")
               if (l != null) l else if (r != null) r else null
             else null
           }
-        }
-        case Fun(n, pl: List[_]) => {
+        case Fun(n, pl: List[_]) =>
           val pars = pl map { buildInternal(_, parseCtx) }
-          if (pars.exists(_ == null)) null else FunExpr(n, pars)  
-        }
+          if (pars.exists(_ == null)) null else FunExpr(n, pars)
         case Ident(i) => IdentExpr(i)
-        case IdentAll(i) => {identAll = true; IdentAllExpr(i.ident)}
+        case IdentAll(i) => { identAll = true; IdentAllExpr(i.ident) }
         case Arr(l: List[_]) => ArrExpr(l map { buildInternal(_, parseCtx) })
-        case Variable("?", o) => this.bindIdx += 1; VarExpr(this.bindIdx.toString, o)
+        case Variable("?", o) =>
+          this.bindIdx += 1; VarExpr(this.bindIdx.toString, o)
         case Variable(n, o) => if (!env.reusableExpr && o && !(env contains n)) null else VarExpr(n, o)
         case Id(seq) => IdExpr(seq)
         case IdRef(seq) => IdRefExpr(seq)
@@ -596,25 +589,22 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           cols._3), asc)
         case All() => AllExpr()
         case null => null
-        case Braces(expr) => {
+        case Braces(expr) =>
           val e = buildInternal(expr, parseCtx)
           if (e == null) null else BracesExpr(e)
-        }
         case x => ConstExpr(x)
       }
-    } finally {
-      ctxStack = ctxStack.tail
-    }
+    } finally ctxStack = ctxStack.tail
   }
 
   private def build(ex: String): Expr = {
     buildInternal(parseExp(ex))
   }
-  
-  private def build(ex:Exp):Expr = {
+
+  private def build(ex: Exp): Expr = {
     buildInternal(ex)
   }
-  
+
   override def toString = "QueryBuilder: " + queryDepth
 
 }
@@ -623,7 +613,7 @@ object QueryBuilder {
   def apply(ex: String, env: Env = Env(Map(), true)): Expr = {
     new QueryBuilder(env).build(ex)
   }
-  def apply(ex:Exp, env:Env):Expr = {
+  def apply(ex: Exp, env: Env): Expr = {
     new QueryBuilder(env).build(ex)
   }
 }
@@ -676,7 +666,7 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
 
   def defaultSQL: String
   def builder: QueryBuilder
-  def sql = if(builder.env.dialect != null) builder.env.dialect(this) else defaultSQL
+  def sql = if (builder.env.dialect != null) builder.env.dialect(this) else defaultSQL
 
   def apply(): Any = error("Must be implemented in subclass")
   def apply(params: Seq[Any]): Any = apply(org.tresql.Query.normalizePars(params))
