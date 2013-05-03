@@ -132,6 +132,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     override def exprType: Class[_] = if ("-" == op) operand.exprType else classOf[ConstExpr]
   }
+  
+  case class InExpr(val lop: Expr, val rop: List[Expr], val not: Boolean) extends BaseExpr {
+    override def apply = if (not) lop notIn rop else lop in rop
+    def defaultSQL = lop.sql + (if(not) " not" else "") + rop.map(_.sql).mkString(" in(", ", ", ")")
+    override def exprType = classOf[ConstExpr]
+  }
 
   case class BinExpr(val op: String, val lop: Expr, val rop: Expr) extends BaseExpr {
     override def apply() = {
@@ -570,6 +576,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
               if (l != null) l else if (r != null) r else null
             else null
           }
+        case In(lop, rop, not) =>
+          val l = buildInternal(lop, parseCtx)
+          if (l == null) null else {
+            val r = rop.map(buildInternal(_, parseCtx)).filter(_ != null)
+            if (r.size == 0) null else InExpr(l, r, not)
+          }
         case Fun(n, pl: List[_]) =>
           val pars = pl map { buildInternal(_, parseCtx) }
           if (pars.exists(_ == null)) null else FunExpr(n, pars)
@@ -663,7 +675,9 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
       case _ => false
     }
   }
-
+  def in(inList: List[Expr]) = inList.contains(this) 
+  def notIn(inList: List[Expr]) = !inList.contains(this)
+  
   def defaultSQL: String
   def builder: QueryBuilder
   def sql = if (builder.env.dialect != null) builder.env.dialect(this) else defaultSQL

@@ -93,7 +93,10 @@ dept/emp[sal >= hisal & sal <= losal]salgrade {deptno, grade, empno, sal}#(null 
 //in operator
 //NOTE: List of arguments if more than 1 value must be in square brackets
 dept[deptno in(10)]{deptno}#(1) --> [[10]] 
+dept[deptno in(10, 20)]{deptno}#(1) --> [[10], [20]]
+dept[deptno !in (:id1, :id2)]{deptno}#(1) --> id1=10; id2=20 --> [[30], [40]]
 dept[deptno in[10, 20]]{deptno}#(1) --> [[10], [20]]
+dept[deptno !in [:id1, :id2]]{deptno}#(1) --> id1=10; id2=20 --> [[30], [40]]
 
 //in subselect
 dept [deptno in (emp{deptno})]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
