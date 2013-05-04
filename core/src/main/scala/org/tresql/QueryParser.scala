@@ -31,6 +31,10 @@ object QueryParser extends JavaTokenParsers {
   case class Fun(name: String, parameters: List[Any]) extends Exp {
     def tresql = name + "(" + parameters.map(any2tresql(_)).mkString(",") + ")"
   }
+  case class In(lop: Any, rop: List[Any], not: Boolean) extends Exp {
+    def tresql = any2tresql(lop) + (if (not) " not" else "") + rop.map(any2tresql(_)).mkString(
+        " in(", ", ", ")")
+  }
   case class BinOp(op: String, lop: Any, rop: Any) extends Exp {
     def tresql = any2tresql(lop) + " " + op + " " + any2tresql(rop)
   }
@@ -237,7 +241,12 @@ object QueryParser extends JavaTokenParsers {
       case l ~ None => l
       case l ~ Some(o ~ r) => BinOp(o, l, r)
     }
-  def logical: Parser[Any] = comp ~ rep("&" ~ comp | "|" ~ comp) ^^ (p => binOp(p))
+  def in: Parser[In] = plusMinus ~ opt("!") ~ "in" ~ "(" ~ rep1sep(plusMinus, ",") <~ ")" ^^ {
+    case lop ~ not ~ "in" ~ "(" ~ rop => In(lop, rop, not != None)
+  }
+  //in parser should come before comp so that it is not taken for in function which is illegal
+  def logicalOp = in | comp 
+  def logical: Parser[Any] = logicalOp ~ rep("&" ~ logicalOp | "|" ~ logicalOp) ^^ (p => binOp(p))
 
   //expression
   def expr: Parser[Any] = opt(comment) ~> logical <~ opt(comment)

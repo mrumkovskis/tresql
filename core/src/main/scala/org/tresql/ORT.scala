@@ -332,7 +332,7 @@ object ORT {
         case _ => List(table.cols.get(cn).map(_.name + " " + n).orNull)
       }
     }).filter(_ != null).mkString(table.name +
-        "[" + filterCol + " in[" + ids.map(_.mkString(", ")).getOrElse(filterVal) + "]]{", ", ", "}")
+        "[" + filterCol + " in(" + ids.map(_.mkString(", ")).getOrElse(filterVal) + ")]{", ", ", "}")
   }
 
   private def importedKey(tableName: String, childTable: metadata.Table) = {
