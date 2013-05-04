@@ -162,6 +162,10 @@ object Query {
         case l: Long => st.setLong(idx, l)
         case d: Double => st.setDouble(idx, d)
         case f: Float => st.setFloat(idx, f)
+        case i: java.lang.Integer => st.setInt(idx, i)
+        case l: java.lang.Long => st.setLong(idx, l)
+        case d: java.lang.Double => st.setDouble(idx, d)
+        case f: java.lang.Float => st.setFloat(idx, f)
         // Allow the user to specify how they want the Date handled based on the input type
         case t: java.sql.Timestamp => st.setTimestamp(idx, t)
         case d: java.sql.Date => st.setDate(idx, d)
@@ -170,6 +174,7 @@ object Query {
 * assume a Timestamp value */
         case d: java.util.Date => st.setTimestamp(idx, new java.sql.Timestamp(d.getTime))
         case b: Boolean => st.setBoolean(idx, b)
+        case b: java.lang.Boolean => st.setBoolean(idx, b)
         case s: String => st.setString(idx, s)
         case bn: java.math.BigDecimal => st.setBigDecimal(idx, bn)
         case bd: BigDecimal => st.setBigDecimal(idx, bd.bigDecimal)
@@ -206,6 +211,10 @@ object Query {
       case l: Long => st.registerOutParameter(idx, BIGINT)
       case d: Double => st.registerOutParameter(idx, DECIMAL)
       case f: Float => st.registerOutParameter(idx, DECIMAL)
+      case i: java.lang.Integer => st.registerOutParameter(idx, INTEGER)
+      case l: java.lang.Long => st.registerOutParameter(idx, BIGINT)
+      case d: java.lang.Double => st.registerOutParameter(idx, DECIMAL)
+      case f: java.lang.Float => st.registerOutParameter(idx, DECIMAL)
       // Allow the user to specify how they want the Date handled based on the input type
       case t: java.sql.Timestamp => st.registerOutParameter(idx, TIMESTAMP)
       case d: java.sql.Date => st.registerOutParameter(idx, DATE)
@@ -214,6 +223,7 @@ object Query {
 * assume a Timestamp value */
       case d: java.util.Date => st.registerOutParameter(idx, TIMESTAMP)
       case b: Boolean => st.registerOutParameter(idx, BOOLEAN)
+      case b: java.lang.Boolean => st.registerOutParameter(idx, BOOLEAN)
       case s: String => st.registerOutParameter(idx, VARCHAR)
       case bn: java.math.BigDecimal => st.registerOutParameter(idx, DECIMAL, bn.scale)
       case bd: BigDecimal => st.registerOutParameter(idx, DECIMAL, bd.scale)

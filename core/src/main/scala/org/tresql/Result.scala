@@ -35,10 +35,16 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     case "Int" => int(columnIndex).asInstanceOf[T]
     case "Long" => long(columnIndex).asInstanceOf[T]
     case "Double" => double(columnIndex).asInstanceOf[T]
+    case "Boolean" => boolean(columnIndex).asInstanceOf[T]
     case "scala.math.BigDecimal" => bigdecimal(columnIndex).asInstanceOf[T]
     case "java.lang.String" => string(columnIndex).asInstanceOf[T]
     case "java.sql.Date" => date(columnIndex).asInstanceOf[T]
     case "java.sql.Timestamp" => timestamp(columnIndex).asInstanceOf[T]
+    case "java.lang.Integer" => jInt(columnIndex).asInstanceOf[T]
+    case "java.lang.Long" => jLong(columnIndex).asInstanceOf[T]
+    case "java.lang.Double" => jDouble(columnIndex).asInstanceOf[T]
+    case "java.math.BigDecimal" => jBigDecimal(columnIndex).asInstanceOf[T]
+    case "java.lang.Boolean" => jBoolean(columnIndex).asInstanceOf[T]
     case x => apply(columnIndex).asInstanceOf[T]
   }
   def apply(columnLabel: String) = {
@@ -112,6 +118,14 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     try timestamp(colMap(columnLabel)) catch {
       case _: NoSuchElementException => timestamp(rs.findColumn(columnLabel))
     }
+  override def boolean(columnIndex: Int): Boolean = {
+    if (cols(columnIndex).idx != -1) rs.getBoolean(cols(columnIndex).idx)
+    else row(columnIndex).asInstanceOf[Boolean]
+  }
+  override def boolean(columnLabel: String): Boolean =
+    try boolean(colMap(columnLabel)) catch {
+      case _: NoSuchElementException => boolean(rs.findColumn(columnLabel))
+    }  
   override def bytes(columnIndex: Int): Array[Byte] = {
     if (cols(columnIndex).idx != -1) rs.getBytes(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[Array[Byte]] 
@@ -125,6 +139,53 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   }
   override def stream(columnLabel: String) = try stream(colMap(columnLabel)) catch {
     case _: NoSuchElementException => stream(rs.findColumn(columnLabel))
+  }
+  
+  //java type support
+  override def jInt(columnIndex: Int): java.lang.Integer = {
+    if (cols(columnIndex).idx != -1) {
+      val x = rs.getInt(cols(columnIndex).idx)
+      if (rs.wasNull()) null else new java.lang.Integer(x)
+    } else row(columnIndex).asInstanceOf[java.lang.Integer]
+  }
+  override def jInt(columnLabel: String): java.lang.Integer = try jInt(colMap(columnLabel)) catch {
+    case _: NoSuchElementException => jInt(rs.findColumn(columnLabel))
+  }
+  override def jLong(columnIndex: Int): java.lang.Long = {
+    if (cols(columnIndex).idx != -1) {
+      val x = rs.getLong(cols(columnIndex).idx)
+      if (rs.wasNull()) null else new java.lang.Long(x)
+    } else row(columnIndex).asInstanceOf[java.lang.Long]
+  }
+  override def jLong(columnLabel: String): java.lang.Long = try jLong(colMap(columnLabel)) catch {
+    case _: NoSuchElementException => jLong(rs.findColumn(columnLabel))
+  }
+  override def jDouble(columnIndex: Int): java.lang.Double = {
+    if (cols(columnIndex).idx != -1) {
+      val x = rs.getDouble(cols(columnIndex).idx)
+      if (rs.wasNull()) null else new java.lang.Double(x)
+    } else row(columnIndex).asInstanceOf[java.lang.Double]
+  }
+  override def jDouble(columnLabel: String): java.lang.Double = try jDouble(colMap(columnLabel)) catch {
+    case _: NoSuchElementException => jDouble(rs.findColumn(columnLabel))
+  }
+  override def jBigDecimal(columnIndex: Int): java.math.BigDecimal = {
+    if (cols(columnIndex).idx != -1) rs.getBigDecimal(cols(columnIndex).idx)
+    else row(columnIndex).asInstanceOf[java.math.BigDecimal]
+  }
+  override def jBigDecimal(columnLabel: String): java.math.BigDecimal = 
+    try jBigDecimal(colMap(columnLabel)) catch {
+    case _: NoSuchElementException => jBigDecimal(rs.findColumn(columnLabel))
+  }
+  override def jBoolean(columnIndex: Int): java.lang.Boolean = {
+    if (cols(columnIndex).idx != -1) {
+      val x = rs.getBoolean(cols(columnIndex).idx)
+      if (rs.wasNull()) null else new java.lang.Boolean(x)
+    } else row(columnIndex).asInstanceOf[java.lang.Boolean]
+  }
+  override def jBoolean(columnLabel: String): java.lang.Boolean =
+    try jBoolean(colMap(columnLabel)) catch {
+    case _: NoSuchElementException => jBoolean(rs.findColumn(columnLabel))
   }
   
   override def toList = this.map(r => Row(this.content)).toList
@@ -271,6 +332,12 @@ trait RowLike extends Dynamic {
   def t = timestamp
   def t(idx: Int) = timestamp(idx)
   def t(name: String) = timestamp(name)
+  def boolean(idx: Int) = typed[Boolean](idx)
+  def boolean(name: String) = typed[Boolean](name)
+  def boolean = new DynamicBoolean(this)
+  def bl = boolean
+  def bl(idx: Int) = boolean(idx)
+  def bl(name: String) = boolean(name)
   def bytes(idx: Int) = typed[Array[Byte]](idx)
   def bytes(name: String) = typed[Array[Byte]](name)
   def bytes = new DynamicByteArray(this)
@@ -289,6 +356,18 @@ trait RowLike extends Dynamic {
   def r = result
   def r(idx: Int) = result(idx)
   def r(name: String) = result(name)
+  //java type limited support
+  def jInt(idx: Int) = typed[java.lang.Integer](idx)
+  def jInt(name: String) = typed[java.lang.Integer](name)
+  def jLong(idx: Int) = typed[java.lang.Long](idx)
+  def jLong(name: String) = typed[java.lang.Long](name)
+  def jBoolean(idx: Int) = typed[java.lang.Boolean](idx)
+  def jBoolean(name: String) = typed[java.lang.Boolean](name)
+  def jDouble(idx: Int) = typed[java.lang.Double](idx)
+  def jDouble(name: String) = typed[java.lang.Double](name)
+  def jBigDecimal(idx: Int) = typed[java.math.BigDecimal](idx)
+  def jBigDecimal(name: String) = typed[java.math.BigDecimal](name)
+  
   def columnCount: Int
   def content: Seq[Any]
   def column(idx: Int): Column
@@ -393,6 +472,20 @@ class DynamicDate(row:RowLike) extends Dynamic {
 */
 class DynamicTimestamp(row:RowLike) extends Dynamic {
   def selectDynamic(col:String) = row.timestamp(col)
+  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+}
+/**
+ * Wrapper for dynamical result column access as Boolean
+ * This uses scala.Dynamic feature.
+ * Example usages:
+ * {{{
+ * val result: RowLike = ...
+ * println(result.bl.is_active)
+ * }}}
+ *
+*/
+class DynamicBoolean(row:RowLike) extends Dynamic {
+  def selectDynamic(col:String) = row.boolean(col)
   def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
 }
 /**
