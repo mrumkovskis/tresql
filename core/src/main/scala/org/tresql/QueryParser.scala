@@ -234,19 +234,18 @@ object QueryParser extends JavaTokenParsers {
   //operation parsers
   //delete must be before negation since it can start with - sign!
   def unaryExpr = delete | negation | not | operand | sep
-  def mulDiv: Parser[Any] = unaryExpr ~ rep("*" ~ unaryExpr | "/" ~ unaryExpr) ^^ (p => binOp(p))
-  def plusMinus: Parser[Any] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ (p => binOp(p))
+  def mulDiv: Parser[Any] = unaryExpr ~ rep("*" ~ unaryExpr | "/" ~ unaryExpr) ^^ (binOp(_))
+  def plusMinus: Parser[Any] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ (binOp(_))
   def comp: Parser[Any] = plusMinus ~
-    opt(("<=" | ">=" | "<" | ">" | "!=" | "=" | "~~" | "!~~" | "~" | "!~" | "in" | "!in") ~ plusMinus) ^^ {
-      case l ~ None => l
-      case l ~ Some(o ~ r) => BinOp(o, l, r)
+    rep(("<=" | ">=" | "<" | ">" | "!=" | "=" | "~~" | "!~~" | "~" | "!~" | "in" | "!in") ~ plusMinus) ^^ {
+      compBinOp(_)
     }
   def in: Parser[In] = plusMinus ~ opt("!") ~ "in" ~ "(" ~ rep1sep(plusMinus, ",") <~ ")" ^^ {
     case lop ~ not ~ "in" ~ "(" ~ rop => In(lop, rop, not != None)
   }
   //in parser should come before comp so that it is not taken for in function which is illegal
   def logicalOp = in | comp 
-  def logical: Parser[Any] = logicalOp ~ rep("&" ~ logicalOp | "|" ~ logicalOp) ^^ (p => binOp(p))
+  def logical: Parser[Any] = logicalOp ~ rep("&" ~ logicalOp | "|" ~ logicalOp) ^^ (binOp(_))
 
   //expression
   def expr: Parser[Any] = opt(comment) ~> logical <~ opt(comment)
@@ -268,14 +267,14 @@ object QueryParser extends JavaTokenParsers {
   }
 
   private def binOp(p: ~[Any, List[~[String, Any]]]): Any = p match {
-    case e ~ Nil => e
-    case e ~ (l@((o ~ _) :: _)) => BinOp(o, e, binOp(l))
+    case lop ~ Nil => lop
+    case lop ~ ((o ~ rop) :: l) => BinOp(o, lop, binOp(this.~(rop ,l)))
   }
-
-  private def binOp(l: List[~[String, Any]]): Any = l match {
-    case (_ ~ e) :: Nil => e
-    case (_ ~ e) :: (l@((o ~ _) :: _)) => BinOp(o, e, binOp(l))
-    case _ => error("Knipis")
+  
+  private def compBinOp(p: ~[Any, List[~[String, Any]]]): Any = p match {
+    case lop ~ Nil => lop
+    case lop ~ ((o ~ rop) :: Nil) => BinOp(o, lop, rop)
+    case lop ~ ((o ~ rop) :: l) => BinOp("&", BinOp(o, lop, rop), compBinOp(this.~(lop, l)))
   }
   
   def any2tresql(any:Any) = any match {
