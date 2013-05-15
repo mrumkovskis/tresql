@@ -274,7 +274,9 @@ object QueryParser extends JavaTokenParsers {
   private def compBinOp(p: ~[Any, List[~[String, Any]]]): Any = p match {
     case lop ~ Nil => lop
     case lop ~ ((o ~ rop) :: Nil) => BinOp(o, lop, rop)
-    case lop ~ ((o ~ rop) :: l) => BinOp("&", BinOp(o, lop, rop), compBinOp(this.~(lop, l)))
+    case lop ~ List((o1 ~ mop), (o2 ~ rop)) => BinOp("&", BinOp(o1, lop, mop), BinOp(o2, mop, rop))
+    case lop ~ x => error("Max ternary comparison operation allowed. " + (x.size + 1) +
+        " operands encountered.")
   }
   
   def any2tresql(any:Any) = any match {
