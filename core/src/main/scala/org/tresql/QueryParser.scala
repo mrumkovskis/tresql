@@ -246,7 +246,13 @@ object QueryParser extends JavaTokenParsers {
       }
       case r => r
     }
-    
+    def compBinOp(p: ~[Any, List[~[String, Any]]]): Any = p match {
+      case lop ~ Nil => lop
+      case lop ~ ((o ~ rop) :: Nil) => BinOp(o, lop, rop)
+      case lop ~ List((o1 ~ mop), (o2 ~ rop)) => BinOp("&", BinOp(o1, lop, mop), BinOp(o2, mop, rop))
+      case lop ~ x => error("Ternary comparison operation is allowed, however, here " + (x.size + 1) +
+          " operands encountered.")
+    }
   }
   def in: Parser[In] = plusMinus ~ opt("!") ~ "in" ~ "(" ~ rep1sep(plusMinus, ",") <~ ")" ^^ {
     case lop ~ not ~ "in" ~ "(" ~ rop => In(lop, rop, not != None)
@@ -278,15 +284,7 @@ object QueryParser extends JavaTokenParsers {
     case lop ~ Nil => lop
     case lop ~ ((o ~ rop) :: l) => BinOp(o, lop, binOp(this.~(rop ,l)))
   }
-  
-  private def compBinOp(p: ~[Any, List[~[String, Any]]]): Any = p match {
-    case lop ~ Nil => lop
-    case lop ~ ((o ~ rop) :: Nil) => BinOp(o, lop, rop)
-    case lop ~ List((o1 ~ mop), (o2 ~ rop)) => BinOp("&", BinOp(o1, lop, mop), BinOp(o2, mop, rop))
-    case lop ~ x => error("Ternary comparison operation is allowed, however, here " + (x.size + 1) +
-        " operands encountered.")
-  }
-  
+    
   def any2tresql(any:Any) = any match {
     case a:String => if (a.contains("'")) "\"" + a + "\"" else "'" + a + "'"
     case e:Exp => e.tresql
