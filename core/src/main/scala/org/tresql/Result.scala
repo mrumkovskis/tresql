@@ -356,18 +356,36 @@ trait RowLike extends Dynamic {
   def r = result
   def r(idx: Int) = result(idx)
   def r(name: String) = result(name)
-  //java type limited support
   def jInt(idx: Int) = typed[java.lang.Integer](idx)
   def jInt(name: String) = typed[java.lang.Integer](name)
+  def jInt = new DynamicJInt(this)
+  def ji = jInt
+  def ji(idx: Int) = jInt(idx)
+  def ji(name: String) = jInt(name)
   def jLong(idx: Int) = typed[java.lang.Long](idx)
   def jLong(name: String) = typed[java.lang.Long](name)
+  def jLong = new DynamicJLong(this)
+  def jl = jLong
+  def jl(idx: Int) = jLong(idx)
+  def jl(name: String) = jLong(name)
   def jBoolean(idx: Int) = typed[java.lang.Boolean](idx)
   def jBoolean(name: String) = typed[java.lang.Boolean](name)
+  def jBoolean = new DynamicJBoolean(this)
+  def jbl = jBoolean
+  def jbl(idx: Int) = jBoolean(idx)
+  def jbl(name: String) = jBoolean(name)
   def jDouble(idx: Int) = typed[java.lang.Double](idx)
   def jDouble(name: String) = typed[java.lang.Double](name)
+  def jDouble = new DynamicJDouble(this)
+  def jdbl = jDouble
+  def jdbl(idx: Int) = jDouble(idx)
+  def jdbl(name: String) = jDouble(name)
   def jBigDecimal(idx: Int) = typed[java.math.BigDecimal](idx)
   def jBigDecimal(name: String) = typed[java.math.BigDecimal](name)
-  
+  def jBigDecimal = new DynamicJBigDecimal(this)
+  def jbd = jBigDecimal
+  def jbd(idx: Int) = jBigDecimal(idx)
+  def jbd(name: String) = jBigDecimal(name)
   def columnCount: Int
   def content: Seq[Any]
   def column(idx: Int): Column
@@ -390,6 +408,10 @@ class DynamicInt(row:RowLike) extends Dynamic {
   def selectDynamic(col:String) = row.int(col)
   def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
 }
+class DynamicJInt(row:RowLike) extends Dynamic {
+  def selectDynamic(col:String) = row.jInt(col)
+  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+}
 /**
  * Wrapper for dynamical result column access as Long
  * This uses scala.Dynamic feature.
@@ -402,6 +424,10 @@ class DynamicInt(row:RowLike) extends Dynamic {
 */
 class DynamicLong(row:RowLike) extends Dynamic {
   def selectDynamic(col:String) = row.long(col)
+  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+}
+class DynamicJLong(row:RowLike) extends Dynamic {
+  def selectDynamic(col:String) = row.jLong(col)
   def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
 }
 /**
@@ -418,6 +444,10 @@ class DynamicDouble(row:RowLike) extends Dynamic {
   def selectDynamic(col:String) = row.double(col)
   def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
 }
+class DynamicJDouble(row:RowLike) extends Dynamic {
+  def selectDynamic(col:String) = row.jDouble(col)
+  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+}
 /**
  * Wrapper for dynamical result column access as BigDecimal
  * This uses scala.Dynamic feature.
@@ -430,6 +460,10 @@ class DynamicDouble(row:RowLike) extends Dynamic {
 */
 class DynamicBigDecimal(row: RowLike) extends Dynamic {
   def selectDynamic(col:String) = row.bigdecimal(col)
+  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+}
+class DynamicJBigDecimal(row: RowLike) extends Dynamic {
+  def selectDynamic(col:String) = row.jBigdecimal(col)
   def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
 }
 /**
@@ -486,6 +520,10 @@ class DynamicTimestamp(row:RowLike) extends Dynamic {
 */
 class DynamicBoolean(row:RowLike) extends Dynamic {
   def selectDynamic(col:String) = row.boolean(col)
+  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+}
+class DynamicJBoolean(row:RowLike) extends Dynamic {
+  def selectDynamic(col:String) = row.jBoolean(col)
   def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
 }
 /**
