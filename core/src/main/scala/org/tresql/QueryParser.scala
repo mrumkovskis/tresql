@@ -236,15 +236,23 @@ object QueryParser extends JavaTokenParsers {
   def unaryExpr = delete | negation | not | operand | sep
   def mulDiv: Parser[Any] = unaryExpr ~ rep("*" ~ unaryExpr | "/" ~ unaryExpr) ^^ (binOp(_))
   def plusMinus: Parser[Any] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ (binOp(_))
-  def comp: Parser[Any] = plusMinus ~
-    rep(("<=" | ">=" | "<" | ">" | "!=" | "=" | "~~" | "!~~" | "~" | "!~" | "in" | "!in") ~ plusMinus) ^^ {
-      compBinOp(_)
+  def comp: Parser[~[Any, List[~[String, Any]]]] = plusMinus ~
+    rep(("<=" | ">=" | "<" | ">" | "!=" | "=" | "~~" | "!~~" | "~" | "!~" | "in" | "!in") ~ plusMinus)
+  //this is for friendly error message
+  def compTernary = new Parser[Any] {
+    def apply(in: Input) = comp(in) match {
+      case s@Success(r, i) => try Success(compBinOp(r), i) catch {
+        case e: Exception => Failure(e.getMessage, i)      
+      }
+      case r => r
     }
+    
+  }
   def in: Parser[In] = plusMinus ~ opt("!") ~ "in" ~ "(" ~ rep1sep(plusMinus, ",") <~ ")" ^^ {
     case lop ~ not ~ "in" ~ "(" ~ rop => In(lop, rop, not != None)
   }
   //in parser should come before comp so that it is not taken for in function which is illegal
-  def logicalOp = in | comp 
+  def logicalOp = in | compTernary 
   def logical: Parser[Any] = logicalOp ~ rep("&" ~ logicalOp | "|" ~ logicalOp) ^^ (binOp(_))
 
   //expression
@@ -275,7 +283,7 @@ object QueryParser extends JavaTokenParsers {
     case lop ~ Nil => lop
     case lop ~ ((o ~ rop) :: Nil) => BinOp(o, lop, rop)
     case lop ~ List((o1 ~ mop), (o2 ~ rop)) => BinOp("&", BinOp(o1, lop, mop), BinOp(o2, mop, rop))
-    case lop ~ x => error("Max ternary comparison operation allowed. " + (x.size + 1) +
+    case lop ~ x => error("Ternary comparison operation is allowed, however, here " + (x.size + 1) +
         " operands encountered.")
   }
   
