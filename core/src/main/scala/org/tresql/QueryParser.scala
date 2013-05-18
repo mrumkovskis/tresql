@@ -302,7 +302,9 @@ object QueryParser extends JavaTokenParsers {
         case Fun(_, pars) => pars foreach bindVars
         case UnOp(_, operand) => bindVars(operand)
         case BinOp(_, lop, rop) => bindVars(lop); bindVars(rop)
+        case In(lop, rop, _) => bindVars(lop); rop foreach bindVars
         case Obj(t, _, j, _) => bindVars(j); bindVars(t)
+        case Join(_, j, _) => bindVars(j)
         case Col(c, _, _) => bindVars(c)
         case Cols(_, cols) => cols foreach bindVars
         case Grp(cols, hv) => cols foreach bindVars; bindVars(hv)
@@ -325,7 +327,9 @@ object QueryParser extends JavaTokenParsers {
         case Delete(_, filter) => bindVars(filter)
         case Arr(els) => els foreach bindVars
         case Braces(expr) => bindVars(expr)
-        case _ =>
+        //for the security
+        case _: Ident | _: Id | _: IdRef | _: Result | _: All | _: Null | _: IdentAll =>
+        case x => error("Unknown expression: " + x)
       }
     parseAll(ex) match {
       case Success(r, _) => {
