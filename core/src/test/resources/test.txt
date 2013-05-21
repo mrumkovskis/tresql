@@ -99,6 +99,11 @@ dept[deptno !in (:id1, :id2)]{deptno}#(1) --> id1=10; id2=20 --> [[30], [40]]
 dept[deptno in[10, 20]]{deptno}#(1) --> [[10], [20]]
 dept[deptno !in [:id1, :id2]]{deptno}#(1) --> id1=10; id2=20 --> [[30], [40]]
 
+//case when else using dialect as case function
+dept{dname, case(deptno in(10, 40), "east") region}#(1) --> [["ACCOUNTING", "east"], ["OPERATIONS", "east"], ["RESEARCH", null], ["SALES", null]]
+dept{dname, case(deptno = 20, "south", "other") region}#(2,1) --> [["ACCOUNTING", "other"], ["OPERATIONS", "other"], ["SALES", "other"], ["RESEARCH", "south"]]
+dept{dname, case(deptno = 10, trim("east"), deptno=30, "north", deptno=20, "south", "other") region}#(2,1) --> [["ACCOUNTING", "east"], ["SALES", "north"], ["OPERATIONS", "other"], ["RESEARCH", "south"]]
+
 //in subselect
 dept [deptno in (emp{deptno})]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
 dept [deptno in (emp[ename ~~ ?]{deptno}) | deptno = 40]#(deptno) --> 'KIN% --> [[10, "ACCOUNTING", "NEW YORK"], [40, "OPERATIONS", "BOSTON"]]
