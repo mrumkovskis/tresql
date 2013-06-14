@@ -52,7 +52,7 @@ class QueryTest extends Suite {
         case D(d) => DF.parse(d)
         case T(t) => TF.parse(t)
         case N(n,_) => BigDecimal(n)
-        case A(a, ac) => parsePars(ac, ",")
+        case A(a, ac) => if (ac.length == 0) List() else parsePars(ac, ",")
         case x => error("unparseable parameter: " + x)        
       }
       val pl = pars.split(sep).map(par).toList

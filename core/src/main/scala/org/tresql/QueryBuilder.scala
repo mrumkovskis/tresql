@@ -57,14 +57,25 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def apply() = env(name)
     var binded = false
     def defaultSQL = {
-      if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
-      if (!env.reusableExpr && (env contains name)) {
+      if (!binded) QueryBuilder.this._bindVariables += this
+      val s = (if (!env.reusableExpr && (env contains name)) {
         env(name) match {
-          case l: scala.collection.Traversable[_] => "?," * (l size) dropRight 1
-          case a: Array[_] => "?," * (a size) dropRight 1
+          case l: scala.collection.Traversable[_] =>
+            if (l.size > 0) "?," * (l size) dropRight 1 else {
+              if (!binded) QueryBuilder.this._bindVariables.trimEnd(1)
+              //return null for empty collection (not to fail in 'in' operator)
+              "null"
+            }
+          case a: Array[_] => if (a.length > 0) "?," * (a length) dropRight 1 else {
+            if (!binded) QueryBuilder.this._bindVariables.trimEnd(1)
+            //return null for empty array (not to fail in 'in' operator)
+            "null"
+          }
           case _ => "?"
         }
-      } else "?"
+      } else "?")
+      binded = true
+      s
     }
     override def toString = if (env contains name) name + " = " + env(name) else name
   }
@@ -206,8 +217,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case "!~~" => "upper(" + lop.sql + ") not like upper(" + rop.sql + ")"
       case "~" => lop.sql + " like " + rop.sql
       case "!~" => lop.sql + " not like " + rop.sql
-      case "in" => lop.sql + " in " + rop.sql
-      case "!in" => lop.sql + " not in " + rop.sql
+      case s@("in" | "!in") => lop.sql + (if (s.startsWith("!")) " not" else "") + " in " +
+      (rop match {
+        case _: BracesExpr | _: ArrExpr => rop.sql
+        case _ => "(" + rop.sql + ")"
+      })
       case _ => error("unknown operation " + op)
     }
     override def exprType: Class[_] = if (List("&&", "++", "+", "-", "*", "/") exists (_ == op)) {
