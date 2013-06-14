@@ -2,9 +2,9 @@ name := "tresql"
 
 organization := "org.tresql"
 
-scalaVersion := "2.10.1"
+scalaVersion := "2.10.2"
 
-crossScalaVersions := Seq("2.9.1", "2.9.2", "2.9.3", "2.10.0", "2.10.1")
+crossScalaVersions := Seq("2.9.1", "2.9.2", "2.9.3", "2.10.2")
 
 scalacOptions ++= Seq("-deprecation", "-Xexperimental")
 
