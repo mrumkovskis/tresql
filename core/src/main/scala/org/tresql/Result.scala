@@ -31,28 +31,12 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     if (cols(columnIndex).idx != -1) asAny(cols(columnIndex).idx)
     else row(columnIndex)
   }
-  def typed[T](columnIndex: Int)(implicit m:scala.reflect.Manifest[T]):T = m.toString match {
-    case "Int" => int(columnIndex).asInstanceOf[T]
-    case "Long" => long(columnIndex).asInstanceOf[T]
-    case "Double" => double(columnIndex).asInstanceOf[T]
-    case "Boolean" => boolean(columnIndex).asInstanceOf[T]
-    case "scala.math.BigDecimal" => bigdecimal(columnIndex).asInstanceOf[T]
-    case "java.lang.String" => string(columnIndex).asInstanceOf[T]
-    case "java.sql.Date" => date(columnIndex).asInstanceOf[T]
-    case "java.sql.Timestamp" => timestamp(columnIndex).asInstanceOf[T]
-    case "java.lang.Integer" => jInt(columnIndex).asInstanceOf[T]
-    case "java.lang.Long" => jLong(columnIndex).asInstanceOf[T]
-    case "java.lang.Double" => jDouble(columnIndex).asInstanceOf[T]
-    case "java.math.BigDecimal" => jBigDecimal(columnIndex).asInstanceOf[T]
-    case "java.lang.Boolean" => jBoolean(columnIndex).asInstanceOf[T]
-    case x => apply(columnIndex).asInstanceOf[T]
-  }
   def apply(columnLabel: String) = {
     try {
       apply(colMap(columnLabel))
     } catch { case _: NoSuchElementException => asAny(rs.findColumn(columnLabel)) }
   }
-  def typed[T](columnLabel: String)(implicit m:scala.reflect.Manifest[T]):T = {
+  def typed[T](columnLabel: String)(implicit m: scala.reflect.Manifest[T]): T = {
     typed[T](colMap(columnLabel))
   }
   def columnCount = cols.length
@@ -125,22 +109,22 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   override def boolean(columnLabel: String): Boolean =
     try boolean(colMap(columnLabel)) catch {
       case _: NoSuchElementException => boolean(rs.findColumn(columnLabel))
-    }  
+    }
   override def bytes(columnIndex: Int): Array[Byte] = {
     if (cols(columnIndex).idx != -1) rs.getBytes(cols(columnIndex).idx)
-    else row(columnIndex).asInstanceOf[Array[Byte]] 
-  } 
+    else row(columnIndex).asInstanceOf[Array[Byte]]
+  }
   override def bytes(columnLabel: String) = try bytes(colMap(columnLabel)) catch {
     case _: NoSuchElementException => bytes(rs.findColumn(columnLabel))
   }
   override def stream(columnIndex: Int) = {
-    if(cols(columnIndex).idx != -1) rs.getBinaryStream(cols(columnIndex).idx)
+    if (cols(columnIndex).idx != -1) rs.getBinaryStream(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[java.io.InputStream]
   }
   override def stream(columnLabel: String) = try stream(colMap(columnLabel)) catch {
     case _: NoSuchElementException => stream(rs.findColumn(columnLabel))
   }
-  
+
   //java type support
   override def jInt(columnIndex: Int): java.lang.Integer = {
     if (cols(columnIndex).idx != -1) {
@@ -173,10 +157,10 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     if (cols(columnIndex).idx != -1) rs.getBigDecimal(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[java.math.BigDecimal]
   }
-  override def jBigDecimal(columnLabel: String): java.math.BigDecimal = 
+  override def jBigDecimal(columnLabel: String): java.math.BigDecimal =
     try jBigDecimal(colMap(columnLabel)) catch {
-    case _: NoSuchElementException => jBigDecimal(rs.findColumn(columnLabel))
-  }
+      case _: NoSuchElementException => jBigDecimal(rs.findColumn(columnLabel))
+    }
   override def jBoolean(columnIndex: Int): java.lang.Boolean = {
     if (cols(columnIndex).idx != -1) {
       val x = rs.getBoolean(cols(columnIndex).idx)
@@ -185,18 +169,20 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   }
   override def jBoolean(columnLabel: String): java.lang.Boolean =
     try jBoolean(colMap(columnLabel)) catch {
-    case _: NoSuchElementException => jBoolean(rs.findColumn(columnLabel))
-  }
-  
+      case _: NoSuchElementException => jBoolean(rs.findColumn(columnLabel))
+    }
+
   override def toList = this.map(r => Row(this.content)).toList
   
-  def toListRowAsMap:List[Map[String, _]] = this.map(r=> rowAsMap).toList
+  def toList[T](implicit m: scala.reflect.Manifest[T]) = this.map(r => typedRow[T]).toList
+
+  def toListRowAsMap: List[Map[String, _]] = this.map(r => rowAsMap).toList
 
   def rowAsMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
     case r: Result => r.toListRowAsMap
     case x => x
   })).toMap
-  
+
   def content = {
     val b = new scala.collection.mutable.ListBuffer[Any]
     var i = 0
@@ -226,7 +212,8 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
       case BIGINT | INTEGER | SMALLINT | TINYINT => {
         val v = rs.getLong(pos); if (rs.wasNull) null else v
       }
-      case BIT | BOOLEAN => val v = rs.getBoolean(pos); if (rs.wasNull) null else v
+      case BIT | BOOLEAN =>
+        val v = rs.getBoolean(pos); if (rs.wasNull) null else v
       case VARCHAR | CHAR | CLOB | LONGVARCHAR => rs.getString(pos)
       case DATE => rs.getDate(pos)
       case TIME | TIMESTAMP => rs.getTimestamp(pos)
@@ -237,7 +224,11 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   /*---------------- Single value methods -------------*/
   def head[T](implicit m: scala.reflect.Manifest[T]): T = {
     hasNext match {
-      case true => next; val v = typed[T](0); close; v
+      case true =>
+        next
+        val v = if (m.toString.startsWith("scala.Tuple")) typedRow[T] else typed[T](0)
+        close
+        v
       case false => throw new NoSuchElementException("No rows in result")
     }
   }
@@ -251,7 +242,9 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   def unique[T](implicit m: scala.reflect.Manifest[T]): T = {
     hasNext match {
       case true =>
-        next; val v = typed[T](0); if (hasNext) {
+        next
+        val v = if (m.toString.startsWith("scala.Tuple")) typedRow[T] else typed[T](0)
+        if (hasNext) {
           close; error("More than one row for unique result")
         } else v
       case false => error("No rows in result")
@@ -260,7 +253,9 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   def uniqueOption[T](implicit m: scala.reflect.Manifest[T]): Option[T] = {
     hasNext match {
       case true =>
-        next; val v = typed[T](0); if (hasNext) {
+        next
+        val v = if (m.toString.startsWith("scala.Tuple")) typedRow[T] else typed[T](0)
+        if (hasNext) {
           close; error("More than one row for unique result")
         } else Some(v)
       case false => None
@@ -269,9 +264,9 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
 
   case class Row(row: Seq[Any]) extends RowLike {
     def apply(idx: Int) = row(idx)
-    def typed[T](idx: Int)(implicit m:scala.reflect.Manifest[T]) = row(idx).asInstanceOf[T]
+    def typed[T](idx: Int)(implicit m: scala.reflect.Manifest[T]) = row(idx).asInstanceOf[T]
     def apply(name: String) = error("unsupported method")
-    def typed[T](name: String)(implicit m:scala.reflect.Manifest[T]) = error("unsupported method")
+    def typed[T](name: String)(implicit m: scala.reflect.Manifest[T]) = error("unsupported method")
     def content = row
     def columnCount = row.length
     def column(idx: Int) = Result.this.column(idx)
@@ -281,15 +276,64 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
       case _ => false
     }
   }
+
+  def typed[T](columnIndex: Int)(implicit m: scala.reflect.Manifest[T]): T = m.toString match {
+    case "Int" => int(columnIndex).asInstanceOf[T]
+    case "Long" => long(columnIndex).asInstanceOf[T]
+    case "Double" => double(columnIndex).asInstanceOf[T]
+    case "Boolean" => boolean(columnIndex).asInstanceOf[T]
+    case "scala.math.BigDecimal" => bigdecimal(columnIndex).asInstanceOf[T]
+    case "java.lang.String" => string(columnIndex).asInstanceOf[T]
+    case "java.sql.Date" => date(columnIndex).asInstanceOf[T]
+    case "java.sql.Timestamp" => timestamp(columnIndex).asInstanceOf[T]
+    case "java.lang.Integer" => jInt(columnIndex).asInstanceOf[T]
+    case "java.lang.Long" => jLong(columnIndex).asInstanceOf[T]
+    case "java.lang.Double" => jDouble(columnIndex).asInstanceOf[T]
+    case "java.math.BigDecimal" => jBigDecimal(columnIndex).asInstanceOf[T]
+    case "java.lang.Boolean" => jBoolean(columnIndex).asInstanceOf[T]
+    case x => apply(columnIndex).asInstanceOf[T]
+  }
+
+  def typedRow[T](implicit m: scala.reflect.Manifest[T]): T =
+    if (m.toString.startsWith("scala.Tuple")) {
+      //tuple construction nightmare
+      m.typeArguments match {
+        case m1 :: Nil => (typed(0)(m1)).asInstanceOf[T]
+        case m1 :: m2 :: Nil => (typed(0)(m1), typed(1)(m2)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17), typed(17)(m18)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17), typed(17)(m18), typed(18)(m19)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: m20 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17), typed(17)(m18), typed(18)(m19), typed(19)(m20)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: m20 :: m21 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17), typed(17)(m18), typed(18)(m19), typed(19)(m20), typed(20)(m21)).asInstanceOf[T]
+        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: m20 :: m21 :: m22 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17), typed(17)(m18), typed(18)(m19), typed(19)(m20), typed(20)(m21), typed(21)(m22)).asInstanceOf[T]
+      }
+    } else {
+      error("Only tuple types are allowed at the moment. Instead encountered: " + m)
+    }
+
 }
 
 trait RowLike extends Dynamic {
   def apply(idx: Int): Any
-  def typed[T](idx: Int)(implicit m:scala.reflect.Manifest[T]): T
+  def typed[T](idx: Int)(implicit m: scala.reflect.Manifest[T]): T
   def apply(name: String): Any
-  def selectDynamic(name:String) = apply(name)
-  def applyDynamic(name:String)(args: Any*) = selectDynamic(name) 
-  def typed[T](name: String)(implicit m:scala.reflect.Manifest[T]): T
+  def selectDynamic(name: String) = apply(name)
+  def applyDynamic(name: String)(args: Any*) = selectDynamic(name)
+  def typed[T](name: String)(implicit m: scala.reflect.Manifest[T]): T
   def int(idx: Int) = typed[Int](idx)
   def int(name: String) = typed[Int](name)
   def int = new DynamicInt(this)
@@ -403,14 +447,14 @@ case class Column(val idx: Int, val name: String, private[tresql] val expr: Expr
  * println(result.i.salary)
  * }}}
  *
-*/
-class DynamicInt(row:RowLike) extends Dynamic {
-  def selectDynamic(col:String) = row.int(col)
-  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+ */
+class DynamicInt(row: RowLike) extends Dynamic {
+  def selectDynamic(col: String) = row.int(col)
+  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
 }
-class DynamicJInt(row:RowLike) extends Dynamic {
-  def selectDynamic(col:String) = row.jInt(col)
-  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+class DynamicJInt(row: RowLike) extends Dynamic {
+  def selectDynamic(col: String) = row.jInt(col)
+  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
 }
 /**
  * Wrapper for dynamical result column access as Long
@@ -421,14 +465,14 @@ class DynamicJInt(row:RowLike) extends Dynamic {
  * println(result.l.salary)
  * }}}
  *
-*/
-class DynamicLong(row:RowLike) extends Dynamic {
-  def selectDynamic(col:String) = row.long(col)
-  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+ */
+class DynamicLong(row: RowLike) extends Dynamic {
+  def selectDynamic(col: String) = row.long(col)
+  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
 }
-class DynamicJLong(row:RowLike) extends Dynamic {
-  def selectDynamic(col:String) = row.jLong(col)
-  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+class DynamicJLong(row: RowLike) extends Dynamic {
+  def selectDynamic(col: String) = row.jLong(col)
+  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
 }
 /**
  * Wrapper for dynamical result column access as Double
@@ -439,14 +483,14 @@ class DynamicJLong(row:RowLike) extends Dynamic {
  * println(result.dbl.salary)
  * }}}
  *
-*/
-class DynamicDouble(row:RowLike) extends Dynamic {
-  def selectDynamic(col:String) = row.double(col)
-  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+ */
+class DynamicDouble(row: RowLike) extends Dynamic {
+  def selectDynamic(col: String) = row.double(col)
+  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
 }
-class DynamicJDouble(row:RowLike) extends Dynamic {
-  def selectDynamic(col:String) = row.jDouble(col)
-  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+class DynamicJDouble(row: RowLike) extends Dynamic {
+  def selectDynamic(col: String) = row.jDouble(col)
+  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
 }
 /**
  * Wrapper for dynamical result column access as BigDecimal
@@ -457,14 +501,14 @@ class DynamicJDouble(row:RowLike) extends Dynamic {
  * println(result.bd.salary)
  * }}}
  *
-*/
+ */
 class DynamicBigDecimal(row: RowLike) extends Dynamic {
-  def selectDynamic(col:String) = row.bigdecimal(col)
-  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+  def selectDynamic(col: String) = row.bigdecimal(col)
+  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
 }
 class DynamicJBigDecimal(row: RowLike) extends Dynamic {
-  def selectDynamic(col:String) = row.jBigdecimal(col)
-  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+  def selectDynamic(col: String) = row.jBigdecimal(col)
+  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
 }
 /**
  * Wrapper for dynamical result column access as String
@@ -475,10 +519,10 @@ class DynamicJBigDecimal(row: RowLike) extends Dynamic {
  * println(result.s.name)
  * }}}
  *
-*/
-class DynamicString(row:RowLike) extends Dynamic {
-  def selectDynamic(col:String) = row.string(col)
-  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+ */
+class DynamicString(row: RowLike) extends Dynamic {
+  def selectDynamic(col: String) = row.string(col)
+  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
 }
 /**
  * Wrapper for dynamical result column access as java.sql.Date
@@ -489,10 +533,10 @@ class DynamicString(row:RowLike) extends Dynamic {
  * println(result.d.birthdate)
  * }}}
  *
-*/
-class DynamicDate(row:RowLike) extends Dynamic {
-  def selectDynamic(col:String) = row.date(col)
-  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+ */
+class DynamicDate(row: RowLike) extends Dynamic {
+  def selectDynamic(col: String) = row.date(col)
+  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
 }
 /**
  * Wrapper for dynamical result column access as java.sql.Timestamp
@@ -503,10 +547,10 @@ class DynamicDate(row:RowLike) extends Dynamic {
  * println(result.t.eventTime)
  * }}}
  *
-*/
-class DynamicTimestamp(row:RowLike) extends Dynamic {
-  def selectDynamic(col:String) = row.timestamp(col)
-  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+ */
+class DynamicTimestamp(row: RowLike) extends Dynamic {
+  def selectDynamic(col: String) = row.timestamp(col)
+  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
 }
 /**
  * Wrapper for dynamical result column access as Boolean
@@ -517,14 +561,14 @@ class DynamicTimestamp(row:RowLike) extends Dynamic {
  * println(result.bl.is_active)
  * }}}
  *
-*/
-class DynamicBoolean(row:RowLike) extends Dynamic {
-  def selectDynamic(col:String) = row.boolean(col)
-  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+ */
+class DynamicBoolean(row: RowLike) extends Dynamic {
+  def selectDynamic(col: String) = row.boolean(col)
+  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
 }
-class DynamicJBoolean(row:RowLike) extends Dynamic {
-  def selectDynamic(col:String) = row.jBoolean(col)
-  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+class DynamicJBoolean(row: RowLike) extends Dynamic {
+  def selectDynamic(col: String) = row.jBoolean(col)
+  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
 }
 /**
  * Wrapper for dynamical result column access as org.tresql.Result
@@ -535,17 +579,17 @@ class DynamicJBoolean(row:RowLike) extends Dynamic {
  * println(result.r.childResult)
  * }}}
  *
-*/
-class DynamicResult(row:RowLike) extends Dynamic {
-  def selectDynamic(col:String) = row.result(col)
-  def applyDynamic(col:String)(args: Any*) = selectDynamic(col) 
+ */
+class DynamicResult(row: RowLike) extends Dynamic {
+  def selectDynamic(col: String) = row.result(col)
+  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
 }
 //wrappers for array and stream
 class DynamicByteArray(row: RowLike) extends Dynamic {
-  def selectDynamic(col:String) = row.bytes(col)
-  def applyDynamic(col:String)(args: Any*) = selectDynamic(col)   
+  def selectDynamic(col: String) = row.bytes(col)
+  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
 }
 class DynamicStream(row: RowLike) extends Dynamic {
-  def selectDynamic(col:String) = row.stream(col)
-  def applyDynamic(col:String)(args: Any*) = selectDynamic(col)   
+  def selectDynamic(col: String) = row.stream(col)
+  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
 }
