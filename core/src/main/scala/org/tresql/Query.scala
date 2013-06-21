@@ -20,17 +20,16 @@ object Query {
   def select(expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection = 
     null) = apply(expr, params)(tresqlConn).asInstanceOf[Result]
 
+  def list[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]) = 
+    select(expr, normalizePars(params)).toList[T]
+  
+  def list[T](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection = 
+    null, m: scala.reflect.Manifest[T]) = select(expr, params)(tresqlConn).toList[T]
+   
   def foreach(expr: String, params: Any*)(f: (RowLike) => Unit = (row) => ()) {
     select(expr, normalizePars(params)) foreach f
   }
   
-  def first[A](expr: String, params: Any*)(f: (RowLike) => A): Option[A] = {
-    val r = select(expr, normalizePars(params))
-    val result = if (r.hasNext) Some(f(r.next)) else None
-    r.close
-    result
-  }
-
   def build(expr: String, params: Map[String, Any] = null, reusableExpr: Boolean = true)
     (implicit tresqlConn: java.sql.Connection = null): Expr = 
         build(expr, if (tresqlConn == null) Env else resources(tresqlConn), params, reusableExpr)

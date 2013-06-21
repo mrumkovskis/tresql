@@ -127,7 +127,7 @@ class QueryTest extends Suite {
     expectResult(List(10, "x"))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x"))
     expectResult("x")(op.value)
     expectResult(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)", 10, "ACC%"))
-    expectResult(None)(Query.first("dept[?]", -1){r => 0})
+    expectResult(None)(Query.headOption("dept[?]", -1))
     //dynamic tests
     expectResult(1900)(Query.select("salgrade[1] {hisal, losal}").foldLeft(0)((x, r) => x + 
         r.i.hisal + r.i.losal))
@@ -145,12 +145,9 @@ class QueryTest extends Suite {
         r.t.hiredate.toString))
     expectResult("KING PRESIDENT")(Query.select("emp[7839] {ename, job}").foldLeft("")((x, r) => 
         r.ename + " " + r.job))    
-    expectResult(("MILLER", BigDecimal(2300.35)))(Query.first("emp[hiredate = '1982-01-23']{ename, sal}")
-        {r => (r.ename, r.bd.sal)}.get)
-    expectResult("ACCOUNTING")(Query.first("dept[10]")(r => r.dname) orNull)
-    expectResult(("ACCOUNTING", "KING,CLARK,MILLER"))(
-      Query.first("dept[10]{deptno, dname, |emp[deptno = :1(1)]{ename} emps}") 
-        { r => (r.dname, r.r.emps.map(r => r.ename).mkString(",")) }.get)
+    expectResult(("MILLER", BigDecimal(2300.35)))(Query.head[(String, BigDecimal)]("emp[hiredate = '1982-01-23']{ename, sal}"))
+    expectResult(List(("CLARK", "ACCOUNTING", 2450.00), ("KING", "ACCOUNTING", 5000.00),
+      ("MILLER", "ACCOUNTING", 2300.35)))(Query.list[(String, String, Double)]("emp/dept[?]{ename, dname, sal}#(1)", 10))
     //bind variables test
     expectResult(List(10, 20, 30, 40)){
       val ex = Query.build("dept[?]{deptno}")
