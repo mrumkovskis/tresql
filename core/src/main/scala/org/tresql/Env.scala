@@ -74,7 +74,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   //resources methods
   def conn: java.sql.Connection = provider.map(_.env.conn).getOrElse(resources.conn)
   override def metaData = provider.map(_.env.metaData).getOrElse(resources.metaData)
-  override def dialect: Expr => String = provider.map(_.env.dialect).getOrElse(resources.dialect)
+  override def dialect: PartialFunction[Expr, String] = provider.map(_.env.dialect).getOrElse(resources.dialect)
   override def idExpr = provider.map(_.env.idExpr).getOrElse(resources.idExpr)
   
   //meta data methods
@@ -91,7 +91,7 @@ object Env extends Resources {
   var sharedConn: java.sql.Connection = null
   //meta data object must be thread safe!
   private var _metaData: Option[MetaData] = None
-  private var _dialect: Option[Expr => String] = None
+  private var _dialect: Option[PartialFunction[Expr, String]] = None
   private var _idExpr: Option[String => String] = None
   //available functions
   private var functions = Functions.getClass.getDeclaredMethods map (_.getName) toSet
@@ -106,7 +106,9 @@ object Env extends Resources {
   
   def conn_=(conn: java.sql.Connection) = this.threadConn set conn
   def metaData_=(metaData: MetaData) = this._metaData = Some(metaData)
-  def dialect_=(dialect: Expr => String) = this._dialect = Some(dialect)
+  def dialect_=(dialect: PartialFunction[Expr, String]) = this._dialect =
+    if (dialect == null) null else Some(dialect.orElse {case e=> e.defaultSQL})
+
   def idExpr_=(idExpr: String => String) = this._idExpr = Some(idExpr)
   
   def availableFunctions(list: Traversable[String]) = functions = list.toSet
@@ -124,7 +126,7 @@ trait Resources extends NameMap {
 
   def conn: java.sql.Connection
   def metaData: MetaData = _metaData
-  def dialect: Expr => String = null
+  def dialect: PartialFunction[Expr, String] = null
   def idExpr: String => String = s => "nextval('" + s + "')"
   //name map methods
   override def tableName(objectName: String): String = _delegateNameMap.map(_.tableName(

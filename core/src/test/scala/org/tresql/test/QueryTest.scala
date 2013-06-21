@@ -13,8 +13,8 @@ class QueryTest extends Suite {
   Class.forName("org.hsqldb.jdbc.JDBCDriver")
   val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
   Env.conn = conn
-  Env.dialect = dialects.InsensitiveCmp("ĒŪĪĀŠĢĶĻŽČŅēūīāšģķļžčņ", "EUIASGKLZCNeuiasgklzcn",
-      dialects.HSQLDialect)
+  Env.dialect = dialects.InsensitiveCmp("ĒŪĪĀŠĢĶĻŽČŅēūīāšģķļžčņ", "EUIASGKLZCNeuiasgklzcn") orElse
+    dialects.HSQLDialect
   Env.idExpr = s => "nextval('seq')"
   Env update ((msg, level) => println (msg))
   Env update (/*object to table name map*/Map(
