@@ -3,14 +3,13 @@ package org.tresql
 package object dialects {
 
   object ANSISQLDialect extends PartialFunction[Expr, String] {
-    def isDefinedAt(e: Expr) = e match {
-      case e.builder.FunExpr("case", pars) if pars.size > 1 => true
-      case _ => false
-    }
-    def apply(e: Expr) = e match {
-      case e.builder.FunExpr("case", pars) if pars.size > 1 => pars.grouped(2).map(l =>
+    def isDefinedAt(e: Expr) = exec(e)._1
+    def apply(e: Expr) = exec(e)._2
+    private def exec(e: Expr) = e match {
+      case e.builder.FunExpr("case", pars) if pars.size > 1 => (true, pars.grouped(2).map(l =>
         if (l.size == 1) "else " + l(0).sql else "when " + l(0).sql + " then " + l(1).sql)
-        .mkString("case ", " ", " end")
+        .mkString("case ", " ", " end"))
+      case _ => (false, "<none>")
     }
   }
 
@@ -34,7 +33,7 @@ package object dialects {
 
   object OracleRawDialect extends PartialFunction[Expr, String] {
     def isDefinedAt(e: Expr) = e match {
-      case e.builder.BinExpr("-", lop, rop) => true
+      case e.builder.BinExpr("-", _, _) => true
       case _ => false
     }
     def apply(e: Expr) = e match {
