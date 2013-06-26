@@ -186,14 +186,27 @@ object QueryParser extends JavaTokenParsers {
         b.map(x => "r") orElse d.orElse(f).map(x => "l") orNull)
     }
   def objs: Parser[List[Obj]] = rep1(obj)
-  def column: Parser[Col] = (qualifiedIdentAll |
-    (expr ~ opt(":" ~> ident) ~ opt(stringLiteral | qualifiedIdent))) ^^ {
+  def column = new Parser[Col] {
+    def parser = (qualifiedIdentAll |
+        (expr ~ opt(":" ~> ident) ~ opt(stringLiteral | qualifiedIdent))) ^^ {
       case i: IdentAll => Col(i, null, null)
       case (o @ Obj(_, a, _, _)) ~ (typ: Option[String]) ~ None => Col(o, a, typ orNull)
       case e ~ (typ: Option[String]) ~ (a: Option[_]) => Col(e, a map {
         case Ident(i) => i.mkString; case s => "\"" + s + "\""
       } orNull, typ orNull)
     }
+    def extractAlias(expr: Any): String = expr match {
+      case BinOp(_, lop, rop) => extractAlias(rop)
+      case UnOp(_, op) => extractAlias(op)
+      case Obj(_, alias, _, null) => alias
+      case _ => null
+    }
+    def apply(in: Input) = parser(in) match {
+      case r@Success(Col(_: IdentAll | _: Obj, _, _), i) => r
+      case Success(c@Col(e, null, _), i) => Success(c.copy(alias = extractAlias(e)), i)
+      case r => r
+    }
+  }
   def columns: Parser[Cols] = (opt("#") <~ "{") ~ rep1sep(column, ",") <~ "}" ^^ {
     case d ~ c => Cols(d != None, c)
   }

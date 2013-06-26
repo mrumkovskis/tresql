@@ -148,6 +148,10 @@ class QueryTest extends Suite {
     expectResult(("MILLER", BigDecimal(2300.35)))(Query.head[(String, BigDecimal)]("emp[hiredate = '1982-01-23']{ename, sal}"))
     expectResult(List(("CLARK", "ACCOUNTING", 2450.00), ("KING", "ACCOUNTING", 5000.00),
       ("MILLER", "ACCOUNTING", 2300.35)))(Query.list[(String, String, Double)]("emp/dept[?]{ename, dname, sal}#(1)", 10))
+    //column alias test
+    expectResult(List("ACCOUNTING,CLARK", "ACCOUNTING,KING", "ACCOUNTING,MILLER")) {
+      Query.select("emp/dept[10] {dname || ',' || ename name}#(1)") map (_.name) toList
+    }
     //bind variables test
     expectResult(List(10, 20, 30, 40)){
       val ex = Query.build("dept[?]{deptno}")
