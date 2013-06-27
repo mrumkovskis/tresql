@@ -155,6 +155,9 @@ class QueryTest extends Suite {
     expectResult(List(0.00, 0.00, 0.00)) {
       Query.select("emp/dept[10] {sal + -sal salary}#(1)") map (_.salary) toList
     }
+    expectResult(List(0.00, 0.00, 0.00)) {
+      Query.select("emp/dept[10] {(sal + -sal) salary}#(1)") map (_.salary) toList
+    }
     
     //bind variables test
     expectResult(List(10, 20, 30, 40)){
