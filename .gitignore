@@ -1,4 +1,4 @@
-# eclipse + scala plugin
+# eclipse + scala plugin + idea
 .classpath
 .project
 .manager
@@ -6,10 +6,12 @@
 class/
 bin/
 .settings/
+.idea/
 .cache
 .worksheet/
 lib/
 jetty-env.xml
+*.iml
 
 # sbt
 target
