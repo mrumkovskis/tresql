@@ -51,7 +51,7 @@ trait Typed { this: RowLike =>
         case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: m20 :: m21 :: m22 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17), typed(17)(m18), typed(18)(m19), typed(19)(m20), typed(20)(m21), typed(21)(m22)).asInstanceOf[T]
       }
     } else {
-      error("Only tuple types are allowed at the moment. Instead encountered: " + m)
+      typed[T](0)
     }
 }
 
