@@ -5,7 +5,7 @@ import java.sql.ResultSetMetaData
 import sys._
 
 class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
-  extends Iterator[RowLike] with RowLike {
+  extends Iterator[RowLike] with RowLike with TypedResult {
   private[this] val md = rs.getMetaData
   private[this] val st = rs.getStatement
   private[this] val row = new Array[Any](cols.length)
@@ -174,8 +174,6 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
 
   override def toList = this.map(r => Row(this.content)).toList
   
-  def toList[T](implicit m: scala.reflect.Manifest[T]) = this.map(r => typedRow[T]).toList
-
   def toListRowAsMap: List[Map[String, _]] = this.map(r => rowAsMap).toList
 
   def rowAsMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
@@ -221,50 +219,8 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     }
   }
 
-  /*---------------- Single value methods -------------*/
-  def head[T](implicit m: scala.reflect.Manifest[T]): T = {
-    hasNext match {
-      case true =>
-        next
-        val v = if (m.toString.startsWith("scala.Tuple")) typedRow[T] else typed[T](0)
-        close
-        v
-      case false => throw new NoSuchElementException("No rows in result")
-    }
-  }
-  def headOption[T](implicit m: scala.reflect.Manifest[T]): Option[T] = {
-    try {
-      Some(head[T])
-    } catch {
-      case e: NoSuchElementException => None
-    }
-  }
-  def unique[T](implicit m: scala.reflect.Manifest[T]): T = {
-    hasNext match {
-      case true =>
-        next
-        val v = if (m.toString.startsWith("scala.Tuple")) typedRow[T] else typed[T](0)
-        if (hasNext) {
-          close; error("More than one row for unique result")
-        } else v
-      case false => error("No rows in result")
-    }
-  }
-  def uniqueOption[T](implicit m: scala.reflect.Manifest[T]): Option[T] = {
-    hasNext match {
-      case true =>
-        next
-        val v = if (m.toString.startsWith("scala.Tuple")) typedRow[T] else typed[T](0)
-        if (hasNext) {
-          close; error("More than one row for unique result")
-        } else Some(v)
-      case false => None
-    }
-  }
-
   case class Row(row: Seq[Any]) extends RowLike {
     def apply(idx: Int) = row(idx)
-    def typed[T](idx: Int)(implicit m: scala.reflect.Manifest[T]) = row(idx).asInstanceOf[T]
     def apply(name: String) = error("unsupported method")
     def typed[T](name: String)(implicit m: scala.reflect.Manifest[T]) = error("unsupported method")
     def content = row
@@ -277,63 +233,13 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     }
   }
 
-  def typed[T](columnIndex: Int)(implicit m: scala.reflect.Manifest[T]): T = m.toString match {
-    case "Int" => int(columnIndex).asInstanceOf[T]
-    case "Long" => long(columnIndex).asInstanceOf[T]
-    case "Double" => double(columnIndex).asInstanceOf[T]
-    case "Boolean" => boolean(columnIndex).asInstanceOf[T]
-    case "scala.math.BigDecimal" => bigdecimal(columnIndex).asInstanceOf[T]
-    case "java.lang.String" => string(columnIndex).asInstanceOf[T]
-    case "java.sql.Date" => date(columnIndex).asInstanceOf[T]
-    case "java.sql.Timestamp" => timestamp(columnIndex).asInstanceOf[T]
-    case "java.lang.Integer" => jInt(columnIndex).asInstanceOf[T]
-    case "java.lang.Long" => jLong(columnIndex).asInstanceOf[T]
-    case "java.lang.Double" => jDouble(columnIndex).asInstanceOf[T]
-    case "java.math.BigDecimal" => jBigDecimal(columnIndex).asInstanceOf[T]
-    case "java.lang.Boolean" => jBoolean(columnIndex).asInstanceOf[T]
-    case x => apply(columnIndex).asInstanceOf[T]
-  }
-
-  def typedRow[T](implicit m: scala.reflect.Manifest[T]): T =
-    if (m.toString.startsWith("scala.Tuple")) {
-      //tuple construction nightmare
-      m.typeArguments match {
-        case m1 :: Nil => (typed(0)(m1)).asInstanceOf[T]
-        case m1 :: m2 :: Nil => (typed(0)(m1), typed(1)(m2)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17), typed(17)(m18)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17), typed(17)(m18), typed(18)(m19)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: m20 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17), typed(17)(m18), typed(18)(m19), typed(19)(m20)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: m20 :: m21 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17), typed(17)(m18), typed(18)(m19), typed(19)(m20), typed(20)(m21)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: m20 :: m21 :: m22 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17), typed(17)(m18), typed(18)(m19), typed(19)(m20), typed(20)(m21), typed(21)(m22)).asInstanceOf[T]
-      }
-    } else {
-      error("Only tuple types are allowed at the moment. Instead encountered: " + m)
-    }
-
 }
 
-trait RowLike extends Dynamic {
+trait RowLike extends Dynamic with Typed {
   def apply(idx: Int): Any
-  def typed[T](idx: Int)(implicit m: scala.reflect.Manifest[T]): T
   def apply(name: String): Any
   def selectDynamic(name: String) = apply(name)
   def applyDynamic(name: String)(args: Any*) = selectDynamic(name)
-  def typed[T](name: String)(implicit m: scala.reflect.Manifest[T]): T
   def int(idx: Int) = typed[Int](idx)
   def int(name: String) = typed[Int](name)
   def int = new DynamicInt(this)

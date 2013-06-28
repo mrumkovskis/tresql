@@ -127,7 +127,7 @@ class QueryTest extends Suite {
     expectResult(List(10, "x"))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x"))
     expectResult("x")(op.value)
     expectResult(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)", 10, "ACC%"))
-    expectResult(None)(Query.headOption("dept[?]", -1))
+    expectResult(None)(Query.headOption[Option[_]]("dept[?]", -1))
     //dynamic tests
     expectResult(1900)(Query.select("salgrade[1] {hisal, losal}").foldLeft(0)((x, r) => x + 
         r.i.hisal + r.i.losal))
@@ -148,6 +148,10 @@ class QueryTest extends Suite {
     expectResult(("MILLER", BigDecimal(2300.35)))(Query.head[(String, BigDecimal)]("emp[hiredate = '1982-01-23']{ename, sal}"))
     expectResult(List(("CLARK", "ACCOUNTING", 2450.00), ("KING", "ACCOUNTING", 5000.00),
       ("MILLER", "ACCOUNTING", 2300.35)))(Query.list[(String, String, Double)]("emp/dept[?]{ename, dname, sal}#(1)", 10))
+    expectResult(List(("CLARK", "ACCOUNTING", 2450.00, "NEW YORK"), ("KING", "ACCOUNTING", 5000.00, "NEW YORK"),
+      ("MILLER", "ACCOUNTING", 2300.35, "NEW YORK"))) {
+      Query.list[String, String, Double, String]("emp/dept[?]{ename, dname, sal, loc}#(1)", 10)
+    }
     //column alias test
     expectResult(List(("ACCOUNTING,CLARK", -2450.00), ("ACCOUNTING,KING", -5000.00), ("ACCOUNTING,MILLER", -2300.35))) {
       Query.select("emp/dept[10] {dname || ',' || ename name, -sal salary}#(1)") map (r=> (r.name, r.dbl.salary)) toList
