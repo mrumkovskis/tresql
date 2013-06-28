@@ -6,7 +6,7 @@ import org.tresql.metadata._
 import sys._
 import java.sql.Connection
 
-object Query {
+object Query extends TypedQuery {
 
   def apply(expr: String, params: Any*): Any = apply(expr, normalizePars(params))
 
@@ -19,12 +19,6 @@ object Query {
 
   def select(expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection = 
     null) = apply(expr, params)(tresqlConn).asInstanceOf[Result]
-
-  def list[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]) = 
-    select(expr, normalizePars(params)).toList[T]
-  
-  def list[T](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection = 
-    null, m: scala.reflect.Manifest[T]) = select(expr, params)(tresqlConn).toList[T]
    
   def foreach(expr: String, params: Any*)(f: (RowLike) => Unit = (row) => ()) {
     select(expr, normalizePars(params)) foreach f
@@ -231,19 +225,6 @@ object Query {
     }
   }
 
-  /*---------------- Single value methods -------------*/
-  def head[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]): T = {
-    select(expr, normalizePars(params)).head[T]
-  }
-  def headOption[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]): Option[T] = {
-    select(expr, normalizePars(params)).headOption[T]
-  }
-  def unique[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]): T = {
-    select(expr, normalizePars(params)).unique[T]
-  }
-  def uniqueOption[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]): Option[T] = {
-    select(expr, normalizePars(params)).uniqueOption[T]
-  }
 }
 
 /** Out parameter box for callable statement */
