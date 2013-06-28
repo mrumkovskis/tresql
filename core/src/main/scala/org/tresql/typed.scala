@@ -360,7 +360,6 @@ trait TypedQuery {
 }
 /* this is used from console to generate methods
 object CodeGen {
-  import java.io._
   def typed(method: String, template: (String, String)) {
     2 to 22 foreach { i =>
       val types = 1 to i map ("T" + _) mkString ","
@@ -372,11 +371,11 @@ object CodeGen {
 
   val typedTemplate = ("(implicit ", "")
 
-  println("-------------typed methodes--------------")
+  println("-------------typed methods--------------")
   List("head", "headOption", "unique", "uniqueOption", "list") foreach { typed(_, typedTemplate) }
 
   println()
-  println("-------------query methodes---------------")
+  println("-------------query methods---------------")
 
   val queryTemplate = ("(expr: String, params: Any*)(implicit ", "(expr, params)")
 
