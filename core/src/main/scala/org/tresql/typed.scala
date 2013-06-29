@@ -12,6 +12,7 @@ trait Typed { this: RowLike =>
     case "Boolean" => boolean(columnIndex).asInstanceOf[T]
     case "scala.math.BigDecimal" => bigdecimal(columnIndex).asInstanceOf[T]
     case "java.lang.String" => string(columnIndex).asInstanceOf[T]
+    case "java.util.Date" => date(columnIndex).asInstanceOf[T]
     case "java.sql.Date" => date(columnIndex).asInstanceOf[T]
     case "java.sql.Timestamp" => timestamp(columnIndex).asInstanceOf[T]
     case "java.lang.Integer" => jInt(columnIndex).asInstanceOf[T]
@@ -20,6 +21,8 @@ trait Typed { this: RowLike =>
     case "java.math.BigDecimal" => jBigDecimal(columnIndex).asInstanceOf[T]
     case "java.lang.Boolean" => jBoolean(columnIndex).asInstanceOf[T]
     case x if x.startsWith("scala.Tuple") => typedRow[T]
+    case x if x.startsWith("scala.collection.immutable.List") && m.typeArguments.size == 1 =>
+      result(columnIndex).list(m.typeArguments(0)).asInstanceOf[T]
     case x => apply(columnIndex).asInstanceOf[T]
   }
 
