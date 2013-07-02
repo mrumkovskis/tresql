@@ -142,7 +142,7 @@ object QueryParser extends JavaTokenParsers {
     qualifiedIdent) <~ ")" ^^ {
       case r ~ c => Result(r.toInt,
         c match {
-          case s: String => try { s.toInt } catch { case _: NumberFormatException => s }
+          case s: String => util.Try(s.toInt) getOrElse s
           case Ident(i) => i
         })
     }
@@ -256,9 +256,9 @@ object QueryParser extends JavaTokenParsers {
   //this is for friendly error message
   def compTernary = new Parser[Any] {
     def apply(in: Input) = comp(in) match {
-      case s @ Success(r, i) => try Success(compBinOp(r), i) catch {
-        case e: Exception => Failure(e.getMessage, i)
-      }
+      case s @ Success(r, i) => util.Try(Success(compBinOp(r), i)) recover {
+        case e => Failure(e.getMessage, i)
+      } get
       case r => r
     }
     def compBinOp(p: ~[Any, List[~[String, Any]]]): Any = p match {
