@@ -203,7 +203,10 @@ object QueryParser extends JavaTokenParsers {
     }
     def apply(in: Input) = parser(in) match {
       case r@Success(Col(_: IdentAll | _: Obj, _, _), i) => r
-      case Success(c@Col(e, null, _), i) => Success(c.copy(alias = extractAlias(e)), i)
+      case s@Success(c@Col(e, null, _), i) => extractAlias(e) match {
+        case null => s
+        case x => Success(c.copy(alias = x), i)
+      }
       case r => r
     }
   }
