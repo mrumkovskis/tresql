@@ -192,17 +192,16 @@ object QueryParser extends JavaTokenParsers {
     }
   def objs: Parser[List[Obj]] = rep1(obj) ^^ { l =>
     var prev: Obj = null
-    l.flatMap { thisObj =>
+    val res = l.flatMap { thisObj =>
       val (prevObj, prevAlias) = (prev, if (prev == null) null else prev.alias)
       prev = thisObj
       //process foreign key shortcut join
       thisObj match {
         case o @ Obj(_, _, j @ Join(false, Arr(l @ List(o1 @ Obj(_, a, _, oj1, n1), _*)), false), oj, n) =>
-          (if (a == null && oj1 == null) List(o)
           //o1.alias prevail over o.alias, o.{outerJoin, nullable} prevail over o1.{outerJoin, nullable}
-          else List(o.copy(alias = (if (a != null) a else o.alias), join =
+          List(o.copy(alias = (if (a != null) a else o.alias), join =
             j.copy(expr = Arr(List(o1.copy(alias = null, outerJoin = null, nullable = false)))),
-            outerJoin = (if (oj == null) oj1 else oj), nullable = n || n1))) ++
+            outerJoin = (if (oj == null) oj1 else oj), nullable = n || n1)) ++
             (if (prevObj == null) List() else l.tail.flatMap {
               //flattenize array of foreign key shortcut joins
               case o2 @ Obj(_, a2, _, oj2, n2) => List((if (prevAlias != null) Obj(Ident(List(prevAlias)),
@@ -215,10 +214,11 @@ object QueryParser extends JavaTokenParsers {
             })
         case o => List(o)
       }
-    }.toVector.lastIndexWhere(_.outerJoin == "r") match {
-      case -1 => l
+    }
+    res.toVector.lastIndexWhere(_.outerJoin == "r") match {
+      case -1 => res
       //set nullable flag for all objs right to the last obj with outer join
-      case x => l.zipWithIndex.map(t => if (t._2 < x && !t._1.nullable) t._1.copy(nullable = true) else t._1)
+      case x => res.zipWithIndex.map(t => if (t._2 < x && !t._1.nullable) t._1.copy(nullable = true) else t._1)
     }
   }
   def column = new Parser[Col] {
