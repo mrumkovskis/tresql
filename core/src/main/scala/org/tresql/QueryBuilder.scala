@@ -266,17 +266,17 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       var al = Set[String]()
       tables.flatMap {
         //foreign key shortcut join aliases checked
-        case tb @ Table(IdentExpr(t), null, TableJoin(_, ArrExpr(l), _), _) => {
+        case tb @ Table(IdentExpr(t), null, TableJoin(_, ArrExpr(l), _), _, _) => {
           l map {
             case AliasIdentExpr(_, a, _) =>
               al += a; a -> tb.copy(alias = a)
             case _ => val s = t.mkString("."); (if (al(s)) null else s) -> tb
           }
         }
-        case tb @ Table(IdentExpr(t), null, _, _) =>
+        case tb @ Table(IdentExpr(t), null, _, _, _) =>
           val s = t.mkString("."); List((if (al(s)) null else s) -> tb)
-        case tb @ Table(t, null, _, _) => List((null, tb))
-        case tb @ Table(t, a, _, _) => al += a; List(a -> tb)
+        case tb @ Table(t, null, _, _, _) => List((null, tb))
+        case tb @ Table(t, a, _, _, _) => al += a; List(a -> tb)
       }.filter(_._1 != null).toMap
     }
     override def apply() = {
@@ -295,7 +295,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def join(tables: List[Table]): String = {
       //used to find table if alias join is used
       def find(t: Table) = t match {
-        case t @ Table(IdentExpr(n), null, _, _) => aliases.getOrElse(n.mkString("."), t)
+        case t @ Table(IdentExpr(n), null, _, _, _) => aliases.getOrElse(n.mkString("."), t)
         case t => t
       }
       (tables: @unchecked) match {
@@ -321,7 +321,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }.mkString
       else "")
   }
-  case class Table(val table: Expr, val alias: String, val join: TableJoin, val outerJoin: String) {
+  case class Table(val table: Expr, val alias: String, val join: TableJoin, val outerJoin: String,
+      val nullable: Boolean) {
     def name = table.sql
     def sqlName = name + (if (alias != null) " " + alias else "")
     def aliasOrName = if (alias != null) alias else name
@@ -521,14 +522,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def buildTable(t: Obj) = Table(buildInternal(t.obj, TABLE_CTX), t.alias,
       if (t.join != null) TableJoin(t.join.default, buildInternal(t.join.expr, JOIN_CTX),
         t.join.noJoin)
-      else null, t.outerJoin)
+      else null, t.outerJoin, t.nullable)
     def buildColumnIdent(c: Obj) = c match {
-      case Obj(Ident(i), _, _, _) => IdentExpr(i)
+      case Obj(Ident(i), _, _, _, _) => IdentExpr(i)
       case o => error("unsupported column definition at this place: " + o)
     }
     def buildIdent(i: Obj) = i match {
-      case Obj(Ident(i), null, _, _) => IdentExpr(i)
-      case Obj(Ident(i), a, _, j) => AliasIdentExpr(i, a, j)
+      case Obj(Ident(i), null, _, _, _) => IdentExpr(i)
+      case Obj(Ident(i), a, _, j, _) => AliasIdentExpr(i, a, j)
       case o => error("unsupported column definition at this place: " + o)
     }
     ctxStack ::= parseCtx
