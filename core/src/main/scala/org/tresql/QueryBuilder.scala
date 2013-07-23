@@ -519,6 +519,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       if (ctxStack.head == WHERE_CTX && q.filter != null && q.filter.elements != Nil &&
         sel.filter == null) null else sel
     }
+    def buildTables(tables: List[Obj]) = {
+      var names = Map[String, Table]()
+    }
     def buildTable(t: Obj) = Table(buildInternal(t.obj, TABLE_CTX), t.alias,
       if (t.join != null) TableJoin(t.join.default, buildInternal(t.join.expr, JOIN_CTX),
         t.join.noJoin)
