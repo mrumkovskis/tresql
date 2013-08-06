@@ -327,17 +327,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def sqlName = name + (if (alias != null) " " + alias else "")
     def aliasOrName = if (alias != null) alias else name
     def sqlJoin(joinTable: Table) = {
-      def sqlJoin(jl: List[Expr]) = (jl map { j =>
-        joinPrefix(j) + (j match {
-          //foreign key join shortcut syntax
-          case i @ IdentExpr(_) => sqlName + " on " + i.sql + " = " +
-            aliasOrName + "." + env.table(name).key.cols.mkString
-          //foreign key alias join shortcut syntax
-          case AliasIdentExpr(i, a, _) => name + " " + a + " on " +
-            i.mkString(".") + " = " + a + "." + env.table(name).key.cols.mkString
-          case e => sqlName + " on " + e.sql
-        })
-      }) mkString " "
+      def sqlJoin(e: Expr) = joinPrefix(e) + (e match {
+        //foreign key join shortcut syntax
+        case i @ IdentExpr(_) => sqlName + " on " + i.sql + " = " +
+          aliasOrName + "." + env.table(name).key.cols.mkString
+        case e => sqlName + " on " + e.sql
+      })
       def joinPrefix(e: Expr) = (outerJoin match {
         case "l" => "left "
         case "r" => "right "
@@ -362,8 +357,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case TableJoin(_, _, true) => ""
         //product join
         case TableJoin(false, ArrExpr(Nil), _) => ", " + sqlName
-        //normal join, foreign key alias join shortcut syntax
-        case TableJoin(false, ArrExpr(l), _) => sqlJoin(l)
+        //normal join, foreign key join shortcut syntax
+        case TableJoin(false, e, _) => sqlJoin(e)
         //default join
         case TableJoin(true, null, _) => joinPrefix(null) + sqlName + " on " + defaultJoin
         //default join with additional expression

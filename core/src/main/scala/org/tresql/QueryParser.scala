@@ -197,11 +197,10 @@ object QueryParser extends JavaTokenParsers {
       prev = thisObj
       //process foreign key shortcut join
       thisObj match {
-        case o @ Obj(_, _, j @ Join(false, Arr(l @ List(o1 @ Obj(_, a, _, oj1, n1), _*)), false), oj, n) =>
+        case o @ Obj(_, a, j @ Join(false, Arr(l @ List(o1 @ Obj(_, a1, _, oj1, n1), _*)), false), oj, n) =>
           //o1.alias prevail over o.alias, o.{outerJoin, nullable} prevail over o1.{outerJoin, nullable}
-          List(o.copy(alias = (if (a != null) a else o.alias), join =
-            //TODO refactor Arr(List(o1...)) -> o1...
-            j.copy(expr = Arr(List(o1.copy(alias = null, outerJoin = null, nullable = false)))),
+          List(o.copy(alias = (Option(a1).getOrElse(a)), join =
+            j.copy(expr = o1.copy(alias = null, outerJoin = null, nullable = false)),
             outerJoin = (if (oj == null) oj1 else oj), nullable = n || n1)) ++
             (if (prevObj == null) List() else l.tail.flatMap {
               //flattenize array of foreign key shortcut joins
@@ -209,8 +208,7 @@ object QueryParser extends JavaTokenParsers {
                 null, NoJoin, null, false)
               else Obj(prevObj.obj, null, NoJoin, null, false)),
                 o.copy(alias = (if (a2 != null) a2 else o.alias), join =
-                  //TODO refactor Arr(List(o2...)) -> o2...
-                  j.copy(expr = Arr(List(o2.copy(alias = null, outerJoin = null, nullable = false)))),
+                  j.copy(expr = o2.copy(alias = null, outerJoin = null, nullable = false)),
                   outerJoin = (if (oj == null) oj2 else oj), nullable = n || n2))
               case x => List(o.copy(join = Join(false, x, false)))
             })
