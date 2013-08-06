@@ -222,6 +222,9 @@ emp[7876] --> [[7876, null, null, null, null, null, null, null]]
 emp[:id]{ename} = [:n] --> id=7876;n='kuku --> 1
 emp[7876] {ename} --> [["kuku"]]
 
+//child update
+emp{empno, job, emp[empno = :1(1)]{job} = [:1(2)]}#(1) --> [[7369, "CLERK", 1], [7499, "SALESMAN", 1], [7521, "SALESMAN", 1], [7566, "MANAGER", 1], [7654, "SALESMAN", 1], [7698, "MANAGER", 1], [7782, "MANAGER", 1], [7788, "ANALYST", 1], [7839, "PRESIDENT", 1], [7844, "SALESMAN", 1], [7876, null, 1], [7900, "CLERK", 1], [7902, "ANALYST", 1], [7934, "CLERK", 1]]
+
 //----DELETE----
 salgrade - [?] --> 5 --> 1
 dummy - [], DUMMY {DUMMY} + [0], -dummy[], DUMMY {DUMMY} + [0] --> [1, 1, 1, 1]

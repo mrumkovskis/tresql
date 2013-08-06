@@ -549,17 +549,17 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case Insert(t, c, v) =>
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildInsert(t, c, v)
-          this.bindIdx = b.bindIdx; ex
+          this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
         //update
         case Update(t, f, c, v) =>
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildUpdate(t, f, c, v)
-          this.bindIdx = b.bindIdx; ex
+          this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
         //delete
         case Delete(t, f) =>
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildDelete(t, f)
-          this.bindIdx = b.bindIdx; ex
+          this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
         //child query
         case UnOp("|", oper) =>
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth + 1, bindIdx)
