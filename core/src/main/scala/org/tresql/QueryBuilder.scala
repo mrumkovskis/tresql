@@ -265,14 +265,6 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     val aliases: Map[String, Table] = {
       var al = Set[String]()
       tables.flatMap {
-        //foreign key shortcut join aliases checked
-        case tb @ Table(IdentExpr(t), null, TableJoin(_, ArrExpr(l), _), _, _) => {
-          l map {
-            case AliasIdentExpr(_, a, _) =>
-              al += a; a -> tb.copy(alias = a)
-            case _ => val s = t.mkString("."); (if (al(s)) null else s) -> tb
-          }
-        }
         case tb @ Table(IdentExpr(t), null, _, _, _) =>
           val s = t.mkString("."); List((if (al(s)) null else s) -> tb)
         case tb @ Table(t, null, _, _, _) => List((null, tb))
@@ -327,24 +319,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def sqlName = name + (if (alias != null) " " + alias else "")
     def aliasOrName = if (alias != null) alias else name
     def sqlJoin(joinTable: Table) = {
-      def sqlJoin(e: Expr) = joinPrefix(e) + (e match {
-        //foreign key join shortcut syntax
-        case i @ IdentExpr(_) => sqlName + " on " + i.sql + " = " +
-          aliasOrName + "." + env.table(name).key.cols.mkString
-        case e => sqlName + " on " + e.sql
-      })
-      def joinPrefix(e: Expr) = (outerJoin match {
+      def joinPrefix(implicitLeftJoin: Boolean) = (outerJoin match {
         case "l" => "left "
         case "r" => "right "
-        case null => Option(e) match {
-          case Some(AliasIdentExpr(_, _, oj)) => oj match {
-            case "l" => "left "
-            case "r" => "right "
-            case null => ""
-          }
-          case _ => ""
-        }
+        case _ if (implicitLeftJoin && nullable) => "left"
+        case _ => ""
       }) + "join "
+      def fkJoin(i: IdentExpr) = sqlName + " on " + i.sql + " = " +
+          aliasOrName + "." + env.table(name).key.cols.mkString
       def defaultJoin = {
         val j = env.join(name, joinTable.name)
         (j._1 zip j._2 map { t =>
@@ -357,12 +339,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case TableJoin(_, _, true) => ""
         //product join
         case TableJoin(false, ArrExpr(Nil), _) => ", " + sqlName
-        //normal join, foreign key join shortcut syntax
-        case TableJoin(false, e, _) => sqlJoin(e)
+        //foreign key join shortcut syntax
+        case TableJoin(false, e @ IdentExpr(_), _) => joinPrefix(true) + fkJoin(e)
+        //normal join
+        case TableJoin(false, e, _) => joinPrefix(false) + sqlName + " on " + e.sql
         //default join
-        case TableJoin(true, null, _) => joinPrefix(null) + sqlName + " on " + defaultJoin
+        case TableJoin(true, null, _) => joinPrefix(true) + sqlName + " on " + defaultJoin
         //default join with additional expression
-        case TableJoin(true, j: Expr, _) => joinPrefix(null) + sqlName + " on " + defaultJoin +
+        case TableJoin(true, j: Expr, _) => joinPrefix(true) + sqlName + " on " + defaultJoin +
           " and " + (j match {
             //primary key equals search
             case _: ConstExpr | _: VarExpr | _: ResExpr => joinTable.aliasOrName + "." +
@@ -389,11 +373,6 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
   case class IdentExpr(val name: List[String]) extends PrimitiveExpr {
     def defaultSQL = name.mkString(".")
-  }
-  //this is used for foreign key alias join shortcut syntax
-  case class AliasIdentExpr(val name: List[String], val alias: String, outerJoin: String)
-    extends PrimitiveExpr {
-    def defaultSQL = "AliasIdentExpr(" + name + ", " + alias + ")"
   }
   case class Order(val ordExprs: (Null, List[Expr], Null), val asc: Boolean) extends PrimitiveExpr {
     def defaultSQL = (ordExprs._2 map (_.sql)).mkString(",") + (if (asc) " asc" else " desc") +
@@ -527,7 +506,6 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     def buildIdent(i: Obj) = i match {
       case Obj(Ident(i), null, _, _, _) => IdentExpr(i)
-      case Obj(Ident(i), a, _, j, _) => AliasIdentExpr(i, a, j)
       case o => error("unsupported column definition at this place: " + o)
     }
     ctxStack ::= parseCtx

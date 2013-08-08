@@ -205,8 +205,7 @@ object QueryParser extends JavaTokenParsers {
             (if (prevObj == null) List() else l.tail.flatMap {
               //flattenize array of foreign key shortcut joins
               case o2 @ Obj(_, a2, _, oj2, n2) => List((if (prevAlias != null) Obj(Ident(List(prevAlias)),
-                null, NoJoin, null, false)
-              else Obj(prevObj.obj, null, NoJoin, null, false)),
+                null, NoJoin, null, false) else Obj(prevObj.obj, null, NoJoin, null, false)),
                 o.copy(alias = (if (a2 != null) a2 else o.alias), join =
                   j.copy(expr = o2.copy(alias = null, outerJoin = null, nullable = false)),
                   outerJoin = (if (oj == null) oj2 else oj), nullable = n || n2))
