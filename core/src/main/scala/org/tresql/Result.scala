@@ -194,6 +194,23 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     Vector(b: _*)
   }
 
+  /**
+   * iterates through this result rows as well as these of descendant result
+   * ensures execution of dml (update, insert, delete) expressions in colums otherwise
+   * has no side effect.
+   */
+  def execute: Unit = foreach { r => {
+      var i = 0
+      while (i < columnCount) {
+        this(i) match {
+          case r: Result => r.execute
+          case _ => 
+        }
+        i += 1
+      }
+    }
+  }
+
   /** needs to be overriden since super class implementation calls hasNext method */
   override def toString = getClass.toString + ":" + (cols.mkString(","))
 
