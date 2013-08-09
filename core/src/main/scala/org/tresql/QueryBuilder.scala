@@ -319,10 +319,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def sqlName = name + (if (alias != null) " " + alias else "")
     def aliasOrName = if (alias != null) alias else name
     def sqlJoin(joinTable: Table) = {
-      def joinPrefix(implicitLeftJoin: Boolean) = (outerJoin match {
+      def joinPrefix(implicitLeftJoinPossible: Boolean) = (outerJoin match {
         case "l" => "left "
         case "r" => "right "
-        case _ if (implicitLeftJoin && nullable) => "left"
+        case _ if (implicitLeftJoinPossible && nullable) => "left"
         case _ => ""
       }) + "join "
       def fkJoin(i: IdentExpr) = sqlName + " on " + i.sql + " = " +
@@ -494,8 +494,13 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         sel.filter == null) null else sel
     }
     def buildTables(tables: List[Obj]) = {
-      var names = Map[String, Table]()
-    }
+      ((tables map buildTable).foldLeft((List[Table]() -> Map[String, Table]())) { (ts, t) =>
+        ((ts._1.headOption.map(pt => {
+          t
+        }).getOrElse(t)) :: ts._1) -> ts._2
+      })._1.reverse
+    } 
+      
     def buildTable(t: Obj) = Table(buildInternal(t.obj, TABLE_CTX), t.alias,
       if (t.join != null) TableJoin(t.join.default, buildInternal(t.join.expr, JOIN_CTX),
         t.join.noJoin)
