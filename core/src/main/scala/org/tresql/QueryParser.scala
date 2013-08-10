@@ -145,7 +145,7 @@ object QueryParser extends JavaTokenParsers {
     qualifiedIdent) <~ ")" ^^ {
       case r ~ c => Result(r.toInt,
         c match {
-          case s: String => util.Try(s.toInt) getOrElse s
+          case s: String => try { s.toInt } catch { case _: NumberFormatException => s }
           case Ident(i) => i
         })
     }
@@ -214,7 +214,7 @@ object QueryParser extends JavaTokenParsers {
         case o => List(o)
       }
     }
-    res.toVector.lastIndexWhere(_.outerJoin == "r") match {
+    Vector(res: _*).lastIndexWhere(_.outerJoin == "r") match {
       case -1 => res
       //set nullable flag for all objs right to the last obj with outer join
       case x => res.zipWithIndex.map(t => if (t._2 < x && !t._1.nullable) t._1.copy(nullable = true) else t._1)
@@ -293,9 +293,9 @@ object QueryParser extends JavaTokenParsers {
   //this is for friendly error message
   def compTernary = new Parser[Any] {
     def apply(in: Input) = comp(in) match {
-      case s @ Success(r, i) => util.Try(Success(compBinOp(r), i)) recover {
+      case s @ Success(r, i) => try Success(compBinOp(r), i) catch {
         case e => Failure(e.getMessage, i)
-      } get
+      }
       case r => r
     }
     def compBinOp(p: ~[Any, List[~[String, Any]]]): Any = p match {
