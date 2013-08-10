@@ -48,7 +48,7 @@ emp e/dept[sal >= hisal & sal <= losal]salgrade {ename, dname, grade} #(empno) -
 work[empno]emp/dept {wdate, ename, dname} #(1,2,3) --> [["2012-06-06", "KING", "ACCOUNTING"], ["2012-06-06", "SCOTT", "RESEARCH"], ["2012-06-07", "KING", "ACCOUNTING"], ["2012-06-07", "SCOTT", "RESEARCH"]]
 dept/car[2222]#(nr) --> [[20, "RESEARCH", "DALLAS", "2222", "BMW", true, 20]]
 car/dept[20]#(nr) --> [["2222", "BMW", true, 20, 20, "RESEARCH", "DALLAS"], ["3333", "MERCEDES", false, 20, 20, "RESEARCH", "DALLAS"]]
-car[2222]/dept#(nr) --> [["2222", "BMW", true, 20, 20, "RESEARCH", "DALLAS"]]
+car[2222]/dept[dname != null]#(nr) --> [["2222", "BMW", true, 20, 20, "RESEARCH", "DALLAS"]]
 
 //foreign key default join
 emp/car[2222]{ename, name}#(1,2) --> [["ADAMS", "BMW"], ["FORD", "BMW"], ["JONES", "BMW"], ["SCOTT", "BMW"], ["SMITH", "BMW"]]
@@ -57,20 +57,20 @@ emp/car[2222]{ename, name}#(1,2) --> [["ADAMS", "BMW"], ["FORD", "BMW"], ["JONES
 dept d/[job = 'PRESIDENT']emp? e {dname, ename}#(1, 2 null) --> [["ACCOUNTING", "KING"], ["OPERATIONS", null], ["RESEARCH", null], ["SALES", null]]
 dept d[job = 'PRESIDENT']/emp? e {dname, ename}#(1, 2 null) --> [["ACCOUNTING", "KING"], ["OPERATIONS", null], ["RESEARCH", null], ["SALES", null]]
 dept d/emp? e [job = 'PRESIDENT']{dname, ename}#(1, 2) --> [["ACCOUNTING", "KING"]]
-emp[?]/dept{ename, dname} --> 7369 --> [["SMITH", "RESEARCH"]]
-emp/[?]dept{ename, dname} --> 7369 --> [["SMITH", "RESEARCH"]]
+emp[?]/dept[dname != null]{ename, dname} --> 7369 --> [["SMITH", "RESEARCH"]]
+emp/[?]dept[dname != null]{ename, dname} --> 7369 --> [["SMITH", "RESEARCH"]]
 emp[?]/dept[?]{ename, dname} --> 7369; 40 --> []
 
 //foreign key alias join shortcut syntax
 emp e[e.deptno d]dept {ename, dname} #(ename) --> [["ADAMS", "RESEARCH"], ["ALLEN", "SALES"], ["BLAKE", "SALES"], ["CLARK", "ACCOUNTING"], ["FORD", "RESEARCH"], ["JAMES", "SALES"], ["JONES", "RESEARCH"], ["KING", "ACCOUNTING"], ["MARTIN", "SALES"], ["MILLER", "ACCOUNTING"], ["SCOTT", "RESEARCH"], ["SMITH", "RESEARCH"], ["TURNER", "SALES"],["WARD", "SALES"]]
-work w[w.empno e, w.empno_mgr m]emp {e.ename, m.ename, hours} #(1,2,3) --> [["SCOTT", "CLARK", 8], ["SCOTT", "JONES", 5]]
+work w[w.empno e, w.empno_mgr m]emp[m.ename != null] {e.ename, m.ename, hours} #(1,2,3) --> [["SCOTT", "CLARK", 8], ["SCOTT", "JONES", 5]]
 //foreign key alias outer shortcut join syntax
 work w[w.empno e, w.empno_mgr m?]emp {e.ename, m.ename, hours} #(1,2,3) --> [["KING", null, 3], ["KING", null, 4], ["SCOTT", "CLARK", 8], ["SCOTT", "JONES", 5]]
 
 //alias join shortcut syntax
 emp e[e.empno = w.empno]work w;e/dept [ename = 'SCOTT']{hours, ename, dname} #(hours) --> [[5, "SCOTT", "RESEARCH"], [8, "SCOTT", "RESEARCH"]]
 emp[emp.empno = w.empno]work w;emp/dept [ename = 'SCOTT']{hours, ename, dname} #(hours) --> [[5, "SCOTT", "RESEARCH"], [8, "SCOTT", "RESEARCH"]]
-work w[w.empno e, w.empno_mgr m]emp;e/dept d;m/dept md {e.ename, d.dname, hours, m.ename, md.dname} #(1,2,3) --> [["SCOTT", "RESEARCH", 5, "JONES", "RESEARCH"], ["SCOTT", "RESEARCH", 8, "CLARK", "ACCOUNTING"]]
+work w[w.empno e, w.empno_mgr m]emp;e/dept d;m/dept md {e.ename, d.dname, hours, m.ename, md.dname} #(1,2,3) --> [["KING", "ACCOUNTING", 3, null, null], ["KING", "ACCOUNTING", 4, null, null], ["SCOTT", "RESEARCH", 5, "JONES", "RESEARCH"], ["SCOTT", "RESEARCH", 8, "CLARK", "ACCOUNTING"]]
 
 //left outer join
 dept d/emp? e[e.deptno != null]#{d.deptno}#(deptno) --> [[10], [20], [30]]
@@ -186,6 +186,9 @@ dept#(deptno)@(1) --> [[10, "ACCOUNTING", "NEW YORK"]]
 //single quoted string
 dept[dname ~ 'ACC%'] --> [[10, "ACCOUNTING", "NEW YORK"]]
 
+//implicit left outer join
+work[empno e, empno_mgr m]emp;e/dept d;m/dept md{hours, e.ename, d.dname, m.ename, md.dname}#(1,2,3) --> [[3, "KING", "ACCOUNTING", null, null], [4, "KING", "ACCOUNTING", null, null], [5, "SCOTT", "RESEARCH", "JONES", "RESEARCH"], [8, "SCOTT", "RESEARCH", "CLARK", "ACCOUNTING"]]
+
 //optional binding
 dept[deptno = :id?] {deptno} #(deptno) --> [[10], [20], [30], [40]]
 dept[:id?] {deptno} #(deptno) --> id=10 --> [[10]]
@@ -217,8 +220,8 @@ dept{deptno}#(deptno)@(:o? :l?) --> l=1 --> [[10]]
 //----UPDATE----
 emp[hiredate >= ? & hiredate <= ?]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;1000.35 --> 2
 emp[hiredate >= ? & hiredate <= ?]{sal} ~#(1) --> '1982-01-23;'1982-12-09 --> [[4000.35], [2300.35]]
-emp[?] {ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} = [?, ?, ?, ?, ?, ?, ?] --> 7876; null; null; null; null; null; null; null --> 1
-emp[7876] --> [[7876, null, null, null, null, null, null, null]]
+emp[?] {ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} = [?, ?, ?, ?, ?, ?, ?] --> 7876; null; null; null; null; null; null; 20 --> 1
+emp[7876] --> [[7876, null, null, null, null, null, null, 20]]
 emp[:id]{ename} = [:n] --> id=7876;n='kuku --> 1
 emp[7876] {ename} --> [["kuku"]]
 

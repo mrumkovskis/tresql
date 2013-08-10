@@ -261,16 +261,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   case class SelectExpr(val tables: List[Table], val filter: List[Expr], val cols: List[ColExpr],
     val distinct: Boolean, val group: Expr, val order: List[Expr],
-    offset: Expr, limit: Expr) extends BaseExpr {
-    val aliases: Map[String, Table] = {
-      var al = Set[String]()
-      tables.flatMap {
-        case tb @ Table(IdentExpr(t), null, _, _, _) =>
-          val s = t.mkString("."); List((if (al(s)) null else s) -> tb)
-        case tb @ Table(t, null, _, _, _) => List((null, tb))
-        case tb @ Table(t, a, _, _, _) => al += a; List(a -> tb)
-      }.filter(_._1 != null).toMap
-    }
+    offset: Expr, limit: Expr, aliases: Map[String, Table]) extends BaseExpr {
     override def apply() = {
       org.tresql.Query.select(sql, cols, QueryBuilder.this.bindVariables, env,
         QueryBuilder.this.allCols, QueryBuilder.this.identAll)
@@ -322,32 +313,33 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       def joinPrefix(implicitLeftJoinPossible: Boolean) = (outerJoin match {
         case "l" => "left "
         case "r" => "right "
-        case _ if (implicitLeftJoinPossible && nullable) => "left"
+        case _ if (implicitLeftJoinPossible && nullable) => "left "
         case _ => ""
       }) + "join "
       def fkJoin(i: IdentExpr) = sqlName + " on " + i.sql + " = " +
           aliasOrName + "." + env.table(name).key.cols.mkString
-      def defaultJoin = {
-        val j = env.join(name, joinTable.name)
-        (j._1 zip j._2 map { t =>
+      def defaultJoin(jcols: (List[String], List[String])) = {
+        //may be default join columns had been calculated during table build implicit left outer join calculation 
+        val j = if (jcols != null) jcols else env.join(joinTable.name, name)
+        (j._2 zip j._1 map { t =>
           aliasOrName + "." + t._1 + " = " +
             joinTable.aliasOrName + "." + t._2
         }) mkString " and "
       }
       join match {
         //no join (used for table alias join)
-        case TableJoin(_, _, true) => ""
+        case TableJoin(_, _, true, _) => ""
         //product join
-        case TableJoin(false, ArrExpr(Nil), _) => ", " + sqlName
+        case TableJoin(false, ArrExpr(Nil), _, _) => ", " + sqlName
         //foreign key join shortcut syntax
-        case TableJoin(false, e @ IdentExpr(_), _) => joinPrefix(true) + fkJoin(e)
+        case TableJoin(false, e @ IdentExpr(_), _, _) => joinPrefix(true) + fkJoin(e)
         //normal join
-        case TableJoin(false, e, _) => joinPrefix(false) + sqlName + " on " + e.sql
+        case TableJoin(false, e, _, _) => joinPrefix(false) + sqlName + " on " + e.sql
         //default join
-        case TableJoin(true, null, _) => joinPrefix(true) + sqlName + " on " + defaultJoin
+        case TableJoin(true, null, _, dj) => joinPrefix(true) + sqlName + " on " + defaultJoin(dj)
         //default join with additional expression
-        case TableJoin(true, j: Expr, _) => joinPrefix(true) + sqlName + " on " + defaultJoin +
-          " and " + (j match {
+        case TableJoin(true, j: Expr, _, dj) => joinPrefix(true) + sqlName + " on " +
+          defaultJoin(dj) + " and " + (j match {
             //primary key equals search
             case _: ConstExpr | _: VarExpr | _: ResExpr => joinTable.aliasOrName + "." +
               env.table(joinTable.name).key.cols(0) + " = " + j.sql
@@ -360,7 +352,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }
     }
   }
-  case class TableJoin(val default: Boolean, val expr: Expr, val noJoin: Boolean)
+  case class TableJoin(val default: Boolean, val expr: Expr, val noJoin: Boolean,
+      defaultJoinCols: (List[String], List[String]))
   case class ColExpr(val col: Expr, val alias: String, val typ: String) extends PrimitiveExpr {
     val separateQuery = QueryBuilder.this.separateQueryFlag
     if (!QueryBuilder.this.allCols) QueryBuilder.this.allCols = col.isInstanceOf[AllExpr]
@@ -478,7 +471,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   private def buildInternal(parsedExpr: Any, parseCtx: String = ROOT_CTX): Expr = {
     def buildSelect(q: Query) = {
-      val sel = SelectExpr(q.tables map buildTable, //tables
+      val tablesAndAliases = buildTables(q.tables)
+      val sel = SelectExpr(tablesAndAliases._1, //tables
         if (q.filter != null) { //filter
           val f = (q.filter.elements map { buildInternal(_, WHERE_CTX) }).filter(_ != null)
           if (f.length > 0) f else null
@@ -487,23 +481,49 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         else List(ColExpr(AllExpr(), null, null)),
         q.distinct, buildInternal(q.group), //distinct, group
         if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null, //order
-        buildInternal(q.offset, LIMIT_CTX), buildInternal(q.limit, LIMIT_CTX)) //offset, limit
+        buildInternal(q.offset, LIMIT_CTX), buildInternal(q.limit, LIMIT_CTX), //offset, limit
+        tablesAndAliases._2)
       //if select expression is subquery in others expression where clause, had where clause itself
       //and where clause was removed due to unbound optional variables remove subquery itself
       if (ctxStack.head == WHERE_CTX && q.filter != null && q.filter.elements != Nil &&
         sel.filter == null) null else sel
     }
+    //build tables, set nullable flag for tables right to default join or foreign key shortcut join,
+    //which is used for implicit left outer join, create aliases map
     def buildTables(tables: List[Obj]) = {
       ((tables map buildTable).foldLeft((List[Table]() -> Map[String, Table]())) { (ts, t) =>
-        ((ts._1.headOption.map(pt => {
-          t
-        }).getOrElse(t)) :: ts._1) -> ts._2
-      })._1.reverse
+        val nt = ts._1.headOption.map(pt => (pt, t) match {          
+          case (Table(IdentExpr(ptn), _, _, _, _), Table(IdentExpr(n), _, j, null, false)) =>
+            //get previous table from aliases map if exists
+            val prevTable = ts._2.get(ptn.mkString(".")).getOrElse(pt)
+            j match {
+              //foreign key of shortcut join must come from previous table i.e. ptn 
+              case TableJoin(false, IdentExpr(fk), _, _) if (fk.size == 1 || fk.dropRight(1) == ptn) =>
+                env.colOption(prevTable.name, fk.last).map(col =>
+                  //set current table to nullable if foreign key column or previous table is nullable
+                  if (prevTable.nullable || col.nullable) t.copy(nullable = true) else t).getOrElse(t)
+              case TableJoin(true, _, _, _) =>
+                val dj = env.join(prevTable.name, t.name)
+                if (prevTable.nullable || dj._1.exists(env.col(prevTable.name, _).nullable))
+                  t.copy(join = t.join.copy(defaultJoinCols = dj), nullable = true)
+                else t.copy(join = t.join.copy(defaultJoinCols = dj))
+              case _ => t
+            }
+          case _ => t
+        }).getOrElse(t)
+        (nt :: ts._1) -> (nt match {
+          case Table(IdentExpr(n), a, _, _, _) if (a != null && !ts._2.contains(a)) =>
+            ts._2 + (a -> nt) 
+          case _ => ts._2
+        })
+      }) match {
+        case (tables: List[Table], aliases: Map[String, Table]) => (tables.reverse, aliases)
+      }
     } 
       
     def buildTable(t: Obj) = Table(buildInternal(t.obj, TABLE_CTX), t.alias,
       if (t.join != null) TableJoin(t.join.default, buildInternal(t.join.expr, JOIN_CTX),
-        t.join.noJoin)
+        t.join.noJoin, null)
       else null, t.outerJoin, t.nullable)
     def buildColumnIdent(c: Obj) = c match {
       case Obj(Ident(i), _, _, _, _) => IdentExpr(i)
@@ -547,8 +567,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           case ROOT_CTX =>
             val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
             val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
-          case QUERY_CTX | TABLE_CTX => SelectExpr(List(buildTable(t)), null,
-            List(ColExpr(AllExpr(), null, null)), false, null, null, null, null)
+          case QUERY_CTX | TABLE_CTX =>
+            val tablesAndAliases = buildTables(List(t))
+            SelectExpr(tablesAndAliases._1, null,
+            List(ColExpr(AllExpr(), null, null)), false, null, null, null, null, tablesAndAliases._2)
           case COL_CTX => buildColumnIdent(t)
           case _ => buildIdent(t)
         }
