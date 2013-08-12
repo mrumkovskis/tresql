@@ -1,0 +1,144 @@
+--- 2013.08.12 tresql 3.11 ---
+1. Implicit left outer join feature.
+
+In the case of join shortcut syntax (default join '/' or foreign key shortcut join '[<fk_olumn>]') implicit outer
+join feature is applied.
+
+For example for statement
+
+work[empno_mgr]emp/dept
+
+following sql select statement is generated
+
+select * from work left join emp on empno_mgr = emp.empno left join dept on dept.deptno = emp.deptno
+
+emp table is left outer joined to work because empno_mgr field of the work table is nullable, dept table is left
+outer joined to emp table because all fields of the emp table are nullable since emp table is left outer joined itself.
+
+Implicit left outer joins are applied only if join shortcut syntax is used!
+
+2. execute method added to Result
+
+Execute method iterates through result rows as well as these of descendant result.
+This ensures execution of dml (update, insert, delete) expressions in colums otherwise
+has no side effect.
+
+--- 2013.06.28 tresql 3.10.1 ---
+Bugfix provided so that this simple case works:
+
+Query.list[String]("dept{dname}#(1)")
+
+--- 2013.06.28 tresql 3.10 ---
+Typesafe capabilities.
+
+Instead of
+
+val (username, companyId) = Query.head[ ( String, Long ) ]("usr[?] {username, company_id}", userId)
+
+or
+
+Query.list[ ( String, String, Double ) ]("emp/dept[?]{ename, dname, sal}#(1)", 10)
+
+one can write like this:
+
+val (username, companyId) = Query.head[String, Long]("usr[?] {username, company_id}", userId)
+
+Query.list[String, String, Double]("emp/dept[?]{ename, dname, sal}#(1)", 10)
+
+--- 2013.06.27 tresql 3.9.1 ---
+Little bugfix.
+
+Parenthesis around column expression can be omited before alias in the case alias is without quotes and if column is binary or unary expression.
+
+Example:
+
+instead of
+
+emp/dept[10] { ( dname || ',' || ename ) name, ( -sal ) salary}
+
+you can write as expected:
+
+emp/dept[10] { dname || ',' || ename name, -sal salary}
+
+--- 2013.06.22 tresql 3.9 ---
+1. Enhanced typesafe capabilities. Now instead of:
+
+    val (username, companyId) = 
+      Query.select("usr[?] {username, company_id}", userId)
+        .map(r => (r.s(0), r.l(1))).toList.head
+    
+one can write like this:
+
+  val (username, companyId) = Query.head[(String, Long)]("usr[?] {username, company_id}", userId)
+
+This means that single value methods now support tuple type.
+
+Also list method is added to Query which returns result as a List of expected Tuple type.
+
+For example:
+
+Query.list[(String, String, Double)]("emp/dept[?]{ename, dname, sal}#(1)", 10)
+
+will return list of desired tuples:
+
+List(("CLARK", "ACCOUNTING", 2450.00), ("KING", "ACCOUNTING", 5000.00),
+      ("MILLER", "ACCOUNTING", 2300.35))
+
+2. first method is removed from Query API on Guntis proposal.
+
+3. dialects are refactored as partial functions. It can create little backward compatibility break
+at the benefit of flexible partial function features i.e. if you have created your own dialect
+it will have to be refactored into partial function.
+
+--- 2013.06.14 tresql 3.8 ---
+Improvements:
+
+1) parenthesis may be omited for in operator with one parameter i.e
+
+emp [id in ?]
+
+instead of
+
+emp [id in (?)]
+
+2) array binding for empty array results in "null". this is useful for passing empty arrays (collection) to tresql so that sql statement does not fail
+
+Example:
+
+Query.select("dept[deptno in ?]", List(List())).toList
+
+will result in followind sql statement:
+
+select * from dept where deptno in (null)
+
+--- 2013.05.16 tresql 3.6 ---
+Ternary comparison feature.
+
+Instead of 
+
+emp [ salary > 100 & salary < 200 ]
+
+one can write
+
+emp [ 100 < salary < 200 ]
+
+--- 2013.05.04 tresql 3.5 ---
+Classic support for in operator.
+
+Before syntax was like this:
+
+dept[deptno in [ 10, 20 ] ]
+dept[deptno !in [ 10, 20 ] ]
+
+now one can write also like this:
+
+dept[deptno in ( 10, 20 ) ]
+dept[deptno !in ( 10, 20 ) ]
+
+--- 2013.03.09 - tresql 3.4 ---
+1. Blob support.
+
+2. Foreign key alias outer join support:
+
+scala> QueryBuilder("work [ empno e, empno_mgr m? ] emp").sql
+res2: String = select * from work join emp e on empno = e.empno left join emp m on empno_mgr = m.empno
