@@ -502,6 +502,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
                 env.colOption(prevTable.name, fk.last).map(col =>
                   //set current table to nullable if foreign key column or previous table is nullable
                   if (prevTable.nullable || col.nullable) t.copy(nullable = true) else t).getOrElse(t)
+              //default join
               case TableJoin(true, _, _, _) =>
                 val dj = env.join(prevTable.name, t.name)
                 if (prevTable.nullable || dj._1.exists(env.col(prevTable.name, _).nullable))
