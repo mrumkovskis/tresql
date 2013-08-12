@@ -190,6 +190,8 @@ dept[dname ~ 'ACC%'] --> [[10, "ACCOUNTING", "NEW YORK"]]
 work[empno e, empno_mgr m]emp;e/dept d;m/dept md{hours, e.ename, d.dname, m.ename, md.dname}#(1,2,3) --> [[3, "KING", "ACCOUNTING", null, null], [4, "KING", "ACCOUNTING", null, null], [5, "SCOTT", "RESEARCH", "JONES", "RESEARCH"], [8, "SCOTT", "RESEARCH", "CLARK", "ACCOUNTING"]]
 work w[w.empno e, w.empno_mgr m]emp;e/dept d;m/dept md{w.hours, e.ename, d.dname, m.ename, md.dname}#(1,2,3) --> [[3, "KING", "ACCOUNTING", null, null], [4, "KING", "ACCOUNTING", null, null], [5, "SCOTT", "RESEARCH", "JONES", "RESEARCH"], [8, "SCOTT", "RESEARCH", "CLARK", "ACCOUNTING"]]
 work[empno_mgr]emp/dept {hours, ename, dname} --> [[3, null, null], [4, null, null], [5, "JONES", "RESEARCH"], [8, "CLARK", "ACCOUNTING"]]
+car/dept{deptno, dname, nr, name} #(1,2,3,4) --> [[null, null, "4444", "VOLKSWAGEN"], [10, "ACCOUNTING", "1111", "PORCHE"], [20, "RESEARCH", "2222", "BMW"], [20, "RESEARCH", "3333", "MERCEDES"]]
+dept/car{deptno, dname, nr, name} #(1,2,3,4) --> [[10, "ACCOUNTING", "1111", "PORCHE"], [20, "RESEARCH", "2222", "BMW"], [20, "RESEARCH", "3333", "MERCEDES"]]
 
 //optional binding
 dept[deptno = :id?] {deptno} #(deptno) --> [[10], [20], [30], [40]]
