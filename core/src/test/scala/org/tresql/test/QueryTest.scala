@@ -144,7 +144,8 @@ class QueryTest extends Suite {
     expectResult("1982-12-09 00:00:00.0")(Query.select("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) => 
         r.t.hiredate.toString))
     expectResult("KING PRESIDENT")(Query.select("emp[7839] {ename, job}").foldLeft("")((x, r) => 
-        r.ename + " " + r.job))    
+        r.ename + " " + r.job))
+    //typed tests
     expectResult(("MILLER", BigDecimal(2300.35)))(Query.head[(String, BigDecimal)]("emp[hiredate = '1982-01-23']{ename, sal}"))
     expectResult(List(("CLARK", "ACCOUNTING", 2450.00), ("KING", "ACCOUNTING", 5000.00),
       ("MILLER", "ACCOUNTING", 2300.35)))(Query.list[(String, String, Double)]("emp/dept[?]{ename, dname, sal}#(1)", 10))
@@ -153,6 +154,11 @@ class QueryTest extends Suite {
       Query.list[String, String, Double, String]("emp/dept[?]{ename, dname, sal, loc}#(1)", 10)
     }
     expectResult(List("ACCOUNTING", "OPERATIONS", "RESEARCH", "SALES"))(Query.list[String]("dept{dname}#(1)"))
+    expectResult(List((10,"ACCOUNTING",List((7782,"CLARK",List()), (7839,"KING",List((Date.valueOf("2012-06-06"),3),
+        (Date.valueOf("2012-06-07"),4))), (7934, "MILLER", List())),List("PORCHE"))))(
+            Query.list[Int, String, List[(Int, String, List[(Date, Int)])], List[String]] {
+      "dept[10]{deptno, dname, |emp[deptno = :1(deptno)]{empno, ename, |work[empno = :1(empno)]{wdate, hours}#(1,2) work}#(1) emps," +
+      " |car[deptnr = :1(deptno)]{name}#(1) cars}"})
     //column alias test
     expectResult(List(("ACCOUNTING,CLARK", -2450.00), ("ACCOUNTING,KING", -5000.00), ("ACCOUNTING,MILLER", -2300.35))) {
       Query.select("emp/dept[10] {dname || ',' || ename name, -sal salary}#(1)") map (r=> (r.name, r.dbl.salary)) toList
