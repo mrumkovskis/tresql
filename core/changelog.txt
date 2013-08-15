@@ -1,3 +1,10 @@
+--- 2013.08.15 tresql 3.11.1 ---
+Implicit left outer join bugfix
+
+Fixed foreign key shortcut join with one member and with foreign key identifier prefixed with table alias i.e.
+
+work w[w.empno_mgr]emp
+
 --- 2013.08.12 tresql 3.11 ---
 1. Implicit left outer join feature.
 
