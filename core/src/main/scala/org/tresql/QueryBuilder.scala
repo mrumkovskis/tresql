@@ -321,9 +321,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       def defaultJoin(jcols: (List[String], List[String])) = {
         //may be default join columns had been calculated during table build implicit left outer join calculation 
         val j = if (jcols != null) jcols else env.join(joinTable.name, name)
-        (j._2 zip j._1 map { t =>
-          aliasOrName + "." + t._1 + " = " +
-            joinTable.aliasOrName + "." + t._2
+        (j._1 zip j._2 map { t =>
+          joinTable.aliasOrName + "." + t._1 + " = " + aliasOrName + "." + t._2
         }) mkString " and "
       }
       join match {
@@ -493,12 +492,13 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def buildTables(tables: List[Obj]) = {
       ((tables map buildTable).foldLeft((List[Table]() -> Map[String, Table]())) { (ts, t) =>
         val nt = ts._1.headOption.map(pt => (pt, t) match {          
-          case (Table(IdentExpr(ptn), _, _, _, _), Table(IdentExpr(n), _, j, null, false)) =>
+          case (Table(IdentExpr(ptn), ptna, _, _, _), Table(IdentExpr(n), _, j, null, false)) =>
             //get previous table from aliases map if exists
             val prevTable = ts._2.get(ptn.mkString(".")).getOrElse(pt)
             j match {
               //foreign key of shortcut join must come from previous table i.e. ptn 
-              case TableJoin(false, IdentExpr(fk), _, _) if (fk.size == 1 || fk.dropRight(1) == ptn) =>
+              case TableJoin(false, IdentExpr(fk), _, _) if (fk.size == 1 ||
+                  fk.dropRight(1) == (if (ptna == null) ptn else List(ptna))) =>
                 env.colOption(prevTable.name, fk.last).map(col =>
                   //set current table to nullable if foreign key column or previous table is nullable
                   if (prevTable.nullable || col.nullable) t.copy(nullable = true) else t).getOrElse(t)

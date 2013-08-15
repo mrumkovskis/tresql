@@ -196,6 +196,9 @@ car[1111]/dept {nr, dname}#(1,2) --> [["1111", "ACCOUNTING"], ["2222", null], ["
 car/[1111]dept {nr, dname}#(1,2) --> [["1111", "ACCOUNTING"], ["2222", null], ["3333", null], ["4444", null]]
 car[nr = 1111]/dept {nr, dname}#(1,2) --> [["1111", "ACCOUNTING"], ["2222", null], ["3333", null], ["4444", null]]
 car/[nr = 1111]dept {nr, dname}#(1,2) --> [["1111", "ACCOUNTING"], ["2222", null], ["3333", null], ["4444", null]]
+work w[w.empno_mgr m]emp {hours, ename}#(1,2) --> [[3, null], [4, null], [5, "JONES"], [8, "CLARK"]]
+work w[w.empno_mgr]emp m {hours, ename}#(1,2) --> [[3, null], [4, null], [5, "JONES"], [8, "CLARK"]]
+work[work.empno_mgr m]emp {hours, ename}#(1,2) --> [[3, null], [4, null], [5, "JONES"], [8, "CLARK"]]
 
 //optional binding
 dept[deptno = :id?] {deptno} #(deptno) --> [[10], [20], [30], [40]]
