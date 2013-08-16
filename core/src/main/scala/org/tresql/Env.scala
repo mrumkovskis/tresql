@@ -64,12 +64,15 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   }
   
   private[tresql] def nextId(seqName: String): Any = provider.map(_.env.nextId(seqName)).getOrElse {
-    //TODO perhaps built expressions can be used?
+    //TODO perhaps built expressions can be used to improve performance?
     val id = Query.unique[Any](resources.idExpr(seqName))
     ids(seqName) = id
     id
   }
   private[tresql] def currId(seqName: String): Any = provider.map(_.env.currId(seqName)).getOrElse(ids(seqName))
+  //update current id. This is called from QueryBuilder.IdExpr
+  private[tresql] def currId(seqName: String, id: Any): Unit =
+    provider.map(_.env.currId(seqName, id)).getOrElse(ids(seqName) = id)
   
   //resources methods
   def conn: java.sql.Connection = provider.map(_.env.conn).getOrElse(resources.conn)

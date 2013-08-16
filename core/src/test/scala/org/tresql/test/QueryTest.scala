@@ -228,12 +228,17 @@ class QueryTest extends Suite {
             "work:empno"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))))
     expectResult(List(1, List(List(List(1, List(List(1, 1))), List(1, List(List(1)))))))(ORT.insert("dept", obj))
     intercept[Exception](ORT.insert("no_table", obj))
-    
-    obj = Map("empno" -> null, "ename" -> "FAIL", "deptno" -> 30,
-          "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))
-    //fail to link emp->work since work contains two foreign keys to emp. 
-    intercept[Exception](ORT.insert("emp", obj))
-    
+        
+    //insert with set parent id and do not insert existing tables with no link to parent
+    //(work under dept) or multiple links to parents (work under emp)
+    obj = Map("deptno" -> 50, "dname" -> "LAW", "loc" -> "FLORIDA",
+        "emp" -> List(Map("empno" -> null, "ename" -> "BROWN", "deptno" -> null,
+            "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null))),
+          Map("empno" -> null, "ename" -> "CHRIS", "deptno" -> null,
+             "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))),
+        "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))
+    expectResult(List(1, List(List(1, 1))))(ORT.insert("dept", obj))
+        
     println("--- fill ---")
     //no row found
     obj = Map("empno"-> -1, "ename"->null, "deptno"->null, "deptno_name"->null,
@@ -308,18 +313,23 @@ class QueryTest extends Suite {
         "emp"->List(
             Map("empno"->null, "ename"->"ANNA", "mgr"->7788, "mgr_name"->null, "deptno"->40), 
             Map("empno"->null, "ename"->"MARY", "mgr"->7566, "mgr_name"->null, "deptno"->40)),
-        "calculated_children"->List(Map("x"->5)), "deptno"->40)
+        "calculated_children"->List(Map("x"->5)), "deptno"->40,
+        "work"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
+              Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)))
     expectResult(List(1, List(0, List(1, 1))))(ORT.update("dept", obj))
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
               Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
         "calculated_children"->List(Map("x"->5)), "deptno"->40)
-    expectResult(List(1, List(2, List(1, 1))))(ORT.update("emp", obj))    
+    expectResult(List(1, List(2, List(1, 1))))(ORT.update("emp", obj)) 
+    //no child record is updated since no relation is found with car and ambiguous relation is
+    //found with work
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
               Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
-        "calculated_children"->List(Map("x"->5)), "deptno"->40)
-    intercept[Exception](ORT.update("emp", obj))    
+        "calculated_children"->List(Map("x"->5)), "deptno"->40,
+        "car"-> List(Map("nr" -> "AAA", "name"-> "GAZ", "deptno" -> 15)))
+    expectResult(1)(ORT.update("emp", obj))    
     
     println("--- delete ---")
     expectResult(1)(ORT.delete("emp", 7934))
@@ -336,7 +346,7 @@ class QueryTest extends Suite {
         Map("empno" -> 7698, "ename" -> "BLAKE", "job" -> "SALESMAN", "mgr" -> 7839,
             "mgr_name" -> null, "deptno" -> 30)),         
       "calculated_children" -> List(Map("x" -> 5)), "deptno" -> 30)
-      expectResult(List(1, List(4, List(1, 1, 1), List(1))))(ORT.save("dept", obj))
+      expectResult(List(1, List(3, List(1, 1, 1), List(1))))(ORT.save("dept", obj))
 
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->7788, "hours"->10, "empno_mgr"->7839),
