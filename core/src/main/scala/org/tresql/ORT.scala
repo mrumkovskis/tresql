@@ -90,8 +90,11 @@ object ORT {
     resources.metaData.tableOption(resources.tableName(objName)).map(table => {
       val ptn = if (parent != null) resources.tableName(parent) else null
       val refColName = if (parent == null) null else if (refPropName == null)
-        if (table.refs(ptn).size != 1) null else table.refs(ptn)(0).cols(0)
-        else resources.colName(objName, refPropName)
+        table.refs(ptn) match {
+          case Nil => null
+          case List(ref) => ref.cols(0)
+          case x => error("Ambiguous references to table: " + ptn + ". Refs: " + x)
+      } else resources.colName(objName, refPropName)
       obj.map((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(objName, n)

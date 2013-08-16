@@ -230,15 +230,18 @@ class QueryTest extends Suite {
     intercept[Exception](ORT.insert("no_table", obj))
         
     //insert with set parent id and do not insert existing tables with no link to parent
-    //(work under dept) or multiple links to parents (work under emp)
+    //(work under dept)
     obj = Map("deptno" -> 50, "dname" -> "LAW", "loc" -> "FLORIDA",
-        "emp" -> List(Map("empno" -> null, "ename" -> "BROWN", "deptno" -> null,
-            "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null))),
-          Map("empno" -> null, "ename" -> "CHRIS", "deptno" -> null,
-             "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))),
+        "emp" -> List(Map("empno" -> null, "ename" -> "BROWN", "deptno" -> null),
+          Map("empno" -> null, "ename" -> "CHRIS", "deptno" -> null)),
         "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))
     expectResult(List(1, List(List(1, 1))))(ORT.insert("dept", obj))
-        
+
+    //Ambiguous references to table: emp. Refs: List(Ref(List(empno)), Ref(List(empno_mgr)))
+    obj = Map("emp" -> Map("empno" -> null, "ename" -> "BROWN", "deptno" -> null,
+            "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null))))
+    intercept[Exception](ORT.insert("emp", obj))
+    
     println("--- fill ---")
     //no row found
     obj = Map("empno"-> -1, "ename"->null, "deptno"->null, "deptno_name"->null,
