@@ -94,6 +94,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       "?"
     }
+    override def toString = "#" + seqName
   }
 
   case class IdRefExpr(val seqName: String) extends BaseExpr {
@@ -103,6 +104,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       "?"
     }
+    override def toString = ":#" + seqName
   }
 
   case class ResExpr(val nr: Int, val col: Any) extends PrimitiveExpr {
