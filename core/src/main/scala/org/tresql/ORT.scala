@@ -135,16 +135,16 @@ object ORT {
     resources.metaData.tableOption(resources.tableName(name)).flatMap(table => {
       var pkProp: Option[String] = None
       //stupid thing - map find methods conflicting from different traits 
-      def findPkProp(objName:String) = pkProp.orElse {
+      def findPkProp = pkProp.orElse {
         pkProp = obj.asInstanceOf[TraversableOnce[(String, _)]].find(
-          n => table.key == metadata.Key(List(resources.colName(objName, n._1)))).map(_._1)
+          n => table.key == metadata.Key(List(resources.colName(name, n._1)))).map(_._1)
         pkProp
       }
       def childUpdates(n:String, o:Map[String, _]) = {
-        val Array(objName, refPropName) = n.split(":").padTo(2, null)
-        resources.metaData.tableOption(resources.tableName(objName)).flatMap(childTable => 
-          findPkProp(objName).map (pk => {
-            Option(refPropName).map(resources.colName(objName, _)).orElse(
+        val Array(childObjName, refPropName) = n.split(":").padTo(2, null)
+        resources.metaData.tableOption(resources.tableName(childObjName)).flatMap(childTable => 
+          findPkProp.map (pk => {
+            Option(refPropName).map(resources.colName(childObjName, _)).orElse(
                 importedKeyOption(table.name, childTable)).map {
               "-" + childTable.name + "[" + _ + " = :" + pk + "]" + (if (o == null) "" else ", " +
                 insert_tresql(n, o, name, resources))
