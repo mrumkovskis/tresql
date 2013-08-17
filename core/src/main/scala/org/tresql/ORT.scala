@@ -119,8 +119,8 @@ object ORT {
         }
       }).filter(_._1 != null && (parent == null || refColName != null)) ++
       (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn))) ++
-      (if (hasPk) Map() else table.key.cols.headOption.map(x=> Map(
-          x -> ("#" + table.name))).getOrElse(Map()))).unzip match {
+      (if (hasPk || (parent != null && refColName == null)) Map() else
+        table.key.cols.headOption.map(x=> Map(x -> ("#" + table.name))).getOrElse(Map()))).unzip match {
         case (Nil, Nil) => null
         case (cols: List[_], vals: List[_]) => cols.mkString("+" + table.name +
           "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") +
