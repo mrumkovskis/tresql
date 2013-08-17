@@ -96,6 +96,7 @@ object ORT {
           case x => error("Ambiguous references to table: " + ptn + ". Refs: " + x)
       } else resources.colName(objName, refPropName)
       var hasRef: Boolean = parent == null
+      var hasPk: Boolean = false
       (obj.map((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(objName, n)
@@ -106,7 +107,9 @@ object ORT {
           case Array(v: Map[String, _], _*) => (insert_tresql(n, v, objName, resources), null)
           case v: Map[String, _] => (insert_tresql(n, v, objName, resources), null)
           //fill pk
-          case v if (table.key == metadata.Key(List(cn))) => cn -> ("#" + table.name)
+          case v if (table.key == metadata.Key(List(cn))) =>
+            hasPk = true
+            cn -> ("#" + table.name)
           //fill fk
           case v if ((refPropName != null && refPropName == n) ||
               (refPropName == null && refColName == cn)) =>
@@ -115,7 +118,9 @@ object ORT {
           case v => (table.cols.get(cn).map(_.name).orNull, ":" + n)
         }
       }).filter(_._1 != null && (parent == null || refColName != null)) ++
-      (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn)))).unzip match {
+      (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn))) ++
+      (if (hasPk) Map() else table.key.cols.headOption.map(x=> Map(
+          x -> ("#" + table.name))).getOrElse(Map()))).unzip match {
         case (Nil, Nil) => null
         case (cols: List[_], vals: List[_]) => cols.mkString("+" + table.name +
           "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") +

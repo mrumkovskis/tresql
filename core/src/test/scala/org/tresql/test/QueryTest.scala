@@ -237,6 +237,10 @@ class QueryTest extends Suite {
         "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))
     expectResult(List(1, List(List(1, 1))))(ORT.insert("dept", obj))
 
+    obj = Map("dname" -> "FOOTBALL", "loc" -> "MIAMI",
+        "emp" -> List(Map("ename" -> "BROWN"), Map("ename" -> "CHRIS")))
+    expectResult(List(1, List(List(1, 1))))(ORT.insert("dept", obj))
+    
     //Ambiguous references to table: emp. Refs: List(Ref(List(empno)), Ref(List(empno_mgr)))
     obj = Map("emp" -> Map("empno" -> null, "ename" -> "BROWN", "deptno" -> null,
             "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null))))
