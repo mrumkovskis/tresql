@@ -90,9 +90,14 @@ object ORT {
     resources.metaData.tableOption(resources.tableName(objName)).map(table => {
       val ptn = if (parent != null) resources.tableName(parent) else null
       val refColName = if (parent == null) null else if (refPropName == null)
-        if (table.refs(ptn).size != 1) null else table.refs(ptn)(0).cols(0)
-        else resources.colName(objName, refPropName)
-      obj.map((t: (String, _)) => {
+        table.refs(ptn) match {
+          case Nil => null
+          case List(ref) => ref.cols(0)
+          case x => error("Ambiguous references to table: " + ptn + ". Refs: " + x)
+      } else resources.colName(objName, refPropName)
+      var hasRef: Boolean = parent == null
+      var hasPk: Boolean = false
+      (obj.map((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(objName, n)
         t._2 match {
@@ -102,13 +107,21 @@ object ORT {
           case Array(v: Map[String, _], _*) => (insert_tresql(n, v, objName, resources), null)
           case v: Map[String, _] => (insert_tresql(n, v, objName, resources), null)
           //fill pk
-          case null if (table.key == metadata.Key(List(cn))) => cn -> ("#" + table.name)
+          case v if (table.key == metadata.Key(List(cn))) =>
+            hasPk = true
+            cn -> ("#" + table.name)
           //fill fk
-          case null if ((refPropName != null && refPropName == n) ||
-              (refPropName == null && refColName == cn)) => cn -> (":#" + ptn)
+          case v if ((refPropName != null && refPropName == n) ||
+              (refPropName == null && refColName == cn)) =>
+                hasRef = true
+                cn -> (":#" + ptn)
           case v => (table.cols.get(cn).map(_.name).orNull, ":" + n)
         }
-      }).filter(_._1 != null).unzip match {
+      }).filter(_._1 != null && (parent == null || refColName != null)) ++
+      (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn))) ++
+      (if (hasPk || (parent != null && refColName == null)) Map() else
+        table.key.cols.headOption.map(x=> Map(x -> ("#" + table.name))).getOrElse(Map()))).unzip match {
+        case (Nil, Nil) => null
         case (cols: List[_], vals: List[_]) => cols.mkString("+" + table.name +
           "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") +
           (if (parent != null) " '" + name + "'" else "")
@@ -130,15 +143,13 @@ object ORT {
       def childUpdates(n:String, o:Map[String, _]) = {
         val Array(objName, refPropName) = n.split(":").padTo(2, null)
         resources.metaData.tableOption(resources.tableName(objName)).flatMap(childTable => 
-          findPkProp(objName).flatMap (pk => {
-            Some(childDeletes(childTable, pk, (if(refPropName == null) null 
-                else resources.colName(objName, refPropName))) + (if (o == null) "" else ", " +
-                insert_tresql(n, o, objName, resources)))
+          findPkProp(objName).map (pk => {
+            Option(refPropName).map(resources.colName(objName, _)).orElse(
+                importedKeyOption(table.name, childTable)).map {
+              "-" + childTable.name + "[" + _ + " = :" + pk + "]" + (if (o == null) "" else ", " +
+                insert_tresql(n, o, name, resources))
+            } orNull
         })).orNull
-      }
-      def childDeletes(childTable: metadata.Table, pkCol: String, refCol: String) = {
-        "-" + childTable.name + "[" + (if (refCol != null) refCol
-            else importedKey(table.name, childTable)) + " = :" + pkCol + "]"
       }
       obj.map((t: (String, _)) => {
         val n = t._1
@@ -156,8 +167,10 @@ object ORT {
         }
       }).filter(_._1 != null).unzip match {
         case (cols: List[_], vals: List[_]) => pkProp.flatMap(pk =>
-          Some(cols.mkString("=" + table.name + "[" + ":" + pk + "]" + "{", ", ", "}") + 
-            vals.filter(_ != null).mkString(" [", ", ", "]")))
+          //primary key in update condition is taken from sequence so that currId is updated for
+          //child records
+          Some(cols.mkString("=" + table.name + "[" + table.key.cols(0) + " = #" + table.name + "]"
+              + "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]")))
       }
     }).orNull
   }
@@ -226,7 +239,7 @@ object ORT {
         action match {
           case "insert" => value match {
             //pk null, get it from sequence
-            case null if (table.key == metadata.Key(List(col))) => (col, "#" + table.name)
+            case x if (table.key == metadata.Key(List(col))) => (col, "#" + table.name)
             //fk null, if unambiguous link to parent found get it from parent sequence reference
             case null if ((refPropName != null && refPropName == n) || (refPropName == null &&
               parentTable != null && table.refs(parentTable.name) ==
@@ -334,6 +347,9 @@ object ORT {
     }).filter(_ != null).mkString(table.name +
         "[" + filterCol + " in(" + ids.map(_.mkString(", ")).getOrElse(filterVal) + ")]{", ", ", "}")
   }
+  
+  private def importedKeyOption(tableName: String, childTable: metadata.Table) =
+    Option(childTable.refs(tableName)).filter(_.size == 1).map(_(0).cols(0))
 
   private def importedKey(tableName: String, childTable: metadata.Table) = {
     val refs = childTable.refs(tableName)

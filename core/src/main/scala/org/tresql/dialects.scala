@@ -21,7 +21,7 @@ package object dialects {
       case e.builder.FunExpr("nextval", List(e.builder.ConstExpr(_))) => true
       case _ => false
     }
-    def apply(e: Expr) = e match {
+    def apply(e: Expr) = (e: @unchecked) match {
       case e.builder.FunExpr("lower", List(p)) => "lcase(" + p.sql + ")"
       case e.builder.FunExpr("translate", List(col, e.builder.ConstExpr(from: String),
         e.builder.ConstExpr(to: String))) if (from.length == to.length) => {
@@ -88,7 +88,7 @@ package dialects {
       case _ => false
     }
 
-    def apply(e: Expr) = e match {
+    def apply(e: Expr) = (e: @unchecked) match {
       case e.builder.FunExpr(mode @ ("cmp_i" | "cmp_i_start" | "cmp_i_end" | "cmp_i_any" | "cmp_i_exact"),
         List(col, value)) => {
         cleanup()

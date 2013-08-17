@@ -81,12 +81,20 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
 
   case class IdExpr(val seqName: String) extends BaseExpr {
-    override def apply() = env.nextId(seqName)
+    override def apply() = {
+      env.tableOption(seqName).map(_.key.cols).filter(_.size == 1).map(_(0))
+      .filter(env.contains(_)).flatMap(key => Option(env(key))).map { id =>
+        //if primary key is set as an environment variable use it instead of sequence
+        env.currId(seqName, id)
+        id
+      } getOrElse env.nextId(seqName)
+    }
     var binded = false
     def defaultSQL = {
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       "?"
     }
+    override def toString = "#" + seqName
   }
 
   case class IdRefExpr(val seqName: String) extends BaseExpr {
@@ -96,6 +104,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       "?"
     }
+    override def toString = ":#" + seqName
   }
 
   case class ResExpr(val nr: Int, val col: Any) extends PrimitiveExpr {
