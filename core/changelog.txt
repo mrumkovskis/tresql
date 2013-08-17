@@ -1,3 +1,6 @@
+--- 2013.08.17 tresql 3.12 ---
+ORT improvements. See git log.
+
 --- 2013.08.15 tresql 3.11.1 ---
 Implicit left outer join bugfix
 
