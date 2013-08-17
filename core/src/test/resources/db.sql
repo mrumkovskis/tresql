@@ -51,7 +51,7 @@ alter table emp add foreign key (mgr) references emp(empno)
 //
 alter table salgrade add primary key (grade)
 //
-alter table work add foreign key (empno) references emp(empno)
+alter table work add foreign key (empno) references emp(empno) on delete cascade
 //
 alter table work add foreign key (empno_mgr) references emp(empno)
 //

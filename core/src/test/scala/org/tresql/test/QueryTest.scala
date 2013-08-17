@@ -325,12 +325,19 @@ class QueryTest extends Suite {
     println("--- update ---")
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
         "emp"->List(
-            Map("empno"->null, "ename"->"ANNA", "mgr"->7788, "mgr_name"->null, "deptno"->40), 
-            Map("empno"->null, "ename"->"MARY", "mgr"->7566, "mgr_name"->null, "deptno"->40)),
+            Map("empno"->null, "ename"->"ANNA", "mgr"->7788, "mgr_name"->null,
+              "work:empno"->List(Map("wdate"->"2012-7-9", "hours"->8, "empno_mgr"->7839),
+                                 Map("wdate"->"2012-7-10", "hours"->10, "empno_mgr"->7839))), 
+            Map("empno"->null, "ename"->"MARY", "mgr"->7566, "mgr_name"->null,
+              "work:empno" -> List())),
         "calculated_children"->List(Map("x"->5)), "deptno"->40,
+        //this will not be inserted since work has no relation to dept
         "work"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
-              Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)))
-    expectResult(List(1, List(0, List(1, 1))))(ORT.update("dept", obj))
+            Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
+            "car" -> List(Map("nr" -> "EEE", "name" -> "BEATLE"), Map("nr" -> "III", "name" -> "FIAT")))
+    expectResult(List(1, List(0, List(List(1, List(List(1, 1))),
+                                      List(1, List(List()))),
+                              0, List(1, 1))))(ORT.update("dept", obj))
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
               Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
