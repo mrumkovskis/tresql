@@ -162,8 +162,10 @@ object ORT {
         }
       }).filter(_._1 != null).unzip match {
         case (cols: List[_], vals: List[_]) => pkProp.flatMap(pk =>
-          Some(cols.mkString("=" + table.name + "[" + "#" + pk + "]" + "{", ", ", "}") + 
-            vals.filter(_ != null).mkString(" [", ", ", "]")))
+          //primary key in update condition is taken from sequence so that currId is updated for
+          //child records
+          Some(cols.mkString("=" + table.name + "[" + table.key.cols(0) + " = #" + table.name + "]"
+              + "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]")))
       }
     }).orNull
   }
