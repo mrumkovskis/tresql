@@ -95,7 +95,8 @@ object ORT {
           case List(ref) => ref.cols(0)
           case x => error("Ambiguous references to table: " + ptn + ". Refs: " + x)
       } else resources.colName(objName, refPropName)
-      obj.map((t: (String, _)) => {
+      var hasRef: Boolean = parent == null
+      (obj.map((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(objName, n)
         t._2 match {
@@ -107,11 +108,14 @@ object ORT {
           //fill pk
           case v if (table.key == metadata.Key(List(cn))) => cn -> ("#" + table.name)
           //fill fk
-          case null if ((refPropName != null && refPropName == n) ||
-              (refPropName == null && refColName == cn)) => cn -> (":#" + ptn)
+          case v if ((refPropName != null && refPropName == n) ||
+              (refPropName == null && refColName == cn)) =>
+                hasRef = true
+                cn -> (":#" + ptn)
           case v => (table.cols.get(cn).map(_.name).orNull, ":" + n)
         }
-      }).filter(_._1 != null && (parent == null || refColName != null)).unzip match {
+      }).filter(_._1 != null && (parent == null || refColName != null)) ++
+      (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn)))).unzip match {
         case (Nil, Nil) => null
         case (cols: List[_], vals: List[_]) => cols.mkString("+" + table.name +
           "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") +
@@ -158,7 +162,7 @@ object ORT {
         }
       }).filter(_._1 != null).unzip match {
         case (cols: List[_], vals: List[_]) => pkProp.flatMap(pk =>
-          Some(cols.mkString("=" + table.name + "[" + ":" + pk + "]" + "{", ", ", "}") + 
+          Some(cols.mkString("=" + table.name + "[" + "#" + pk + "]" + "{", ", ", "}") + 
             vals.filter(_ != null).mkString(" [", ", ", "]")))
       }
     }).orNull

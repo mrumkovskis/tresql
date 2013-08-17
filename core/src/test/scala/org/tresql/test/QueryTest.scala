@@ -309,6 +309,10 @@ class QueryTest extends Suite {
     //Cannot link child table 'work'. Must be exactly one reference from child to parent table 'emp'.
     //Instead these refs found: List(Ref(List(empno)), Ref(List(empno_mgr)))
     intercept[Exception](ORT.fill("emp", obj, true))
+    
+    obj = Map("deptno" -> null, "dname" -> "DRUGS",
+              "car" -> List(Map("nr" -> "UUU", "name" -> "BEATLE")))
+    expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
 
       
     println("--- update ---")
