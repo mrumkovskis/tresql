@@ -81,7 +81,7 @@ object ORT {
     }
     val fill = fill_tresql(name, obj, fillNames, resources)
     Env log fill
-    Query.select(fill).toListRowAsMap.headOption.map(r=> merge(obj, r))
+    Query.select(fill).toListOfMaps.headOption.map(r=> merge(obj, r))
   }
 
   def insert_tresql(name: String, obj: Map[String, _], parent: String, resources: Resources): String = {    
