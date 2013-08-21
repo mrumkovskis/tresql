@@ -250,13 +250,17 @@ class QueryTest extends Suite {
     intercept[Exception](ORT.insert("emp", obj))
     
     //child foreign key is also its primary key
-    obj = Map("dname" -> "POLAR", "loc" -> "ALASKA", "dept_addr" -> List(Map("addr" -> "Halibut")))
+    obj = Map("deptno" -> 60, "dname" -> "POLAR", "loc" -> "ALASKA",
+              "dept_addr" -> List(Map("addr" -> "Halibut")))
     expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
     //child foreign key is also its primary key
     obj = Map("dname" -> "BEACH", "loc" -> "HAWAII",
               "dept_addr" -> List(Map("deptnr" -> 1, "addr" -> "Honolulu", "zip_code" -> "1010")))
     expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
             
+    obj = Map("deptno" -> null, "dname" -> "DRUGS",
+              "car" -> List(Map("nr" -> "UUU", "name" -> "BEATLE")))
+    expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
             
     println("--- fill ---")
     //no row found
@@ -325,11 +329,6 @@ class QueryTest extends Suite {
     //Cannot link child table 'work'. Must be exactly one reference from child to parent table 'emp'.
     //Instead these refs found: List(Ref(List(empno)), Ref(List(empno_mgr)))
     intercept[Exception](ORT.fill("emp", obj, true))
-    
-    obj = Map("deptno" -> null, "dname" -> "DRUGS",
-              "car" -> List(Map("nr" -> "UUU", "name" -> "BEATLE")))
-    expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
-
       
     println("--- update ---")
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
@@ -359,7 +358,12 @@ class QueryTest extends Suite {
               Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
         "calculated_children"->List(Map("x"->5)), "deptno"->40,
         "car"-> List(Map("nr" -> "AAA", "name"-> "GAZ", "deptno" -> 15)))
-    expectResult(1)(ORT.update("emp", obj))    
+    expectResult(1)(ORT.update("emp", obj))
+
+    //child foreign key is also its primary key
+    obj = Map("deptno" -> 60, "dname" -> "POLAR BEAR", "loc" -> "ALASKA",
+              "dept_addr" -> List(Map("addr" -> "Halibut", "zip_code" -> "1010")))
+    expectResult(List(1, List(1, List(1))))(ORT.update("dept", obj))
     
     println("--- delete ---")
     expectResult(1)(ORT.delete("emp", 7934))
