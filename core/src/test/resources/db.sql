@@ -24,6 +24,11 @@ CREATE TABLE DEPT
   DNAME VARCHAR(14),
   LOC VARCHAR(13))
 //
+CREATE TABLE DEPT_ADDR
+ (DEPTNR INTEGER NOT NULL,
+  ADDR VARCHAR(50) NOT NULL,
+  ZIP_CODE VARCHAR(10))
+//
 CREATE TABLE CAR
  (NR VARCHAR(10) NOT NULL,
   NAME VARCHAR(20) NOT NULL,
@@ -51,13 +56,17 @@ alter table emp add foreign key (mgr) references emp(empno)
 //
 alter table salgrade add primary key (grade)
 //
-alter table work add foreign key (empno) references emp(empno)
+alter table work add foreign key (empno) references emp(empno) on delete cascade
 //
 alter table work add foreign key (empno_mgr) references emp(empno)
 //
 alter table car add primary key (nr)
 //
 alter table car add foreign key (deptnr) references dept(deptno)
+//
+alter table dept_addr add primary key (deptnr)
+//
+alter table dept_addr add foreign key (deptnr) references dept(deptno)
 //
 CREATE FUNCTION inc_val_5 (x INTEGER)
   RETURNS INTEGER

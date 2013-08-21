@@ -249,6 +249,19 @@ class QueryTest extends Suite {
             "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null))))
     intercept[Exception](ORT.insert("emp", obj))
     
+    //child foreign key is also its primary key
+    obj = Map("deptno" -> 60, "dname" -> "POLAR", "loc" -> "ALASKA",
+              "dept_addr" -> List(Map("addr" -> "Halibut")))
+    expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
+    //child foreign key is also its primary key
+    obj = Map("dname" -> "BEACH", "loc" -> "HAWAII",
+              "dept_addr" -> List(Map("deptnr" -> 1, "addr" -> "Honolulu", "zip_code" -> "1010")))
+    expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
+            
+    obj = Map("deptno" -> null, "dname" -> "DRUGS",
+              "car" -> List(Map("nr" -> "UUU", "name" -> "BEATLE")))
+    expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
+            
     println("--- fill ---")
     //no row found
     obj = Map("empno"-> -1, "ename"->null, "deptno"->null, "deptno_name"->null,
@@ -316,21 +329,23 @@ class QueryTest extends Suite {
     //Cannot link child table 'work'. Must be exactly one reference from child to parent table 'emp'.
     //Instead these refs found: List(Ref(List(empno)), Ref(List(empno_mgr)))
     intercept[Exception](ORT.fill("emp", obj, true))
-    
-    obj = Map("deptno" -> null, "dname" -> "DRUGS",
-              "car" -> List(Map("nr" -> "UUU", "name" -> "BEATLE")))
-    expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
-
       
     println("--- update ---")
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
         "emp"->List(
-            Map("empno"->null, "ename"->"ANNA", "mgr"->7788, "mgr_name"->null, "deptno"->40), 
-            Map("empno"->null, "ename"->"MARY", "mgr"->7566, "mgr_name"->null, "deptno"->40)),
+            Map("empno"->null, "ename"->"ANNA", "mgr"->7788, "mgr_name"->null,
+              "work:empno"->List(Map("wdate"->"2012-7-9", "hours"->8, "empno_mgr"->7839),
+                                 Map("wdate"->"2012-7-10", "hours"->10, "empno_mgr"->7839))), 
+            Map("empno"->null, "ename"->"MARY", "mgr"->7566, "mgr_name"->null,
+              "work:empno" -> List())),
         "calculated_children"->List(Map("x"->5)), "deptno"->40,
+        //this will not be inserted since work has no relation to dept
         "work"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
-              Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)))
-    expectResult(List(1, List(0, List(1, 1))))(ORT.update("dept", obj))
+            Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
+            "car" -> List(Map("nr" -> "EEE", "name" -> "BEATLE"), Map("nr" -> "III", "name" -> "FIAT")))
+    expectResult(List(1, List(0, List(List(1, List(List(1, 1))),
+                                      List(1, List(List()))),
+                              0, List(1, 1))))(ORT.update("dept", obj))
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
               Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
@@ -343,7 +358,12 @@ class QueryTest extends Suite {
               Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
         "calculated_children"->List(Map("x"->5)), "deptno"->40,
         "car"-> List(Map("nr" -> "AAA", "name"-> "GAZ", "deptno" -> 15)))
-    expectResult(1)(ORT.update("emp", obj))    
+    expectResult(1)(ORT.update("emp", obj))
+
+    //child foreign key is also its primary key
+    obj = Map("deptno" -> 60, "dname" -> "POLAR BEAR", "loc" -> "ALASKA",
+              "dept_addr" -> List(Map("addr" -> "Halibut", "zip_code" -> "1010")))
+    expectResult(List(1, List(1, List(1))))(ORT.update("dept", obj))
     
     println("--- delete ---")
     expectResult(1)(ORT.delete("emp", 7934))

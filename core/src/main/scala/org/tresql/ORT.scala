@@ -81,7 +81,7 @@ object ORT {
     }
     val fill = fill_tresql(name, obj, fillNames, resources)
     Env log fill
-    Query.select(fill).toListRowAsMap.headOption.map(r=> merge(obj, r))
+    Query.select(fill).toListOfMaps.headOption.map(r=> merge(obj, r))
   }
 
   def insert_tresql(name: String, obj: Map[String, _], parent: String, resources: Resources): String = {    
@@ -106,8 +106,9 @@ object ORT {
           case Seq(v: Map[String, _], _*) => (insert_tresql(n, v, objName, resources), null)
           case Array(v: Map[String, _], _*) => (insert_tresql(n, v, objName, resources), null)
           case v: Map[String, _] => (insert_tresql(n, v, objName, resources), null)
-          //fill pk
-          case v if (table.key == metadata.Key(List(cn))) =>
+          //fill pk (only if it does not match fk prop to parent, in this case fk prop, see below,
+          //takes precedence)
+          case v if table.key.cols == List(cn) && table.key.cols != List(refColName) =>
             hasPk = true
             cn -> ("#" + table.name)
           //fill fk
@@ -119,8 +120,10 @@ object ORT {
         }
       }).filter(_._1 != null && (parent == null || refColName != null)) ++
       (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn))) ++
-      (if (hasPk || (parent != null && refColName == null)) Map() else
-        table.key.cols.headOption.map(x=> Map(x -> ("#" + table.name))).getOrElse(Map()))).unzip match {
+      (if (hasPk || (parent != null && (refColName == null ||
+          table.key.cols == List(refColName)))) Map()
+       else table.key.cols.headOption.map(x=> Map(x -> ("#" + table.name))).getOrElse(
+           Map()))).unzip match {
         case (Nil, Nil) => null
         case (cols: List[_], vals: List[_]) => cols.mkString("+" + table.name +
           "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") +
@@ -135,16 +138,16 @@ object ORT {
     resources.metaData.tableOption(resources.tableName(name)).flatMap(table => {
       var pkProp: Option[String] = None
       //stupid thing - map find methods conflicting from different traits 
-      def findPkProp(objName:String) = pkProp.orElse {
+      def findPkProp = pkProp.orElse {
         pkProp = obj.asInstanceOf[TraversableOnce[(String, _)]].find(
-          n => table.key == metadata.Key(List(resources.colName(objName, n._1)))).map(_._1)
+          n => table.key == metadata.Key(List(resources.colName(name, n._1)))).map(_._1)
         pkProp
       }
       def childUpdates(n:String, o:Map[String, _]) = {
-        val Array(objName, refPropName) = n.split(":").padTo(2, null)
-        resources.metaData.tableOption(resources.tableName(objName)).flatMap(childTable => 
-          findPkProp(objName).map (pk => {
-            Option(refPropName).map(resources.colName(objName, _)).orElse(
+        val Array(childObjName, refPropName) = n.split(":").padTo(2, null)
+        resources.metaData.tableOption(resources.tableName(childObjName)).flatMap(childTable => 
+          findPkProp.map (pk => {
+            Option(refPropName).map(resources.colName(childObjName, _)).orElse(
                 importedKeyOption(table.name, childTable)).map {
               "-" + childTable.name + "[" + _ + " = :" + pk + "]" + (if (o == null) "" else ", " +
                 insert_tresql(n, o, name, resources))

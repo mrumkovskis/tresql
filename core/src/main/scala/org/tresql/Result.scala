@@ -174,10 +174,10 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
 
   override def toList = this.map(r => Row(this.content)).toList
   
-  def toListRowAsMap: List[Map[String, _]] = this.map(r => rowAsMap).toList
+  def toListOfMaps: List[Map[String, _]] = this.map(r => rowAsMap).toList
 
   def rowAsMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
-    case r: Result => r.toListRowAsMap
+    case r: Result => r.toListOfMaps
     case x => x
   })).toMap
 
