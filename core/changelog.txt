@@ -1,3 +1,6 @@
+--- 2013.08.21 tresql 3.12.1
+ORT support for children insert where child primary key field is also foreign key field to parent
+
 --- 2013.08.17 tresql 3.12 ---
 ORT improvements. See git log.
 
