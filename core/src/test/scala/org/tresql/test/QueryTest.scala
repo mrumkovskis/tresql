@@ -249,6 +249,15 @@ class QueryTest extends Suite {
             "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null))))
     intercept[Exception](ORT.insert("emp", obj))
     
+    //child foreign key is also its primary key
+    obj = Map("dname" -> "POLAR", "loc" -> "ALASKA", "dept_addr" -> List(Map("addr" -> "Halibut")))
+    expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
+    //child foreign key is also its primary key
+    obj = Map("dname" -> "BEACH", "loc" -> "HAWAII",
+              "dept_addr" -> List(Map("deptnr" -> 1, "addr" -> "Honolulu", "zip_code" -> "1010")))
+    expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
+            
+            
     println("--- fill ---")
     //no row found
     obj = Map("empno"-> -1, "ename"->null, "deptno"->null, "deptno_name"->null,
