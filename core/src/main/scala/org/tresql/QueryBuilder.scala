@@ -283,7 +283,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       (if (order == null) "" else " order by " + (order map (_.sql)).mkString(", ")) +
       (if (offset == null) "" else " offset " + offset.sql) +
       (if (limit == null) "" else " limit " + limit.sql)
-    def sqlCols = cols.filter(!_.separateQuery).map(_.sql).mkString(",")
+    def sqlCols = cols.filter(!_.separateQuery).map(_.sql).mkString(", ")
     def join(tables: List[Table]): String = {
       //used to find table if alias join is used
       def find(t: Table) = t match {
@@ -387,9 +387,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   class InsertExpr(table: IdentExpr, val cols: List[Expr], val vals: List[Expr])
     extends DeleteExpr(table, null) {
     override protected def _sql = "insert into " + table.sql +
-      "(" + cols.map(_.sql).mkString(",") + ")" + (vals match {
+      "(" + cols.map(_.sql).mkString(", ") + ")" + (vals match {
         case v :: Nil => " values " + v.sql
-        case _ => " values (" + vals.map(_.sql).mkString(",") + ")"
+        case _ => " values (" + vals.map(_.sql).mkString(", ") + ")"
       })
   }
   class UpdateExpr(table: IdentExpr, filter: List[Expr], val cols: List[Expr],
@@ -397,7 +397,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     if (cols.length != vals.length) error("update statement columns and values count differ: " +
       cols.length + "," + vals.length)
     override protected def _sql = "update " + table.sql + " set " +
-      (cols zip vals map { v => v._1.sql + " = " + v._2.sql }).mkString(",") +
+      (cols zip vals map { v => v._1.sql + " = " + v._2.sql }).mkString(", ") +
       (if (filter == null) "" else " where " + where)
   }
   class DeleteExpr(val table: IdentExpr, val filter: List[Expr]) extends BaseExpr {
