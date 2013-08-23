@@ -275,3 +275,8 @@ emp[cmp_i_start(ename, ?)]{ename} --> 'MĀR --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
 emp[cmp_i_start(ename, ?)]{ename} --> 'mār --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
 emp[cmp_i_exact(ename, ?)]{ename} --> 'martins zvukskis --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
 emp[cmp_i(ename, ?)]{ename} --> null --> []
+
+//external function test
+emp{ename, job, |concat(:1(1), ' ', :1(2))}#(1,2) --> [["ADAMS", "CLERK", "ADAMS CLERK"], ["ALLEN", "SALESMAN", "ALLEN SALESMAN"], ["BLAKE", "MANAGER", "BLAKE MANAGER"], ["CLARK", "MANAGER", "CLARK MANAGER"], ["FORD", "ANALYST", "FORD ANALYST"], ["JAMES", "CLERK", "JAMES CLERK"], ["JONES", "MANAGER", "JONES MANAGER"], ["KING", "PRESIDENT", "KING PRESIDENT"], ["MARTIN", "SALESMAN", "MARTIN SALESMAN"], ["MILLER", "CLERK", "MILLER CLERK"], ["MĀRTIŅŠ ŽVŪKŠĶIS", "CLERK", "MĀRTIŅŠ ŽVŪKŠĶIS CLERK"], ["SCOTT", "ANALYST", "SCOTT ANALYST"], ["SMITH", "CLERK", "SMITH CLERK"], ["TURNER", "SALESMAN", "TURNER SALESMAN"], ["WARD", "SALESMAN", "WARD SALESMAN"]]
+emp[deptno = 10]{ename, |echo(:1(1))}#(1) --> [["CLARK", "CLARK"], ["KING", "KING"], ["MILLER", "MILLER"]]
+salgrade {losal, hisal, |plus(:1(1), :1(2))}#(1,2) --> [[1200, 700, 1900], [1400, 1201, 2601], [2000, 1401, 3401], [3000, 2001, 5001], [11000, 10000, 21000]]

@@ -3,7 +3,7 @@ package org.tresql
 import java.text.SimpleDateFormat
 import java.sql.Statement
 
-object Functions {
+class Functions {
 
   def date(s: String, f: String) = new java.sql.Date(new SimpleDateFormat(f).parse(s).getTime)
   def d(s: String, f: String = "yyyy-MM-dd") = date(s, f)

@@ -16,6 +16,11 @@ class QueryTest extends Suite {
   Env.dialect = dialects.InsensitiveCmp("ĒŪĪĀŠĢĶĻŽČŅēūīāšģķļžčņ", "EUIASGKLZCNeuiasgklzcn") orElse
     dialects.HSQLDialect
   Env.idExpr = s => "nextval('seq')"
+  class TestFunctions extends Functions {
+    def echo(x: String) = x
+    def plus(a: java.lang.Long, b: java.lang.Long) = a + b
+  }
+  Env.functions = new TestFunctions
   Env update ((msg, level) => println (msg))
   Env update (/*object to table name map*/Map(
       "emp_dept_view"->"emp"),
