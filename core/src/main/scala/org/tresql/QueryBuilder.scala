@@ -384,23 +384,23 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       (if (having != null) " having " + having.sql else "")
   }
 
-  class InsertExpr(table: IdentExpr, val cols: List[Expr], val vals: List[Expr])
-    extends DeleteExpr(table, null) {
-    override protected def _sql = "insert into " + table.sql +
-      "(" + cols.map(_.sql).mkString(", ") + ")" + (vals match {
+  class InsertExpr(table: IdentExpr, alias: String, val cols: List[Expr], val vals: List[Expr])
+    extends DeleteExpr(table, alias, null) {
+    override protected def _sql = "insert into " + table.sql + (if (alias == null) "" else " " + alias) +
+      " (" + cols.map(_.sql).mkString(", ") + ")" + (vals match {
         case v :: Nil => " values " + v.sql
         case _ => " values (" + vals.map(_.sql).mkString(", ") + ")"
       })
   }
-  class UpdateExpr(table: IdentExpr, filter: List[Expr], val cols: List[Expr],
-    val vals: List[Expr]) extends DeleteExpr(table, filter) {
+  class UpdateExpr(table: IdentExpr, alias: String, filter: List[Expr], val cols: List[Expr],
+    val vals: List[Expr]) extends DeleteExpr(table, alias, filter) {
     if (cols.length != vals.length) error("update statement columns and values count differ: " +
       cols.length + "," + vals.length)
-    override protected def _sql = "update " + table.sql + " set " +
-      (cols zip vals map { v => v._1.sql + " = " + v._2.sql }).mkString(", ") +
+    override protected def _sql = "update " + table.sql + (if (alias == null) "" else " " + alias) +
+      " set " + (cols zip vals map { v => v._1.sql + " = " + v._2.sql }).mkString(", ") +
       (if (filter == null) "" else " where " + where)
   }
-  class DeleteExpr(val table: IdentExpr, val filter: List[Expr]) extends BaseExpr {
+  class DeleteExpr(val table: IdentExpr, val alias: String, val filter: List[Expr]) extends BaseExpr {
     override def apply() = {
       val r = org.tresql.Query.update(sql, QueryBuilder.this.bindVariables, env)
       executeChildren match {
@@ -408,16 +408,16 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case x => List(r, x)
       }
     }
-    protected def _sql = "delete from " + table.sql +
+    protected def _sql = "delete from " + table.sql + (if (alias == null) "" else " " + alias) +
       (if (filter == null || filter.size == 0) "" else " where " + where)
     lazy val defaultSQL = _sql
     def where = filter match {
-      case (c @ ConstExpr(x)) :: Nil => table.sql + "." +
+      case (c @ ConstExpr(x)) :: Nil => Option(alias).getOrElse(table.sql) + "." +
         env.table(table.sql).key.cols(0) + " = " + c.sql
-      case (v @ VarExpr(x, _)) :: Nil => table.sql + "." +
+      case (v @ VarExpr(x, _)) :: Nil => Option(alias).getOrElse(table.sql) + "." +
         env.table(table.sql).key.cols(0) + " = " + v.sql
       case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
-      case l => table.sql + "." + env.table(table.sql).key.cols(0) + " in(" +
+      case l => Option(alias).getOrElse(table.sql) + "." + env.table(table.sql).key.cols(0) + " in(" +
         (l map { _.sql }).mkString(",") + ")"
     }
   }
@@ -457,14 +457,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
 
   //DML statements are defined outsided buildInternal method since they are called from other QueryBuilder
-  private def buildInsert(table: Ident, cols: List[Col], vals: List[Arr]) = {
-    new InsertExpr(IdentExpr(table.ident), cols map (buildInternal(_, COL_CTX)) filter {
+  private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: List[Arr]) = {
+    new InsertExpr(IdentExpr(table.ident), alias, cols map (buildInternal(_, COL_CTX)) filter {
       case x @ ColExpr(IdentExpr(_), _, _) => true
       case e: ColExpr => this.childUpdates += { (e.col, e.name) }; false
     }, vals map { buildInternal(_, VALUES_CTX) })
   }
-  private def buildUpdate(table: Ident, filter: Arr, cols: List[Col], vals: Arr) = {
-    new UpdateExpr(IdentExpr(table.ident), if (filter != null)
+  private def buildUpdate(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Arr) = {
+    new UpdateExpr(IdentExpr(table.ident), alias, if (filter != null)
       filter.elements map { buildInternal(_, WHERE_CTX) } else null,
       cols map (buildInternal(_, COL_CTX)) filter {
         case ColExpr(IdentExpr(_), _, _) => true
@@ -472,8 +472,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       },
       vals.elements map { buildInternal(_, VALUES_CTX) })
   }
-  private def buildDelete(table: Ident, filter: Arr) = {
-    new DeleteExpr(IdentExpr(table.ident),
+  private def buildDelete(table: Ident, alias: String, filter: Arr) = {
+    new DeleteExpr(IdentExpr(table.ident), alias,
       if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null)
   }
 
@@ -554,19 +554,19 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case BinOp("=", Variable(n, o), v) if (parseCtx == ROOT_CTX) =>
           AssignExpr(n, buildInternal(v, parseCtx))
         //insert
-        case Insert(t, c, v) =>
+        case Insert(t, a, c, v) =>
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-          val ex = b.buildInsert(t, c, v)
+          val ex = b.buildInsert(t, a, c, v)
           this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
         //update
-        case Update(t, f, c, v) =>
+        case Update(t, a, f, c, v) =>
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-          val ex = b.buildUpdate(t, f, c, v)
+          val ex = b.buildUpdate(t, a, f, c, v)
           this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
         //delete
-        case Delete(t, f) =>
+        case Delete(t, a, f) =>
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-          val ex = b.buildDelete(t, f)
+          val ex = b.buildDelete(t, a, f)
           this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
         //child query
         case UnOp("|", oper) =>

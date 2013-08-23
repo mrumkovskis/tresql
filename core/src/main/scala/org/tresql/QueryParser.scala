@@ -81,16 +81,17 @@ object QueryParser extends JavaTokenParsers {
         any2tresql(limit) + ")"
       else "")
   }
-  case class Insert(table: Ident, cols: List[Col], vals: List[Arr]) extends Exp {
-    def tresql = "+" + table.tresql + cols.map(_.tresql).mkString("{", ",", "}") +
-      vals.map(_.tresql).mkString(",")
+  case class Insert(table: Ident, alias: String, cols: List[Col], vals: List[Arr]) extends Exp {
+    def tresql = "+" + table.tresql + Option(alias).getOrElse("") +
+      cols.map(_.tresql).mkString("{", ",", "}") + vals.map(_.tresql).mkString(",")
   }
-  case class Update(table: Ident, filter: Arr, cols: List[Col], vals: Arr) extends Exp {
-    def tresql = "=" + table.tresql + (if (filter != null) filter.tresql else "") +
+  case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Arr) extends Exp {
+    def tresql = "=" + table.tresql + Option(alias).getOrElse("") +
+      (if (filter != null) filter.tresql else "") +
       cols.map(_.tresql).mkString("{", ",", "}") + vals.tresql
   }
-  case class Delete(table: Ident, filter: Arr) extends Exp {
-    def tresql = "-" + table.tresql + filter.tresql
+  case class Delete(table: Ident, alias: String, filter: Arr) extends Exp {
+    def tresql = "-" + table.tresql + Option(alias).getOrElse("") + filter.tresql
   }
   case class Arr(elements: List[Any]) extends Exp {
     def tresql = elements.map(any2tresql(_)).mkString("[", ",", "]")
@@ -272,16 +273,19 @@ object QueryParser extends JavaTokenParsers {
       case t ~ f ~ c ~ g ~ o ~ l => Query(t, f.orNull, c.map(_.cols) orNull,
         c.map(_.distinct) getOrElse false, g.orNull, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
     }
-  def insert: Parser[Insert] = (("+" ~> qualifiedIdent ~ columns ~ rep1sep(array, ",")) |
-    ((qualifiedIdent ~ columns <~ "+") ~ rep1sep(array, ","))) ^^ {
-      case t ~ Cols(_, c) ~ v => Insert(t, c, v)
+  def insert: Parser[Insert] = (("+" ~> qualifiedIdent ~ opt(excludeKeywordsIdent) ~ columns ~ 
+      rep1sep(array, ",")) |
+    ((qualifiedIdent ~ opt(excludeKeywordsIdent) ~ columns <~ "+") ~ rep1sep(array, ","))) ^^ {
+      case t ~ a ~ Cols(_, c) ~ v => Insert(t, a.orNull, c, v)
     }
-  def update: Parser[Update] = (("=" ~> qualifiedIdent ~ opt(filter) ~ columns ~ array) |
-    ((qualifiedIdent ~ opt(filter) ~ columns <~ "=") ~ array)) ^^ {
-      case t ~ f ~ Cols(_, c) ~ v => Update(t, f orNull, c, v)
+  def update: Parser[Update] = (("=" ~> qualifiedIdent ~ opt(excludeKeywordsIdent) ~ 
+      opt(filter) ~ columns ~ array) |
+    ((qualifiedIdent ~ opt(excludeKeywordsIdent) ~ opt(filter) ~ columns <~ "=") ~ array)) ^^ {
+      case t ~ a ~ f ~ Cols(_, c) ~ v => Update(t, a orNull, f orNull, c, v)
     }
-  def delete: Parser[Delete] = (("-" ~> qualifiedIdent ~ filter) | ((qualifiedIdent <~ "-") ~ filter)) ^^ {
-    case t ~ f => Delete(t, f)
+  def delete: Parser[Delete] = (("-" ~> qualifiedIdent ~ opt(excludeKeywordsIdent) ~ filter) |
+      (((qualifiedIdent ~ opt(excludeKeywordsIdent)) <~ "-") ~ filter)) ^^ {
+    case t ~ a ~ f => Delete(t, a orNull, f)
   }
   //operation parsers
   //delete must be before negation since it can start with - sign!
@@ -372,16 +376,16 @@ object QueryParser extends JavaTokenParsers {
           bindVars(gr)
           if (ord != null) ord foreach bindVars
         }
-        case Insert(_, cols, vals) => {
+        case Insert(_, _, cols, vals) => {
           cols foreach bindVars
           vals foreach bindVars
         }
-        case Update(_, filter, cols, vals) => {
+        case Update(_, _, filter, cols, vals) => {
           if (filter != null) bindVars(filter)
           cols foreach bindVars
           bindVars(vals)
         }
-        case Delete(_, filter) => bindVars(filter)
+        case Delete(_, _, filter) => bindVars(filter)
         case Arr(els) => els foreach bindVars
         case Braces(expr) => bindVars(expr)
         //for the security
