@@ -233,7 +233,8 @@ dept{deptno}#(deptno)@(:o? :l?) --> l=1 --> [[10]]
 /(dept{deptno} ++ dept{deptno})#{deptno}#(1) --> [[10], [20], [30], [40]]
 
 //braces test
-dept[deptno = ((? + ?) * ((? - ?) / ?))] {deptno} --> 2; 3; 6; 2; 2 --> [[10]]
+dept[deptno = ((? + ?) * ((? - ?) / (?)))] {deptno} --> 2; 3; 6; 2; 2 --> [[10]]
+#((1 + 2) * (((3 - 4)) / (5))) --> x
 
 //----UPDATE----
 emp[hiredate >= ? & hiredate <= ?]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;1000.35 --> 2
