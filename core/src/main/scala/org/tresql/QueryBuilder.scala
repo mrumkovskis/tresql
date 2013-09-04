@@ -17,6 +17,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   val HAVING_CTX = "HAVING"
   val VALUES_CTX = "VALUES"
   val LIMIT_CTX = "LIMIT"
+  val FUN_CTX = "FUNCTION"
 
   private def this(env: Env) = this(env, 0, 0)
 
@@ -244,6 +245,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       val ts = p map (_.getClass)
       if (Env.isDefined(name)) {
         try {
+          Env log ts.mkString("Trying to call locally defined function: " + name + "(", ", ", ")")
           env.functions.map(f => f.getClass.getMethod(name, ts: _*).invoke(
               f, p.asInstanceOf[List[Object]]: _*)).get
         } catch {
@@ -536,12 +538,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       if (t.join != null) TableJoin(t.join.default, buildInternal(t.join.expr, JOIN_CTX),
         t.join.noJoin, null)
       else null, t.outerJoin, t.nullable)
-    def buildColumnIdent(c: Obj) = c match {
+    def buildColumnIdentOrBracesExpr(c: Obj) = c match {
       case Obj(Ident(i), _, _, _, _) => IdentExpr(i)
+      case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
       case o => error("unsupported column definition at this place: " + o)
     }
-    def buildIdent(i: Obj) = i match {
+    def buildIdentOrBracesExpr(i: Obj) = i match {
       case Obj(Ident(i), null, _, _, _) => IdentExpr(i)
+      case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
       case o => error("unsupported column definition at this place: " + o)
     }
     ctxStack ::= parseCtx
@@ -575,15 +579,25 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           val ex = b.buildInternal(oper, QUERY_CTX)
           this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
         case t: Obj => parseCtx match {
-          case ROOT_CTX =>
-            val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-            val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
-          case QUERY_CTX | TABLE_CTX =>
+          case ROOT_CTX => t match {
+              case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
+              case _ =>
+                val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+                val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
+            }
+          case QUERY_CTX => t match {
+            case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
+            case _ =>
+              val tablesAndAliases = buildTables(List(t))
+              SelectExpr(tablesAndAliases._1, null,
+                List(ColExpr(AllExpr(), null, null)), false, null, null, null, null, tablesAndAliases._2)
+          }
+          case TABLE_CTX =>
             val tablesAndAliases = buildTables(List(t))
             SelectExpr(tablesAndAliases._1, null,
             List(ColExpr(AllExpr(), null, null)), false, null, null, null, null, tablesAndAliases._2)
-          case COL_CTX => buildColumnIdent(t)
-          case _ => buildIdent(t)
+          case COL_CTX => buildColumnIdentOrBracesExpr(t)
+          case _ => buildIdentOrBracesExpr(t)
         }
         case q: Query => parseCtx match {
           case ROOT_CTX =>
@@ -612,7 +626,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
             if (r.size == 0) null else InExpr(l, r, not)
           }
         case Fun(n, pl: List[_]) =>
-          val pars = pl map { buildInternal(_, parseCtx) }
+          val pars = pl map { buildInternal(_, FUN_CTX) }
           if (pars.exists(_ == null)) null else FunExpr(n, pars)
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => { identAll = true; IdentAllExpr(i.ident) }

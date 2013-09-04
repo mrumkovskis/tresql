@@ -116,7 +116,8 @@ dept [deptno in (emp[ename ~~ ?]{deptno}) | deptno = 40]#(deptno) --> 'KIN% --> 
 dept d[(emp e[e.deptno = d.deptno])]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
 
 //from clause select
-dept[deptno in (/(dept[:id]){deptno})]{deptno}#(1) --> id=10 --> [[10]]
+dept[deptno in ((dept[:id]){deptno})]{deptno}#(1) --> id=10 --> [[10]]
+(dummy)[](dummy {dummy} ++ dummy {dummy})[](dummy) --> [[0, 0, 0], [0, 0, 0]]
 
 //array binding
 emp [empno in ?]{empno, ename, job}#(empno) --> [] --> []
@@ -216,6 +217,9 @@ dept d[d.deptno in (emp e[e.deptno in (dept d1[:id?]{d1.deptno})]{e.deptno}) & d
 dept[deptno in (/(dept[:id?]{deptno}){deptno})]{deptno}#(1) --> [[10], [20], [30], [40]]
 dept[deptno in (/(salgrade[:id?]{grade} + dept[:id?]{deptno}){*})]{deptno}#(1) --> [[10], [20], [30], [40]]
 dept[deptno in (/(salgrade[:id?]{grade} + dept[10]{deptno}){*})]{deptno}#(1) --> [[10]]
+dept[deptno in ((dept[:id?]{deptno}){deptno})]{deptno}#(1) --> [[10], [20], [30], [40]]
+dept[deptno in ((salgrade[:id?]{grade} + dept[:id?]{deptno}){*})]{deptno}#(1) --> [[10], [20], [30], [40]]
+dept[deptno in ((salgrade[:id?]{grade} + dept[10]{deptno}){*})]{deptno}#(1) --> [[10]]
 dept[deptno in (emp/dept[dname ~~ :n?]{deptno})]{deptno}#(1) --> [[10], [20], [30], [40]]
 dept[deptno in (emp/dept[dname ~~ :n?]{deptno})]{deptno}#(1) --> n='acc% --> [[10]]
 dept[10 & dname ~upper(:n?)] {dname} --> [["ACCOUNTING"]]
@@ -228,6 +232,8 @@ dept{deptno}#(deptno)@(:o? :l?) --> l=1 --> [[10]]
 //distinct
 /(dept{deptno} ++ dept{deptno})#{deptno}#(1) --> [[10], [20], [30], [40]]
 
+//braces test
+dept[deptno = ((? + ?) * ((? - ?) / ?))] {deptno} --> 2; 3; 6; 2; 2 --> [[10]]
 
 //----UPDATE----
 emp[hiredate >= ? & hiredate <= ?]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;1000.35 --> 2

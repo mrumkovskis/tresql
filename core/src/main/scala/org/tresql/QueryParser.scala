@@ -160,7 +160,7 @@ object QueryParser extends JavaTokenParsers {
      * Also important is that variable parser is after query parser since ? mark matches variable
      * Also important that insert, delete, update parsers are before query parser */
   def operand: Parser[Any] = (TRUE | FALSE | NULL | ALL | decimalNr |
-    stringLiteral | function | insert | update | bracesExp | query | variable | id |
+    stringLiteral | function | insert | update | query | variable | id |
     idref | result | array)
   def negation: Parser[UnOp] = "-" ~> operand ^^ (UnOp("-", _))
   def not: Parser[UnOp] = "!" ~> operand ^^ (UnOp("!", _))
