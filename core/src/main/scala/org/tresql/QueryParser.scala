@@ -265,12 +265,29 @@ object QueryParser extends JavaTokenParsers {
             case None => error("Knipis")
           })
     }
-  def query: Parser[Any] = objs ~ opt(filter) ~ opt(columns) ~ opt(group) ~ opt(order) ~
+  def query: Parser[Any] = new Parser[Any] {
+    def parser = objs ~ opt(QueryParser.filter) ~ opt(columns) ~ opt(group) ~ opt(order) ~
     opt(offsetLimit) ^^ {
       case (t :: Nil) ~ None ~ None ~ None ~ None ~ None => t
       case t ~ f ~ c ~ g ~ o ~ l => Query(t, f.orNull, c.map(_.cols) orNull,
         c.map(_.distinct) getOrElse false, g.orNull, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
     }
+    def toDivChain(objs: List[Obj]): Any = objs match {
+      case o :: Nil => o.obj
+      case l => BinOp("/", l.head.obj, toDivChain(l.tail))
+    }
+    def apply(in: Input) = parser(in) match {
+      //check for division chain
+      case r @ Success(Query(objs, null, null, false, null, null, null, null), i) =>
+        if (objs.exists {
+          case Obj(_, null, DefaultJoin, null, _) => false
+          case Obj(_, null, null, null, _) => false
+          case _ => true
+        }) r else Success(toDivChain(objs), i) //division chain found
+      case r => r
+    }
+    
+  }
   def insert: Parser[Insert] = (("+" ~> qualifiedIdent ~ opt(excludeKeywordsIdent) ~ columns ~ 
       rep1sep(array, ",")) |
     ((qualifiedIdent ~ opt(excludeKeywordsIdent) ~ columns <~ "+") ~ rep1sep(array, ","))) ^^ {

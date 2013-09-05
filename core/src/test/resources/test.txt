@@ -157,7 +157,7 @@ dept[?]{loc, deptno, |emp[deptno = :1(2)] {job}, dname} --> 10 --> [["NEW YORK",
 
 //union
 dept[?]{deptno} ++ emp[?]{empno} ++ salgrade[?]{grade} --> 10;7839;1 --> [[10], [7839], [1]]
-/(dept{deptno} + salgrade{grade}) ~#(1) --> [[40], [30], [20], [10], [5], [4], [3], [2], [1]]
+(dept{deptno} + salgrade{grade}) ~#(1) --> [[40], [30], [20], [10], [5], [4], [3], [2], [1]]
 
 //intersect
 dept{deptno} && emp{empno} --> []
@@ -230,11 +230,15 @@ dept{deptno}#(deptno)@(:o? :l?) --> o=3 --> [[40]]
 dept{deptno}#(deptno)@(:o? :l?) --> l=1 --> [[10]]
 
 //distinct
-/(dept{deptno} ++ dept{deptno})#{deptno}#(1) --> [[10], [20], [30], [40]]
+(dept{deptno} ++ dept{deptno})#{deptno}#(1) --> [[10], [20], [30], [40]]
 
 //braces test
 dept[deptno = ((? + ?) * ((? - ?) / (?)))] {deptno} --> 2; 3; 6; 2; 2 --> [[10]]
-#((1 + 2) * (((3 - 4)) / (5))) --> x
+((1 + 2) * (((3 - 4)) / (5))) --> -0.6
+
+//division test (because of language peculiarities since / sign is used also as default join)
+emp[](emp{avg(sal) avgsal}) {ename, sal, avgsal, sal/avgsal}#(4, 1) --> [["SMITH", 800.00, 2073.21, 0.38], ["JAMES", 950.00, 2073.21, 0.45], ["ADAMS", 1100.00, 2073.21, 0.53], ["MARTIN", 1250.00, 2073.21, 0.60], ["WARD", 1250.00, 2073.21, 0.60], ["MILLER", 1300.00, 2073.21, 0.62], ["TURNER", 1500.00, 2073.21, 0.72], ["ALLEN", 1600.00, 2073.21, 0.77], ["CLARK", 2450.00, 2073.21, 1.18], ["BLAKE", 2850.00, 2073.21, 1.37], ["JONES", 2975.00, 2073.21, 1.43], ["FORD", 3000.00, 2073.21, 1.44], ["SCOTT", 3000.00, 2073.21, 1.44], ["KING", 5000.00, 2073.21, 2.41]]
+emp[](emp{avg(sal) avgsal}) [sal/avgsal <= 1] {count(*)} --> [[8]]
 
 //----UPDATE----
 emp[hiredate >= ? & hiredate <= ?]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;1000.35 --> 2
