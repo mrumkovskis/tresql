@@ -49,7 +49,7 @@ object QueryParser extends JavaTokenParsers {
   }
   val NoJoin = Join(false, null, true)
   val DefaultJoin = Join(true, null, false)
-  
+
   case class Obj(obj: Any, alias: String, join: Join, outerJoin: String, nullable: Boolean) extends Exp {
     def tresql = (if (join != null) join.tresql else "") + (if (outerJoin == "r") "?" else "") +
       any2tresql(obj) + (if (outerJoin == "l") "?" else "") + (if (alias != null) " " + alias else "")
@@ -187,7 +187,7 @@ object QueryParser extends JavaTokenParsers {
       case a ~ b ~ c ~ d ~ e ~ f => Obj(c, e.orNull, a.orNull,
         b.map(x => "r") orElse d.orElse(f).map(x => "l") orNull,
         //set nullable flag if left outer join
-        d orElse f map (x=> true) getOrElse(false))
+        d orElse f map (x => true) getOrElse (false))
     }
   def objs: Parser[List[Obj]] = rep1(obj) ^^ { l =>
     var prev: Obj = null
@@ -204,7 +204,8 @@ object QueryParser extends JavaTokenParsers {
             (if (prevObj == null) List() else l.tail.flatMap {
               //flattenize array of foreign key shortcut joins
               case o2 @ Obj(_, a2, _, oj2, n2) => List((if (prevAlias != null) Obj(Ident(List(prevAlias)),
-                null, NoJoin, null, false) else Obj(prevObj.obj, null, NoJoin, null, false)),
+                null, NoJoin, null, false)
+              else Obj(prevObj.obj, null, NoJoin, null, false)),
                 o.copy(alias = (if (a2 != null) a2 else o.alias), join =
                   j.copy(expr = o2.copy(alias = null, outerJoin = null, nullable = false)),
                   outerJoin = (if (oj == null) oj2 else oj), nullable = n || n2))
@@ -221,13 +222,13 @@ object QueryParser extends JavaTokenParsers {
   }
   def column = new Parser[Col] {
     def parser = (qualifiedIdentAll |
-        (expr ~ opt(":" ~> ident) ~ opt(stringLiteral | qualifiedIdent))) ^^ {
-      case i: IdentAll => Col(i, null, null)
-      case (o @ Obj(_, a, _, _, _)) ~ (typ: Option[String]) ~ None => Col(o, a, typ orNull)
-      case e ~ (typ: Option[String]) ~ (a: Option[_]) => Col(e, a map {
-        case Ident(i) => i.mkString; case s => "\"" + s + "\""
-      } orNull, typ orNull)
-    }
+      (expr ~ opt(":" ~> ident) ~ opt(stringLiteral | qualifiedIdent))) ^^ {
+        case i: IdentAll => Col(i, null, null)
+        case (o @ Obj(_, a, _, _, _)) ~ (typ: Option[String]) ~ None => Col(o, a, typ orNull)
+        case e ~ (typ: Option[String]) ~ (a: Option[_]) => Col(e, a map {
+          case Ident(i) => i.mkString; case s => "\"" + s + "\""
+        } orNull, typ orNull)
+      }
     def extractAlias(expr: Any): String = expr match {
       case BinOp(_, lop, rop) => extractAlias(rop)
       case UnOp(_, op) => extractAlias(op)
@@ -235,8 +236,8 @@ object QueryParser extends JavaTokenParsers {
       case _ => null
     }
     def apply(in: Input) = parser(in) match {
-      case r@Success(Col(_: IdentAll | _: Obj, _, _), i) => r
-      case s@Success(c@Col(e, null, _), i) => extractAlias(e) match {
+      case r @ Success(Col(_: IdentAll | _: Obj, _, _), i) => r
+      case s @ Success(c @ Col(e, null, _), i) => extractAlias(e) match {
         case null => s
         case x => Success(c.copy(alias = x), i)
       }
@@ -267,11 +268,11 @@ object QueryParser extends JavaTokenParsers {
     }
   def query: Parser[Any] = new Parser[Any] {
     def parser = objs ~ opt(QueryParser.filter) ~ opt(columns) ~ opt(group) ~ opt(order) ~
-    opt(offsetLimit) ^^ {
-      case (t :: Nil) ~ None ~ None ~ None ~ None ~ None => t
-      case t ~ f ~ c ~ g ~ o ~ l => Query(t, f.orNull, c.map(_.cols) orNull,
-        c.map(_.distinct) getOrElse false, g.orNull, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
-    }
+      opt(offsetLimit) ^^ {
+        case (t :: Nil) ~ None ~ None ~ None ~ None ~ None => t
+        case t ~ f ~ c ~ g ~ o ~ l => Query(t, f.orNull, c.map(_.cols) orNull,
+          c.map(_.distinct) getOrElse false, g.orNull, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
+      }
     def toDivChain(objs: List[Obj]): Any = objs match {
       case o :: Nil => o.obj
       case l => BinOp("/", l.head.obj, toDivChain(l.tail))
@@ -286,22 +287,21 @@ object QueryParser extends JavaTokenParsers {
         }) r else Success(toDivChain(objs), i) //division chain found
       case r => r
     }
-    
   }
-  def insert: Parser[Insert] = (("+" ~> qualifiedIdent ~ opt(excludeKeywordsIdent) ~ columns ~ 
-      rep1sep(array, ",")) |
+  def insert: Parser[Insert] = (("+" ~> qualifiedIdent ~ opt(excludeKeywordsIdent) ~ columns ~
+    rep1sep(array, ",")) |
     ((qualifiedIdent ~ opt(excludeKeywordsIdent) ~ columns <~ "+") ~ rep1sep(array, ","))) ^^ {
       case t ~ a ~ Cols(_, c) ~ v => Insert(t, a.orNull, c, v)
     }
-  def update: Parser[Update] = (("=" ~> qualifiedIdent ~ opt(excludeKeywordsIdent) ~ 
-      opt(filter) ~ columns ~ array) |
+  def update: Parser[Update] = (("=" ~> qualifiedIdent ~ opt(excludeKeywordsIdent) ~
+    opt(filter) ~ columns ~ array) |
     ((qualifiedIdent ~ opt(excludeKeywordsIdent) ~ opt(filter) ~ columns <~ "=") ~ array)) ^^ {
       case t ~ a ~ f ~ Cols(_, c) ~ v => Update(t, a orNull, f orNull, c, v)
     }
   def delete: Parser[Delete] = (("-" ~> qualifiedIdent ~ opt(excludeKeywordsIdent) ~ filter) |
-      (((qualifiedIdent ~ opt(excludeKeywordsIdent)) <~ "-") ~ filter)) ^^ {
-    case t ~ a ~ f => Delete(t, a orNull, f)
-  }
+    (((qualifiedIdent ~ opt(excludeKeywordsIdent)) <~ "-") ~ filter)) ^^ {
+      case t ~ a ~ f => Delete(t, a orNull, f)
+    }
   //operation parsers
   //delete must be before negation since it can start with - sign!
   def unaryExpr = delete | negation | not | operand | sep

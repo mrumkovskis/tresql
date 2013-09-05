@@ -84,11 +84,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   case class IdExpr(val seqName: String) extends BaseExpr {
     override def apply() = {
       env.tableOption(seqName).map(_.key.cols).filter(_.size == 1).map(_(0))
-      .filter(env.contains(_)).flatMap(key => Option(env(key))).map { id =>
-        //if primary key is set as an environment variable use it instead of sequence
-        env.currId(seqName, id)
-        id
-      } getOrElse env.nextId(seqName)
+        .filter(env.contains(_)).flatMap(key => Option(env(key))).map { id =>
+          //if primary key is set as an environment variable use it instead of sequence
+          env.currId(seqName, id)
+          id
+        } getOrElse env.nextId(seqName)
     }
     var binded = false
     def defaultSQL = {
@@ -153,10 +153,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     override def exprType: Class[_] = if ("-" == op) operand.exprType else classOf[ConstExpr]
   }
-  
+
   case class InExpr(val lop: Expr, val rop: List[Expr], val not: Boolean) extends BaseExpr {
     override def apply = if (not) lop notIn rop else lop in rop
-    def defaultSQL = lop.sql + (if(not) " not" else "") + rop.map(_.sql).mkString(" in(", ", ", ")")
+    def defaultSQL = lop.sql + (if (not) " not" else "") + rop.map(_.sql).mkString(" in(", ", ", ")")
     override def exprType = classOf[ConstExpr]
   }
 
@@ -227,11 +227,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case "!~~" => "upper(" + lop.sql + ") not like upper(" + rop.sql + ")"
       case "~" => lop.sql + " like " + rop.sql
       case "!~" => lop.sql + " not like " + rop.sql
-      case s@("in" | "!in") => lop.sql + (if (s.startsWith("!")) " not" else "") + " in " +
-      (rop match {
-        case _: BracesExpr | _: ArrExpr => rop.sql
-        case _ => "(" + rop.sql + ")"
-      })
+      case s @ ("in" | "!in") => lop.sql + (if (s.startsWith("!")) " not" else "") + " in " +
+        (rop match {
+          case _: BracesExpr | _: ArrExpr => rop.sql
+          case _ => "(" + rop.sql + ")"
+        })
       case _ => error("unknown operation " + op)
     }
     override def exprType: Class[_] = if (List("&&", "++", "+", "-", "*", "/") exists (_ == op)) {
@@ -247,16 +247,15 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         try {
           Env log ts.mkString("Trying to call locally defined function: " + name + "(", ", ", ")")
           env.functions.map(f => f.getClass.getMethod(name, ts: _*).invoke(
-              f, p.asInstanceOf[List[Object]]: _*)).get
+            f, p.asInstanceOf[List[Object]]: _*)).get
         } catch {
           case ex: NoSuchMethodException => {
-            env.functions.flatMap(f=> f.getClass.getMethods.filter(m =>
+            env.functions.flatMap(f => f.getClass.getMethods.filter(m =>
               m.getName == name && (m.getParameterTypes match {
                 case Array(par) => par.isInstance(p)
                 case _ => false
-              })
-            ).headOption.map(_.invoke(f, List(p).asInstanceOf[List[Object]]: _*)).orElse(Some(
-            org.tresql.Query.call("{call " + sql + "}", QueryBuilder.this.bindVariables, env)))).get
+              })).headOption.map(_.invoke(f, List(p).asInstanceOf[List[Object]]: _*)).orElse(Some(
+              org.tresql.Query.call("{call " + sql + "}", QueryBuilder.this.bindVariables, env)))).get
           }
         }
       } else org.tresql.Query.call("{call " + sql + "}", QueryBuilder.this.bindVariables, env)
@@ -317,7 +316,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       else "")
   }
   case class Table(val table: Expr, val alias: String, val join: TableJoin, val outerJoin: String,
-      val nullable: Boolean) {
+    val nullable: Boolean) {
     def name = table.sql
     def sqlName = name + (if (alias != null) " " + alias else "")
     def aliasOrName = if (alias != null) alias else name
@@ -329,7 +328,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case _ => ""
       }) + "join "
       def fkJoin(i: IdentExpr) = sqlName + " on " + i.sql + " = " +
-          aliasOrName + "." + env.table(name).key.cols.mkString
+        aliasOrName + "." + env.table(name).key.cols.mkString
       def defaultJoin(jcols: (List[String], List[String])) = {
         //may be default join columns had been calculated during table build implicit left outer join calculation 
         val j = if (jcols != null) jcols else env.join(joinTable.name, name)
@@ -364,7 +363,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
   }
   case class TableJoin(val default: Boolean, val expr: Expr, val noJoin: Boolean,
-      defaultJoinCols: (List[String], List[String]))
+    defaultJoinCols: (List[String], List[String]))
   case class ColExpr(val col: Expr, val alias: String, val typ: String) extends PrimitiveExpr {
     val separateQuery = QueryBuilder.this.separateQueryFlag
     if (!QueryBuilder.this.allCols) QueryBuilder.this.allCols = col.isInstanceOf[AllExpr]
@@ -503,14 +502,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     //which is used for implicit left outer join, create aliases map
     def buildTables(tables: List[Obj]) = {
       ((tables map buildTable).foldLeft((List[Table]() -> Map[String, Table]())) { (ts, t) =>
-        val nt = ts._1.headOption.map(pt => (pt, t) match {          
+        val nt = ts._1.headOption.map(pt => (pt, t) match {
           case (Table(IdentExpr(ptn), ptna, _, _, _), Table(IdentExpr(n), _, j, null, false)) =>
             //get previous table from aliases map if exists
             val prevTable = ts._2.get(ptn.mkString(".")).getOrElse(pt)
             j match {
               //foreign key of shortcut join must come from previous table i.e. ptn 
               case TableJoin(false, IdentExpr(fk), _, _) if (fk.size == 1 ||
-                  fk.dropRight(1) == (if (ptna == null) ptn else List(ptna))) =>
+                fk.dropRight(1) == (if (ptna == null) ptn else List(ptna))) =>
                 env.colOption(prevTable.name, fk.last).map(col =>
                   //set current table to nullable if foreign key column or previous table is nullable
                   if (prevTable.nullable || col.nullable) t.copy(nullable = true) else t).getOrElse(t)
@@ -526,14 +525,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         }).getOrElse(t)
         (nt :: ts._1) -> (nt match {
           case Table(IdentExpr(n), a, _, _, _) if (a != null && !ts._2.contains(a)) =>
-            ts._2 + (a -> nt) 
+            ts._2 + (a -> nt)
           case _ => ts._2
         })
       }) match {
         case (tables: List[Table], aliases: Map[String, Table]) => (tables.reverse, aliases)
       }
-    } 
-      
+    }
+
     def buildTable(t: Obj) = Table(buildInternal(t.obj, TABLE_CTX), t.alias,
       if (t.join != null) TableJoin(t.join.default, buildInternal(t.join.expr, JOIN_CTX),
         t.join.noJoin, null)
@@ -580,11 +579,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
         case t: Obj => parseCtx match {
           case ROOT_CTX => t match {
-              case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
-              case _ =>
-                val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-                val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
-            }
+            case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
+            case _ =>
+              val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+              val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
+          }
           case QUERY_CTX => t match {
             case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
             case _ =>
@@ -595,7 +594,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           case TABLE_CTX =>
             val tablesAndAliases = buildTables(List(t))
             SelectExpr(tablesAndAliases._1, null,
-            List(ColExpr(AllExpr(), null, null)), false, null, null, null, null, tablesAndAliases._2)
+              List(ColExpr(AllExpr(), null, null)), false, null, null, null, null, tablesAndAliases._2)
           case COL_CTX => buildColumnIdentOrBracesExpr(t)
           case _ => buildIdentOrBracesExpr(t)
         }
@@ -618,7 +617,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
             if (l != null && r != null) BinExpr(op, l, r) else if (op == "&" || op == "|")
               if (l != null) l else if (r != null) r else null
             else null
-          }
+        }
         case In(lop, rop, not) =>
           val l = buildInternal(lop, parseCtx)
           if (l == null) null else {
@@ -718,9 +717,9 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
       case _ => false
     }
   }
-  def in(inList: List[Expr]) = inList.contains(this) 
+  def in(inList: List[Expr]) = inList.contains(this)
   def notIn(inList: List[Expr]) = !inList.contains(this)
-  
+
   def defaultSQL: String
   def builder: QueryBuilder
   def sql = if (builder.env.dialect != null) builder.env.dialect(this) else defaultSQL
