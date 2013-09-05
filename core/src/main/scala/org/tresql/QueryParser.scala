@@ -153,8 +153,6 @@ object QueryParser extends JavaTokenParsers {
   def bracesExp: Parser[Braces] = "(" ~> expr <~ ")" ^^ (Braces(_))
   /* Important is that function parser is applied before query because of the longest token
      * matching, otherwise qualifiedIdent of query will match earlier.
-     * Also important is that bracesExpr parser is applied before query otherwise it will always 
-     * match down to query.
      * Also important is that array parser is applied after query parser because it matches join parser
      * of the query.
      * Also important is that variable parser is after query parser since ? mark matches variable
