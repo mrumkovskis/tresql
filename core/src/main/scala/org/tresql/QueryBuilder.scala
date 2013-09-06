@@ -724,9 +724,10 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
   def builder: QueryBuilder
   def sql = if (builder.env.dialect != null) builder.env.dialect(this) else defaultSQL
 
-  def apply(): Any = error("Apply method must be implemented in subclass")
+  def apply(): Any = error("Apply method not implemented in subclass of Expr: " + getClass)
   def apply(params: Seq[Any]): Any = apply(org.tresql.Query.normalizePars(params))
-  def apply(params: Map[String, Any]): Any = error("Must be implemented in subclass")
+  def apply(params: Map[String, Any]): Any =
+    error("Apply method not implemented in subclass of Expr: " + getClass)
   def select(params: Any*): Result = select(org.tresql.Query.normalizePars(params))
   def select(params: Map[String, Any]): Result = apply(params).asInstanceOf[Result]
   def foreach(params: Any*)(f: (RowLike) => Unit = (row) => ()) {
@@ -737,7 +738,7 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
     }
     else select(params)) foreach f
   }
-  def close: Unit = error("Must be implemented in subclass")
+  def close: Unit = error("Close method not implemented in subclass of Expr: " + getClass)
   def exprType: Class[_] = this.getClass
   override def toString = defaultSQL
 }
