@@ -16,8 +16,9 @@ trait MetaData {
         import scala.collection.mutable.ListBuffer
         //try to find two imported keys of the same primary key
         t1.rfs.filter(_._2.size == 1).foldLeft(ListBuffer[(List[String], List[String])]()) {
-          (res, t1refs) => {
-              t2.rfs.foreach (t2refs => if (t2refs._2.size == 1 && t1refs._1 == t2refs._1)
+          (res, t1refs) =>
+            {
+              t2.rfs.foreach(t2refs => if (t2refs._2.size == 1 && t1refs._1 == t2refs._1)
                 res += (t1refs._2(0).cols -> t2refs._2(0).cols))
               res
             }
@@ -25,19 +26,19 @@ trait MetaData {
           case ListBuffer() => error("Relation not found between tables " + table1 + ", " + table2)
           case ListBuffer(r) => r
           case b => error("Ambiguous relation. Too many found between tables " + table1 + ", " +
-              table2 + ". Relation columns: " + b)
+            table2 + ". Relation columns: " + b)
         }
       }
       case (k1, k2) => if (k1.length == 1) (k1(0).cols, t2.key.cols) else (t1.key.cols, k2(0).cols)
     }
   }
 
-  def col(table: String, col: String):Col = this.table(table).cols(col)
-  def colOption(table:String, col:String):Option[Col] = this.tableOption(table).flatMap(_.cols.get(col))
-  def col(col: String):Col = 
+  def col(table: String, col: String): Col = this.table(table).cols(col)
+  def colOption(table: String, col: String): Option[Col] = this.tableOption(table).flatMap(_.cols.get(col))
+  def col(col: String): Col =
     table(col.substring(0, col.lastIndexOf('.'))).cols(col.substring(col.lastIndexOf('.') + 1))
-  def colOption(col: String):Option[Col] = tableOption(col.substring(0, col.lastIndexOf('.'))).flatMap(
-      _.cols.get(col.substring(col.lastIndexOf('.') + 1)))
+  def colOption(col: String): Option[Col] = tableOption(col.substring(0, col.lastIndexOf('.'))).flatMap(
+    _.cols.get(col.substring(col.lastIndexOf('.') + 1)))
 
   def dbName: String
   def table(name: String): Table
@@ -48,33 +49,37 @@ trait MetaData {
 
 //TODO pk col storing together with ref col (for multi col key secure support)?
 package metadata {
-  case class Table(val name:String, val comments: String, val cols: Map[String, Col], val key: Key,
+  case class Table(val name: String, val comments: String, val cols: Map[String, Col], val key: Key,
     rfs: Map[String, List[Ref]], dbname: String) {
-    val refTable:Map[Ref, String] = rfs.flatMap(t=> t._2.map(_ -> t._1))
+    val refTable: Map[Ref, String] = rfs.flatMap(t => t._2.map(_ -> t._1))
     def refs(table: String) = rfs.get(table).getOrElse(Nil)
   }
   object Table {
     def apply(t: Map[String, Any]): Table = {
       Table(t("name").toString.toLowerCase, t("comments").asInstanceOf[String], t("cols") match {
-        case l:List[Map[String, String]] => (l map {c => (c("name").toLowerCase,
+        case l: List[Map[String, String]] => (l map { c =>
+          (c("name").toLowerCase,
             Col(c("name").toString.toLowerCase, c("sqlType").asInstanceOf[Int],
-                c("typeName").toString.toLowerCase, c("nullable").asInstanceOf[Boolean],
-                c("size").asInstanceOf[Int], c("decimalDigits").asInstanceOf[Int],
-                c("comments").asInstanceOf[String]))}).toMap
-      }, t("key") match { case l:List[String] => Key(l map (_.toLowerCase)) }, t("refs") match {
-        case l:List[Map[String, Any]] => (l map {r => (r("table").asInstanceOf[String].toLowerCase,
+              c("typeName").toString.toLowerCase, c("nullable").asInstanceOf[Boolean],
+              c("size").asInstanceOf[Int], c("decimalDigits").asInstanceOf[Int],
+              c("comments").asInstanceOf[String]))
+        }).toMap
+      }, t("key") match { case l: List[String] => Key(l map (_.toLowerCase)) }, t("refs") match {
+        case l: List[Map[String, Any]] => (l map { r =>
+          (r("table").asInstanceOf[String].toLowerCase,
             r("refs") match {
-              case l:List[List[String]] => l map (rc => Ref(rc map (_.toLowerCase)))
-        })}).toMap }, if (t.get("dbname") == None) null else t("dbname").asInstanceOf[String]
-      )
+              case l: List[List[String]] => l map (rc => Ref(rc map (_.toLowerCase)))
+            })
+        }).toMap
+      }, if (t.get("dbname") == None) null else t("dbname").asInstanceOf[String])
     }
   }
   case class Col(val name: String, val sqlType: Int, val typeName: String, val nullable: Boolean,
-      size: Int, decimalDigits: Int, comments: String)
+    size: Int, decimalDigits: Int, comments: String)
   case class Key(val cols: List[String])
   case class Ref(val cols: List[String])
   case class Procedure(val name: String, val comments: String, val procType: Int,
     val pars: List[Par], val returnSqlType: Int, val returnTypeName: String)
   case class Par(val name: String, val comments: String, val parType: Int, val sqlType: Int,
-      val typeName: String)
+    val typeName: String)
 }

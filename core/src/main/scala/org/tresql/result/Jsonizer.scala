@@ -38,6 +38,7 @@ object Jsonizer {
         }
       case a: Seq[_] => jsonizeArray(a, buf, rType)
       case a: Array[_] => jsonizeArray(a, buf, rType)
+      case m: Map[String, _] => jsonizeMap(m, buf, rType)
       case b: Boolean => buf append b.toString
       case n: Byte => buf append n.toString
       case n: Short => buf append n.toString
@@ -98,18 +99,29 @@ object Jsonizer {
     if (rType != Object) buf append ']'
   }
 
+  def jsonizeMap(map: Map[String, Any], buf: Writer, rType: ResultType = Objects) {
+    buf append (if (rType == Arrays) '[' else '{')
+    var i = 0
+    map.foreach(t=> {
+      if (i > 0) buf append ','
+      if (rType != Arrays) {
+        buf append ('"' + (t._1 match {
+          case null => "null"
+          case name => JSONFormat.quoteString(name toLowerCase)
+        }) + "\": ")
+      }
+      // value
+      jsonize(t._2, buf, if (rType == Object) Arrays else rType)
+      i += 1
+    })
+    buf append (if (rType == Arrays) ']' else '}')
+  }
+
   def jsonizeArray(result: Iterable[_], buf: Writer, rType: ResultType = Objects) {
     buf append '['
     var i = 0
     result foreach { r: Any =>
       if (i > 0) buf append ", "
-      // name
-      if (rType != Arrays) {
-        buf append '"'
-        buf append i.toString
-        buf append "\": "          
-      }
-      // value
       jsonize(r, buf, if (rType == Object) Arrays else rType)
       i += 1
     }

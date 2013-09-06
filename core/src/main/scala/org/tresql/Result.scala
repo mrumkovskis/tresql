@@ -173,7 +173,7 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
     }
 
   override def toList = this.map(r => Row(this.content)).toList
-  
+
   def toListOfMaps: List[Map[String, _]] = this.map(r => rowAsMap).toList
 
   def rowAsMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
@@ -199,12 +199,13 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
    * ensures execution of dml (update, insert, delete) expressions in colums otherwise
    * has no side effect.
    */
-  def execute: Unit = foreach { r => {
+  def execute: Unit = foreach { r =>
+    {
       var i = 0
       while (i < columnCount) {
         this(i) match {
           case r: Result => r.execute
-          case _ => 
+          case _ =>
         }
         i += 1
       }

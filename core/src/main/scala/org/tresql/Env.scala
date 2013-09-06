@@ -79,6 +79,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   override def metaData = provider.map(_.env.metaData).getOrElse(resources.metaData)
   override def dialect: PartialFunction[Expr, String] = provider.map(_.env.dialect).getOrElse(resources.dialect)
   override def idExpr = provider.map(_.env.idExpr).getOrElse(resources.idExpr)
+  override def functions = provider.map(_.env.functions).getOrElse(resources.functions)
   
   //meta data methods
   def dbName = metaData.dbName
@@ -97,7 +98,9 @@ object Env extends Resources {
   private var _dialect: Option[PartialFunction[Expr, String]] = None
   private var _idExpr: Option[String => String] = None
   //available functions
-  private var functions = Functions.getClass.getDeclaredMethods map (_.getName) toSet
+  private var _functions: Option[Any] = None
+  private var _functionNames: Option[Set[String]] = None
+  functions = super.functions.get
 
   private var logger: (=> String, Int) => Unit = null
   
@@ -106,16 +109,18 @@ object Env extends Resources {
   override def metaData = _metaData.getOrElse(super.metaData)
   override def dialect = _dialect.getOrElse(super.dialect)
   override def idExpr = _idExpr.getOrElse(super.idExpr)
+  override def functions = _functions
+  def isDefined(functionName: String) = _functionNames.map(_.contains(functionName)).getOrElse(false) 
   
   def conn_=(conn: java.sql.Connection) = this.threadConn set conn
   def metaData_=(metaData: MetaData) = this._metaData = Some(metaData)
   def dialect_=(dialect: PartialFunction[Expr, String]) = this._dialect =
-    if (dialect == null) null else Some(dialect.orElse {case e=> e.defaultSQL})
-
+    Option(dialect).map(_.orElse {case e=> e.defaultSQL})
   def idExpr_=(idExpr: String => String) = this._idExpr = Some(idExpr)
-  
-  def availableFunctions(list: Traversable[String]) = functions = list.toSet
-  def isDefined(functionName: String) = functions.contains(functionName) 
+  def functions_=(functions: Any) = {
+    this._functions = Option(functions)
+    this._functionNames = this.functions.flatMap(f => Option(f.getClass.getMethods.map(_.getName).toSet))
+  }
   
   def log(msg: => String, level: Int = 0): Unit = if (logger != null) logger(msg, level)
   def update(logger: (=> String, Int) => Unit) = this.logger = logger
@@ -131,6 +136,7 @@ trait Resources extends NameMap {
   def metaData: MetaData = _metaData
   def dialect: PartialFunction[Expr, String] = null
   def idExpr: String => String = s => "nextval('" + s + "')"
+  def functions: Option[Any] = Option(new Functions)
   //name map methods
   override def tableName(objectName: String): String = _delegateNameMap.map(_.tableName(
       objectName)).getOrElse(_nameMap.flatMap(_._1.get(objectName)).getOrElse(objectName))
@@ -144,7 +150,7 @@ trait Resources extends NameMap {
         _nameMap.flatMap(_._4.get(objectName)).flatMap(_.get(propertyName)))
 
   def nameMap = _delegateNameMap getOrElse this
-  def nameMap_=(map:NameMap) = _delegateNameMap = if (map == null || map == this) None else Some(map)
+  def nameMap_=(map:NameMap) = _delegateNameMap = Option(map).filter(_ != this)
   /** Set name map for this NameMap implementation
    * 1. map: object name -> table name,
    * 2. map: object name -> map: (property name -> column name),
