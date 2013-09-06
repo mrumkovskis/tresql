@@ -1,4 +1,21 @@
---- 2013.08.21 tresql 3.12.1
+--- 2013.09.06 tresql 3.13 ---
+1. Pluggable functions support.
+Example:
+
+  class TestFunctions {
+    def echo(x: String) = x
+    def plus(a: java.lang.Long, b: java.lang.Long) = a + b
+  }
+  Env.functions = new TestFunctions
+
+  salgrade {losal, hisal, |plus(:1(1), :1(2))}#(1,2)
+
+2. Division operation bugfix (since table join shortcut has the same syntax).
+It's possible now to execute statement like this:
+
+emp[](emp{avg(sal) avgsal}) [sal/avgsal <= 1] {count(*)}
+
+--- 2013.08.21 tresql 3.12.1 ---
 ORT support for children insert where child primary key field is also foreign key field to parent
 
 --- 2013.08.17 tresql 3.12 ---
