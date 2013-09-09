@@ -57,11 +57,11 @@ object Query extends TypedQuery {
     def rcol(c: QueryBuilder#ColExpr) = if (c.separateQuery) Column(-1, c.name, c.col) else {
       i += 1; Column(i, c.name, null)
     }
-    def rcols = {
-      var (md, l) = (rs.getMetaData, List[Column]())
-      1 to md.getColumnCount foreach { j => i += 1; l = Column(i, md.getColumnLabel(j), null) :: l }
-      l.reverse      
-    }
+    def rcols = Option(rs.getMetaData).map { md =>
+      (1 to md.getColumnCount).foldLeft(List[Column]()) {
+        (l, j) => i += 1; Column(i, md.getColumnLabel(j), null) :: l
+      } reverse
+    } get
     val r = new Result(rs, Vector((if (allCols) cols.flatMap { 
       c => (if (c.col.isInstanceOf[QueryBuilder#AllExpr]) rcols else List(rcol(c)))
     } else if (identAll) rcols ++ (cols.filter(_.separateQuery) map rcol)
