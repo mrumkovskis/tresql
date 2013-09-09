@@ -547,6 +547,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
       case o => error("unsupported column definition at this place: " + o)
     }
+    def buildExternalFunction(f: Fun) = {
+      
+    }
     ctxStack ::= parseCtx
     try {
       parsedExpr match {

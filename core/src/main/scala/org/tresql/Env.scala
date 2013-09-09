@@ -123,9 +123,9 @@ object Env extends Resources {
   def dialect_=(dialect: PartialFunction[Expr, String]) = this._dialect =
     Option(dialect).map(_.orElse {case e=> e.defaultSQL})
   def idExpr_=(idExpr: String => String) = this._idExpr = Some(idExpr)
-  def functions_=(functions: Any) = {
-    this._functions = Option(functions)
-    this._functionNames = this.functions.flatMap(f => Option(f.getClass.getMethods.map(_.getName).toSet))
+  def functions_=(funcs: Any) = {
+    this._functions = if (funcs == null) None else Option(funcs)
+    this._functionNames = functions.flatMap(f => Option(f.getClass.getMethods.map(_.getName).toSet))
   }
   
   def log(msg: => String, level: Int = 0): Unit = if (logger != null) logger(msg, level)
