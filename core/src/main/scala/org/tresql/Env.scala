@@ -27,9 +27,15 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   private var _result: Result = null
   private var _statement: java.sql.PreparedStatement = null
 
-  def apply(name: String):Any = vars.map(_(name)) getOrElse provider.get.env(name) match {
+  def apply(name: String): Any = vars.map(_(name)) getOrElse provider.get.env(name) match {
     case e: Expr => e()
     case x => x
+  }
+  
+  def get(name: String): Option[Any] = vars.flatMap(_.get(name)) orElse provider.flatMap(
+      _.env.get(name)).map {
+    case e: Expr => e()
+    case x => x    
   }
 
   def contains(name: String): Boolean = vars.map(_.contains(name)) getOrElse

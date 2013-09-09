@@ -127,6 +127,9 @@ class QueryTest extends Suite {
       ex.close
       ex.select().toList
     }
+    //bind variables absence error message
+    val ex = intercept[RuntimeException](Query("emp[?]"))
+    assert(ex.getMessage() === "Bind variable with name 1 not found.")
     
     var op = OutPar()
     expectResult(List(10, "x"))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x"))
