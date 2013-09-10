@@ -18,6 +18,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   val VALUES_CTX = "VALUES"
   val LIMIT_CTX = "LIMIT"
   val FUN_CTX = "FUNCTION"
+  val EXTERNAL_FUN_CTX = "EXTERNAL_FUN_CTX"
 
   private def this(env: Env) = this(env, 0, 0)
 
@@ -264,7 +265,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def defaultSQL = name + (params map (_.sql)).mkString("(", ",", ")")
     override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
   }
-
+  
+  case class ExtFunParamExpr(expr: Expr) extends PrimitiveExpr {
+    override def apply() = env(expr)
+    def defaultSQL = error("not implemented")
+  }
+  
   case class ArrExpr(val elements: List[Expr]) extends BaseExpr {
     override def apply() = elements map (_())
     def defaultSQL = elements map { _.sql } mkString ("(", ", ", ")")
@@ -547,6 +553,13 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
       case o => error("unsupported column definition at this place: " + o)
     }
+    def buildExternalFunction(name: String, params: List[Any]) = {
+      this.separateQueryFlag = true
+      FunExpr(name, params.flatMap(buildInternal(_, EXTERNAL_FUN_CTX) match {
+        case f @ FunExpr(n, _) if Env.isDefined(n) => List(f)
+        case e => List(ExtFunParamExpr(e), e)
+      }))
+    }
     
     ctxStack ::= parseCtx
     try {
@@ -625,9 +638,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
             val r = rop.map(buildInternal(_, parseCtx)).filter(_ != null)
             if (r.size == 0) null else InExpr(l, r, not)
           }
-        case Fun(n, pl: List[_]) =>
-          val pars = pl map { buildInternal(_, FUN_CTX) }
-          if (pars.exists(_ == null)) null else FunExpr(n, pars)
+        case Fun(n, pl: List[_]) => parseCtx match {
+          case COL_CTX | EXTERNAL_FUN_CTX if Env.isDefined(n) => buildExternalFunction(n, pl)
+          case _ =>
+            val pars = pl map { buildInternal(_, FUN_CTX) }
+            if (pars.exists(_ == null)) null else FunExpr(n, pars)
+        }
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => IdentAllExpr(i.ident)
         case Arr(l: List[_]) => ArrExpr(l map { buildInternal(_, parseCtx) })

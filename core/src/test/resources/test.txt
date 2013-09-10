@@ -180,6 +180,10 @@ emp/dept[10] {deptno, dname, emp.*, |emp[deptno = :1(deptno)]{ename}#(ename)}#(e
 //NOTE: child query allways stays last in result when all cols from one table is used 
 emp/dept[10] {|emp[deptno = :1(deptno)]{ename}#(ename), deptno, dname, emp.*}#(empno) --> [[10, "ACCOUNTING", 7782, "CLARK", "MANAGER", 7839, "1981-06-09", 2450.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7839, "KING", "PRESIDENT", null, "1981-11-17", 5000.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7934, "MILLER", "CLERK", 7782, "1982-01-23", 1300.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]]]
 
+//bind variables in columns
+dept{?} --> 1 --> [["1"], ["1"], ["1"], ["1"]]
+dept{:x} --> x = 'y --> [["y"], ["y"], ["y"], ["y"]]
+
 //limit offset
 dept#(deptno)@(1 2) --> [[20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
 dept#(deptno)@(? ?) --> 2;3 --> [[30, "SALES", "CHICAGO"], [40, "OPERATIONS", "BOSTON"]]

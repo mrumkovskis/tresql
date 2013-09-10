@@ -16,13 +16,14 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   //provided envs are used for statement closing. this list is filled only if provider is not set.
   //NOTE: list contains also this environment 
   private var providedEnvs: List[Env] = Nil
-  private val provider: Option[EnvProvider] = if(_provider == null) None else Some(_provider)
+  private val provider: Option[EnvProvider] = Option(_provider)
 
   private def rootEnv(e: Env): Env = e.provider.map(p=>rootEnv(p.env)).getOrElse(e)
   private val root = rootEnv(this)
   root.providedEnvs = this :: root.providedEnvs
   
   private var vars: Option[scala.collection.mutable.Map[String, Any]] = None
+  private var _exprs: Option[Map[Expr, Int]] = None
   private val ids = scala.collection.mutable.Map[String, Any]()
   private var _result: Result = null
   private var _statement: java.sql.PreparedStatement = null
@@ -49,7 +50,9 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
     this.vars = if (vars == null) None else Some(scala.collection.mutable.Map(vars.toList: _*))
   }
   
-  def apply(rIdx: Int) = {
+  private [tresql] def updateExprs(exprs: Map[Expr, Int]) = _exprs = Option(exprs)
+  
+  def apply(rIdx: Int): Result = {
     var i = 0
     var e: Env = this
     while (i < rIdx && e != null) {
@@ -58,6 +61,9 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
     }
     if (i == rIdx && e != null) e.result else error("Result not available at index: " + rIdx)
   }
+
+  def apply(expr: Expr): Any = _exprs.map(_.getOrElse(expr,
+      error("Expression not found in env: " + expr))).map(this(0)(_)).get
 
   private[tresql] def statement = _statement
   private[tresql] def statement_=(st: java.sql.PreparedStatement) = _statement = st
@@ -124,7 +130,7 @@ object Env extends Resources {
     Option(dialect).map(_.orElse {case e=> e.defaultSQL})
   def idExpr_=(idExpr: String => String) = this._idExpr = Some(idExpr)
   def functions_=(funcs: Any) = {
-    this._functions = if (funcs == null) None else Option(funcs)
+    this._functions = Option(funcs)
     this._functionNames = functions.flatMap(f => Option(f.getClass.getMethods.map(_.getName).toSet))
   }
   
@@ -164,7 +170,7 @@ trait Resources extends NameMap {
    * 4. map: object name -> map: (property name -> name tresql expression)
    */
   def update(map:(Map[String, String], Map[String, Map[String, String]], Map[String, String],
-      Map[String, Map[String, String]])) = _nameMap = if (map == null) None else Some(map)
+      Map[String, Map[String, String]])) = _nameMap = Option(map)
 }
 
 trait NameMap {
