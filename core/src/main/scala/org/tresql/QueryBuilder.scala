@@ -51,6 +51,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def defaultSQL = "*"
   }
   case class IdentAllExpr(val name: List[String]) extends PrimitiveExpr {
+    QueryBuilder.this.identAll = true
     def defaultSQL = name.mkString(".") + ".*"
   }
 
@@ -532,7 +533,6 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case (tables: List[Table], aliases: Map[String, Table]) => (tables.reverse, aliases)
       }
     }
-
     def buildTable(t: Obj) = Table(buildInternal(t.obj, TABLE_CTX), t.alias,
       if (t.join != null) TableJoin(t.join.default, buildInternal(t.join.expr, JOIN_CTX),
         t.join.noJoin, null)
@@ -547,9 +547,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
       case o => error("unsupported column definition at this place: " + o)
     }
-    def buildExternalFunction(f: Fun) = {
-      
-    }
+    
     ctxStack ::= parseCtx
     try {
       parsedExpr match {
@@ -631,7 +629,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           val pars = pl map { buildInternal(_, FUN_CTX) }
           if (pars.exists(_ == null)) null else FunExpr(n, pars)
         case Ident(i) => IdentExpr(i)
-        case IdentAll(i) => { identAll = true; IdentAllExpr(i.ident) }
+        case IdentAll(i) => IdentAllExpr(i.ident)
         case Arr(l: List[_]) => ArrExpr(l map { buildInternal(_, parseCtx) })
         case Variable("?", o) =>
           this.bindIdx += 1; VarExpr(this.bindIdx.toString, o)
@@ -639,7 +637,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case Id(seq) => IdExpr(seq)
         case IdRef(seq) => IdRefExpr(seq)
         case Result(r, c) => ResExpr(r, c)
-        case Col(c, a, t) => { separateQueryFlag = false; ColExpr(buildInternal(c, parseCtx), a, t) }
+        case Col(c, a, t) => 
+          separateQueryFlag = false
+          ColExpr(buildInternal(c, parseCtx), a, t)
         case Grp(cols, having) => Group(cols map { buildInternal(_, GROUP_CTX) },
           buildInternal(having, HAVING_CTX))
         case Ord(cols, asc) => Order((cols._1, cols._2 map { buildInternal(_, parseCtx) },
