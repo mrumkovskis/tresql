@@ -241,10 +241,13 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     } else classOf[ConstExpr]
   }
 
-  case class FunExpr(val name: String, val params: List[Expr]) extends BaseExpr {
+  case class FunExpr(name: String, params: List[Expr]) extends BaseExpr {
     override def apply() = {
       val p = params map (_())
-      val ts = p map (_.getClass)
+      val ts = p map {
+        case null => classOf[Any]
+        case x => x.getClass
+      }
       if (Env.isDefined(name)) {
         try {
           Env log ts.mkString("Trying to call locally defined function: " + name + "(", ", ", ")")
@@ -265,10 +268,16 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def defaultSQL = name + (params map (_.sql)).mkString("(", ",", ")")
     override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
   }
-  
-  case class ExtFunParamExpr(expr: Expr) extends PrimitiveExpr {
-    override def apply() = env(expr)
-    def defaultSQL = error("not implemented")
+
+  case class ExternalFunExpr(name: String, params: List[Expr],
+    method: java.lang.reflect.Method) extends BaseExpr {
+    val p = params map (_())
+    if (method.getParameterTypes.size != params.size) error("Wrong parameter count for method "
+      + method + " " + method.getParameterTypes.size + " != " + params.size)
+    Env.functions.map(method.invoke(_, p.asInstanceOf[List[Object]]: _*))
+      .getOrElse("Functions not defined in Env!")
+    def defaultSQL = error("Method not implemented for external function")
+    override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
   }
   
   case class ArrExpr(val elements: List[Expr]) extends BaseExpr {
@@ -371,8 +380,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
   case class TableJoin(val default: Boolean, val expr: Expr, val noJoin: Boolean,
     defaultJoinCols: (List[String], List[String]))
-  case class ColExpr(val col: Expr, val alias: String, val typ: String) extends PrimitiveExpr {
-    val separateQuery = QueryBuilder.this.separateQueryFlag
+  case class ColExpr(val col: Expr, val alias: String, val typ: String, sepQuery: Boolean = false, 
+      hidden: Boolean = false)
+    extends PrimitiveExpr {
+    val separateQuery = sepQuery || QueryBuilder.this.separateQueryFlag
     if (!QueryBuilder.this.allCols) QueryBuilder.this.allCols = col.isInstanceOf[AllExpr]
     def defaultSQL = col.sql + (if (alias != null) " " + alias else "")
     def name = if (alias != null) alias.stripPrefix("\"").stripSuffix("\"") else col match {
@@ -381,6 +392,29 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     override def toString = col.toString + (if (alias != null) " " + alias else "")
   }
+  case class HiddenColRefExpr(expr: Expr, resType: Class[_]) extends PrimitiveExpr {
+    override def apply() = {
+      val (res, idx) = (env(0), env(expr))      
+      if (resType == classOf[Int]) res.int(idx)
+      else if (resType == classOf[Long]) res.long(idx)
+      else if (resType == classOf[Double]) res.double(idx)
+      else if (resType == classOf[Boolean]) res.boolean(idx)
+      else if (resType == classOf[BigDecimal]) res.bigdecimal(idx)
+      else if (resType == classOf[String]) res.string(idx)
+      else if (resType == classOf[java.util.Date]) res.date(idx)
+      else if (resType == classOf[java.sql.Date]) res.date(idx)
+      else if (resType == classOf[java.sql.Timestamp]) res.timestamp(idx)
+      else if (resType == classOf[java.lang.Integer]) res.jInt(idx)
+      else if (resType == classOf[java.lang.Long]) res.jLong(idx)
+      else if (resType == classOf[java.lang.Double]) res.jDouble(idx)
+      else if (resType == classOf[java.lang.Boolean]) res.jBoolean(idx)
+      else if (resType == classOf[java.math.BigDecimal]) res.bigdecimal(idx) match {
+        case null => null
+        case bd => bd.bigDecimal
+      }
+    }
+    def defaultSQL = error("not implemented")
+  }  
   case class IdentExpr(val name: List[String]) extends PrimitiveExpr {
     def defaultSQL = name.mkString(".")
   }
@@ -468,7 +502,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   //DML statements are defined outsided buildInternal method since they are called from other QueryBuilder
   private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: List[Arr]) = {
     new InsertExpr(IdentExpr(table.ident), alias, cols map (buildInternal(_, COL_CTX)) filter {
-      case x @ ColExpr(IdentExpr(_), _, _) => true
+      case x @ ColExpr(IdentExpr(_), _, _, _, _) => true
       case e: ColExpr => this.childUpdates += { (e.col, e.name) }; false
     }, vals map { buildInternal(_, VALUES_CTX) })
   }
@@ -476,7 +510,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     new UpdateExpr(IdentExpr(table.ident), alias, if (filter != null)
       filter.elements map { buildInternal(_, WHERE_CTX) } else null,
       cols map (buildInternal(_, COL_CTX)) filter {
-        case ColExpr(IdentExpr(_), _, _) => true
+        case ColExpr(IdentExpr(_), _, _, _, _) => true
         case e: ColExpr => this.childUpdates += { (e.col, e.name) }; false
       },
       vals.elements map { buildInternal(_, VALUES_CTX) })
@@ -494,9 +528,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           val f = (q.filter.elements map { buildInternal(_, WHERE_CTX) }).filter(_ != null)
           if (f.length > 0) f else null
         } else null,
-        if (q.cols != null) q.cols map { buildInternal(_, COL_CTX).asInstanceOf[ColExpr] } //cols 
-        else List(ColExpr(AllExpr(), null, null)),
-        q.distinct, buildInternal(q.group), //distinct, group
+        buildCols(q.cols), q.distinct, buildInternal(q.group), //cols, distinct, group
         if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null, //order
         buildInternal(q.offset, LIMIT_CTX), buildInternal(q.limit, LIMIT_CTX), //offset, limit
         tablesAndAliases._2)
@@ -553,12 +585,21 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
       case o => error("unsupported column definition at this place: " + o)
     }
-    def buildExternalFunction(name: String, params: List[Any]) = {
-      this.separateQueryFlag = true
-      FunExpr(name, params.flatMap(buildInternal(_, EXTERNAL_FUN_CTX) match {
-        case f @ FunExpr(n, _) if Env.isDefined(n) => List(f)
-        case e => List(ExtFunParamExpr(e), e)
-      }))
+    def buildCols(cols: List[Col]) = if (cols == null) List(ColExpr(AllExpr(), null, null)) else {
+      val colExprs = cols.map(buildInternal(_, COL_CTX).asInstanceOf[ColExpr])
+      if (colExprs.exists {
+        case ColExpr(FunExpr(n, _), _, _, _, _) => Env.isDefined(n)
+        case _ => false
+      }) colExprs flatMap { //external function found
+        case ColExpr(FunExpr(n, pars), a, t, _, _) if Env.isDefined(n) =>
+          val m = Env.functions.flatMap(_.getClass.getMethods.filter(m=> m.getName == n &&
+              m.getParameterTypes.size == pars.size).headOption).getOrElse(
+                  error("External function " + n + " with " + pars.size + " parameters not found"))
+          ColExpr(ExternalFunExpr(n, m.getParameterTypes.toList.zip(pars).map(tp=>
+            HiddenColRefExpr(tp._2, tp._1)), m), a, t, true) :: pars.map(
+                ColExpr(_, null, null, hidden = true))
+        case e => List(e)
+      } else colExprs 
     }
     
     ctxStack ::= parseCtx
@@ -638,12 +679,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
             val r = rop.map(buildInternal(_, parseCtx)).filter(_ != null)
             if (r.size == 0) null else InExpr(l, r, not)
           }
-        case Fun(n, pl: List[_]) => parseCtx match {
-          case COL_CTX | EXTERNAL_FUN_CTX if Env.isDefined(n) => buildExternalFunction(n, pl)
-          case _ =>
-            val pars = pl map { buildInternal(_, FUN_CTX) }
-            if (pars.exists(_ == null)) null else FunExpr(n, pars)
-        }
+        case Fun(n, pl: List[_]) =>
+          val pars = pl map { buildInternal(_, FUN_CTX) }
+          if (pars.exists(_ == null)) null else FunExpr(n, pars)
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => IdentAllExpr(i.ident)
         case Arr(l: List[_]) => ArrExpr(l map { buildInternal(_, parseCtx) })
@@ -652,7 +690,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case Variable(n, o) => if (!env.reusableExpr && o && !(env contains n)) null else VarExpr(n, o)
         case Id(seq) => IdExpr(seq)
         case IdRef(seq) => IdRefExpr(seq)
-        case Result(r, c) => ResExpr(r, c)
+        case Res(r, c) => ResExpr(r, c)
         case Col(c, a, t) => 
           separateQueryFlag = false
           ColExpr(buildInternal(c, parseCtx), a, t)

@@ -22,7 +22,7 @@ object QueryParser extends JavaTokenParsers {
   case class IdRef(name: String) extends Exp {
     def tresql = ":#" + name
   }
-  case class Result(rNr: Int, col: Any) extends Exp {
+  case class Res(rNr: Int, col: Any) extends Exp {
     def tresql = ":" + rNr + "(" + any2tresql(col) + ")"
   }
   case class UnOp(operation: String, operand: Any) extends Exp {
@@ -142,9 +142,9 @@ object QueryParser extends JavaTokenParsers {
   }
   def id: Parser[Id] = "#" ~> ident ^^ (Id(_))
   def idref: Parser[IdRef] = ":#" ~> ident ^^ (IdRef(_))
-  def result: Parser[Result] = (":" ~> "[0-9]+".r <~ "(") ~ ("[0-9]+".r | stringLiteral |
+  def result: Parser[Res] = (":" ~> "[0-9]+".r <~ "(") ~ ("[0-9]+".r | stringLiteral |
     qualifiedIdent) <~ ")" ^^ {
-      case r ~ c => Result(r.toInt,
+      case r ~ c => Res(r.toInt,
         c match {
           case s: String => try { s.toInt } catch { case _: NumberFormatException => s }
           case Ident(i) => i
@@ -403,7 +403,7 @@ object QueryParser extends JavaTokenParsers {
         case Arr(els) => els foreach bindVars
         case Braces(expr) => bindVars(expr)
         //for the security
-        case _: Ident | _: Id | _: IdRef | _: Result | _: All | _: Null | _: IdentAll =>
+        case _: Ident | _: Id | _: IdRef | _: Res | _: All | _: Null | _: IdentAll =>
         case x => error("Unknown expression: " + x)
       }
     parseAll(ex) match {

@@ -54,18 +54,29 @@ object Query extends TypedQuery {
     bindVars(st, bindVariables)
     var i = 0
     val rs = st.executeQuery
-    def rcol(c: QueryBuilder#ColExpr) = if (c.separateQuery) Column(-1, c.name, c.col) else {
-      i += 1; Column(i, c.name, null)
-    }
-    def rcols = Option(rs.getMetaData).map { md =>
+    def jdbcRcols = Option(rs.getMetaData).map { md =>
       (1 to md.getColumnCount).foldLeft(List[Column]()) {
         (l, j) => i += 1; Column(i, md.getColumnLabel(j), null) :: l
       } reverse
     } get
+    def rcol(c: QueryBuilder#ColExpr) = if (c.separateQuery) Column(-1, c.name, c.col) else {
+      i += 1; Column(i, c.name, null)
+    }
+    def rcols = if (cols.exists(_.hidden)) {
+      val res = (cols.groupBy(_.hidden).toList.sortBy {
+        case (true, _) => 1
+        case (false, _) => 0
+      }).flatMap (t=> t._2).foldLeft((List[Column](), Map[Expr, Int]())) {(r, c) =>
+        (rcol(c) :: r._1, r._2 + (c.col -> i))
+      }
+      env.updateExprs(res._2)
+      res._1.reverse
+    } else cols map rcol
+    
     val r = new Result(rs, Vector((if (allCols) cols.flatMap { 
-      c => (if (c.col.isInstanceOf[QueryBuilder#AllExpr]) rcols else List(rcol(c)))
-    } else if (identAll) rcols ++ (cols.filter(_.separateQuery) map rcol)
-    else cols.map { rcol(_) }): _*), env)
+      c => (if (c.col.isInstanceOf[QueryBuilder#AllExpr]) jdbcRcols else List(rcol(c)))
+    } else if (identAll) jdbcRcols ++ (cols.filter(_.separateQuery) map rcol)
+    else rcols: _*), env))
     env.result = r
     r
   }

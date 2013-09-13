@@ -62,8 +62,8 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
     if (i == rIdx && e != null) e.result else error("Result not available at index: " + rIdx)
   }
 
-  def apply(expr: Expr): Any = _exprs.map(_.getOrElse(expr,
-      error("Expression not found in env: " + expr))).map(this(0)(_)).get
+  def apply(expr: Expr): Int = _exprs.map(_.getOrElse(expr,
+      error("Expression not found in env: " + expr))).get
 
   private[tresql] def statement = _statement
   private[tresql] def statement_=(st: java.sql.PreparedStatement) = _statement = st
