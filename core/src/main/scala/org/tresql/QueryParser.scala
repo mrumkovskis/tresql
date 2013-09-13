@@ -280,11 +280,10 @@ object QueryParser extends JavaTokenParsers {
     def apply(in: Input) = parser(in) match {
       //check for division chain
       case r @ Success(Query(objs, null, null, false, null, null, null, null), i) =>
-        if (objs.exists {
-          case Obj(_, null, DefaultJoin, null, _) => false
-          case Obj(_, null, null, null, _) => false
-          case _ => true
-        }) r else Success(toDivChain(objs), i) //division chain found
+        if (objs.forall {
+          case Obj(_, null, DefaultJoin, null, _) | Obj(_, null, null, null, _) => true
+          case _ => false
+        }) Success(toDivChain(objs), i) /*division chain found*/ else r
       case r => r
     }
   }
