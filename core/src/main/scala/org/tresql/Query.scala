@@ -67,18 +67,22 @@ object Query extends TypedQuery {
         case (true, _) => 1
         case (false, _) => 0
       }).flatMap (t=> t._2).foldLeft((List[Column](), Map[Expr, Int]())) {(r, c) =>
-        (rcol(c) :: r._1, r._2 + (c.col -> i))
+        (rcol(c) :: r._1, if (c.hidden) r._2 + (c.col -> i) else r._2)
       }
       env.updateExprs(res._2)
-      res._1.reverse
-    } else cols map rcol
-    
-    val r = new Result(rs, Vector((if (allCols) cols.flatMap { 
-      c => (if (c.col.isInstanceOf[QueryBuilder#AllExpr]) jdbcRcols else List(rcol(c)))
-    } else if (identAll) jdbcRcols ++ (cols.filter(_.separateQuery) map rcol)
-    else rcols: _*), env))
-    env.result = r
-    r
+      (res._1.reverse, res._2.size)
+    } else (cols map rcol, -1)
+    val result = if (allCols) new Result(rs, Vector(cols.flatMap {c => 
+      if (c.col.isInstanceOf[QueryBuilder#AllExpr]) jdbcRcols else List(rcol(c))
+    }: _*), env)
+    else if (identAll) new Result(rs,
+        Vector(jdbcRcols ++ (cols.filter(_.separateQuery) map rcol) :_*), env)
+    else rcols match {
+      case (c, -1) => new Result(rs, Vector(c: _*), env)
+      case (c, s) => new Result(rs, Vector(c: _*), env, s)
+    }
+    env.result = result
+    result
   }
 
   private[tresql] def update(sql: String, bindVariables: List[Expr], env: Env) = {
