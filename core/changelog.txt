@@ -1,3 +1,21 @@
+--- 2013.09.16 tresql 3.14 ---
+External functions invocation improvements.
+
+Instead of:
+
+  salgrade {losal, hisal, |plus(:1(1), :1(2))}
+
+now can be written:
+
+  salgrade {plus(losal, hisal)}
+
+Restrictions:
+
+1. Column clause with external function cannot contain all column marker * or all column marker for certain alias i.e. a.*
+2. External function invocation cannot be used in subqueries or from clause queries.
+3. External function cannot be used as an operand in expression or as an argument of another function.
+
+
 --- 2013.09.06 tresql 3.13 ---
 1. Pluggable functions support.
 Example:
