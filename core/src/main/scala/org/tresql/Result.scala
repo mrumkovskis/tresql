@@ -4,7 +4,7 @@ import java.sql.ResultSet
 import java.sql.ResultSetMetaData
 import sys._
 
-class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
+class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _columnCount: Int = -1)
   extends Iterator[RowLike] with RowLike with TypedResult {
   private[this] val md = rs.getMetaData
   private[this] val st = rs.getStatement
@@ -39,7 +39,7 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env)
   def typed[T](columnLabel: String)(implicit m: scala.reflect.Manifest[T]): T = {
     typed[T](colMap(columnLabel))
   }
-  def columnCount = cols.length
+  def columnCount = if (_columnCount == -1) cols.length else _columnCount
   def column(idx: Int) = cols(idx)
   def jdbcResult = rs
   def close {

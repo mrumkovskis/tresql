@@ -47,27 +47,40 @@ object Query extends TypedQuery {
     } else map(pars)    
   }
 
-  private[tresql] def select(sql: String, cols: List[QueryBuilder#ColExpr],
-    bindVariables: List[Expr], env: Env, allCols: Boolean, identAll: Boolean): Result = {
+  private[tresql] def sel(sql: String, cols: List[QueryBuilder#ColExpr],
+    bindVariables: List[Expr], env: Env, allCols: Boolean, identAll: Boolean,
+    externalFunction: Boolean): Result = {
     Env log sql
     val st = statement(sql, env)
     bindVars(st, bindVariables)
     var i = 0
     val rs = st.executeQuery
+    def jdbcRcols = Option(rs.getMetaData).map { md =>
+      (1 to md.getColumnCount).foldLeft(List[Column]()) {
+        (l, j) => i += 1; Column(i, md.getColumnLabel(j), null) :: l
+      } reverse
+    } get
     def rcol(c: QueryBuilder#ColExpr) = if (c.separateQuery) Column(-1, c.name, c.col) else {
       i += 1; Column(i, c.name, null)
     }
-    def rcols = {
-      var (md, l) = (rs.getMetaData, List[Column]())
-      1 to md.getColumnCount foreach { j => i += 1; l = Column(i, md.getColumnLabel(j), null) :: l }
-      l.reverse      
+    def rcols = if (externalFunction /*cols.exists(_.hidden)*/) {
+      val res = cols.zipWithIndex.foldLeft((List[Column](), Map[Expr, Int]())) {(r, c) =>
+        (rcol(c._1) :: r._1, if (c._1.hidden) r._2 + (c._1.col -> c._2) else r._2)
+      }
+      env.updateExprs(res._2)
+      (res._1.reverse, res._1.size - res._2.size)
+    } else (cols map rcol, -1)
+    val result = if (allCols) new Result(rs, Vector(cols.flatMap {c => 
+      if (c.col.isInstanceOf[QueryBuilder#AllExpr]) jdbcRcols else List(rcol(c))
+    }: _*), env)
+    else if (identAll) new Result(rs,
+        Vector(jdbcRcols ++ (cols.filter(_.separateQuery) map rcol) :_*), env)
+    else rcols match {
+      case (c, -1) => new Result(rs, Vector(c: _*), env)
+      case (c, s) => new Result(rs, Vector(c: _*), env, s)
     }
-    val r = new Result(rs, Vector((if (allCols) cols.flatMap { 
-      c => (if (c.col.isInstanceOf[QueryBuilder#AllExpr]) rcols else List(rcol(c)))
-    } else if (identAll) rcols ++ (cols.filter(_.separateQuery) map rcol)
-    else cols.map { rcol(_) }): _*), env)
-    env.result = r
-    r
+    env.result = result
+    result
   }
 
   private[tresql] def update(sql: String, bindVariables: List[Expr], env: Env) = {

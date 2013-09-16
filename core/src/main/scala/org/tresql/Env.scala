@@ -16,20 +16,27 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   //provided envs are used for statement closing. this list is filled only if provider is not set.
   //NOTE: list contains also this environment 
   private var providedEnvs: List[Env] = Nil
-  private val provider: Option[EnvProvider] = if(_provider == null) None else Some(_provider)
+  private val provider: Option[EnvProvider] = Option(_provider)
 
   private def rootEnv(e: Env): Env = e.provider.map(p=>rootEnv(p.env)).getOrElse(e)
   private val root = rootEnv(this)
   root.providedEnvs = this :: root.providedEnvs
   
   private var vars: Option[scala.collection.mutable.Map[String, Any]] = None
+  private var _exprs: Option[Map[Expr, Int]] = None
   private val ids = scala.collection.mutable.Map[String, Any]()
   private var _result: Result = null
   private var _statement: java.sql.PreparedStatement = null
 
-  def apply(name: String):Any = vars.map(_(name)) getOrElse provider.get.env(name) match {
+  def apply(name: String): Any = vars.map(_(name)) getOrElse provider.get.env(name) match {
     case e: Expr => e()
     case x => x
+  }
+  
+  def get(name: String): Option[Any] = vars.flatMap(_.get(name)) orElse provider.flatMap(
+      _.env.get(name)).map {
+    case e: Expr => e()
+    case x => x    
   }
 
   def contains(name: String): Boolean = vars.map(_.contains(name)) getOrElse
@@ -43,7 +50,9 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
     this.vars = if (vars == null) None else Some(scala.collection.mutable.Map(vars.toList: _*))
   }
   
-  def apply(rIdx: Int) = {
+  private [tresql] def updateExprs(exprs: Map[Expr, Int]) = _exprs = Option(exprs)
+  
+  def apply(rIdx: Int): Result = {
     var i = 0
     var e: Env = this
     while (i < rIdx && e != null) {
@@ -52,6 +61,9 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
     }
     if (i == rIdx && e != null) e.result else error("Result not available at index: " + rIdx)
   }
+
+  def apply(expr: Expr): Int = _exprs.map(_.getOrElse(expr,
+      error("Expression not found in env: " + expr))).get
 
   private[tresql] def statement = _statement
   private[tresql] def statement_=(st: java.sql.PreparedStatement) = _statement = st
@@ -117,9 +129,9 @@ object Env extends Resources {
   def dialect_=(dialect: PartialFunction[Expr, String]) = this._dialect =
     Option(dialect).map(_.orElse {case e=> e.defaultSQL})
   def idExpr_=(idExpr: String => String) = this._idExpr = Some(idExpr)
-  def functions_=(functions: Any) = {
-    this._functions = Option(functions)
-    this._functionNames = this.functions.flatMap(f => Option(f.getClass.getMethods.map(_.getName).toSet))
+  def functions_=(funcs: Any) = {
+    this._functions = Option(funcs)
+    this._functionNames = functions.flatMap(f => Option(f.getClass.getMethods.map(_.getName).toSet))
   }
   
   def log(msg: => String, level: Int = 0): Unit = if (logger != null) logger(msg, level)
@@ -158,7 +170,7 @@ trait Resources extends NameMap {
    * 4. map: object name -> map: (property name -> name tresql expression)
    */
   def update(map:(Map[String, String], Map[String, Map[String, String]], Map[String, String],
-      Map[String, Map[String, String]])) = _nameMap = if (map == null) None else Some(map)
+      Map[String, Map[String, String]])) = _nameMap = Option(map)
 }
 
 trait NameMap {

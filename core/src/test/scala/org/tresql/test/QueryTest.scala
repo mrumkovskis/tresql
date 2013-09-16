@@ -19,6 +19,7 @@ class QueryTest extends Suite {
   class TestFunctions extends Functions {
     def echo(x: String) = x
     def plus(a: java.lang.Long, b: java.lang.Long) = a + b
+    def average(a: BigDecimal, b: BigDecimal) = (a + b) / 2
   }
   Env.functions = new TestFunctions
   Env update ((msg, level) => println (msg))
@@ -127,6 +128,9 @@ class QueryTest extends Suite {
       ex.close
       ex.select().toList
     }
+    //bind variables absence error message
+    assert(intercept[RuntimeException](Query("emp[?]")).getMessage() === "Bind variable with name 1 not found.")
+    assert(intercept[RuntimeException](Query("emp[:nr]")).getMessage() === "Bind variable with name nr not found.")
     
     var op = OutPar()
     expectResult(List(10, "x"))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x"))
