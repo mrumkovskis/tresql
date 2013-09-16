@@ -37,6 +37,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private var allCols = false
   //indicate table.* in column clause
   private var identAll = false
+  //indicate presence of hidden columns due to external function call
+  private var externalFunction = false
 
   case class ConstExpr(val value: Any) extends BaseExpr {
     override def apply() = value
@@ -175,17 +177,19 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case "*" => lop * rop
         case "/" => lop / rop
         case "||" => lop + rop
-        case "&&" => org.tresql.Query.select(sql, selCols(lop),
-          QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols, QueryBuilder.this.identAll)
-        case "++" => org.tresql.Query.select(sql, selCols(lop),
-          QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols, QueryBuilder.this.identAll)
+        case "&&" => org.tresql.Query.sel(sql, selCols(lop),
+          QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols,
+          QueryBuilder.this.identAll, QueryBuilder.this.externalFunction)
+        case "++" => org.tresql.Query.sel(sql, selCols(lop),
+          QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols,
+          QueryBuilder.this.identAll, QueryBuilder.this.externalFunction)
         case "+" => if (exprType == classOf[SelectExpr])
-          org.tresql.Query.select(sql, selCols(lop), QueryBuilder.this.bindVariables, env,
-            QueryBuilder.this.allCols, QueryBuilder.this.identAll)
+          org.tresql.Query.sel(sql, selCols(lop), QueryBuilder.this.bindVariables, env,
+            QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.externalFunction)
         else lop + rop
         case "-" => if (exprType == classOf[SelectExpr])
-          org.tresql.Query.select(sql, selCols(lop), QueryBuilder.this.bindVariables, env,
-            QueryBuilder.this.allCols, QueryBuilder.this.identAll)
+          org.tresql.Query.sel(sql, selCols(lop), QueryBuilder.this.bindVariables, env,
+            QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.externalFunction)
         else lop - rop
         case "=" => lop == rop
         case "!=" => lop != rop
@@ -271,11 +275,13 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   case class ExternalFunExpr(name: String, params: List[Expr],
     method: java.lang.reflect.Method) extends BaseExpr {
-    val p = params map (_())
-    if (method.getParameterTypes.size != params.size) error("Wrong parameter count for method "
-      + method + " " + method.getParameterTypes.size + " != " + params.size)
-    Env.functions.map(method.invoke(_, p.asInstanceOf[List[Object]]: _*))
-      .getOrElse("Functions not defined in Env!")
+    override def apply() = {
+      val p = params map (_())
+      if (method.getParameterTypes.size != params.size) error("Wrong parameter count for method "
+        + method + " " + method.getParameterTypes.size + " != " + params.size)
+      Env.functions.map(method.invoke(_, p.asInstanceOf[List[Object]]: _*))
+        .getOrElse("Functions not defined in Env!")
+    }
     def defaultSQL = error("Method not implemented for external function")
     override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
   }
@@ -290,8 +296,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     val distinct: Boolean, val group: Expr, val order: List[Expr],
     offset: Expr, limit: Expr, aliases: Map[String, Table]) extends BaseExpr {
     override def apply() = {
-      org.tresql.Query.select(sql, cols, QueryBuilder.this.bindVariables, env,
-        QueryBuilder.this.allCols, QueryBuilder.this.identAll)
+      org.tresql.Query.sel(sql, cols, QueryBuilder.this.bindVariables, env,
+        QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.externalFunction)
     }
     lazy val defaultSQL = "select " + (if (distinct) "distinct " else "") +
       (if (cols == null) "*" else sqlCols) + " from " + tables.head.sqlName + join(tables) +
@@ -394,7 +400,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
   case class HiddenColRefExpr(expr: Expr, resType: Class[_]) extends PrimitiveExpr {
     override def apply() = {
-      val (res, idx) = (env(0), env(expr))      
+      val (res, idx) = (env(0), env(expr))
       if (resType == classOf[Int]) res.int(idx)
       else if (resType == classOf[Long]) res.long(idx)
       else if (resType == classOf[Double]) res.double(idx)
@@ -413,7 +419,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case bd => bd.bigDecimal
       }
     }
-    def defaultSQL = error("not implemented")
+    override def defaultSQL = error("not implemented")
+    override def toString = expr + ":" + resType
   }  
   case class IdentExpr(val name: List[String]) extends PrimitiveExpr {
     def defaultSQL = name.mkString(".")
@@ -590,16 +597,19 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       if (colExprs.exists {
         case ColExpr(FunExpr(n, _), _, _, _, _) => Env.isDefined(n)
         case _ => false
-      }) colExprs flatMap { //external function found
+      }) (colExprs flatMap { //external function found
         case ColExpr(FunExpr(n, pars), a, t, _, _) if Env.isDefined(n) =>
           val m = Env.functions.flatMap(_.getClass.getMethods.filter(m=> m.getName == n &&
               m.getParameterTypes.size == pars.size).headOption).getOrElse(
                   error("External function " + n + " with " + pars.size + " parameters not found"))
+          QueryBuilder.this.externalFunction = true
           ColExpr(ExternalFunExpr(n, m.getParameterTypes.toList.zip(pars).map(tp=>
             HiddenColRefExpr(tp._2, tp._1)), m), a, t, true) :: pars.map(
                 ColExpr(_, null, null, hidden = true))
         case e => List(e)
-      } else colExprs 
+      }).groupBy (_.hidden) match { //put hidden columns at the end
+        case m: Map[Boolean, ColExpr] => m(false) ++ m(true)
+      } else colExprs
     }
     
     ctxStack ::= parseCtx
@@ -766,14 +776,12 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
       case x: String => x.compare(that().asInstanceOf[String])
       case null => if (that() == null) 0 else -1
       case x: Boolean => if (x == that()) 0 else -1
+      case x: Expr => if (super.equals(that)) 0 else -1
     }
   }
-  override def equals(that: Any) = {
-    that match {
-      case e: Expr => compare(e) == 0
-      case _ => false
-    }
-  }
+  //use object equals method for hash map
+  override def equals(that: Any) = super.equals(that)
+  
   def in(inList: List[Expr]) = inList.contains(this)
   def notIn(inList: List[Expr]) = !inList.contains(this)
 
@@ -781,10 +789,9 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
   def builder: QueryBuilder
   def sql = if (builder.env.dialect != null) builder.env.dialect(this) else defaultSQL
 
-  def apply(): Any = error("Apply method not implemented in subclass of Expr: " + getClass)
+  def apply(): Any = this
   def apply(params: Seq[Any]): Any = apply(org.tresql.Query.normalizePars(params))
-  def apply(params: Map[String, Any]): Any =
-    error("Apply method not implemented in subclass of Expr: " + getClass)
+  def apply(params: Map[String, Any]): Any = this
   def select(params: Any*): Result = select(org.tresql.Query.normalizePars(params))
   def select(params: Map[String, Any]): Result = apply(params).asInstanceOf[Result]
   def foreach(params: Any*)(f: (RowLike) => Unit = (row) => ()) {

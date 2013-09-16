@@ -19,6 +19,7 @@ class QueryTest extends Suite {
   class TestFunctions extends Functions {
     def echo(x: String) = x
     def plus(a: java.lang.Long, b: java.lang.Long) = a + b
+    def average(a: BigDecimal, b: BigDecimal) = (a + b) / 2
   }
   Env.functions = new TestFunctions
   Env update ((msg, level) => println (msg))
