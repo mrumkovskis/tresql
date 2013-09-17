@@ -304,4 +304,6 @@ salgrade {grade, plus(losal, hisal), average(losal, hisal)}#(1) --> [[1, 1900, 9
 salgrade {grade, losal, hisal, plus(losal, hisal), average(losal, hisal)}#(1) --> [[1, 1200, 700, 1900, 950], [2, 1400, 1201, 2601, 1300.5], [3, 2000, 1401, 3401, 1700.5], [4, 3000, 2001, 5001, 2500.5], [6, 11000, 10000, 21000, 10500]]
 salgrade {plus(losal, hisal), grade, average(losal, hisal), losal, hisal}#(2) --> [[1900, 1, 950, 1200, 700], [2601, 2, 1300.5, 1400, 1201], [3401, 3, 1700.5, 2000, 1401], [5001, 4, 2500.5, 3000, 2001], [21000, 6, 10500, 11000, 10000]]
 salgrade {plus(losal * 2, hisal / 2), grade, average(losal + 1000, hisal - 1000), losal, hisal}#(2) --> [[2750, 1, 950, 1200, 700], [3400, 2, 1300.5, 1400, 1201], [4700, 3, 1700.5, 2000, 1401], [7000, 4, 2500.5, 3000, 2001], [27000, 6, 10500, 11000, 10000]]
+dept[10] {nopars(), dname} --> [["ok", "ACCOUNTING"]]
+dept[10] {dname, nopars()} --> [["ACCOUNTING", "ok"]]
 
