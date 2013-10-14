@@ -51,7 +51,7 @@ class JDBCMetaData(private val db: String, private val defaultSchema: String = n
             "cols" -> cols(dmd.getColumns(null, schema, tableName, null)),
             "key" -> key(dmd.getPrimaryKeys(null, schema, tableName)),
             "refs" -> refs(dmd.getImportedKeys(null, schema, tableName)))
-          tableCache += (name -> Table(mdh))
+          tableCache.putIfAbsent(name, Table(mdh))
         }
         rs.close
         tableCache(name)
