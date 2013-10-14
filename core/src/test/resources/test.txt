@@ -264,6 +264,11 @@ salgrade - [?] --> 5 --> 1
 //delete table with alias
 dummy d - [], DUMMY {DUMMY} + [0], -dummy[], DUMMY {DUMMY} + [0] --> [1, 1, 1, 1]
 
+//negation
+-1 - 2 --> -3
+-1 - -2 --> 1
+-1 - (-2) --> 1
+
 //--ASSIGN EXPR
 :v = 5, :s = "kuku" --> [5, "kuku"]
 
