@@ -1,3 +1,20 @@
+--- 2013.10.15 tresql 4.0 ---
+Parsed expression cache added to improve performance.
+
+Upon invocation of method org.tresql.QueryParser.parseExp(expr: String)
+parameter expr is used as a key to find already parsed expression in cache
+(in the case cache is set for the environment) so no actual parsing is done.
+This gives significant performance boost since parsing is very time consuming.
+
+Cache is implemented as a trait org.tresql.Cache
+Configuration is done through org.tresql.Env
+
+Example:
+Env.cache = new WeakHashCache
+
+Default cache implementation is based on java.util.concurrent.ConcurrentHashMap and
+java.util.WeakHashMap
+
 --- 2013.09.16 tresql 3.14 ---
 External functions invocation improvements.
 
