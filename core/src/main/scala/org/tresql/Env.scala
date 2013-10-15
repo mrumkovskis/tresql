@@ -114,7 +114,8 @@ object Env extends Resources {
   private var _functions: Option[Any] = None
   private var _functionNames: Option[Set[String]] = None
   functions = super.functions.get
-
+  //cache
+  private var _cache: Option[Cache] = None
   private var logger: (=> String, Int) => Unit = null
   
   def apply(params: Map[String, Any], reusableExpr: Boolean) = new Env(params, this, reusableExpr)
@@ -123,17 +124,19 @@ object Env extends Resources {
   override def dialect = _dialect.getOrElse(super.dialect)
   override def idExpr = _idExpr.getOrElse(super.idExpr)
   override def functions = _functions
-  def isDefined(functionName: String) = _functionNames.map(_.contains(functionName)).getOrElse(false) 
+  def isDefined(functionName: String) = _functionNames.map(_.contains(functionName)).getOrElse(false)
+  override def cache = _cache
   
   def conn_=(conn: java.sql.Connection) = this.threadConn set conn
-  def metaData_=(metaData: MetaData) = this._metaData = Some(metaData)
+  def metaData_=(metaData: MetaData) = this._metaData = Option(metaData)
   def dialect_=(dialect: PartialFunction[Expr, String]) = this._dialect =
     Option(dialect).map(_.orElse {case e=> e.defaultSQL})
-  def idExpr_=(idExpr: String => String) = this._idExpr = Some(idExpr)
+  def idExpr_=(idExpr: String => String) = this._idExpr = Option(idExpr)
   def functions_=(funcs: Any) = {
     this._functions = Option(funcs)
     this._functionNames = functions.flatMap(f => Option(f.getClass.getMethods.map(_.getName).toSet))
   }
+  def cache_=(cache: Cache) = this._cache = Option(cache)
   
   def log(msg: => String, level: Int = 0): Unit = if (logger != null) logger(msg, level)
   def update(logger: (=> String, Int) => Unit) = this.logger = logger
@@ -150,6 +153,7 @@ trait Resources extends NameMap {
   def dialect: PartialFunction[Expr, String] = null
   def idExpr: String => String = s => "nextval('" + s + "')"
   def functions: Option[Any] = Option(new Functions)
+  def cache: Option[Cache] = None
   //name map methods
   override def tableName(objectName: String): String = _delegateNameMap.map(_.tableName(
       objectName)).getOrElse(_nameMap.flatMap(_._1.get(objectName)).getOrElse(objectName))

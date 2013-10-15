@@ -109,19 +109,19 @@ object QueryParser extends JavaTokenParsers {
   case class Braces(expr: Any) extends Exp {
     def tresql = "(" + any2tresql(expr) + ")"
   }
-  
+
   val quotedStringLiteralRegexp = ("'" + """([^'\p{Cntrl}\\]|\\[\\/bfnrt']|\\u[a-fA-F0-9]{4})*""" + "'")r
   val doubleQuotedStringLiteralRegexp = ("\"" + """([^"\p{Cntrl}\\]|\\[\\/bfnrt"]|\\u[a-fA-F0-9]{4})*""" + "\"")r
   val identRegexp = """\p{javaJavaIdentifierStart}\p{javaJavaIdentifierPart}*"""r
 
   def quotedStringLiteral: Parser[String] = quotedStringLiteralRegexp ^^
-      (s => s.substring(1, s.length - 1).replace("\\'", "'"))
+    (s => s.substring(1, s.length - 1).replace("\\'", "'"))
   def doubleQuotedStringLiteral: Parser[String] = doubleQuotedStringLiteralRegexp ^^
-      (s => s.substring(1, s.length - 1).replace("\\\"", "\""))
+    (s => s.substring(1, s.length - 1).replace("\\\"", "\""))
   override def stringLiteral: Parser[String] = quotedStringLiteral | doubleQuotedStringLiteral
   //for performance reasons, do not initialize regexp on each invocation
   override def ident: Parser[String] = identRegexp
-    
+
   val KEYWORDS = Set("in", "null")
   def excludeKeywordsIdent = new Parser[String] {
     def apply(in: Input) = {
@@ -163,7 +163,7 @@ object QueryParser extends JavaTokenParsers {
      * Also important is that variable parser is after query parser since ? mark matches variable
      * Also important that insert, delete, update parsers are before query parser */
   def operand: Parser[Any] = (TRUE | FALSE | NULL | ALL | function | insert | update | query |
-      decimalNr | stringLiteral | variable | id | idref | result | array)
+    decimalNr | stringLiteral | variable | id | idref | result | array)
   def negation: Parser[UnOp] = "-" ~> operand ^^ (UnOp("-", _))
   def not: Parser[UnOp] = "!" ~> operand ^^ (UnOp("!", _))
   //is used within column clause to indicate separate query
@@ -349,9 +349,13 @@ object QueryParser extends JavaTokenParsers {
   }
 
   def parseExp(expr: String): Any = {
-    parseAll(expr) match {
-      case Success(r, _) => r
-      case x => error(x.toString)
+    Env.cache.flatMap(_.get(expr)).getOrElse {
+      val e = parseAll(expr) match {
+        case Success(r, _) => r
+        case x => error(x.toString)
+      }
+      Env.cache.map(_.put(expr, e))
+      e
     }
   }
 
