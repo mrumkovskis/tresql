@@ -20,8 +20,10 @@ class QueryTest extends Suite {
     def echo(x: String) = x
     def plus(a: java.lang.Long, b: java.lang.Long) = a + b
     def average(a: BigDecimal, b: BigDecimal) = (a + b) / 2
+    def nopars() = "ok"
   }
   Env.functions = new TestFunctions
+  Env.cache = new WeakHashCache
   Env update ((msg, level) => println (msg))
   Env update (/*object to table name map*/Map(
       "emp_dept_view"->"emp"),
@@ -38,8 +40,12 @@ class QueryTest extends Suite {
   new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
     sql => val st = conn.createStatement; st.execute(sql); st.close
   }
-    
+  
   def test {
+    execStatements
+  }
+    
+  private def execStatements {
     def parsePars(pars: String, sep:String = ";"): Any = {
       val DF = new java.text.SimpleDateFormat("yyyy-MM-dd")
       val TF = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
@@ -412,4 +418,5 @@ class QueryTest extends Suite {
         "work:empno"->List(), "calculated_children"->List(Map("x"->5)), "deptno"->20)
     expectResult(List(1, List(2)))(ORT.save("emp", obj))        
   }
+    
 }

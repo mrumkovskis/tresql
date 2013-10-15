@@ -608,7 +608,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
                 ColExpr(_, null, null, hidden = true))
         case e => List(e)
       }).groupBy (_.hidden) match { //put hidden columns at the end
-        case m: Map[Boolean, ColExpr] => m(false) ++ m(true)
+        case m: Map[Boolean, ColExpr] => m(false) ++ m.getOrElse(true, Nil)
       } else colExprs
     }
     
