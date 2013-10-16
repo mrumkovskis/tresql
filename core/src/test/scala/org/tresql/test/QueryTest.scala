@@ -23,7 +23,7 @@ class QueryTest extends Suite {
     def nopars() = "ok"
   }
   Env.functions = new TestFunctions
-  Env.cache = new WeakHashCache
+  Env.cache = new SimpleCache
   Env update ((msg, level) => println (msg))
   Env update (/*object to table name map*/Map(
       "emp_dept_view"->"emp"),
@@ -416,7 +416,11 @@ class QueryTest extends Suite {
     
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(), "calculated_children"->List(Map("x"->5)), "deptno"->20)
-    expectResult(List(1, List(2)))(ORT.save("emp", obj))        
+    expectResult(List(1, List(2)))(ORT.save("emp", obj))
+    
+    println("-------------- CACHE -----------------")
+    Env.cache.map(println(_))
+    
   }
     
 }
