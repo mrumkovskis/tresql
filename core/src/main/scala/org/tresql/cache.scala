@@ -10,7 +10,7 @@ trait Cache {
   def put(tresql: String, expr: Any)
 }
 
-/** Cache based on java conncurrent hash map */
+/** Cache based on java concurrent hash map */
 class SimpleCache extends Cache {
   private val cache = new ConcurrentHashMap[String, Any]
 
