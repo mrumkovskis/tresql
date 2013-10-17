@@ -1,3 +1,13 @@
+--- 2013.10.15 tresql 4.0.1 ---
+Parsed expression cache fixes.
+
+WeakHashCache is renamed to SimpleCache and is based on java.util.concurrent.ConcurrentHashMap
+Difference from previous version is that cache: java.util.concurrent.ConcurrentHashMap is not
+constructed with java.util.WeakHashMap as a parameter (since Map as a parameter is not delegated map
+as mistakenly taken for earlier).
+
+WeakHashCache is added which is based on java.util.WeakHashMap
+
 --- 2013.10.15 tresql 4.0 ---
 Parsed expression cache added to improve performance.
 
