@@ -92,7 +92,7 @@ object ORT {
       val refColName = if (parent == null) null else if (refPropName == null)
         table.refs(ptn) match {
           case Nil => null
-          case List(ref) => ref.cols(0)
+          case List(ref) if ref.cols.length == 1 => ref.cols(0)
           case x => error("Ambiguous references to table: " + ptn + ". Refs: " + x)
       } else resources.colName(objName, refPropName)
       var hasRef: Boolean = parent == null

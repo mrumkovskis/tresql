@@ -35,6 +35,11 @@ CREATE TABLE CAR
   IS_ACTIVE BOOLEAN,
   DEPTNR INTEGER)
 //
+CREATE TABLE CAR_USAGE
+ (CAR_NR VARCHAR(10) NOT NULL,
+  EMPNO INTEGER NOT NULL,
+  DATE_FROM DATE)
+//
 CREATE TABLE CAR_IMAGE
  (CARNR INTEGER NOT NULL,
   IMAGE BLOB(1K))
@@ -67,6 +72,12 @@ alter table car add foreign key (deptnr) references dept(deptno)
 alter table dept_addr add primary key (deptnr)
 //
 alter table dept_addr add foreign key (deptnr) references dept(deptno)
+//
+alter table car_usage add primary key (car_nr, empno)
+//
+alter table car_usage add foreign key (car_nr) references car(nr)
+//
+alter table car_usage add foreign key (empno) references emp(empno)
 //
 CREATE FUNCTION inc_val_5 (x INTEGER)
   RETURNS INTEGER

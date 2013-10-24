@@ -276,6 +276,17 @@ class QueryTest extends Suite {
     obj = Map("deptno" -> null, "dname" -> "DRUGS",
               "car" -> List(Map("nr" -> "UUU", "name" -> "BEATLE")))
     expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
+    
+    //multiple column primary key
+    obj = Map("empno"->7788, "car_nr" -> "1111")
+    expectResult(1)(ORT.insert("car_usage", obj))
+    //primary key component not specified error must be thrown
+    obj = Map("car_nr" -> "1111")
+    intercept[SQLException](ORT.insert("car_usage", obj))
+    obj = Map("date_from" -> "2013-10-24")
+    intercept[SQLException](ORT.insert("car_usage", obj))
+    obj = Map("empno" -> 7839)
+    intercept[SQLException](ORT.insert("car_usage", obj))
             
     println("--- fill ---")
     //no row found
@@ -417,7 +428,7 @@ class QueryTest extends Suite {
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(), "calculated_children"->List(Map("x"->5)), "deptno"->20)
     expectResult(List(1, List(2)))(ORT.save("emp", obj))
-    
+        
     println("-------------- CACHE -----------------")
     Env.cache.map(println(_))
     
