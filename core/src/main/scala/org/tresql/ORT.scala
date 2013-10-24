@@ -120,10 +120,9 @@ object ORT {
         }
       }).filter(_._1 != null && (parent == null || refColName != null)) ++
       (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn))) ++
-      (if (hasPk || (parent != null && (refColName == null ||
+      (if (hasPk || table.key.cols.length != 1 || (parent != null && (refColName == null ||
           table.key.cols == List(refColName)))) Map()
-       else table.key.cols.headOption.map(x=> Map(x -> ("#" + table.name))).getOrElse(
-           Map()))).unzip match {
+       else Map(table.key.cols(0) -> ("#" + table.name)))).unzip match {
         case (Nil, Nil) => null
         case (cols: List[_], vals: List[_]) => cols.mkString("+" + table.name +
           "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") +
