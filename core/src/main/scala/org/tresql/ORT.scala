@@ -93,7 +93,9 @@ object ORT {
         table.refs(ptn) match {
           case Nil => null
           case List(ref) if ref.cols.length == 1 => ref.cols(0)
-          case x => error("Ambiguous references to table: " + ptn + ". Refs: " + x)
+          case x => error(
+              "Ambiguous references to table (reference must be one and must consist of one column): "
+              + ptn + ". Refs: " + x)
       } else resources.colName(objName, refPropName)
       var hasRef: Boolean = parent == null
       var hasPk: Boolean = false
