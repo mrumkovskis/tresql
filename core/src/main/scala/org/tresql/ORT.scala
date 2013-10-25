@@ -92,8 +92,10 @@ object ORT {
       val refColName = if (parent == null) null else if (refPropName == null)
         table.refs(ptn) match {
           case Nil => null
-          case List(ref) => ref.cols(0)
-          case x => error("Ambiguous references to table: " + ptn + ". Refs: " + x)
+          case List(ref) if ref.cols.length == 1 => ref.cols(0)
+          case x => error(
+              "Ambiguous references to table (reference must be one and must consist of one column): "
+              + ptn + ". Refs: " + x)
       } else resources.colName(objName, refPropName)
       var hasRef: Boolean = parent == null
       var hasPk: Boolean = false
@@ -120,10 +122,9 @@ object ORT {
         }
       }).filter(_._1 != null && (parent == null || refColName != null)) ++
       (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn))) ++
-      (if (hasPk || (parent != null && (refColName == null ||
+      (if (hasPk || table.key.cols.length != 1 || (parent != null && (refColName == null ||
           table.key.cols == List(refColName)))) Map()
-       else table.key.cols.headOption.map(x=> Map(x -> ("#" + table.name))).getOrElse(
-           Map()))).unzip match {
+       else Map(table.key.cols(0) -> ("#" + table.name)))).unzip match {
         case (Nil, Nil) => null
         case (cols: List[_], vals: List[_]) => cols.mkString("+" + table.name +
           "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") +
