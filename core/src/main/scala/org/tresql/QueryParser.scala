@@ -291,15 +291,23 @@ object QueryParser extends JavaTokenParsers {
       case r => r
     }
   }
-  def insert: Parser[Insert] = (("+" ~> qualifiedIdent ~ opt(excludeKeywordsIdent) ~ columns ~
-    rep1sep(array, ",")) |
-    ((qualifiedIdent ~ opt(excludeKeywordsIdent) ~ columns <~ "+") ~ rep1sep(array, ","))) ^^ {
-      case t ~ a ~ Cols(_, c) ~ v => Insert(t, a.orNull, c, v)
+  def insert: Parser[Insert] = (("+" ~> qualifiedIdent ~ opt(excludeKeywordsIdent) ~ opt(columns) ~
+    repsep(array, ",")) |
+    ((qualifiedIdent ~ opt(excludeKeywordsIdent) ~ opt(columns) <~ "+") ~ rep1sep(array, ","))) ^^ {
+      case t ~ a ~ Some(Cols(_, c)) ~ v => Insert(t, a.orNull, c, v)
+      case t ~ a ~ None ~ v => Insert(t, a.orNull, null, v)
     }
   def update: Parser[Update] = (("=" ~> qualifiedIdent ~ opt(excludeKeywordsIdent) ~
-    opt(filter) ~ columns ~ array) |
-    ((qualifiedIdent ~ opt(excludeKeywordsIdent) ~ opt(filter) ~ columns <~ "=") ~ array)) ^^ {
-      case t ~ a ~ f ~ Cols(_, c) ~ v => Update(t, a orNull, f orNull, c, v)
+    opt(filter) ~ opt(columns) ~ opt(array)) |
+    ((qualifiedIdent ~ opt(excludeKeywordsIdent) ~ opt(filter) ~ opt(columns) <~ "=") ~ array)) ^^ {
+      case t ~ a ~ f ~ c ~ v => Update(t, a orNull, f orNull, c match {
+        case Some(Cols(_, c)) => c
+        case None => null
+      }, v match {
+        case a: Arr => a
+        case Some(a: Arr) => a
+        case None => null
+      })
     }
   def delete: Parser[Delete] = (("-" ~> qualifiedIdent ~ opt(excludeKeywordsIdent) ~ filter) |
     (((qualifiedIdent ~ opt(excludeKeywordsIdent)) <~ "-") ~ filter)) ^^ {
