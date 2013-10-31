@@ -1,3 +1,32 @@
+--- 2013.10.31 tresql 4.1 ---
+insert, update shortcut syntax support
+
+Values expression in insert and update statements can be omitted or left empty i.e. [] or
+set as [*]. In this case values expression is generated implicitly with bind variables ?
+Variable count equals to column count.
+
+Columns expression also can be omitted. In this case columns expression is generated implicitly from table
+metadata on which DML statement is performed.
+
+Some examples:
+
+tresql: +emp
+sql: insert into emp (empno, ename, job, mgr, hiredate, sal, comm, deptno) values (?, ?, ?, ?, ?, ?, ?, ?)
+
+tresql: +emp{empno, ename, job}
+sql: insert into emp (empno, ename, job) values (?, ?, ?)
+
+tresql: emp + [7844, *]
+sql: insert into emp (empno, ename, job, mgr, hiredate, sal, comm, deptno) values (7844, ?, ?, ?, ?, ?, ?, ?)
+
+
+tresql: =emp e[?]{e.ename}
+sql: update emp e set e.ename = ? where e.empno = ?
+
+tresql: =emp[?]
+sql: update emp set empno = ?, ename = ?, job = ?, mgr = ?, hiredate = ?, sal = ?, comm = ?, deptno = ? where emp.empno = ?
+
+
 --- 2013.10.15 tresql 4.0.1 ---
 Parsed expression cache fixes.
 
