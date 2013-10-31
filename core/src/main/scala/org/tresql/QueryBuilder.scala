@@ -508,24 +508,36 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   //DML statements are defined outsided buildInternal method since they are called from other QueryBuilder
   private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: List[Arr]) = {
-    new InsertExpr(IdentExpr(table.ident), alias, cols map (buildInternal(_, COL_CTX)) filter {
+    new InsertExpr(IdentExpr(table.ident), alias, Option(cols) map (_ map (buildInternal(_, COL_CTX)) filter {
       case x @ ColExpr(IdentExpr(_), _, _, _, _) => true
       case e: ColExpr => this.childUpdates += { (e.col, e.name) }; false
-    }, vals map { buildInternal(_, VALUES_CTX) })
+    }) getOrElse this.table(table).cols.map(c=> IdentExpr(List(c.name))),
+    vals map { buildInternal(_, VALUES_CTX) } match {
+      case Nil | List(ArrExpr(Nil)) | List(ArrExpr(List(AllExpr()))) => Option(cols).getOrElse(
+          this.table(table).cols).map(c => buildInternal(Variable("?", false), VALUES_CTX))
+      case List(ArrExpr(List(e, AllExpr()))) => e :: Option(cols).getOrElse(
+          this.table(table).cols).drop(1).map(c => buildInternal(Variable("?", false), VALUES_CTX))
+      case v => v
+    })
   }
   private def buildUpdate(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Arr) = {
     new UpdateExpr(IdentExpr(table.ident), alias, if (filter != null)
       filter.elements map { buildInternal(_, WHERE_CTX) } else null,
-      cols map (buildInternal(_, COL_CTX)) filter {
+      Option(cols) map (_ map (buildInternal(_, COL_CTX)) filter {
         case ColExpr(IdentExpr(_), _, _, _, _) => true
         case e: ColExpr => this.childUpdates += { (e.col, e.name) }; false
-      },
-      vals.elements map { buildInternal(_, VALUES_CTX) })
+      }) getOrElse this.table(table).cols.map(c=> IdentExpr(List(c.name))),
+      Option(vals).map(_.elements).getOrElse(Nil) map { buildInternal(_, VALUES_CTX) } match {
+      case Nil | List(AllExpr()) => Option(cols).getOrElse(
+          this.table(table).cols).map(c => buildInternal(Variable("?", false), VALUES_CTX))
+      case v => v
+    })
   }
   private def buildDelete(table: Ident, alias: String, filter: Arr) = {
     new DeleteExpr(IdentExpr(table.ident), alias,
       if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null)
   }
+  private def table(t: Ident) = env.table(t.ident.mkString("."))
 
   private def buildInternal(parsedExpr: Any, parseCtx: String = ROOT_CTX): Expr = {
     def buildSelect(q: Query) = {

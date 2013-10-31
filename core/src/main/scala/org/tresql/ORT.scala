@@ -118,7 +118,7 @@ object ORT {
               (refPropName == null && refColName == cn)) =>
                 hasRef = true
                 cn -> (":#" + ptn)
-          case v => (table.cols.get(cn).map(_.name).orNull, ":" + n)
+          case v => (table.colOption(cn).map(_.name).orNull, ":" + n)
         }
       }).filter(_._1 != null && (parent == null || refColName != null)) ++
       (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn))) ++
@@ -167,7 +167,7 @@ object ORT {
           case v: Map[String, _] => (childUpdates(n, v), null)
           //do not update pkProp
           case v if (Some(n) == pkProp) => (null, null)
-          case v => (table.cols.get(cn).map(_.name).orNull, ":" + n)
+          case v => (table.colOption(cn).map(_.name).orNull, ":" + n)
         }
       }).filter(_._1 != null).unzip match {
         case (cols: List[_], vals: List[_]) => pkProp.flatMap(pk =>
@@ -206,7 +206,7 @@ object ORT {
                 //check that delete table exists
                 resources.metaData.tableOption(resources.tableName(t._1.takeWhile(!Set(':', '#').contains(_)))) != None))
         //eliminate props not matching col in database
-        case x => table.cols.get(col).map(c=> ListMap(entry)).getOrElse(ListMap())
+        case x => table.colOption(col).map(c=> ListMap(entry)).getOrElse(ListMap())
       }
     })
     if (pk == null) ListMap(name + "#insert" -> tresqlObj)
@@ -346,7 +346,7 @@ object ORT {
               fill_tresql(n, v, fillNames, resources, parent = Some(objName -> pkpr)) +
               " '" + n + "'"))).orNull)
         } 
-        case _ => List(table.cols.get(cn).map(_.name + " " + n).orNull)
+        case _ => List(table.colOption(cn).map(_.name + " " + n).orNull)
       }
     }).filter(_ != null).mkString(table.name +
         "[" + filterCol + " in(" + ids.map(_.mkString(", ")).getOrElse(filterVal) + ")]{", ", ", "}")

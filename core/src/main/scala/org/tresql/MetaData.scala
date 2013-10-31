@@ -33,12 +33,12 @@ trait MetaData {
     }
   }
 
-  def col(table: String, col: String): Col = this.table(table).cols(col)
-  def colOption(table: String, col: String): Option[Col] = this.tableOption(table).flatMap(_.cols.get(col))
+  def col(table: String, col: String): Col = this.table(table).col(col)
+  def colOption(table: String, col: String): Option[Col] = this.tableOption(table).flatMap(_.colOption(col))
   def col(col: String): Col =
-    table(col.substring(0, col.lastIndexOf('.'))).cols(col.substring(col.lastIndexOf('.') + 1))
+    table(col.substring(0, col.lastIndexOf('.'))).col(col.substring(col.lastIndexOf('.') + 1))
   def colOption(col: String): Option[Col] = tableOption(col.substring(0, col.lastIndexOf('.'))).flatMap(
-    _.cols.get(col.substring(col.lastIndexOf('.') + 1)))
+    _.colOption(col.substring(col.lastIndexOf('.') + 1)))
 
   def dbName: String
   def table(name: String): Table
@@ -49,21 +49,23 @@ trait MetaData {
 
 //TODO pk col storing together with ref col (for multi col key secure support)?
 package metadata {
-  case class Table(val name: String, val comments: String, val cols: Map[String, Col], val key: Key,
+  case class Table(name: String, comments: String, cols: List[Col], key: Key,
     rfs: Map[String, List[Ref]], dbname: String) {
+    private val colMap = cols map (c => c.name -> c) toMap
     val refTable: Map[Ref, String] = rfs.flatMap(t => t._2.map(_ -> t._1))
+    def col(name: String) = colMap(name)
+    def colOption(name: String) = colMap.get(name)
     def refs(table: String) = rfs.get(table).getOrElse(Nil)
   }
   object Table {
     def apply(t: Map[String, Any]): Table = {
       Table(t("name").toString.toLowerCase, t("comments").asInstanceOf[String], t("cols") match {
-        case l: List[Map[String, String]] => (l map { c =>
-          (c("name").toLowerCase,
-            Col(c("name").toString.toLowerCase, c("sqlType").asInstanceOf[Int],
-              c("typeName").toString.toLowerCase, c("nullable").asInstanceOf[Boolean],
-              c("size").asInstanceOf[Int], c("decimalDigits").asInstanceOf[Int],
-              c("comments").asInstanceOf[String]))
-        }).toMap
+        case l: List[Map[String, String]] => l map { c =>
+          Col(c("name").toString.toLowerCase, c("sqlType").asInstanceOf[Int],
+            c("typeName").toString.toLowerCase, c("nullable").asInstanceOf[Boolean],
+            c("size").asInstanceOf[Int], c("decimalDigits").asInstanceOf[Int],
+            c("comments").asInstanceOf[String])
+        }
       }, t("key") match { case l: List[String] => Key(l map (_.toLowerCase)) }, t("refs") match {
         case l: List[Map[String, Any]] => (l map { r =>
           (r("table").asInstanceOf[String].toLowerCase,
