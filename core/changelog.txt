@@ -1,3 +1,13 @@
+--- 2013.10.31 tresql 4.1.1 ---
+insert, update shortcut syntax support enhanced:
+1. * sign can be placed at any position in values clause
+2. * sign can be used in multiple values clauses of insert statement
+
+Examples:
+
+dept {deptno, dname, loc} + [*, "RIGA"]
+dept + [*], [*]
+
 --- 2013.10.31 tresql 4.1 ---
 insert, update shortcut syntax support
 
