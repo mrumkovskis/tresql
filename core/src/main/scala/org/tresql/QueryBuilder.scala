@@ -286,14 +286,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
   }
   
-  case class ArrExpr(val elements: List[Expr]) extends BaseExpr {
+  case class ArrExpr(elements: List[Expr]) extends BaseExpr {
     override def apply() = elements map (_())
     def defaultSQL = elements map { _.sql } mkString ("(", ", ", ")")
     override def toString = elements map { _.toString } mkString ("[", ", ", "]")
   }
 
-  case class SelectExpr(val tables: List[Table], val filter: List[Expr], val cols: List[ColExpr],
-    val distinct: Boolean, val group: Expr, val order: List[Expr],
+  case class SelectExpr(tables: List[Table], filter: List[Expr], cols: List[ColExpr],
+    distinct: Boolean, group: Expr, order: List[Expr],
     offset: Expr, limit: Expr, aliases: Map[String, Table]) extends BaseExpr {
     override def apply() = {
       org.tresql.Query.sel(sql, cols, QueryBuilder.this.bindVariables, env,
@@ -511,13 +511,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     new InsertExpr(IdentExpr(table.ident), alias, Option(cols) map (_ map (buildInternal(_, COL_CTX)) filter {
       case x @ ColExpr(IdentExpr(_), _, _, _, _) => true
       case e: ColExpr => this.childUpdates += { (e.col, e.name) }; false
-    }) getOrElse this.table(table).cols.map(c=> IdentExpr(List(c.name))),
-    vals map { buildInternal(_, VALUES_CTX) } match {
-      case Nil | List(ArrExpr(Nil)) | List(ArrExpr(List(AllExpr()))) => Option(cols).getOrElse(
-          this.table(table).cols).map(c => buildInternal(Variable("?", false), VALUES_CTX))
-      case List(ArrExpr(List(e, AllExpr()))) => e :: Option(cols).getOrElse(
-          this.table(table).cols).drop(1).map(c => buildInternal(Variable("?", false), VALUES_CTX))
-      case v => v
+    }) getOrElse this.table(table).cols.map(c => IdentExpr(List(c.name))), vals map {
+      buildInternal(_, VALUES_CTX) match {
+        case ArrExpr(l) => ArrExpr(patchVals(table, cols, l))
+        case e => e
+      }
+    } match {
+      case Nil => patchVals(table, cols, Nil)
+      case l => l
     })
   }
   private def buildUpdate(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Arr) = {
@@ -526,18 +527,25 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       Option(cols) map (_ map (buildInternal(_, COL_CTX)) filter {
         case ColExpr(IdentExpr(_), _, _, _, _) => true
         case e: ColExpr => this.childUpdates += { (e.col, e.name) }; false
-      }) getOrElse this.table(table).cols.map(c=> IdentExpr(List(c.name))),
-      Option(vals).map(_.elements).getOrElse(Nil) map { buildInternal(_, VALUES_CTX) } match {
-      case Nil | List(AllExpr()) => Option(cols).getOrElse(
-          this.table(table).cols).map(c => buildInternal(Variable("?", false), VALUES_CTX))
-      case v => v
-    })
+      }) getOrElse this.table(table).cols.map(c => IdentExpr(List(c.name))), patchVals(table, cols,
+        Option(vals).map(_.elements).getOrElse(Nil) map { buildInternal(_, VALUES_CTX) }))
   }
   private def buildDelete(table: Ident, alias: String, filter: Arr) = {
     new DeleteExpr(IdentExpr(table.ident), alias,
       if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null)
   }
   private def table(t: Ident) = env.table(t.ident.mkString("."))
+  private def patchVals(table: Ident, cols: List[Col], vals: List[Expr]) = {
+    val diff = Option(cols).getOrElse(this.table(table).cols).size - vals.size
+    def v(i: Int) = buildInternal(Variable("?", false), VALUES_CTX)
+    val allExprIdx = vals.indexWhere(_.isInstanceOf[AllExpr])
+    if (diff > 0 || allExprIdx != -1) allExprIdx match {
+      case -1 if vals.size == 0 => 1 to diff map v toList //empty value clause
+      case -1 => vals //perhaps hierarchical update
+      case i => vals.patch(i, 1 to (diff + 1) map v, 1)
+    }
+    else vals
+  }
 
   private def buildInternal(parsedExpr: Any, parseCtx: String = ROOT_CTX): Expr = {
     def buildSelect(q: Query) = {
