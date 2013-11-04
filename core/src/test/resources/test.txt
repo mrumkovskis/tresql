@@ -2,14 +2,15 @@
 //<statement> --> [<semicolon separated bind params (array elements are comma separated)>] --> <result as returned from method uniso.query.result.Jsonizer.jsonize(..., Jsonizer.Arrays)>
 //INSERT
 //DEPTS
-DEPT {DEPTNO, DNAME, LOC} + [10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"], [40, "OPERATIONS", "BOSTON"] --> 4
+DEPT {DEPTNO, DNAME, LOC} + [10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"] --> 2
+DEPT {DEPTNO, DNAME, LOC} + [], [*] --> 30; 'SALES; 'CHICAGO; 40; 'OPERATIONS; 'BOSTON --> 2
 //EMPS
 EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7839, "KING",   "PRESIDENT", null, "1981-11-17", 5000, null, 10] --> 1
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7698, "BLAKE",  "MANAGER",   7839, "1981-05-01",  2850, null, 30] --> 1
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7782, "CLARK",  "MANAGER",   7839, "1981-06-9", 2450, null, 10] --> 1
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7566, "JONES",  "MANAGER",   7839, "1981-04-02",  2975, null, 20] --> 1
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7499, "ALLEN",  "SALESMAN",  7698, "1981-02-20", 1600,  300, 30] --> 1
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7521, "WARD",   "SALESMAN",  7698, "1981-02-22", 1250,  500, 30] --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7698, "BLAKE",  "MANAGER",   7839, "1981-05-01",  2850, null, *] --> 30 --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7782, "CLARK",  *,   7839, "1981-06-9", 2450, null, 10] --> 'MANAGER --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [*, "JONES",  "MANAGER",   7839, "1981-04-02",  2975, null, 20] --> 7566 --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7499, "ALLEN",  "SALESMAN",  7698, "1981-02-20", *] --> 1600; 300; 30 --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7521, *,  7698, "1981-02-22", 1250,  500, 30] --> 'WARD; 'SALESMAN --> 1
 EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [*] --> 7654; 'MARTIN; 'SALESMAN; 7698; '1981-09-28; 1250; 1400; 30 --> 1
 EMP + [7844, *] --> 'TURNER; 'SALESMAN;  7698; '1981-09-8; 1500; 0; 30 --> 1
 EMP + [] --> 7900; 'JAMES; 'CLERK; 7698; '1981-12-3; 950; null; 30 --> 1
@@ -250,6 +251,8 @@ emp[](emp{avg(sal) avgsal}) [(sal)/avgsal <= 1] {count(*)} --> [[8]]
 //----UPDATE----
 emp[hiredate >= ? & hiredate <= ?]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;1000.35 --> 2
 emp[hiredate >= ? & hiredate <= ?]{sal} ~#(1) --> '1982-01-23;'1982-12-09 --> [[4000.35], [2300.35]]
+=emp[?] [7876, *, 20] --> 7876; null; 'DESIGNER; null; null; null; null --> 1
+emp[7876] --> [[7876, null, "DESIGNER", null, null, null, null, 20]]
 =emp[?] --> 7876; 7876; null; null; null; null; null; null; 20 --> 1
 emp[7876] --> [[7876, null, null, null, null, null, null, 20]]
 //update table with alias
