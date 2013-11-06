@@ -405,6 +405,8 @@ class QueryTest extends Suite {
     //value clause test
     obj = Map("nr" -> 4444, "dname" -> "OPERATIONS")
     expectResult(1)(ORT.update("car", obj))
+    obj = Map("nr" -> 4444, "dname" -> "<NONE>")
+    expectResult(1)(ORT.update("car", obj))
     
     println("--- delete ---")
     
