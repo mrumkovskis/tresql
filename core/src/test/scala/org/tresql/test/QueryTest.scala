@@ -29,7 +29,7 @@ class QueryTest extends Suite {
     "emp_dept_view" -> "emp"),
     /*property to column name map*/
     Map("car_usage" -> Map("empname" -> ("empno", "(emp[ename = :empname]{empno})")),
-        "car" -> Map("dname" -> ("deptnr", "(dept[dname = :dname] {deptno})"))),
+        "car" -> Map("dname" -> ("deptnr", "(case((dept[dname = :dname] {count(deptno)}) = 1, (dept[dname = :dname] {deptno}), -1))"))),
     /*table to name map*/ Map(
       "work" -> "work[empno]emp{ename || ' (' || wdate || ', ' || hours || ')'}",
       "dept" -> "deptno, deptno || ', ' || dname || ' (' || loc || ')'",
@@ -403,10 +403,10 @@ class QueryTest extends Suite {
     expectResult(List(1, List(1, List(1))))(ORT.update("dept", obj))
     
     //value clause test
-    obj = Map("nr" -> 4444, "dname" -> "OPERATIONS")
+    obj = Map("nr" -> 4444, "dname" -> "ACCOUNTING")
     expectResult(1)(ORT.update("car", obj))
     obj = Map("nr" -> 4444, "dname" -> "<NONE>")
-    expectResult(1)(ORT.update("car", obj))
+    intercept[java.sql.SQLIntegrityConstraintViolationException](ORT.update("car", obj))
     
     println("--- delete ---")
     
