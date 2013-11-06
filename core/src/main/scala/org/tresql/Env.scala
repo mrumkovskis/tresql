@@ -144,7 +144,7 @@ object Env extends Resources {
 
 trait Resources extends NameMap {
   private val _metaData = metadata.JDBCMetaData("")
-  private var _nameMap:Option[(Map[String, String], Map[String, Map[String, String]],
+  private var _nameMap:Option[(Map[String, String], Map[String, Map[String, (String, String)]],
       Map[String, String], Map[String, Map[String, String]])] = None
   private var _delegateNameMap:Option[NameMap] = None
 
@@ -159,28 +159,32 @@ trait Resources extends NameMap {
       objectName)).getOrElse(_nameMap.flatMap(_._1.get(objectName)).getOrElse(objectName))
   override def colName(objectName: String, propertyName: String): String = _delegateNameMap.map(
       _.colName(objectName, propertyName)).getOrElse(_nameMap.flatMap(_._2.get(objectName).flatMap(
-          _.get(propertyName))).getOrElse(propertyName))
+          _.get(propertyName))).map(_._1).getOrElse(propertyName))
   override def nameExpr(tableName: String): Option[String] =
     _delegateNameMap.flatMap(_.nameExpr(tableName)).orElse(_nameMap.flatMap(_._3.get(tableName)))
   override def propNameExpr(objectName: String, propertyName: String) =
     _delegateNameMap.flatMap(_.propNameExpr(objectName, propertyName)).orElse(
         _nameMap.flatMap(_._4.get(objectName)).flatMap(_.get(propertyName)))
+  override def valueClause(objectName: String, propertyName: String) = _delegateNameMap.map(
+      _.valueClause(objectName, propertyName)).getOrElse(_nameMap.flatMap(_._2.get(objectName).flatMap(
+          _.get(propertyName))).map(_._2).getOrElse(super.valueClause(objectName, propertyName)))
 
   def nameMap = _delegateNameMap getOrElse this
   def nameMap_=(map:NameMap) = _delegateNameMap = Option(map).filter(_ != this)
   /** Set name map for this NameMap implementation
    * 1. map: object name -> table name,
-   * 2. map: object name -> map: (property name -> column name),
+   * 2. map: object name -> map: (property name -> (column name -> column value clause)),
    * 3. map: table name -> name tresql expression
    * 4. map: object name -> map: (property name -> name tresql expression)
    */
-  def update(map:(Map[String, String], Map[String, Map[String, String]], Map[String, String],
+  def update(map:(Map[String, String], Map[String, Map[String, (String, String)]], Map[String, String],
       Map[String, Map[String, String]])) = _nameMap = Option(map)
 }
 
 trait NameMap {
   def tableName(objectName:String):String = objectName
   def colName(objectName:String, propertyName:String):String = propertyName
+  def valueClause(objectName: String, propertyName: String) = ":" + propertyName
   /** TreSQL expression returning entity name. Typically it is a query from table referenced
    * by tableName (NOT objectName!). Name expression is used in ORT.fill method if fillNames
    * parameter is true when foreign key property of the object is resolved to name.

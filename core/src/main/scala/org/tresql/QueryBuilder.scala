@@ -537,12 +537,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private def table(t: Ident) = env.table(t.ident.mkString("."))
   private def patchVals(table: Ident, cols: List[Col], vals: List[Expr]) = {
     val diff = Option(cols).getOrElse(this.table(table).cols).size - vals.size
-    def v(i: Int) = buildInternal(Variable("?", false), VALUES_CTX)
     val allExprIdx = vals.indexWhere(_.isInstanceOf[AllExpr])
+    def v(i: Int) = buildInternal(Variable("?", false), VALUES_CTX)
     if (diff > 0 || allExprIdx != -1) allExprIdx match {
       case -1 if vals.size == 0 => 1 to diff map v toList //empty value clause
       case -1 => vals //perhaps hierarchical update
-      case i => vals.patch(i, 1 to (diff + 1) map v, 1)
+      case i => vals.patch(i, 0 to diff map v, 1)
     }
     else vals
   }

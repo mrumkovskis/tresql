@@ -25,17 +25,20 @@ class QueryTest extends Suite {
   Env.functions = new TestFunctions
   Env.cache = new SimpleCache
   Env update ((msg, level) => println (msg))
-  Env update (/*object to table name map*/Map(
-      "emp_dept_view"->"emp"),
-      /*property to column name map*/Map(), /*table to name map*/Map(
-      "work"->"work[empno]emp{ename || ' (' || wdate || ', ' || hours || ')'}",
-      "dept"->"deptno, deptno || ', ' || dname || ' (' || loc || ')'",
+  Env update ( /*object to table name map*/ Map(
+    "emp_dept_view" -> "emp"),
+    /*property to column name map*/
+    Map("car_usage" -> Map("empname" -> ("empno", "(emp[ename = :empname]{empno})")),
+        "car" -> Map("dname" -> ("deptnr", "(case((dept[dname = :dname] {count(deptno)}) = 1, (dept[dname = :dname] {deptno}), -1))"))),
+    /*table to name map*/ Map(
+      "work" -> "work[empno]emp{ename || ' (' || wdate || ', ' || hours || ')'}",
+      "dept" -> "deptno, deptno || ', ' || dname || ' (' || loc || ')'",
       /* NOTE: in emp table name expression in from clause 'dept/emp' emp must come after dept since
         emp name is resolved by adding search by primary key shortcut syntax i.e. 'dept/emp[10]'
         and shortcut primary key search expression refers to the last table in from clause. */
-      "emp"->"dept/emp{empno, empno, ename || ' (' || dname || ')'}"),
-      /*object property to name map*/Map(
-      "emp_dept_view"->Map("deptno"->"null")))
+      "emp" -> "dept/emp{empno, empno, ename || ' (' || dname || ')'}"),
+      /*object property to name map*/ Map(
+        "emp_dept_view" -> Map("deptno" -> "null")))
   //create test db script
   new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
     sql => val st = conn.createStatement; st.execute(sql); st.close
@@ -231,7 +234,9 @@ class QueryTest extends Suite {
         Map("ename" -> "SMITH"), Map("ename" -> "LEWIS")))))
         
     println("----------- ORT tests ------------")
-    println("--- inserts ---")
+    
+    println("--- insert ---")
+    
     var obj:Map[String, Any] = Map("deptno" -> null, "dname" -> "LAW", "loc" -> "DALLAS",
       "calculated_field"->333, "another_calculated_field"->"A",
       "emp" -> scala.Array(Map("empno" -> null, "ename" -> "SMITH", "deptno" -> null,
@@ -276,7 +281,7 @@ class QueryTest extends Suite {
     obj = Map("deptno" -> null, "dname" -> "DRUGS",
               "car" -> List(Map("nr" -> "UUU", "name" -> "BEATLE")))
     expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
-    
+        
     //multiple column primary key
     obj = Map("empno"->7788, "car_nr" -> "1111")
     expectResult(1)(ORT.insert("car_usage", obj))
@@ -287,11 +292,16 @@ class QueryTest extends Suite {
     intercept[SQLException](ORT.insert("car_usage", obj))
     obj = Map("empno" -> 7839)
     intercept[SQLException](ORT.insert("car_usage", obj))
-            
+    
+    //value clause test
+    obj = Map("car_nr" -> 2222, "empname" -> "SCOTT", "date_from" -> "2013-11-06")
+    expectResult(1)(ORT.insert("car_usage", obj))
+        
     println("--- fill ---")
+    
     //no row found
     obj = Map("empno"-> -1, "ename"->null, "deptno"->null, "deptno_name"->null,
-        "mgr"->null, "mgr_name"->null)
+        "mgr"->null, "mgr_name"->null)    
     expectResult(None)(ORT.fill("emp", obj, true))
     //no primary key property found
     obj = Map("kuku"-> -1, "ename"->null, "deptno"->null, "deptno_name"->null,
@@ -357,6 +367,7 @@ class QueryTest extends Suite {
     intercept[Exception](ORT.fill("emp", obj, true))
       
     println("--- update ---")
+    
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
         "emp"->List(
             Map("empno"->null, "ename"->"ANNA", "mgr"->7788, "mgr_name"->null,
@@ -391,10 +402,18 @@ class QueryTest extends Suite {
               "dept_addr" -> List(Map("addr" -> "Halibut", "zip_code" -> "1010")))
     expectResult(List(1, List(1, List(1))))(ORT.update("dept", obj))
     
+    //value clause test
+    obj = Map("nr" -> 4444, "dname" -> "ACCOUNTING")
+    expectResult(1)(ORT.update("car", obj))
+    obj = Map("nr" -> 4444, "dname" -> "<NONE>")
+    intercept[java.sql.SQLIntegrityConstraintViolationException](ORT.update("car", obj))
+    
     println("--- delete ---")
+    
     expectResult(1)(ORT.delete("emp", 7934))
     
     println("--- save ---")
+    
     obj = Map("dname" -> "SALES", "loc" -> "WASHINGTON", "calculated_field" -> 222,
       "emp" -> List(
         Map("empno" -> 7499, "ename" -> "ALLEN SMITH", "job" -> "SALESMAN", "mgr" -> 7698,

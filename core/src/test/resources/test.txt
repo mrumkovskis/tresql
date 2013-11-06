@@ -20,7 +20,7 @@ EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7788, "SCOTT",  "AN
 +EMP E {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} --> 7369; 'SMITH; 'CLERK; 7902; 1980-12-17; 800; null; 20 --> 1
 
 //SALGRADES
-SALGRADE {GRADE, HISAL, LOSAL} + [1, 700, 1200],[2, 1201, 1400],[3, 1401, 2000],[4, 2001, 3000],[5, 3001, 9999] --> 5
+SALGRADE + [1, 700, 1200],[2, 1201, 1400],[3, 1401, 2000],[4, 2001, 3000],[5, 3001, 9999] --> 5
 
 //WORK
 WORK {WDATE, EMPNO, HOURS, EMPNO_MGR} + ["2012-06-06", 7839, 3, null], ["2012-06-07", 7839, 4, null], ["2012-06-06", 7788, 5, 7566], ["2012-06-07", 7788, 8, 7782] --> 4
@@ -46,7 +46,7 @@ dept[:'id'] {deptno} #(deptno) --> id=10 --> [[10]]
 dept[:"id"] {deptno} #(deptno) --> id=10 --> [[10]]
 
 //join
-emp e/dept[sal >= hisal & sal <= losal]salgrade {ename, dname, grade} #(empno) --> [["SMITH", "RESEARCH", 1], ["ALLEN", "SALES", 3], ["WARD", "SALES", 2], ["JONES", "RESEARCH", 4], ["MARTIN", "SALES", 2], ["BLAKE", "SALES", 4], ["CLARK", "ACCOUNTING", 4], ["SCOTT", "RESEARCH", 4], ["KING", "ACCOUNTING", 5], ["TURNER", "SALES", 3], ["ADAMS", "RESEARCH", 1], ["JAMES", "SALES", 1], ["FORD", "RESEARCH", 4], ["MILLER", "ACCOUNTING", 2]]
+emp e/dept[sal >= losal & sal <= hisal]salgrade {ename, dname, grade} #(empno) --> [["SMITH", "RESEARCH", 1], ["ALLEN", "SALES", 3], ["WARD", "SALES", 2], ["JONES", "RESEARCH", 4], ["MARTIN", "SALES", 2], ["BLAKE", "SALES", 4], ["CLARK", "ACCOUNTING", 4], ["SCOTT", "RESEARCH", 4], ["KING", "ACCOUNTING", 5], ["TURNER", "SALES", 3], ["ADAMS", "RESEARCH", 1], ["JAMES", "SALES", 1], ["FORD", "RESEARCH", 4], ["MILLER", "ACCOUNTING", 2]]
 work[empno]emp/dept {wdate, ename, dname} #(1,2,3) --> [["2012-06-06", "KING", "ACCOUNTING"], ["2012-06-06", "SCOTT", "RESEARCH"], ["2012-06-07", "KING", "ACCOUNTING"], ["2012-06-07", "SCOTT", "RESEARCH"]]
 dept/car[2222]#(nr) --> [[20, "RESEARCH", "DALLAS", "2222", "BMW", true, 20]]
 car/dept[20]#(nr) --> [["2222", "BMW", true, 20, 20, "RESEARCH", "DALLAS"], ["3333", "MERCEDES", false, 20, 20, "RESEARCH", "DALLAS"]]
@@ -92,8 +92,8 @@ emp/dept[10] {dname || ',' || ename name}#(1) --> [["ACCOUNTING,CLARK"], ["ACCOU
 emp[ename ~~ ?]{ename, (dept[?]{dname}) dname, (dept[?]{dname}) dname1} --> 'KIN%; 10; 20 --> [["KING", "ACCOUNTING", "RESEARCH"]]
 
 //order
-dept/emp[sal >= hisal & sal <= losal]salgrade {deptno, grade, empno, sal}#(deptno, grade)~#(sal) --> [[10, 2, 7934, 1300.00], [10, 4, 7782, 2450.00], [10, 5, 7839, 5000.00], [20, 1, 7876, 1100.00], [20, 1, 7369, 800.00], [20, 4, 7788, 3000.00], [20, 4, 7902, 3000.00], [20, 4, 7566, 2975.00], [30, 1, 7900, 950.00], [30, 2, 7521, 1250.00], [30, 2, 7654, 1250.00], [30, 3, 7499, 1600.00], [30, 3, 7844, 1500.00], [30, 4, 7698, 2850.00]]
-dept/emp[sal >= hisal & sal <= losal]salgrade {deptno, grade, empno, sal}#(null deptno, grade)~#(sal, 3 null) --> [[10, 2, 7934, 1300.00], [10, 4, 7782, 2450.00], [10, 5, 7839, 5000.00], [20, 1, 7369, 800.00], [20, 1, 7876, 1100.00], [20, 4, 7566, 2975.00], [20, 4, 7902, 3000.00], [20, 4, 7788, 3000.00], [30, 1, 7900, 950.00], [30, 2, 7654, 1250.00], [30, 2, 7521, 1250.00], [30, 3, 7844, 1500.00], [30, 3, 7499, 1600.00], [30, 4, 7698, 2850.00]]
+dept/emp[sal >= losal & sal <= hisal]salgrade {deptno, grade, empno, sal}#(deptno, grade)~#(sal) --> [[10, 2, 7934, 1300.00], [10, 4, 7782, 2450.00], [10, 5, 7839, 5000.00], [20, 1, 7876, 1100.00], [20, 1, 7369, 800.00], [20, 4, 7788, 3000.00], [20, 4, 7902, 3000.00], [20, 4, 7566, 2975.00], [30, 1, 7900, 950.00], [30, 2, 7521, 1250.00], [30, 2, 7654, 1250.00], [30, 3, 7499, 1600.00], [30, 3, 7844, 1500.00], [30, 4, 7698, 2850.00]]
+dept/emp[sal >= losal & sal <= hisal]salgrade {deptno, grade, empno, sal}#(null deptno, grade)~#(sal, 3 null) --> [[10, 2, 7934, 1300.00], [10, 4, 7782, 2450.00], [10, 5, 7839, 5000.00], [20, 1, 7369, 800.00], [20, 1, 7876, 1100.00], [20, 4, 7566, 2975.00], [20, 4, 7902, 3000.00], [20, 4, 7788, 3000.00], [30, 1, 7900, 950.00], [30, 2, 7654, 1250.00], [30, 2, 7521, 1250.00], [30, 3, 7844, 1500.00], [30, 3, 7499, 1600.00], [30, 4, 7698, 2850.00]]
 
 //in operator
 dept[deptno in(10)]{deptno}#(1) --> [[10]]
@@ -138,20 +138,20 @@ dept[deptno in (emp[sal >= ?]{deptno})] {dname} --> 5000 --> [["ACCOUNTING"]]
 dept d[d.deptno in (emp e[e.deptno in (dept d1[:id?]{d1.deptno})]{e.deptno})]{deptno}#(deptno) --> id=10 --> [[10]]
 
 //ternary comparison
-emp[hisal <= sal <= losal] salgrade {ename, sal, grade} #(3,2,1) --> [["SMITH", 800.00, 1], ["JAMES", 950.00, 1], ["ADAMS", 1100.00, 1], ["MARTIN", 1250.00, 2], ["WARD", 1250.00, 2], ["MILLER", 1300.00, 2], ["TURNER", 1500.00, 3], ["ALLEN", 1600.00, 3], ["CLARK", 2450.00, 4], ["BLAKE", 2850.00, 4], ["JONES", 2975.00, 4], ["FORD", 3000.00, 4], ["SCOTT", 3000.00, 4], ["KING", 5000.00, 5]]
+emp[losal <= sal <= hisal] salgrade {ename, sal, grade} #(3,2,1) --> [["SMITH", 800.00, 1], ["JAMES", 950.00, 1], ["ADAMS", 1100.00, 1], ["MARTIN", 1250.00, 2], ["WARD", 1250.00, 2], ["MILLER", 1300.00, 2], ["TURNER", 1500.00, 3], ["ALLEN", 1600.00, 3], ["CLARK", 2450.00, 4], ["BLAKE", 2850.00, 4], ["JONES", 2975.00, 4], ["FORD", 3000.00, 4], ["SCOTT", 3000.00, 4], ["KING", 5000.00, 5]]
 emp/dept[dname ~~ 'SAL%' & ? <= sal < ? & comm != null ]{ename, sal, dname} #(ename) --> 1500; 2000 --> [["ALLEN", 1600.00, "SALES"], ["TURNER", 1500.00, "SALES"]]
 
 //group by, having
-emp[sal >= hisal & sal <= losal]salgrade {grade, hisal, losal, count(empno)} (grade, hisal, losal) #(1) --> [[1, 700, 1200, 3], [2, 1201, 1400, 3], [3, 1401, 2000, 2], [4, 2001, 3000, 5], [5, 3001, 9999, 1]]
-emp[sal >= hisal & sal <= losal]salgrade {grade, hisal, losal, count(*)} (grade, hisal, losal)^(count(*) > ?)#(1) --> 1 --> [[1, 700, 1200, 3], [2, 1201, 1400, 3], [3, 1401, 2000, 2], [4, 2001, 3000, 5]] 
+emp[sal >= losal & sal <= hisal]salgrade {grade, losal, hisal, count(empno)} (grade, losal, hisal) #(1) --> [[1, 700, 1200, 3], [2, 1201, 1400, 3], [3, 1401, 2000, 2], [4, 2001, 3000, 5], [5, 3001, 9999, 1]]
+emp[sal >= losal & sal <= hisal]salgrade {grade, losal, hisal, count(*)} (grade, losal, hisal)^(count(*) > ?)#(1) --> 1 --> [[1, 700, 1200, 3], [2, 1201, 1400, 3], [3, 1401, 2000, 2], [4, 2001, 3000, 5]] 
 
 //two level query: salgrade -> emp
-salgrade[?] {grade, hisal, losal, |emp[sal >= :1(2) & sal <= :1(3)]{ename, sal}} --> 5 --> [[5, 3001, 9999, [["KING", 5000.00]]]]
-salgrade[?] {grade, hisal, losal lo, |emp[sal >= :1('hisal') & sal <= :1('lo')]{ename, sal}} --> 5 --> [[5, 3001, 9999, [["KING", 5000.00]]]]
-salgrade[?] {grade, hisal hi, losal, |emp[sal >= :1(hi) & sal <= :1(losal)]{ename, sal}} --> 5 --> [[5, 3001, 9999, [["KING", 5000.00]]]]
+salgrade[?] {grade, losal, hisal, |emp[sal >= :1(2) & sal <= :1(3)]{ename, sal}} --> 5 --> [[5, 3001, 9999, [["KING", 5000.00]]]]
+salgrade[?] {grade, losal lo, hisal, |emp[sal >= :1('lo') & sal <= :1('hisal')]{ename, sal}} --> 5 --> [[5, 3001, 9999, [["KING", 5000.00]]]]
+salgrade[?] {grade, losal, hisal hi, |emp[sal >= :1(losal) & sal <= :1(hi)]{ename, sal}} --> 5 --> [[5, 3001, 9999, [["KING", 5000.00]]]]
 
 //three level query: dept -> salgrade -> emp
-dept{deptno, dname, |emp[sal >= hisal & sal <= losal]salgrade[deptno = :1(1)] {grade, hisal, losal, count(empno) empcount, |emp/dept[sal >= :1(2) & sal <= :1(3) & emp.deptno = :2(1)]{ename, emp.deptno, dname, sal}#(empno) emps} (grade, hisal, losal) #(1) salgrades}#(deptno) --> [[10, "ACCOUNTING", [[2, 1201, 1400, 1, [["MILLER", 10, "ACCOUNTING", 1300.00]]], [4, 2001, 3000, 1, [["CLARK", 10, "ACCOUNTING", 2450.00]]], [5, 3001, 9999, 1, [["KING", 10, "ACCOUNTING", 5000.00]]]]], [20, "RESEARCH", [[1, 700, 1200, 2, [["SMITH", 20, "RESEARCH", 800.00], ["ADAMS", 20, "RESEARCH", 1100.00]]], [4, 2001, 3000, 3, [["JONES", 20, "RESEARCH", 2975.00], ["SCOTT", 20, "RESEARCH", 3000.00], ["FORD", 20, "RESEARCH", 3000.00]]]]], [30, "SALES", [[1, 700, 1200, 1, [["JAMES", 30, "SALES", 950.00]]], [2, 1201, 1400, 2, [["WARD", 30, "SALES", 1250.00], ["MARTIN", 30, "SALES", 1250.00]]], [3, 1401, 2000, 2, [["ALLEN", 30, "SALES", 1600.00], ["TURNER", 30, "SALES", 1500.00]]], [4, 2001, 3000, 1, [["BLAKE", 30, "SALES", 2850.00]]]]], [40, "OPERATIONS", []]]
+dept{deptno, dname, |emp[sal >= losal & sal <= hisal]salgrade[deptno = :1(1)] {grade, losal, hisal, count(empno) empcount, |emp/dept[sal >= :1(2) & sal <= :1(3) & emp.deptno = :2(1)]{ename, emp.deptno, dname, sal}#(empno) emps} (grade, losal, hisal) #(1) salgrades}#(deptno) --> [[10, "ACCOUNTING", [[2, 1201, 1400, 1, [["MILLER", 10, "ACCOUNTING", 1300.00]]], [4, 2001, 3000, 1, [["CLARK", 10, "ACCOUNTING", 2450.00]]], [5, 3001, 9999, 1, [["KING", 10, "ACCOUNTING", 5000.00]]]]], [20, "RESEARCH", [[1, 700, 1200, 2, [["SMITH", 20, "RESEARCH", 800.00], ["ADAMS", 20, "RESEARCH", 1100.00]]], [4, 2001, 3000, 3, [["JONES", 20, "RESEARCH", 2975.00], ["SCOTT", 20, "RESEARCH", 3000.00], ["FORD", 20, "RESEARCH", 3000.00]]]]], [30, "SALES", [[1, 700, 1200, 1, [["JAMES", 30, "SALES", 950.00]]], [2, 1201, 1400, 2, [["WARD", 30, "SALES", 1250.00], ["MARTIN", 30, "SALES", 1250.00]]], [3, 1401, 2000, 2, [["ALLEN", 30, "SALES", 1600.00], ["TURNER", 30, "SALES", 1500.00]]], [4, 2001, 3000, 1, [["BLAKE", 30, "SALES", 2850.00]]]]], [40, "OPERATIONS", []]]
 
 //two level query, child query in the midst of parent query columns
 dept[?]{loc, deptno, |emp[deptno = :1(2)] {job}, dname} --> 10 --> [["NEW YORK", 10, [["PRESIDENT"], ["MANAGER"], ["CLERK"]], "ACCOUNTING"]]
@@ -278,7 +278,7 @@ dummy d - [], DUMMY {DUMMY} + [0], -dummy[], DUMMY {DUMMY} + [0] --> [1, 1, 1, 1
 :v = 5, :s = "kuku" --> [5, "kuku"]
 
 //----BATCH----
-SALGRADE {GRADE, HISAL, LOSAL} + [?, ?, ?], emp[?] {ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} = [?, ?, ?, ?, ?, ?, ?], emp[?] --> 6; 10000; 11000; 7876; 'ADAMS;  'CLERK; 7788; '1983-01-12; 1100; null; 20; 7788 --> [1, 1, [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 4000.35, null, 20]]]
+SALGRADE {GRADE, LOSAL, HISAL} + [?, ?, ?], emp[?] {ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} = [?, ?, ?, ?, ?, ?, ?], emp[?] --> 6; 10000; 11000; 7876; 'ADAMS;  'CLERK; 7788; '1983-01-12; 1100; null; 20; 7788 --> [1, 1, [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 4000.35, null, 20]]]
 //two unions in batch
 salgrade[?] {grade} + dummy, "A" + " " + "B", dept[dname ~~ ?]{deptno} + dummy, 1 + 3 --> -1; 'kuku% --> [[[0]], "A B", [[0]], 4]
 //merging of two results with variables
@@ -307,13 +307,13 @@ emp[cmp_i(ename, ?)]{ename} --> null --> []
 //external function test
 emp{ename, job, |concat(:1(1), ' ', :1(2))}#(1,2) --> [["ADAMS", "CLERK", "ADAMS CLERK"], ["ALLEN", "SALESMAN", "ALLEN SALESMAN"], ["BLAKE", "MANAGER", "BLAKE MANAGER"], ["CLARK", "MANAGER", "CLARK MANAGER"], ["FORD", "ANALYST", "FORD ANALYST"], ["JAMES", "CLERK", "JAMES CLERK"], ["JONES", "MANAGER", "JONES MANAGER"], ["KING", "PRESIDENT", "KING PRESIDENT"], ["MARTIN", "SALESMAN", "MARTIN SALESMAN"], ["MILLER", "CLERK", "MILLER CLERK"], ["MĀRTIŅŠ ŽVŪKŠĶIS", "CLERK", "MĀRTIŅŠ ŽVŪKŠĶIS CLERK"], ["SCOTT", "ANALYST", "SCOTT ANALYST"], ["SMITH", "CLERK", "SMITH CLERK"], ["TURNER", "SALESMAN", "TURNER SALESMAN"], ["WARD", "SALESMAN", "WARD SALESMAN"]]
 emp[deptno = 10]{ename, |echo(:1(1))}#(1) --> [["CLARK", "CLARK"], ["KING", "KING"], ["MILLER", "MILLER"]]
-salgrade {losal, hisal, |plus(:1(1), :1(2))}#(1,2) --> [[1200, 700, 1900], [1400, 1201, 2601], [2000, 1401, 3401], [3000, 2001, 5001], [11000, 10000, 21000]]
+salgrade {losal, hisal, |plus(:1(1), :1(2))}#(1,2) --> [[700, 1200, 1900], [1201, 1400, 2601], [1401, 2000, 3401], [2001, 3000, 5001], [10000, 11000, 21000]]
 salgrade {grade, plus(losal, hisal)}#(1) --> [[1, 1900], [2, 2601], [3, 3401], [4, 5001], [6, 21000]]
 salgrade {plus(losal, hisal), grade}#(1) --> [[1900, 1], [2601, 2], [3401, 3], [5001, 4], [21000, 6]]
 salgrade {grade, plus(losal, hisal), average(losal, hisal)}#(1) --> [[1, 1900, 950], [2, 2601, 1300.5], [3, 3401, 1700.5], [4, 5001, 2500.5], [6, 21000, 10500]]
-salgrade {grade, losal, hisal, plus(losal, hisal), average(losal, hisal)}#(1) --> [[1, 1200, 700, 1900, 950], [2, 1400, 1201, 2601, 1300.5], [3, 2000, 1401, 3401, 1700.5], [4, 3000, 2001, 5001, 2500.5], [6, 11000, 10000, 21000, 10500]]
-salgrade {plus(losal, hisal), grade, average(losal, hisal), losal, hisal}#(2) --> [[1900, 1, 950, 1200, 700], [2601, 2, 1300.5, 1400, 1201], [3401, 3, 1700.5, 2000, 1401], [5001, 4, 2500.5, 3000, 2001], [21000, 6, 10500, 11000, 10000]]
-salgrade {plus(losal * 2, hisal / 2), grade, average(losal + 1000, hisal - 1000), losal, hisal}#(2) --> [[2750, 1, 950, 1200, 700], [3400, 2, 1300.5, 1400, 1201], [4700, 3, 1700.5, 2000, 1401], [7000, 4, 2500.5, 3000, 2001], [27000, 6, 10500, 11000, 10000]]
+salgrade {grade, losal, hisal, plus(losal, hisal), average(losal, hisal)}#(1) --> [[1, 700, 1200, 1900, 950], [2, 1201, 1400, 2601, 1300.5], [3, 1401, 2000, 3401, 1700.5], [4, 2001, 3000, 5001, 2500.5], [6, 10000, 11000, 21000, 10500]]
+salgrade {plus(losal, hisal), grade, average(losal, hisal), losal, hisal}#(2) --> [[1900, 1, 950, 700, 1200], [2601, 2, 1300.5, 1201, 1400], [3401, 3, 1700.5, 1401, 2000], [5001, 4, 2500.5, 2001, 3000], [21000, 6, 10500, 10000, 11000]]
+salgrade {plus(losal * 2, hisal / 2), grade, average(losal + 1000, hisal - 1000), losal, hisal}#(2) --> [[2000, 1, 950, 700, 1200], [3102, 2, 1300.5, 1201, 1400], [3802, 3, 1700.5, 1401, 2000], [5502, 4, 2500.5, 2001, 3000], [25500, 6, 10500, 10000, 11000]]
 dept[10] {nopars(), dname} --> [["ok", "ACCOUNTING"]]
 dept[10] {dname, nopars()} --> [["ACCOUNTING", "ok"]]
 
