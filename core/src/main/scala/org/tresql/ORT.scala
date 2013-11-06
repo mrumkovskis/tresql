@@ -118,7 +118,7 @@ object ORT {
               (refPropName == null && refColName == cn)) =>
                 hasRef = true
                 cn -> (":#" + ptn)
-          case v => (table.colOption(cn).map(_.name).orNull, ":" + n)
+          case v => (table.colOption(cn).map(_.name).orNull, resources.valueClause(objName, n))
         }
       }).filter(_._1 != null && (parent == null || refColName != null)) ++
       (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn))) ++
@@ -167,7 +167,7 @@ object ORT {
           case v: Map[String, _] => (childUpdates(n, v), null)
           //do not update pkProp
           case v if (Some(n) == pkProp) => (null, null)
-          case v => (table.colOption(cn).map(_.name).orNull, ":" + n)
+          case v => (table.colOption(cn).map(_.name).orNull, resources.valueClause(name, n))
         }
       }).filter(_._1 != null).unzip match {
         case (cols: List[_], vals: List[_]) => pkProp.flatMap(pk =>
@@ -249,7 +249,7 @@ object ORT {
               parentTable != null && table.refs(parentTable.name) ==
               List(metadata.Ref(List(col))))) => (col, ":#" + parentTable.name)
             //value
-            case _ => (col, ":" + n)
+            case _ => (col, res.valueClause(objName, n))
           }
           case "update" => if (table.key == metadata.Key(List(col))) {
             pkProp = n; (null, null)
