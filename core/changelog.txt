@@ -1,3 +1,12 @@
+--- 2013.11.07 tresql 4.2 ---
+valueClause(objectName, propertyName) method is added in NameMap trait.
+Method is used to increase flexibility in ORT insert and update methods
+when forming value clause for column value expressions.
+Default implementation returns bindingVariable expression - :propertyName
+However, if overriden method can return tresql statements etc.
+
+See NameMap trait in Env.scala and QueryTest.scala for details.
+
 --- 2013.10.31 tresql 4.1.1 ---
 insert, update shortcut syntax support enhanced:
 1. * sign can be placed at any position in values clause
