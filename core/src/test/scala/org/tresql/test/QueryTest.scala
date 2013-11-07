@@ -226,7 +226,7 @@ class QueryTest extends Suite {
         
     println("----------- ORT tests ------------")
     
-    println("--- insert ---")
+    println("--- INSERT ---")
     
     var obj:Map[String, Any] = Map("deptno" -> null, "dname" -> "LAW", "loc" -> "DALLAS",
       "calculated_field"->333, "another_calculated_field"->"A",
@@ -288,7 +288,7 @@ class QueryTest extends Suite {
     obj = Map("car_nr" -> 2222, "empname" -> "SCOTT", "date_from" -> "2013-11-06")
     expectResult(1)(ORT.insert("car_usage", obj))
     
-    println("--- update ---")
+    println("--- UPDATE ---")
     
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
         "emp"->List(
@@ -330,11 +330,11 @@ class QueryTest extends Suite {
     obj = Map("nr" -> 4444, "dname" -> "<NONE>")
     intercept[java.sql.SQLIntegrityConstraintViolationException](ORT.update("car", obj))
     
-    println("--- delete ---")
+    println("--- DELETE ---")
     
     expectResult(1)(ORT.delete("emp", 7934))
     
-    println("--- save ---")
+    println("--- SAVE ---")
     
     obj = Map("dname" -> "SALES", "loc" -> "WASHINGTON", "calculated_field" -> 222,
       "emp" -> List(
