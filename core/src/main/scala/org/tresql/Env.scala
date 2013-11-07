@@ -144,8 +144,7 @@ object Env extends Resources {
 
 trait Resources extends NameMap {
   private val _metaData = metadata.JDBCMetaData("")
-  private var _nameMap:Option[(Map[String, String], Map[String, Map[String, (String, String)]],
-      Map[String, String], Map[String, Map[String, String]])] = None
+  private var _nameMap:Option[(Map[String, String], Map[String, Map[String, (String, String)]])] = None
   private var _delegateNameMap:Option[NameMap] = None
 
   def conn: java.sql.Connection
@@ -160,14 +159,9 @@ trait Resources extends NameMap {
   override def colName(objectName: String, propertyName: String): String = _delegateNameMap.map(
       _.colName(objectName, propertyName)).getOrElse(_nameMap.flatMap(_._2.get(objectName).flatMap(
           _.get(propertyName))).map(_._1).getOrElse(propertyName))
-  override def nameExpr(tableName: String): Option[String] =
-    _delegateNameMap.flatMap(_.nameExpr(tableName)).orElse(_nameMap.flatMap(_._3.get(tableName)))
-  override def propNameExpr(objectName: String, propertyName: String) =
-    _delegateNameMap.flatMap(_.propNameExpr(objectName, propertyName)).orElse(
-        _nameMap.flatMap(_._4.get(objectName)).flatMap(_.get(propertyName)))
-  override def valueClause(objectName: String, propertyName: String) = _delegateNameMap.map(
-      _.valueClause(objectName, propertyName)).getOrElse(_nameMap.flatMap(_._2.get(objectName).flatMap(
-          _.get(propertyName))).map(_._2).getOrElse(super.valueClause(objectName, propertyName)))
+  override def valueExpr(objectName: String, propertyName: String) = _delegateNameMap.map(
+      _.valueExpr(objectName, propertyName)).getOrElse(_nameMap.flatMap(_._2.get(objectName).flatMap(
+          _.get(propertyName))).map(_._2).getOrElse(super.valueExpr(objectName, propertyName)))
 
   def nameMap = _delegateNameMap getOrElse this
   def nameMap_=(map:NameMap) = _delegateNameMap = Option(map).filter(_ != this)
@@ -177,34 +171,16 @@ trait Resources extends NameMap {
    * 3. map: table name -> name tresql expression
    * 4. map: object name -> map: (property name -> name tresql expression)
    */
-  def update(map:(Map[String, String], Map[String, Map[String, (String, String)]], Map[String, String],
-      Map[String, Map[String, String]])) = _nameMap = Option(map)
+  def update(map:(Map[String, String], Map[String, Map[String, (String, String)]])) =
+    _nameMap = Option(map)
 }
 
 trait NameMap {
   def tableName(objectName:String):String = objectName
   def colName(objectName:String, propertyName:String):String = propertyName
-  def valueClause(objectName: String, propertyName: String) = ":" + propertyName
-  /** TreSQL expression returning entity name. Typically it is a query from table referenced
-   * by tableName (NOT objectName!). Name expression is used in ORT.fill method if fillNames
-   * parameter is true when foreign key property of the object is resolved to name.
-   * In this case filter clause of name expression if present is replaced with this one -
-   * [<pk of referenced table> = <foreign key property value>] 
-   * Examples:
-   * 1. name of entity emp (when used in ORT.fill method
-   *    first table in table clause must be the one which is referenced by object foreign key
-   *    property):
-   *    emp/dept{firstname + ' ' + lastname + ', ' + deptname}
-   * 2. name of some entity as a comma separated list of columns. In this case expression will
-   *    be transformed to: table_name {<column list>}
-   *    registration_number + ", " + name, foundation_date
-   */
-  def nameExpr(tableName:String):Option[String] = None
-  /** TreSQL expression defining property name. This is typically used in ORT.fillMethod if
-   * fillNames parameter is true to resolve foreign key properties to names.
-   */
-  def propNameExpr(objectName:String, propertyName:String):Option[String] = None
-  
+  /** Column value expression in tresql statement value clause.
+   *  Default is named bind variable - {{{:propertyName}}} */
+  def valueExpr(objectName: String, propertyName: String) = ":" + propertyName  
 }
 
 trait EnvProvider {

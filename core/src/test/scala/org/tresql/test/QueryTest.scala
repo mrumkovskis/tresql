@@ -29,16 +29,7 @@ class QueryTest extends Suite {
     "emp_dept_view" -> "emp"),
     /*property to column name map*/
     Map("car_usage" -> Map("empname" -> ("empno", "(emp[ename = :empname]{empno})")),
-        "car" -> Map("dname" -> ("deptnr", "(case((dept[dname = :dname] {count(deptno)}) = 1, (dept[dname = :dname] {deptno}), -1))"))),
-    /*table to name map*/ Map(
-      "work" -> "work[empno]emp{ename || ' (' || wdate || ', ' || hours || ')'}",
-      "dept" -> "deptno, deptno || ', ' || dname || ' (' || loc || ')'",
-      /* NOTE: in emp table name expression in from clause 'dept/emp' emp must come after dept since
-        emp name is resolved by adding search by primary key shortcut syntax i.e. 'dept/emp[10]'
-        and shortcut primary key search expression refers to the last table in from clause. */
-      "emp" -> "dept/emp{empno, empno, ename || ' (' || dname || ')'}"),
-      /*object property to name map*/ Map(
-        "emp_dept_view" -> Map("deptno" -> "null")))
+        "car" -> Map("dname" -> ("deptnr", "(case((dept[dname = :dname] {count(deptno)}) = 1, (dept[dname = :dname] {deptno}), -1))"))))
   //create test db script
   new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
     sql => val st = conn.createStatement; st.execute(sql); st.close
@@ -296,76 +287,7 @@ class QueryTest extends Suite {
     //value clause test
     obj = Map("car_nr" -> 2222, "empname" -> "SCOTT", "date_from" -> "2013-11-06")
     expectResult(1)(ORT.insert("car_usage", obj))
-        
-    println("--- fill ---")
     
-    //no row found
-    obj = Map("empno"-> -1, "ename"->null, "deptno"->null, "deptno_name"->null,
-        "mgr"->null, "mgr_name"->null)    
-    expectResult(None)(ORT.fill("emp", obj, true))
-    //no primary key property found
-    obj = Map("kuku"-> -1, "ename"->null, "deptno"->null, "deptno_name"->null,
-        "mgr"->null, "mgr_name"->null)
-    expectResult(None)(ORT.fill("emp", obj, true))
-    
-    obj = Map("empno"->7788, "ename"->null, "deptno"->null, "deptno_name"->null,
-        "mgr"->null, "mgr_name"->null)
-    expectResult(Some(Map("ename" -> "SCOTT", "empno" -> 7788, "deptno" -> 20,
-        "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")), "mgr" -> 7566,
-        "mgr_name" -> List(Map("code" -> 7566, "name" -> "JONES (RESEARCH)")))))(ORT.fill("emp", obj, true))
-    obj = Map("empno"->7839, "ename"->null, "deptno"->null, "deptno_name"->null,
-        "mgr"->null, "mgr_name"->null)
-    expectResult(Some(Map("ename" -> "KING", "empno" -> 7839, "deptno" -> 10,
-        "deptno_name" -> List(Map("name" -> "10, ACCOUNTING (NEW YORK)")), "mgr" -> null,
-        "mgr_name" -> List())))(ORT.fill("emp", obj, true))
-        
-    obj = Map("deptno"->20, "dname"->null, "loc"->null, "calculated_field"-> 222,
-        "emp_dept_view"->List(Map("empno"->7788, "ename"->null, "mgr"->null, "mgr_name"->null,
-            "deptno"->null, "deptno_name"->null), 
-                  Map("empno"->7566, "ename"->null, "mgr"->null, "mgr_name"->null,
-            "deptno"->null, "deptno_name"->null)),
-        "calculated_children"->List(Map("x"->5)))
-    
-    expectResult(Some(Map("deptno" -> 20, "dname" -> "RESEARCH", "loc"->"DALLAS", "calculated_field"-> 222,
-        "emp_dept_view" -> List(
-            Map("empno" -> 7566, "deptno" -> 20, 
-              "mgr_name" -> List(Map("code" -> 7839, "name" -> "KING (ACCOUNTING)")),
-              "ename" -> "JONES", "mgr" -> 7839, "deptno_name" -> null), 
-            Map("empno" -> 7788, "deptno" -> 20, 
-              "mgr_name" -> List(Map("code" -> 7566, "name" -> "JONES (RESEARCH)")),
-              "ename" -> "SCOTT", "mgr" -> 7566, "deptno_name" -> null)),
-        "calculated_children"->List(Map("x"->5)))))(ORT.fill("dept", obj, true))
-        
-    obj = Map("deptno"->20, "dname"->null, "loc"->null, "calculated_field"-> 222,
-        "emp_dept_view"->List(
-            Map("empno"->7788, "ename"->null, "mgr"->null, "mgr_name"->null, "deptno"->20), 
-            Map("empno"->7566, "ename"->null, "mgr"->null, "mgr_name"->null, "deptno"->20)),
-        "calculated_children"->List(Map("x"->5)))
-    
-    expectResult(Some(Map("deptno" -> 20, "dname" -> "RESEARCH", "loc"->"DALLAS", "calculated_field"-> 222,
-        "emp_dept_view" -> List(
-            Map("empno" -> 7566, "mgr_name" -> List(Map("code" -> 7839, "name" -> "KING (ACCOUNTING)")),
-              "ename" -> "JONES", "mgr" -> 7839, "deptno"->20), 
-            Map("empno" -> 7788, "mgr_name" -> List(Map("code" -> 7566, "name" -> "JONES (RESEARCH)")),
-              "ename" -> "SCOTT", "mgr" -> 7566, "deptno"->20)),
-        "calculated_children"->List(Map("x"->5)))))(ORT.fill("dept", obj, true))
-    
-    obj = Map("empno"->7788, "mgr"-> null, "mgr_name"->null, "work:empno"-> Map("wdate"->null,
-        "hours"->null, "empno_mgr"->null, "empno_mgr_name"->null))
-    expectResult(Some(Map("empno" -> 7788, "mgr" -> 7566, "mgr_name" -> List(Map("code" -> 7566,
-      "name" -> "JONES (RESEARCH)")), "work:empno" -> List(Map("wdate" ->
-      Date.valueOf("2012-06-06"), "hours" -> 5, "empno_mgr" -> 7566,
-      "empno_mgr_name" -> List(Map("code" -> 7566, "name" -> "JONES (RESEARCH)"))),
-      Map("wdate" -> Date.valueOf("2012-06-07"), "hours" -> 8, "empno_mgr" -> 7782,
-        "empno_mgr_name" -> List(Map("code" -> 7782, "name" -> "CLARK (ACCOUNTING)")))))))(
-      ORT.fill("emp", obj, true))
-
-    obj = Map("empno"->7788, "mgr"-> null, "mgr_name"->null, "work"-> Map("wdate"->null,
-        "hours"->null, "empno_mgr"->null, "empno_mgr_name"->null))
-    //Cannot link child table 'work'. Must be exactly one reference from child to parent table 'emp'.
-    //Instead these refs found: List(Ref(List(empno)), Ref(List(empno_mgr)))
-    intercept[Exception](ORT.fill("emp", obj, true))
-      
     println("--- update ---")
     
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,

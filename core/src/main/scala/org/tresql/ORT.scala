@@ -41,49 +41,7 @@ object ORT {
     Env log delete
     Query.build(delete, resources, Map("1"->id), false)()
   }
-  /** 
-   * Fills object properties specified by 'obj' parameter from table specified by 'name' parameter.
-   * obj contains property names to be filled from database. obj map must contain primary key entry.
-   * If no corresponding table column to the property is found property value in returned object
-   * remains untouched.
-   * If no object is found by primary key None is returned.
-   * 
-   * Returned object contains exactly the same property set as the one passed as a parameter.
-   * 
-   * If parameter fillNames is true, foreign key properties are resolved to names using
-   * resources.nameExpr(tableName). Name expression column aliases are modified according to
-   * the following rules:
-   *     1. if name expression contains one column without column alias column alias is set to "name"
-   *     2. if name expression contains two columns without column aliases, second column is taken
-   *        for the name and alias is set to "name". (first column is interpreted as a primary key) 
-   *     3. if name expression contains three columns without column aliases, second column is taken
-   *        for the code and alias is set to "code", third column is taken for the name and alias
-   *        is set to "name". (first column is interpreted as a primary key)
-   */
-  def fill(name:String, obj:Map[String, _], fillNames: Boolean = false)
-    (implicit resources:Resources = Env):Option[Map[String, Any]] = {
-    def merge(obj: Map[String, _], res: Map[String, _]):Map[String, _] = {
-      obj.map((t: (String, _)) => t._1 -> res.get(t._1).map({
-        case rs: Seq[Map[String, _]] => t._2 match {
-          case os: Seq[Map[String, _]] => os.zipWithIndex.map(
-            ost => rs.lift(ost._2).map(merge(ost._1, _)).getOrElse(ost._1))
-          case oa: Array[Map[String, _]] => oa.zipWithIndex.map(
-            ost => rs.lift(ost._2).map(merge(ost._1, _)).getOrElse(ost._1))
-          case om: Map[String, _] => rs.map(merge(om, _))
-          case ox => rs
-        }
-        case rm: Map[String, _] => t._2 match {
-          case om: Map[String, _] => merge(om, rm)
-          case ox => rm
-        }
-        case rx => rx
-      }).getOrElse(t._2))
-    }
-    val fill = fill_tresql(name, obj, fillNames, resources)
-    Env log fill
-    Query.select(fill).toListOfMaps.headOption.map(r=> merge(obj, r))
-  }
-
+  
   def insert_tresql(name: String, obj: Map[String, _], parent: String, resources: Resources): String = {    
     //insert statement column, value map from obj
     val Array(objName, refPropName) = name.split(":").padTo(2, null)
@@ -118,7 +76,7 @@ object ORT {
               (refPropName == null && refColName == cn)) =>
                 hasRef = true
                 cn -> (":#" + ptn)
-          case v => (table.colOption(cn).map(_.name).orNull, resources.valueClause(objName, n))
+          case v => (table.colOption(cn).map(_.name).orNull, resources.valueExpr(objName, n))
         }
       }).filter(_._1 != null && (parent == null || refColName != null)) ++
       (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn))) ++
@@ -167,7 +125,7 @@ object ORT {
           case v: Map[String, _] => (childUpdates(n, v), null)
           //do not update pkProp
           case v if (Some(n) == pkProp) => (null, null)
-          case v => (table.colOption(cn).map(_.name).orNull, resources.valueClause(name, n))
+          case v => (table.colOption(cn).map(_.name).orNull, resources.valueExpr(name, n))
         }
       }).filter(_._1 != null).unzip match {
         case (cols: List[_], vals: List[_]) => pkProp.flatMap(pk =>
@@ -249,7 +207,7 @@ object ORT {
               parentTable != null && table.refs(parentTable.name) ==
               List(metadata.Ref(List(col))))) => (col, ":#" + parentTable.name)
             //value
-            case _ => (col, res.valueClause(objName, n))
+            case _ => (col, res.valueExpr(objName, n))
           }
           case "update" => if (table.key == metadata.Key(List(col))) {
             pkProp = n; (null, null)
@@ -264,94 +222,7 @@ object ORT {
         (if (parentTable != null) " '" + name + "'" else "")
     }
   }
-  
-  def fill_tresql(name: String, obj: Map[String, _], fillNames:Boolean, resources: Resources,
-      ids:Option[Seq[_]] = None, parent:Option[(/*objName*/String, /*pkPropName*/String)] = None): String = {
-    def nameExpr(table:String, idVar:String, nameExpr:String) = {
-      import QueryParser._
-      parseExp(nameExpr) match {
-        //replace existing filter with pk filter
-        case q:Query => (q.copy(filter = parseExp("[" + ":1('" + idVar + "')]").asInstanceOf[Arr]) match {
-          //set default aliases for query columns
-          case x@Query(_, _, List(c@Col(_, null, _)), _, _, _, _, _) => 
-            x.copy(cols = List(c.copy(alias = "name")))
-          case x@Query(_, _, List(Col(_, null, _), c2@Col(_, null, _)), _, _, _, _, _) =>
-            x.copy(cols = List(c2.copy(alias = "name")))
-          case x@Query(_, _, List(Col(_, null, _), c2@Col(_, null, _), c3@Col(_, null, _)), _, _, _, _, _) =>
-            x.copy(cols = List(c2.copy(alias = "code"), c3.copy(alias = "name")))
-          case x => x
-        }).tresql
-        case a:Arr => table + "[" + ":1('" + idVar + "')]" + (a match {
-          case Arr(List(name:Exp)) => "{" + name.tresql + " name" + "}"
-          case Arr(List(id:Exp, name:Exp)) => "{" + name.tresql + " name" + "}"
-          case Arr(List(id:Exp, code:Exp, name:Exp)) => "{" + code.tresql + " code, " +
-            name.tresql + " name" + "}"
-          case _ => a.elements.map(any2tresql(_)).mkString("{", ", ", "}") 
-        })
-        case _ => nameExpr
-      }
-    }
-    val Array(objName, refPropName) = name.split(":").padTo(2, null)
-    val table = resources.metaData.table(resources.tableName(objName))
-    var pkProp: Option[String] = None
-    //stupid thing - map find methods conflicting from different traits 
-    def findPkProp = pkProp.orElse {
-      pkProp = obj.asInstanceOf[TraversableOnce[(String, _)]].find(
-        n => table.key == metadata.Key(List(resources.colName(objName, n._1)))).map(_._1)
-      pkProp
-    }
-    var filterCol: String = parent.map(p => if (refPropName != null) 
-      resources.colName(objName, refPropName) else importedKey(resources.tableName(p._1), table)).orNull
-    var filterVal:Any = if(filterCol != null) ":1('" + parent.get._2 + "')" else null
-    obj.flatMap((t: (String, _)) => {
-      val n = t._1
-      val cn = resources.colName(objName, n)
-      val refTable = table.refTable.get(metadata.Ref(List(cn)))
-      t._2 match {
-        //pk
-        case v if (table.key == metadata.Key(List(cn))) => {
-          if (filterCol == null && v != null) {
-            //set filter column if primary key set
-            filterCol = cn; filterVal = v
-          }
-          pkProp = Some(n)
-          List(filterCol + " " + n)
-        }
-        //foreign key
-        case v if (refTable != None) => {
-          (cn + " " + n) :: (if (fillNames) resources.propNameExpr(objName, n).orElse(
-              resources.nameExpr(refTable.get)).map(ne => 
-              List("|" + nameExpr(refTable.get, n, ne) + " " + n + "_name")).getOrElse(Nil) else Nil)
-        }
-        //children
-        case s:Seq[Map[String, _]] if(s.size > 0) => {
-          List(resources.metaData.tableOption(resources.tableName(n)).map(cht=>
-          "|" + fill_tresql(n, s(0), fillNames, resources, Some(s.flatMap(_.filter(t=>
-            metadata.Key(List(resources.colName(cht.name, t._1))) == 
-              cht.key).map(_._2)))) + " " + n).orNull)
-        }
-        //children
-        case a:Array[Map[String, _]] if(a.size > 0) => {
-          List(resources.metaData.tableOption(resources.tableName(n)).map(cht=>
-          "|" + fill_tresql(n, a(0), fillNames, resources, Some(a.flatMap(_.filter(t=>
-            metadata.Key(List(resources.colName(cht.name, t._1))) == 
-              cht.key).map(_._2)))) + " " + n).orNull)
-        }
-        //children linked on this table primary key property and child table only foreign key
-        //property or foreign key property specified after colon
-        case v: Map[String, _] => {
-          val Array(on, rpn) = n.split(":").padTo(2, null)
-          List(resources.metaData.tableOption(resources.tableName(on)).flatMap(
-            cht => findPkProp.flatMap(pkpr => Some("|" +
-              fill_tresql(n, v, fillNames, resources, parent = Some(objName -> pkpr)) +
-              " '" + n + "'"))).orNull)
-        } 
-        case _ => List(table.colOption(cn).map(_.name + " " + n).orNull)
-      }
-    }).filter(_ != null).mkString(table.name +
-        "[" + filterCol + " in(" + ids.map(_.mkString(", ")).getOrElse(filterVal) + ")]{", ", ", "}")
-  }
-  
+    
   private def importedKeyOption(tableName: String, childTable: metadata.Table) =
     Option(childTable.refs(tableName)).filter(_.size == 1).map(_(0).cols(0))
 
