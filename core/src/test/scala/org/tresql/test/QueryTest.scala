@@ -70,7 +70,7 @@ class QueryTest extends Suite {
         }} toMap
       } else pl
     }
-    println("------------------------ Test TreSQL statements ----------------------")
+    println("\n------------------------ Test TreSQL statements ----------------------\n")
     var nr = 0
     new scala.io.BufferedSource(getClass.getResourceAsStream("/test.txt"))("UTF-8").getLines.foreach {
       case l if (l.trim.startsWith("//")) =>
@@ -100,7 +100,7 @@ class QueryTest extends Suite {
       }
       case _ =>
     }
-    println("---------------- Test API ----------------------")
+    println("\n---------------- Test API ----------------------\n")
     expectResult(10)(Query.head[Int]("dept{deptno}#(deptno)"))
     expectResult(10)(Query.unique[Int]("dept[10]{deptno}#(deptno)"))
     expectResult(Some(10))(Query.headOption[Int]("dept{deptno}#(deptno)"))
@@ -224,9 +224,9 @@ class QueryTest extends Suite {
       Map("dname" -> "LAW", "loc" -> "DALLAS", "emps" -> scala.Array(
         Map("ename" -> "SMITH"), Map("ename" -> "LEWIS")))))
         
-    println("----------- ORT tests ------------")
+    println("\n----------- ORT tests ------------\n")
     
-    println("--- INSERT ---")
+    println("\n--- INSERT ---\n")
     
     var obj:Map[String, Any] = Map("deptno" -> null, "dname" -> "LAW", "loc" -> "DALLAS",
       "calculated_field"->333, "another_calculated_field"->"A",
@@ -288,7 +288,7 @@ class QueryTest extends Suite {
     obj = Map("car_nr" -> 2222, "empname" -> "SCOTT", "date_from" -> "2013-11-06")
     expectResult(1)(ORT.insert("car_usage", obj))
     
-    println("--- UPDATE ---")
+    println("\n--- UPDATE ---\n")
     
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
         "emp"->List(
@@ -330,11 +330,11 @@ class QueryTest extends Suite {
     obj = Map("nr" -> 4444, "dname" -> "<NONE>")
     intercept[java.sql.SQLIntegrityConstraintViolationException](ORT.update("car", obj))
     
-    println("--- DELETE ---")
+    println("\n--- DELETE ---\n")
     
     expectResult(1)(ORT.delete("emp", 7934))
     
-    println("--- SAVE ---")
+    println("\n--- SAVE ---\n")
     
     obj = Map("dname" -> "SALES", "loc" -> "WASHINGTON", "calculated_field" -> 222,
       "emp" -> List(
@@ -370,8 +370,8 @@ class QueryTest extends Suite {
         "work:empno"->List(), "calculated_children"->List(Map("x"->5)), "deptno"->20)
     expectResult(List(1, List(2)))(ORT.save("emp", obj))
         
-    println("-------------- CACHE -----------------")
-    Env.cache.map(println(_))
+    println("\n-------------- CACHE -----------------\n")
+    Env.cache map println
     
   }
     
