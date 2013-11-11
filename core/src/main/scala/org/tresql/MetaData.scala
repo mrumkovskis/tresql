@@ -3,8 +3,7 @@ package org.tresql
 import java.util.NoSuchElementException
 import sys._
 
-//TODO consider letting metadata to span multiple databases?
-//Implementation of meta data must be thread safe
+/** Implementation of meta data must be thread safe */
 trait MetaData {
   import metadata._
   def join(table1: String, table2: String) = {
