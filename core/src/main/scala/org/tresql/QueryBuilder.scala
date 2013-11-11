@@ -414,10 +414,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       else if (resType == classOf[java.lang.Long]) res.jLong(idx)
       else if (resType == classOf[java.lang.Double]) res.jDouble(idx)
       else if (resType == classOf[java.lang.Boolean]) res.jBoolean(idx)
+      else if (resType == classOf[Array[Byte]]) res.bytes(idx)
+      else if (resType == classOf[java.io.InputStream]) res.stream(idx)
       else if (resType == classOf[java.math.BigDecimal]) res.bigdecimal(idx) match {
         case null => null
         case bd => bd.bigDecimal
-      }
+      } else res(idx)
     }
     override def defaultSQL = expr.sql
     override def toString = expr + ":" + resType
