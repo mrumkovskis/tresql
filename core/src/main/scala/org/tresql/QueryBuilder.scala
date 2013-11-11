@@ -39,6 +39,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private var identAll = false
   //indicate presence of hidden columns due to external function call
   private var externalFunction = false
+  //tables and aliases. This is used to find relationship between query built by this builder and
+  //query built by child builder
+  private var tablesAndAliases: List[(String, String)] = Nil  
+  //table alias and key columns to be added as hidden columns for query built by this builder
+  //in order to establish relation ship with query built by child builder
+  private var joinWithChildQuery: Option[(String, List[String])] = None
 
   case class ConstExpr(val value: Any) extends BaseExpr {
     override def apply() = value
@@ -508,6 +514,32 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }.toList
   }
 
+  //find join between child and parent queries
+  //return value in form: (child query table col -> parent query table col) -> parent query table alias or name
+  private def joinWithChild(table: String,
+    refCol: Option[String]): Option[((List[String], List[String]), String)] = {
+    val v = joinWithChild(table, refCol, this.tablesAndAliases)
+    this.joinWithChildQuery = v.map(o => o._2 -> o._1._2)
+    v
+  }
+  private def joinWithChild(table: String, refCol: Option[String],
+      tablesAndAliases: List[(String, String)]): Option[((List[String], List[String]), String)] =
+    tablesAndAliases match {
+      case Nil => None
+      case (t, a) :: l => try refCol.map(ref => List(ref) -> env.table(env.table(t).refTable(
+          metadata.Ref(List(ref)))).key.cols).orElse(Option(env.join(table, t))).map(_ -> a) catch {
+        case e: Exception => l match {
+          case Nil => error("Unable to find relationship between " + table +
+            " and parent query tables " + tablesAndAliases)
+          case _ => joinWithChild(table, refCol, l)
+        }
+      }
+    }
+  private def joinWithParent(table: String, refCol: Option[String]) = env.provider.flatMap {
+    case b: QueryBuilder => b.joinWithChild(table, refCol)
+    case x => error("Cannot join query with parent. Instead of parent query builder found: " + x)
+  } 
+
   //DML statements are defined outsided buildInternal method since they are called from other QueryBuilder
   private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: List[Arr]) = {
     new InsertExpr(IdentExpr(table.ident), alias, Option(cols) map (_ map (buildInternal(_, COL_CTX)) filter {
@@ -548,10 +580,21 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     else vals
   }
-
+  
   private def buildInternal(parsedExpr: Any, parseCtx: String = ROOT_CTX): Expr = {
     def buildSelect(q: Query) = {
       val tablesAndAliases = buildTables(q.tables)
+      if (ctxStack.head == QUERY_CTX) {
+        //set table aliases for the query builder so they can be used for calculating relations
+        //with child queries
+        tablesAndAliases._1 flatMap (t => t.table match {
+          case IdentExpr(n) =>
+            val name = n.mkString(".")
+            if (t.alias == null) if(tablesAndAliases._2.contains(name)) Nil else List(name -> name) 
+            else List(name -> t.alias)
+          case _ => Nil
+        })
+      }
       val sel = SelectExpr(tablesAndAliases._1, //tables
         if (q.filter != null) { //filter
           val f = (q.filter.elements map { buildInternal(_, WHERE_CTX) }).filter(_ != null)

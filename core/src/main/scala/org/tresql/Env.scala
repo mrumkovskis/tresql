@@ -16,7 +16,8 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   //provided envs are used for statement closing. this list is filled only if provider is not set.
   //NOTE: list contains also this environment 
   private var providedEnvs: List[Env] = Nil
-  private val provider: Option[EnvProvider] = Option(_provider)
+  //is package private since is accessed from QueryBuilder
+  private[tresql] val provider: Option[EnvProvider] = Option(_provider)
 
   private def rootEnv(e: Env): Env = e.provider.map(p=>rootEnv(p.env)).getOrElse(e)
   private val root = rootEnv(this)
