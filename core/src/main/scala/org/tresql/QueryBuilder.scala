@@ -400,7 +400,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
   case class HiddenColRefExpr(expr: Expr, resType: Class[_]) extends PrimitiveExpr {
     override def apply() = {
-      val (res, idx) = (env(0), env(expr))
+      val (res, idx) = (env(0), env(this))
       if (resType == classOf[Int]) res.int(idx)
       else if (resType == classOf[Long]) res.long(idx)
       else if (resType == classOf[Double]) res.double(idx)
@@ -419,7 +419,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case bd => bd.bigDecimal
       }
     }
-    override def defaultSQL = error("not implemented")
+    override def defaultSQL = expr.sql
     override def toString = expr + ":" + resType
   }  
   case class IdentExpr(val name: List[String]) extends PrimitiveExpr {
@@ -559,8 +559,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null, //order
         buildInternal(q.offset, LIMIT_CTX), buildInternal(q.limit, LIMIT_CTX), //offset, limit
         tablesAndAliases._2)
-      //if select expression is subquery in others expression where clause, had where clause itself
-      //and where clause was removed due to unbound optional variables remove subquery itself
+      //if select expression is subquery in other's expression where clause, has where clause itself
+      //but where clause was removed due to unbound optional variables remove subquery itself
       if (ctxStack.head == WHERE_CTX && q.filter != null && q.filter.elements != Nil &&
         sel.filter == null) null else sel
     }
@@ -619,17 +619,19 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case _ => false
       }) (colExprs flatMap { //external function found
         case ColExpr(FunExpr(n, pars), a, t, _, _) if Env.isDefined(n) =>
-          val m = Env.functions.flatMap(_.getClass.getMethods.filter(m=> m.getName == n &&
-              m.getParameterTypes.size == pars.size).headOption).getOrElse(
-                  error("External function " + n + " with " + pars.size + " parameters not found"))
+          val m = Env.functions.flatMap(_.getClass.getMethods.filter(m => m.getName == n &&
+            m.getParameterTypes.size == pars.size).headOption).getOrElse(
+            error("External function " + n + " with " + pars.size + " parameters not found"))
           QueryBuilder.this.externalFunction = true
-          ColExpr(ExternalFunExpr(n, m.getParameterTypes.toList.zip(pars).map(tp=>
-            HiddenColRefExpr(tp._2, tp._1)), m), a, t, true) :: pars.map(
-                ColExpr(_, null, null, hidden = true))
+          val hiddenColPars = m.getParameterTypes.toList.zip(pars).map(tp =>
+            HiddenColRefExpr(tp._2, tp._1))
+          ColExpr(ExternalFunExpr(n, hiddenColPars, m), a, t, true) :: hiddenColPars.map(
+            ColExpr(_, null, null, hidden = true))
         case e => List(e)
-      }).groupBy (_.hidden) match { //put hidden columns at the end
+      }).groupBy(_.hidden) match { //put hidden columns at the end
         case m: Map[Boolean, ColExpr] => m(false) ++ m.getOrElse(true, Nil)
-      } else colExprs
+      }
+      else colExprs
     }
     
     ctxStack ::= parseCtx
@@ -799,8 +801,6 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
       case x: Expr => if (super.equals(that)) 0 else -1
     }
   }
-  //use object equals method for hash map
-  override def equals(that: Any) = super.equals(that)
   
   def in(inList: List[Expr]) = inList.contains(this)
   def notIn(inList: List[Expr]) = !inList.contains(this)
