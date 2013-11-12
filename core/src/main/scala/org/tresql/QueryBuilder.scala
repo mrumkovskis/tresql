@@ -42,9 +42,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   //tables and aliases. This is used to find relationship between query built by this builder and
   //query built by child builder
   private var tablesAndAliases: List[(String, String)] = Nil  
-  //table alias and key columns to be added as hidden columns for query built by this builder
-  //in order to establish relation ship with query built by child builder
-  private var joinWithChildQuery: Option[(String, List[String])] = None
+  //table alias and key column(s) (multiple in the case of composite primary key) to be added as
+  //hidden columns for query built by this builder in order to establish relation ship with query
+  //built by child builder
+  private var joinsWithChildren: List[(String, List[String])] = Nil
+  lazy val joinsWithChildrenColExprs = this.joinsWithChildren.flatMap(tc => tc._2.map(
+          c => ColExpr(IdentExpr(List(tc._1, c)), "_" + tc._1 + "_" + c, null, hidden = true)))
 
   case class ConstExpr(val value: Any) extends BaseExpr {
     override def apply() = value
@@ -514,31 +517,47 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }.toList
   }
 
-  //find join between child and parent queries
-  //return value in form: (child query table col -> parent query table col) -> parent query table alias or name
+  //default or fk shortcut join with child.
+  //return value in form: (child query table col(s) -> parent query cols(s) alias(es))
   private def joinWithChild(table: String,
-    refCol: Option[String]): Option[((List[String], List[String]), String)] = {
-    val v = joinWithChild(table, refCol, this.tablesAndAliases)
-    this.joinWithChildQuery = v.map(o => o._2 -> o._1._2)
-    v
-  }
-  private def joinWithChild(table: String, refCol: Option[String],
+    refCol: Option[String]): Option[(List[String], List[String])] = {
+    def findJoin(table: String, refCol: Option[String],
       tablesAndAliases: List[(String, String)]): Option[((List[String], List[String]), String)] =
-    tablesAndAliases match {
-      case Nil => None
-      case (t, a) :: l => try refCol.map(ref => List(ref) -> env.table(env.table(t).refTable(
+      tablesAndAliases match {
+        case Nil => None
+        case (t, a) :: l => try refCol.map(ref => List(ref) -> env.table(env.table(t).refTable(
           metadata.Ref(List(ref)))).key.cols).orElse(Option(env.join(table, t))).map(_ -> a) catch {
-        case e: Exception => l match {
-          case Nil => error("Unable to find relationship between " + table +
-            " and parent query tables " + tablesAndAliases)
-          case _ => joinWithChild(table, refCol, l)
+          case e: Exception => l match {
+            case Nil => error("Unable to find relationship between " + table +
+              " and parent query tables " + tablesAndAliases)
+            case _ => findJoin(table, refCol, l)
+          }
         }
       }
+    findJoin(table, refCol, this.tablesAndAliases) match {
+      case None => None
+      case o @ Some(x) =>
+        this.joinsWithChildren ::= (x._2 -> x._1._2)
+        o.map(j=> j._1._1 -> j._1._2.map("_" + j._2 + "_" + _))
     }
+  }
+  //default or fk shortcut join with parent
   private def joinWithParent(table: String, refCol: Option[String]) = env.provider.flatMap {
     case b: QueryBuilder => b.joinWithChild(table, refCol)
     case x => error("Cannot join query with parent. Instead of parent query builder found: " + x)
-  } 
+  }
+  private def joinWithAncestor(ancestorTableAlias: String, ancestorTableCol: String,
+      resIdx: Int = 1): Int = env.provider.map {
+    case b: QueryBuilder =>
+      b.joinWithDescendant(ancestorTableAlias, ancestorTableCol).map(x=> resIdx).getOrElse(
+          b.joinWithAncestor(ancestorTableAlias, ancestorTableCol, resIdx + 1)) 
+    case _ => error("Parent column " + ancestorTableAlias + "." + ancestorTableCol + "not found!")
+  } getOrElse(error("Parent column " + ancestorTableAlias + "." + ancestorTableCol + "not found!"))
+  private def joinWithDescendant(tableAlias: String, tableCol: String) =
+    this.tablesAndAliases.find(tableAlias == _._2).map(x=> {
+      this.joinsWithChildren ::= (tableAlias -> List(tableCol))
+      x
+    })
 
   //DML statements are defined outsided buildInternal method since they are called from other QueryBuilder
   private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: List[Arr]) = {
@@ -584,10 +603,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private def buildInternal(parsedExpr: Any, parseCtx: String = ROOT_CTX): Expr = {
     def buildSelect(q: Query) = {
       val tablesAndAliases = buildTables(q.tables)
-      if (ctxStack.head == QUERY_CTX) {
+      if (ctxStack.head == QUERY_CTX && this.tablesAndAliases == Nil) {
         //set table aliases for the query builder so they can be used for calculating relations
         //with child queries
-        tablesAndAliases._1 flatMap (t => t.table match {
+        this.tablesAndAliases = tablesAndAliases._1 flatMap (t => t.table match {
           case IdentExpr(n) =>
             val name = n.mkString(".")
             if (t.alias == null) if(tablesAndAliases._2.contains(name)) Nil else List(name -> name) 
@@ -659,7 +678,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     def buildCols(cols: List[Col]) = if (cols == null) List(ColExpr(AllExpr(), null, null)) else {
       val colExprs = cols.map(buildInternal(_, COL_CTX).asInstanceOf[ColExpr])
-      if (colExprs.exists {
+      (if (colExprs.exists {
         case ColExpr(FunExpr(n, _), _, _, _, _) => Env.isDefined(n)
         case _ => false
       }) (colExprs flatMap { //external function found
@@ -676,7 +695,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }).groupBy(_.hidden) match { //put hidden columns at the end
         case m: Map[Boolean, ColExpr] => m(false) ++ m.getOrElse(true, Nil)
       }
-      else colExprs
+      else colExprs) ++ joinsWithChildrenColExprs //add hidden columns used in filters of descendant queries 
     }
     
     ctxStack ::= parseCtx
