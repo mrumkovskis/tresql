@@ -46,11 +46,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   //hidden columns for query built by this builder in order to establish relation ship with query
   //built by child builder
   private var joinsWithChildren: Set[(String, List[String])] = Set()
-  lazy val joinsWithChildrenColExprs = {
-    if (this.joinsWithChildren.size > 0) this.hasHiddenCols = true
-    this.joinsWithChildren.flatMap(tc => tc._2.map(
-    c => ColExpr(IdentExpr(List(tc._1, c)), tc._1 + "_" + c, null, Some(false), true)))
-  }
+  lazy val joinsWithChildrenColExprs = for {
+    tc <- { if (this.joinsWithChildren.size > 0) this.hasHiddenCols = true; this.joinsWithChildren }
+    c <- tc._2
+  } yield (ColExpr(IdentExpr(List(tc._1, c)), tc._1 + "_" + c, null, Some(false), true))
 
   case class ConstExpr(val value: Any) extends BaseExpr {
     override def apply() = value
@@ -359,7 +358,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       (if (order == null) "" else " order by " + (order map (_.sql)).mkString(", ")) +
       (if (offset == null) "" else " offset " + offset.sql) +
       (if (limit == null) "" else " limit " + limit.sql)
-    def sqlCols = cols.filter(!_.separateQuery).map(_.sql).mkString(", ")
+    def sqlCols = cols.withFilter(!_.separateQuery).map(_.sql).mkString(", ")
     def join(tables: List[Table]): String = {
       //used to find table if alias join is used
       def find(t: Table) = t match {
