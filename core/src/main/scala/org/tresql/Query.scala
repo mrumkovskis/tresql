@@ -49,7 +49,7 @@ object Query extends TypedQuery {
 
   private[tresql] def sel(sql: String, cols: List[QueryBuilder#ColExpr],
     bindVariables: List[Expr], env: Env, allCols: Boolean, identAll: Boolean,
-    externalFunction: Boolean): Result = {
+    hasHiddenCols: Boolean): Result = {
     Env log sql
     val st = statement(sql, env)
     bindVars(st, bindVariables)
@@ -63,13 +63,14 @@ object Query extends TypedQuery {
     def rcol(c: QueryBuilder#ColExpr) = if (c.separateQuery) Column(-1, c.name, c.col) else {
       i += 1; Column(i, c.name, null)
     }
-    def rcols = if (externalFunction /*cols.exists(_.hidden)*/) {
+    def rcols = if (hasHiddenCols /*cols.exists(_.hidden)*/) {
       val res = cols.zipWithIndex.foldLeft((List[Column](), Map[Expr, Int]())) {(r, c) =>
         (rcol(c._1) :: r._1, if (c._1.hidden) r._2 + (c._1.col -> c._2) else r._2)
       }
       env.updateExprs(res._2)
       (res._1.reverse, res._1.size - res._2.size)
     } else (cols map rcol, -1)
+    
     val result = if (allCols) new Result(rs, Vector(cols.flatMap {c => 
       if (c.col.isInstanceOf[QueryBuilder#AllExpr]) jdbcRcols else List(rcol(c))
     }: _*), env)

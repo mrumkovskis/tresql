@@ -166,7 +166,7 @@ class QueryTest extends Suite {
     expectResult(List((10,"ACCOUNTING",List((7782,"CLARK",List()), (7839,"KING",List((Date.valueOf("2012-06-06"),3),
         (Date.valueOf("2012-06-07"),4))), (7934, "MILLER", List())),List("PORCHE"))))(
             Query.list[Int, String, List[(Int, String, List[(Date, Int)])], List[String]] {
-      "dept[10]{deptno, dname, |emp[deptno = :1(deptno)]{empno, ename, |work[empno = :1(empno)]{wdate, hours}#(1,2) work}#(1) emps," +
+      "dept[10]{deptno, dname, |emp[deptno = :1(deptno)]{empno, ename, |[empno]work{wdate, hours}#(1,2) work}#(1) emps," +
       " |car[deptnr = :1(deptno)]{name}#(1) cars}"})
     //column alias test
     expectResult(List(("ACCOUNTING,CLARK", -2450.00), ("ACCOUNTING,KING", -5000.00), ("ACCOUNTING,MILLER", -2300.35))) {
