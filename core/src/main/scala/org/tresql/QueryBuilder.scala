@@ -4,7 +4,7 @@ import sys._
 import QueryParser._
 
 class QueryBuilder private (val env: Env, private val queryDepth: Int,
-  private var bindIdx: Int) extends EnvProvider {
+  private var bindIdx: Int) extends EnvProvider with Transformer {
 
   val ROOT_CTX = "ROOT"
   val QUERY_CTX = "QUERY"
@@ -863,6 +863,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     buildInternal(ex)
   }
   
+  private def transform(e: Expr, f: PartialFunction[Expr, Expr]) = {
+    transformer = f orElse this
+    transformer(e)
+  }
+    
   override def toString = "QueryBuilder: " + queryDepth
 
 }
