@@ -161,6 +161,9 @@ dept[?]{loc, deptno, |emp[deptno = :1(2)] {job}, dname} --> 10 --> [["NEW YORK",
 //default parent child hierarchical query join
 dept[?]{loc, |emp {job}#(1), dname} --> 10 --> [["NEW YORK", [["CLERK"], ["MANAGER"], ["PRESIDENT"]], "ACCOUNTING"]]
 
+//hierarchical query foreign key shortcut syntax
+dept/emp e[?] {dname, ename, |[empno_mgr]work{hours}#(1)} --> 7566 --> [["RESEARCH", "JONES", [[5]]]]
+
 //three level hierarchical query with default and fk shortcut joins
 dept[?]{loc, |emp {ename, job, |[empno_mgr]work {hours}#(1) controlled_hours}#(1), dname} --> 20 --> [["DALLAS", [["ADAMS", "CLERK", []], ["FORD", "ANALYST", []], ["JONES", "MANAGER", [[5]]], ["SCOTT", "ANALYST", []], ["SMITH", "CLERK", []]], "RESEARCH"]]
 
