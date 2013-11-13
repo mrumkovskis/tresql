@@ -168,8 +168,8 @@ object QueryParser extends JavaTokenParsers {
   def not: Parser[UnOp] = "!" ~> operand ^^ (UnOp("!", _))
   //is used within column clause to indicate separate query
   def sep: Parser[UnOp] = "|" ~> operand ^^ (UnOp("|", _))
-  def function: Parser[Fun] = (ident <~ "(") ~ repsep(expr, ",") <~ ")" ^^ {
-    case a ~ b => Fun(a, b)
+  def function: Parser[Fun] = (qualifiedIdent <~ "(") ~ repsep(expr, ",") <~ ")" ^^ {
+    case Ident(a) ~ b => Fun(a.mkString("."), b)
   }
   def array: Parser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ (Arr(_))
 
