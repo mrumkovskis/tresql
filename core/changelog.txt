@@ -1,3 +1,30 @@
+--- 2013.11.13 tresql 5.0 ---
+1. Hierarchical query join shortcut syntax support
+
+  1) Default join (join is searched between first table of child query and parent query tables starting from first)
+  
+     dept{dname, |emp{ename}}
+
+  2) Foreign key join
+
+     emp {ename, |[empno_mgr]work{hours}}
+
+  3) Ancestor alias join (at the moment ancestor column id must be rightemost operand of join expresion)
+
+     dept d {dname, |emp {ename, |[d.deptno = emp.deptno]work/emp {hours, ename}}}
+
+  4) No join
+
+     dept{dname, |[]emp{ename}}
+
+  Previous syntax of parent result expressions i.e. :1(empno), :2(deptno) also continues to be valid.
+
+2. Function name can be also qualified identifier. This is added because sometimes db functions need to be prefixed with schema name.
+
+  Example:
+
+  public.my_fun('a')
+
 --- 2013.10.31 tresql 4.1.1 ---
 insert, update shortcut syntax support enhanced:
 1. * sign can be placed at any position in values clause
