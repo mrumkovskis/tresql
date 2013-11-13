@@ -44,7 +44,7 @@ trait MetaData {
 //TODO pk col storing together with ref col (for multi col key secure support)?
 package metadata {
   case class Table(name: String, comments: String, cols: List[Col], key: Key,
-    rfs: Map[String, List[Ref]], dbname: String) {
+      rfs: Map[String, List[Ref]], dbname: String) {
     private val colMap = cols map (c => c.name -> c) toMap
     val refTable: Map[Ref, String] = rfs.flatMap(t => t._2.map(_ -> t._1))
     def col(name: String) = colMap(name)
@@ -70,12 +70,11 @@ package metadata {
       }, if (t.get("dbname") == None) null else t("dbname").asInstanceOf[String])
     }
   }
-  case class Col(val name: String, val sqlType: Int, val typeName: String, val nullable: Boolean,
+  case class Col(name: String, sqlType: Int, typeName: String, nullable: Boolean,
     size: Int, decimalDigits: Int, comments: String)
-  case class Key(val cols: List[String])
-  case class Ref(val cols: List[String])
-  case class Procedure(val name: String, val comments: String, val procType: Int,
-    val pars: List[Par], val returnSqlType: Int, val returnTypeName: String)
-  case class Par(val name: String, val comments: String, val parType: Int, val sqlType: Int,
-    val typeName: String)
+  case class Key(cols: List[String])
+  case class Ref(cols: List[String])
+  case class Procedure(name: String, comments: String, procType: Int,
+    pars: List[Par], returnSqlType: Int, returnTypeName: String)
+  case class Par(name: String, comments: String, parType: Int, sqlType: Int, typeName: String)
 }

@@ -569,13 +569,16 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   //return value in form: (child query table col(s) -> parent query cols(s) alias(es))
   private def joinWithChild(table: String,
     refCol: Option[String]): Option[(List[String], List[String])] = {
-    
+
     def findJoin(table: String, refCol: Option[String],
       tablesAndAliases: List[(String, String)]): Option[((List[String], List[String]), String)] =
       tablesAndAliases match {
         case Nil => None
-        case (t, a) :: l => try refCol.map(ref => List(ref) -> env.table(env.table(table).refTable(
-          metadata.Ref(List(ref)))).key.cols).orElse(Option(env.join(table, t))).map(_ -> a) catch {
+        case (t, a) :: l => try refCol.map(ref => {
+          val refTable = env.table(table).refTable(metadata.Ref(List(ref)))
+          List(ref) -> env.table(refTable).key.cols ->
+            this.tablesAndAliases.find(_._1 == refTable).map(_._2).get
+        }).orElse(Option(env.join(table, t) -> a)) catch {
           case e: Exception => l match {
             case Nil => error("Unable to find relationship between table " + table +
               " and parent query (tables, aliases) - " + this.tablesAndAliases)
@@ -587,7 +590,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case None => None
       case o @ Some(x) =>
         this.joinsWithChildren += (x._2 -> x._1._2)
-        o.map(j=> j._1._1 -> j._1._2.map(j._2 + "_" + _))
+        o.map(j => j._1._1 -> j._1._2.map(j._2 + "_" + _))
     }
   }
   //default or fk shortcut join with parent
