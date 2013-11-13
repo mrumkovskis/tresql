@@ -38,7 +38,19 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   //indicate table.* in column clause
   private var identAll = false
   //indicate presence of hidden columns due to external function call
-  private var externalFunction = false
+  private var hasHiddenCols = false
+  //tables and aliases. This is used to find relationship between query built by this builder and
+  //query built by child builder
+  private var tablesAndAliases: List[(String, String)] = Nil  
+  //table alias and key column(s) (multiple in the case of composite primary key) to be added as
+  //hidden columns for query built by this builder in order to establish relation ship with query
+  //built by child builder
+  private var joinsWithChildren: Set[(String, List[String])] = Set()
+  lazy val joinsWithChildrenColExprs = {
+    if (this.joinsWithChildren.size > 0) this.hasHiddenCols = true
+    this.joinsWithChildren.flatMap(tc => tc._2.map(
+    c => ColExpr(IdentExpr(List(tc._1, c)), tc._1 + "_" + c, null, Some(false), true)))
+  }
 
   case class ConstExpr(val value: Any) extends BaseExpr {
     override def apply() = value
@@ -179,17 +191,17 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case "||" => lop + rop
         case "&&" => org.tresql.Query.sel(sql, selCols(lop),
           QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols,
-          QueryBuilder.this.identAll, QueryBuilder.this.externalFunction)
+          QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
         case "++" => org.tresql.Query.sel(sql, selCols(lop),
           QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols,
-          QueryBuilder.this.identAll, QueryBuilder.this.externalFunction)
+          QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
         case "+" => if (exprType == classOf[SelectExpr])
           org.tresql.Query.sel(sql, selCols(lop), QueryBuilder.this.bindVariables, env,
-            QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.externalFunction)
+            QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
         else lop + rop
         case "-" => if (exprType == classOf[SelectExpr])
           org.tresql.Query.sel(sql, selCols(lop), QueryBuilder.this.bindVariables, env,
-            QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.externalFunction)
+            QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
         else lop - rop
         case "=" => lop == rop
         case "!=" => lop != rop
@@ -297,12 +309,52 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     offset: Expr, limit: Expr, aliases: Map[String, Table]) extends BaseExpr {
     override def apply() = {
       org.tresql.Query.sel(sql, cols, QueryBuilder.this.bindVariables, env,
-        QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.externalFunction)
+        QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
+    }
+    //check whether parent query with at least one primitive table exists
+    def hasParentQuery = env.provider.map {
+      case b: QueryBuilder => b.tablesAndAliases != Nil
+      case _ => false
+    } getOrElse(false)
+    //establish link between ancestors
+    val parentJoin = if (QueryBuilder.this.ctxStack.head != QUERY_CTX || !hasParentQuery) None else {
+      def parentChildJoinExpr(table: Table, qname: List[String], refCol: Option[String] = None) = {
+        def exp(childCol: String, parentCol: String) = BinExpr("=",
+          IdentExpr(List(table.aliasOrName, childCol)), ResExpr(1, parentCol))
+        def exps(cols: List[(String, String)]): Expr = cols match {
+          case c :: Nil => exp(c._1, c._2)
+          case c :: l => BinExpr("&", exp(c._1, c._2), exps(l))
+        }
+        joinWithParent(qname.mkString("."), refCol).map(t => exps(t._1 zip t._2))
+      }
+      tables.headOption.flatMap {
+        //default join
+        case tb @ Table(IdentExpr(t), _, null, _, _) => parentChildJoinExpr(tb, t)
+        case tb @ Table(IdentExpr(t), _, TableJoin(true, null, _, _), _, _) => parentChildJoinExpr(tb, t)
+        case Table(x, _, TableJoin(true, null, _, _), _, _) =>
+          error("At the moment default join with parent query cannot be performed on table: " + x)
+        //foreign key join shortcut syntax
+        case tb @ Table(IdentExpr(t), _, TableJoin(false, IdentExpr(fk), _, _), _, _) =>
+          parentChildJoinExpr(tb, t, fk.lastOption)
+        case Table(x, _, TableJoin(false, IdentExpr(fk), _, _), _, _) =>
+          error("At the moment foreign key shortcut join with parent query cannot be performed on table: " + x)
+        //product join
+        case Table(_, _, TableJoin(false, ArrExpr(Nil), _, _), _, _) => None
+        case tb @ Table(_, _, j, _, _) => j match {
+          //ancestor alias shortcut join 
+          case TableJoin(false, ArrExpr(List(BinExpr(o, IdentExpr(List(ta, cn)), rop))), _, _)
+            if ta != tb.aliasOrName =>
+            Some(BinExpr(o, ResExpr(joinWithAncestor(ta, cn), ta + "_" + cn), rop))
+          //explicit join
+          case TableJoin(false, e, _, _) if e != null => Some(e)
+          case _ => None
+        }
+      }
     }
     lazy val defaultSQL = "select " + (if (distinct) "distinct " else "") +
       (if (cols == null) "*" else sqlCols) + " from " + tables.head.sqlName + join(tables) +
       //(filter map where).getOrElse("")
-      (if (filter == null) "" else " where " + where) +
+      Option(where).map(" where " + _).getOrElse("") +
       (if (group == null) "" else " group by " + group.sql) +
       (if (order == null) "" else " order by " + (order map (_.sql)).mkString(", ")) +
       (if (offset == null) "" else " offset " + offset.sql) +
@@ -319,16 +371,21 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case t :: l => (Option(" " + l.head.sqlJoin(find(t))) filter (_.size > 1) getOrElse "") + join(l)
       }
     }
-    def where = filter match {
-      //primary key equals search
-      case List(_: ConstExpr | _: VarExpr | _: ResExpr) => tables(tables.size - 1).aliasOrName + "." +
-        env.table(tables(tables.size - 1).name).key.cols(0) + " = " + filter(0).sql
-      //normal filter expression
-      case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
-      //primary key in search
-      case l => tables(tables.size - 1).aliasOrName + "." +
-        env.table(tables(tables.size - 1).name).key.cols(0) +
-        " in(" + (l map { _.sql }).mkString(",") + ")"
+    def where = {
+      def filterSql = filter match {
+        case null => null
+        //primary key equals search
+        case List(_: ConstExpr | _: VarExpr | _: ResExpr) => tables(tables.size - 1).aliasOrName + "." +
+          env.table(tables(tables.size - 1).name).key.cols(0) + " = " + filter(0).sql
+        //normal filter expression
+        case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
+        //primary key in search
+        case l => tables.last.aliasOrName + "." +
+          env.table(tables.last.name).key.cols(0) +
+          " in(" + (l map { _.sql }).mkString(",") + ")"
+      }
+      parentJoin.map(e => Option(filterSql).map("(" + _ + ") and " + e.sql).getOrElse(e.sql)).
+        getOrElse(filterSql)
     }
     val queryDepth = QueryBuilder.this.queryDepth
     override def toString = sql + " (" + QueryBuilder.this + ")\n" +
@@ -386,10 +443,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
   case class TableJoin(val default: Boolean, val expr: Expr, val noJoin: Boolean,
     defaultJoinCols: (List[String], List[String]))
-  case class ColExpr(val col: Expr, val alias: String, val typ: String, sepQuery: Boolean = false, 
-      hidden: Boolean = false)
+  case class ColExpr(val col: Expr, val alias: String, val typ: String,
+      sepQuery: Option[Boolean] = None, hidden: Boolean = false)
     extends PrimitiveExpr {
-    val separateQuery = sepQuery || QueryBuilder.this.separateQueryFlag
+    val separateQuery = sepQuery.getOrElse(QueryBuilder.this.separateQueryFlag)
     if (!QueryBuilder.this.allCols) QueryBuilder.this.allCols = col.isInstanceOf[AllExpr]
     def defaultSQL = col.sql + (if (alias != null) " " + alias else "")
     def name = if (alias != null) alias.stripPrefix("\"").stripSuffix("\"") else col match {
@@ -400,7 +457,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
   case class HiddenColRefExpr(expr: Expr, resType: Class[_]) extends PrimitiveExpr {
     override def apply() = {
-      val (res, idx) = (env(0), env(expr))
+      val (res, idx) = (env(0), env(this))
       if (resType == classOf[Int]) res.int(idx)
       else if (resType == classOf[Long]) res.long(idx)
       else if (resType == classOf[Double]) res.double(idx)
@@ -414,12 +471,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       else if (resType == classOf[java.lang.Long]) res.jLong(idx)
       else if (resType == classOf[java.lang.Double]) res.jDouble(idx)
       else if (resType == classOf[java.lang.Boolean]) res.jBoolean(idx)
+      else if (resType == classOf[Array[Byte]]) res.bytes(idx)
+      else if (resType == classOf[java.io.InputStream]) res.stream(idx)
       else if (resType == classOf[java.math.BigDecimal]) res.bigdecimal(idx) match {
         case null => null
         case bd => bd.bigDecimal
-      }
+      } else res(idx)
     }
-    override def defaultSQL = error("not implemented")
+    override def defaultSQL = expr.sql
     override def toString = expr + ":" + resType
   }  
   case class IdentExpr(val name: List[String]) extends PrimitiveExpr {
@@ -506,6 +565,49 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }.toList
   }
 
+  //default or fk shortcut join with child.
+  //return value in form: (child query table col(s) -> parent query cols(s) alias(es))
+  private def joinWithChild(table: String,
+    refCol: Option[String]): Option[(List[String], List[String])] = {
+    
+    def findJoin(table: String, refCol: Option[String],
+      tablesAndAliases: List[(String, String)]): Option[((List[String], List[String]), String)] =
+      tablesAndAliases match {
+        case Nil => None
+        case (t, a) :: l => try refCol.map(ref => List(ref) -> env.table(env.table(table).refTable(
+          metadata.Ref(List(ref)))).key.cols).orElse(Option(env.join(table, t))).map(_ -> a) catch {
+          case e: Exception => l match {
+            case Nil => error("Unable to find relationship between table " + table +
+              " and parent query (tables, aliases) - " + this.tablesAndAliases)
+            case _ => findJoin(table, refCol, l)
+          }
+        }
+      }
+    findJoin(table, refCol, this.tablesAndAliases) match {
+      case None => None
+      case o @ Some(x) =>
+        this.joinsWithChildren += (x._2 -> x._1._2)
+        o.map(j=> j._1._1 -> j._1._2.map(j._2 + "_" + _))
+    }
+  }
+  //default or fk shortcut join with parent
+  private def joinWithParent(table: String, refCol: Option[String] = None) = env.provider.flatMap {
+    case b: QueryBuilder => b.joinWithChild(table, refCol)
+    case x => None
+  }
+  private def joinWithAncestor(ancestorTableAlias: String, ancestorTableCol: String,
+      resIdx: Int = 1): Int = env.provider.map {
+    case b: QueryBuilder =>
+      b.joinWithDescendant(ancestorTableAlias, ancestorTableCol).map(x=> resIdx).getOrElse(
+          b.joinWithAncestor(ancestorTableAlias, ancestorTableCol, resIdx + 1)) 
+    case _ => error("Parent column " + ancestorTableAlias + "." + ancestorTableCol + "not found!")
+  } getOrElse(error("Parent column " + ancestorTableAlias + "." + ancestorTableCol + "not found!"))
+  private def joinWithDescendant(tableAlias: String, tableCol: String) =
+    this.tablesAndAliases.find(tableAlias == _._2).map(x=> {
+      this.joinsWithChildren += (tableAlias -> List(tableCol))
+      x
+    })
+
   //DML statements are defined outsided buildInternal method since they are called from other QueryBuilder
   private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: List[Arr]) = {
     new InsertExpr(IdentExpr(table.ident), alias, Option(cols) map (_ map (buildInternal(_, COL_CTX)) filter {
@@ -537,19 +639,30 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private def table(t: Ident) = env.table(t.ident.mkString("."))
   private def patchVals(table: Ident, cols: List[Col], vals: List[Expr]) = {
     val diff = Option(cols).getOrElse(this.table(table).cols).size - vals.size
-    def v(i: Int) = buildInternal(Variable("?", false), VALUES_CTX)
     val allExprIdx = vals.indexWhere(_.isInstanceOf[AllExpr])
+    def v(i: Int) = buildInternal(Variable("?", false), VALUES_CTX)
     if (diff > 0 || allExprIdx != -1) allExprIdx match {
       case -1 if vals.size == 0 => 1 to diff map v toList //empty value clause
       case -1 => vals //perhaps hierarchical update
-      case i => vals.patch(i, 1 to (diff + 1) map v, 1)
+      case i => vals.patch(i, 0 to diff map v, 1)
     }
     else vals
   }
-
+  
   private def buildInternal(parsedExpr: Any, parseCtx: String = ROOT_CTX): Expr = {
     def buildSelect(q: Query) = {
       val tablesAndAliases = buildTables(q.tables)
+      if (ctxStack.head == QUERY_CTX && this.tablesAndAliases == Nil) {
+        //set table aliases for the query builder so they can be used for calculating relations
+        //with child queries
+        this.tablesAndAliases = tablesAndAliases._1 flatMap (t => t.table match {
+          case IdentExpr(n) =>
+            val name = n.mkString(".")
+            if (t.alias == null) if(tablesAndAliases._2.contains(name)) Nil else List(name -> name) 
+            else List(name -> t.alias)
+          case _ => Nil
+        })
+      }
       val sel = SelectExpr(tablesAndAliases._1, //tables
         if (q.filter != null) { //filter
           val f = (q.filter.elements map { buildInternal(_, WHERE_CTX) }).filter(_ != null)
@@ -559,8 +672,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null, //order
         buildInternal(q.offset, LIMIT_CTX), buildInternal(q.limit, LIMIT_CTX), //offset, limit
         tablesAndAliases._2)
-      //if select expression is subquery in others expression where clause, had where clause itself
-      //and where clause was removed due to unbound optional variables remove subquery itself
+      //if select expression is subquery in other's expression where clause, has where clause itself
+      //but where clause was removed due to unbound optional variables remove subquery itself
       if (ctxStack.head == WHERE_CTX && q.filter != null && q.filter.elements != Nil &&
         sel.filter == null) null else sel
     }
@@ -614,22 +727,24 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     def buildCols(cols: List[Col]) = if (cols == null) List(ColExpr(AllExpr(), null, null)) else {
       val colExprs = cols.map(buildInternal(_, COL_CTX).asInstanceOf[ColExpr])
-      if (colExprs.exists {
+      (if (colExprs.exists {
         case ColExpr(FunExpr(n, _), _, _, _, _) => Env.isDefined(n)
         case _ => false
       }) (colExprs flatMap { //external function found
         case ColExpr(FunExpr(n, pars), a, t, _, _) if Env.isDefined(n) =>
-          val m = Env.functions.flatMap(_.getClass.getMethods.filter(m=> m.getName == n &&
-              m.getParameterTypes.size == pars.size).headOption).getOrElse(
-                  error("External function " + n + " with " + pars.size + " parameters not found"))
-          QueryBuilder.this.externalFunction = true
-          ColExpr(ExternalFunExpr(n, m.getParameterTypes.toList.zip(pars).map(tp=>
-            HiddenColRefExpr(tp._2, tp._1)), m), a, t, true) :: pars.map(
-                ColExpr(_, null, null, hidden = true))
+          val m = Env.functions.flatMap(_.getClass.getMethods.filter(m => m.getName == n &&
+            m.getParameterTypes.size == pars.size).headOption).getOrElse(
+            error("External function " + n + " with " + pars.size + " parameters not found"))
+          QueryBuilder.this.hasHiddenCols = true
+          val hiddenColPars = m.getParameterTypes.toList.zip(pars).map(tp =>
+            HiddenColRefExpr(tp._2, tp._1))
+          ColExpr(ExternalFunExpr(n, hiddenColPars, m), a, t, Some(true)) :: hiddenColPars.map(
+            ColExpr(_, null, null, hidden = true))
         case e => List(e)
-      }).groupBy (_.hidden) match { //put hidden columns at the end
+      }).groupBy(_.hidden) match { //put hidden columns at the end
         case m: Map[Boolean, ColExpr] => m(false) ++ m.getOrElse(true, Nil)
-      } else colExprs
+      }
+      else colExprs) ++ joinsWithChildrenColExprs //add hidden columns used in filters of descendant queries 
     }
     
     ctxStack ::= parseCtx
@@ -745,7 +860,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private def build(ex: Exp): Expr = {
     buildInternal(ex)
   }
-
+  
   override def toString = "QueryBuilder: " + queryDepth
 
 }
@@ -799,8 +914,6 @@ abstract class Expr extends (() => Any) with Ordered[Expr] {
       case x: Expr => if (super.equals(that)) 0 else -1
     }
   }
-  //use object equals method for hash map
-  override def equals(that: Any) = super.equals(that)
   
   def in(inList: List[Expr]) = inList.contains(this)
   def notIn(inList: List[Expr]) = !inList.contains(this)

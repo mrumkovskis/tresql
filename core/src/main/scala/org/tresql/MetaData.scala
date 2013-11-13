@@ -3,8 +3,7 @@ package org.tresql
 import java.util.NoSuchElementException
 import sys._
 
-//TODO consider letting metadata to span multiple databases?
-//Implementation of meta data must be thread safe
+/** Implementation of meta data must be thread safe */
 trait MetaData {
   import metadata._
   def join(table1: String, table2: String) = {
@@ -12,19 +11,14 @@ trait MetaData {
     (t1.refs(t2.name), t2.refs(t1.name)) match {
       case (k1, k2) if (k1.length + k2.length > 1) => error("Ambiguous relation. Too many found between tables " +
         table1 + ", " + table2)
-      case (k1, k2) if (k1.length + k2.length == 0) => {
-        import scala.collection.mutable.ListBuffer
-        //try to find two imported keys of the same primary key
-        t1.rfs.filter(_._2.size == 1).foldLeft(ListBuffer[(List[String], List[String])]()) {
+      case (k1, k2) if (k1.length + k2.length == 0) => { //try to find two imported keys of the same primary key
+        t1.rfs.filter(_._2.size == 1).foldLeft(List[(List[String], List[String])]()) {
           (res, t1refs) =>
-            {
-              t2.rfs.foreach(t2refs => if (t2refs._2.size == 1 && t1refs._1 == t2refs._1)
-                res += (t1refs._2(0).cols -> t2refs._2(0).cols))
-              res
-            }
+              t2.rfs.foldLeft(res)((r, t2refs) => if (t2refs._2.size == 1 && t1refs._1 == t2refs._1)
+                (t1refs._2(0).cols -> t2refs._2(0).cols) :: r else r)
         } match {
-          case ListBuffer() => error("Relation not found between tables " + table1 + ", " + table2)
-          case ListBuffer(r) => r
+          case Nil => error("Relation not found between tables " + table1 + ", " + table2)
+          case List(r) => r
           case b => error("Ambiguous relation. Too many found between tables " + table1 + ", " +
             table2 + ". Relation columns: " + b)
         }

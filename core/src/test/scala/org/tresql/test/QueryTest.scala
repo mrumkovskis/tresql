@@ -25,17 +25,11 @@ class QueryTest extends Suite {
   Env.functions = new TestFunctions
   Env.cache = new SimpleCache
   Env update ((msg, level) => println (msg))
-  Env update (/*object to table name map*/Map(
-      "emp_dept_view"->"emp"),
-      /*property to column name map*/Map(), /*table to name map*/Map(
-      "work"->"work[empno]emp{ename || ' (' || wdate || ', ' || hours || ')'}",
-      "dept"->"deptno, deptno || ', ' || dname || ' (' || loc || ')'",
-      /* NOTE: in emp table name expression in from clause 'dept/emp' emp must come after dept since
-        emp name is resolved by adding search by primary key shortcut syntax i.e. 'dept/emp[10]'
-        and shortcut primary key search expression refers to the last table in from clause. */
-      "emp"->"dept/emp{empno, empno, ename || ' (' || dname || ')'}"),
-      /*object property to name map*/Map(
-      "emp_dept_view"->Map("deptno"->"null")))
+  Env update ( /*object to table name map*/ Map(
+    "emp_dept_view" -> "emp"),
+    /*property to column name map*/
+    Map("car_usage" -> Map("empname" -> ("empno", "(emp[ename = :empname]{empno})")),
+        "car" -> Map("dname" -> ("deptnr", "(case((dept[dname = :dname] {count(deptno)}) = 1, (dept[dname = :dname] {deptno}), -1))"))))
   //create test db script
   new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
     sql => val st = conn.createStatement; st.execute(sql); st.close
@@ -76,7 +70,7 @@ class QueryTest extends Suite {
         }} toMap
       } else pl
     }
-    println("------------------------ Test TreSQL statements ----------------------")
+    println("\n------------------------ Test TreSQL statements ----------------------\n")
     var nr = 0
     new scala.io.BufferedSource(getClass.getResourceAsStream("/test.txt"))("UTF-8").getLines.foreach {
       case l if (l.trim.startsWith("//")) =>
@@ -106,7 +100,7 @@ class QueryTest extends Suite {
       }
       case _ =>
     }
-    println("---------------- Test API ----------------------")
+    println("\n---------------- Test API ----------------------\n")
     expectResult(10)(Query.head[Int]("dept{deptno}#(deptno)"))
     expectResult(10)(Query.unique[Int]("dept[10]{deptno}#(deptno)"))
     expectResult(Some(10))(Query.headOption[Int]("dept{deptno}#(deptno)"))
@@ -172,7 +166,7 @@ class QueryTest extends Suite {
     expectResult(List((10,"ACCOUNTING",List((7782,"CLARK",List()), (7839,"KING",List((Date.valueOf("2012-06-06"),3),
         (Date.valueOf("2012-06-07"),4))), (7934, "MILLER", List())),List("PORCHE"))))(
             Query.list[Int, String, List[(Int, String, List[(Date, Int)])], List[String]] {
-      "dept[10]{deptno, dname, |emp[deptno = :1(deptno)]{empno, ename, |work[empno = :1(empno)]{wdate, hours}#(1,2) work}#(1) emps," +
+      "dept[10]{deptno, dname, |emp[deptno = :1(deptno)]{empno, ename, |[empno]work{wdate, hours}#(1,2) work}#(1) emps," +
       " |car[deptnr = :1(deptno)]{name}#(1) cars}"})
     //column alias test
     expectResult(List(("ACCOUNTING,CLARK", -2450.00), ("ACCOUNTING,KING", -5000.00), ("ACCOUNTING,MILLER", -2300.35))) {
@@ -230,8 +224,10 @@ class QueryTest extends Suite {
       Map("dname" -> "LAW", "loc" -> "DALLAS", "emps" -> scala.Array(
         Map("ename" -> "SMITH"), Map("ename" -> "LEWIS")))))
         
-    println("----------- ORT tests ------------")
-    println("--- inserts ---")
+    println("\n----------- ORT tests ------------\n")
+    
+    println("\n--- INSERT ---\n")
+    
     var obj:Map[String, Any] = Map("deptno" -> null, "dname" -> "LAW", "loc" -> "DALLAS",
       "calculated_field"->333, "another_calculated_field"->"A",
       "emp" -> scala.Array(Map("empno" -> null, "ename" -> "SMITH", "deptno" -> null,
@@ -276,7 +272,7 @@ class QueryTest extends Suite {
     obj = Map("deptno" -> null, "dname" -> "DRUGS",
               "car" -> List(Map("nr" -> "UUU", "name" -> "BEATLE")))
     expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
-    
+        
     //multiple column primary key
     obj = Map("empno"->7788, "car_nr" -> "1111")
     expectResult(1)(ORT.insert("car_usage", obj))
@@ -287,76 +283,13 @@ class QueryTest extends Suite {
     intercept[SQLException](ORT.insert("car_usage", obj))
     obj = Map("empno" -> 7839)
     intercept[SQLException](ORT.insert("car_usage", obj))
-            
-    println("--- fill ---")
-    //no row found
-    obj = Map("empno"-> -1, "ename"->null, "deptno"->null, "deptno_name"->null,
-        "mgr"->null, "mgr_name"->null)
-    expectResult(None)(ORT.fill("emp", obj, true))
-    //no primary key property found
-    obj = Map("kuku"-> -1, "ename"->null, "deptno"->null, "deptno_name"->null,
-        "mgr"->null, "mgr_name"->null)
-    expectResult(None)(ORT.fill("emp", obj, true))
     
-    obj = Map("empno"->7788, "ename"->null, "deptno"->null, "deptno_name"->null,
-        "mgr"->null, "mgr_name"->null)
-    expectResult(Some(Map("ename" -> "SCOTT", "empno" -> 7788, "deptno" -> 20,
-        "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")), "mgr" -> 7566,
-        "mgr_name" -> List(Map("code" -> 7566, "name" -> "JONES (RESEARCH)")))))(ORT.fill("emp", obj, true))
-    obj = Map("empno"->7839, "ename"->null, "deptno"->null, "deptno_name"->null,
-        "mgr"->null, "mgr_name"->null)
-    expectResult(Some(Map("ename" -> "KING", "empno" -> 7839, "deptno" -> 10,
-        "deptno_name" -> List(Map("name" -> "10, ACCOUNTING (NEW YORK)")), "mgr" -> null,
-        "mgr_name" -> List())))(ORT.fill("emp", obj, true))
-        
-    obj = Map("deptno"->20, "dname"->null, "loc"->null, "calculated_field"-> 222,
-        "emp_dept_view"->List(Map("empno"->7788, "ename"->null, "mgr"->null, "mgr_name"->null,
-            "deptno"->null, "deptno_name"->null), 
-                  Map("empno"->7566, "ename"->null, "mgr"->null, "mgr_name"->null,
-            "deptno"->null, "deptno_name"->null)),
-        "calculated_children"->List(Map("x"->5)))
+    //value clause test
+    obj = Map("car_nr" -> 2222, "empname" -> "SCOTT", "date_from" -> "2013-11-06")
+    expectResult(1)(ORT.insert("car_usage", obj))
     
-    expectResult(Some(Map("deptno" -> 20, "dname" -> "RESEARCH", "loc"->"DALLAS", "calculated_field"-> 222,
-        "emp_dept_view" -> List(
-            Map("empno" -> 7566, "deptno" -> 20, 
-              "mgr_name" -> List(Map("code" -> 7839, "name" -> "KING (ACCOUNTING)")),
-              "ename" -> "JONES", "mgr" -> 7839, "deptno_name" -> null), 
-            Map("empno" -> 7788, "deptno" -> 20, 
-              "mgr_name" -> List(Map("code" -> 7566, "name" -> "JONES (RESEARCH)")),
-              "ename" -> "SCOTT", "mgr" -> 7566, "deptno_name" -> null)),
-        "calculated_children"->List(Map("x"->5)))))(ORT.fill("dept", obj, true))
-        
-    obj = Map("deptno"->20, "dname"->null, "loc"->null, "calculated_field"-> 222,
-        "emp_dept_view"->List(
-            Map("empno"->7788, "ename"->null, "mgr"->null, "mgr_name"->null, "deptno"->20), 
-            Map("empno"->7566, "ename"->null, "mgr"->null, "mgr_name"->null, "deptno"->20)),
-        "calculated_children"->List(Map("x"->5)))
+    println("\n--- UPDATE ---\n")
     
-    expectResult(Some(Map("deptno" -> 20, "dname" -> "RESEARCH", "loc"->"DALLAS", "calculated_field"-> 222,
-        "emp_dept_view" -> List(
-            Map("empno" -> 7566, "mgr_name" -> List(Map("code" -> 7839, "name" -> "KING (ACCOUNTING)")),
-              "ename" -> "JONES", "mgr" -> 7839, "deptno"->20), 
-            Map("empno" -> 7788, "mgr_name" -> List(Map("code" -> 7566, "name" -> "JONES (RESEARCH)")),
-              "ename" -> "SCOTT", "mgr" -> 7566, "deptno"->20)),
-        "calculated_children"->List(Map("x"->5)))))(ORT.fill("dept", obj, true))
-    
-    obj = Map("empno"->7788, "mgr"-> null, "mgr_name"->null, "work:empno"-> Map("wdate"->null,
-        "hours"->null, "empno_mgr"->null, "empno_mgr_name"->null))
-    expectResult(Some(Map("empno" -> 7788, "mgr" -> 7566, "mgr_name" -> List(Map("code" -> 7566,
-      "name" -> "JONES (RESEARCH)")), "work:empno" -> List(Map("wdate" ->
-      Date.valueOf("2012-06-06"), "hours" -> 5, "empno_mgr" -> 7566,
-      "empno_mgr_name" -> List(Map("code" -> 7566, "name" -> "JONES (RESEARCH)"))),
-      Map("wdate" -> Date.valueOf("2012-06-07"), "hours" -> 8, "empno_mgr" -> 7782,
-        "empno_mgr_name" -> List(Map("code" -> 7782, "name" -> "CLARK (ACCOUNTING)")))))))(
-      ORT.fill("emp", obj, true))
-
-    obj = Map("empno"->7788, "mgr"-> null, "mgr_name"->null, "work"-> Map("wdate"->null,
-        "hours"->null, "empno_mgr"->null, "empno_mgr_name"->null))
-    //Cannot link child table 'work'. Must be exactly one reference from child to parent table 'emp'.
-    //Instead these refs found: List(Ref(List(empno)), Ref(List(empno_mgr)))
-    intercept[Exception](ORT.fill("emp", obj, true))
-      
-    println("--- update ---")
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
         "emp"->List(
             Map("empno"->null, "ename"->"ANNA", "mgr"->7788, "mgr_name"->null,
@@ -391,10 +324,18 @@ class QueryTest extends Suite {
               "dept_addr" -> List(Map("addr" -> "Halibut", "zip_code" -> "1010")))
     expectResult(List(1, List(1, List(1))))(ORT.update("dept", obj))
     
-    println("--- delete ---")
+    //value clause test
+    obj = Map("nr" -> 4444, "dname" -> "ACCOUNTING")
+    expectResult(1)(ORT.update("car", obj))
+    obj = Map("nr" -> 4444, "dname" -> "<NONE>")
+    intercept[java.sql.SQLIntegrityConstraintViolationException](ORT.update("car", obj))
+    
+    println("\n--- DELETE ---\n")
+    
     expectResult(1)(ORT.delete("emp", 7934))
     
-    println("--- save ---")
+    println("\n--- SAVE ---\n")
+    
     obj = Map("dname" -> "SALES", "loc" -> "WASHINGTON", "calculated_field" -> 222,
       "emp" -> List(
         Map("empno" -> 7499, "ename" -> "ALLEN SMITH", "job" -> "SALESMAN", "mgr" -> 7698,
@@ -429,8 +370,8 @@ class QueryTest extends Suite {
         "work:empno"->List(), "calculated_children"->List(Map("x"->5)), "deptno"->20)
     expectResult(List(1, List(2)))(ORT.save("emp", obj))
         
-    println("-------------- CACHE -----------------")
-    Env.cache.map(println(_))
+    println("\n-------------- CACHE -----------------\n")
+    Env.cache map println
     
   }
     
