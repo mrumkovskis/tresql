@@ -727,7 +727,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
       case o => error("unsupported column definition at this place: " + o)
     }
-    def buildCols(cols: List[Col]) = if (cols == null) List(ColExpr(AllExpr(), null, null)) else {
+    def buildCols(cols: List[Col]) = if (cols == null)
+      List(ColExpr(AllExpr(), null, null, Some(false))) else {
       val colExprs = cols.map(buildInternal(_, COL_CTX).asInstanceOf[ColExpr])
       (if (colExprs.exists {
         case ColExpr(FunExpr(n, _), _, _, _, _) => Env.isDefined(n)
@@ -790,13 +791,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
             case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
             case _ =>
               val tablesAndAliases = buildTables(List(t))
-              SelectExpr(tablesAndAliases._1, null,
-                List(ColExpr(AllExpr(), null, null)), false, null, null, null, null, tablesAndAliases._2)
+              SelectExpr(tablesAndAliases._1, null, List(ColExpr(AllExpr(), null, null,
+                  Some(false))), false, null, null, null, null, tablesAndAliases._2)
           }
           case TABLE_CTX =>
             val tablesAndAliases = buildTables(List(t))
             SelectExpr(tablesAndAliases._1, null,
-              List(ColExpr(AllExpr(), null, null)), false, null, null, null, null, tablesAndAliases._2)
+              List(ColExpr(AllExpr(), null, null, Some(false))), false, null, null, null, null,
+              tablesAndAliases._2)
           case COL_CTX => buildColumnIdentOrBracesExpr(t)
           case _ => buildIdentOrBracesExpr(t)
         }
