@@ -332,3 +332,5 @@ salgrade {plus(losal * 2, hisal / 2), grade, average(losal + 1000, hisal - 1000)
 dept[10] {nopars(), dname} --> [["ok", "ACCOUNTING"]]
 dept[10] {dname, nopars()} --> [["ACCOUNTING", "ok"]]
 
+//hierarchical query in from clause select //FIXME: does not return child query result!
+(dept{deptno, |emp{ename}})[deptno = 10] --> [[10]]
