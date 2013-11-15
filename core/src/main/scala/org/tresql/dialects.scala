@@ -51,7 +51,7 @@ package object dialects {
                 "(" + ns.sql + ") [rownum <= " + l.sql + "]"
               case (l, o) if l == null && o != null =>
                 "((" + ns.sql + ") w {rownum rnum, w.*}) [rnum > " + o.sql + "]"
-              case (limit, offset) =>
+              case _ =>
                 "((" + ns.sql + ") w [rownum <= " + l.sql + "] {rownum rnum, w.*}) [rnum > " + o.sql + "]"
             }
         }
