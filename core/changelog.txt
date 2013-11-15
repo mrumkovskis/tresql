@@ -1,3 +1,23 @@
+--- 2013.11.16 tresql 5.1 ---
+1. Hierarchical query join shortcut syntax improvements - ancestor alias join better support.
+
+Example:
+
+dept d{deptno, dname, 
+    |emp[sal >= losal & sal <= hisal]salgrade g {grade, losal, hisal, count(empno) empcount,
+        |[d.deptno = emp.deptno & sal >= g.losal & sal <= g.hisal]emp/dept{ename, emp.deptno, dname, sal}#(empno) emps
+    } (grade, losal, hisal) #(1) salgrades
+}#(deptno)
+
+Fragment 'sal >= g.losal & sal <= g.hisal' during execution is transformed to 'sal >= :1(g_hisal) & sal <= :1(g_losal)'
+
+2. Limit offset syntax improvements.
+
+Example:
+
+dept#(deptno)@(1, 2)
+dept#(deptno)@(3, )  //only offset
+
 --- 2013.11.13 tresql 5.0 ---
 1. Hierarchical query join shortcut syntax support
 
