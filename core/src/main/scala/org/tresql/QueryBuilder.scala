@@ -306,51 +306,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   case class SelectExpr(tables: List[Table], filter: List[Expr], cols: List[ColExpr],
     distinct: Boolean, group: Expr, order: List[Expr],
-    offset: Expr, limit: Expr, aliases: Map[String, Table]) extends BaseExpr {
+    offset: Expr, limit: Expr, aliases: Map[String, Table], parentJoin: Option[Expr]) extends BaseExpr {
     override def apply() = {
       org.tresql.Query.sel(sql, cols, QueryBuilder.this.bindVariables, env,
         QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
-    }
-    //check whether parent query with at least one primitive table exists
-    def hasParentQuery = env.provider.map {
-      case b: QueryBuilder => b.tablesAndAliases != Nil
-      case _ => false
-    } getOrElse(false)
-    //establish link between ancestors
-    val parentJoin =
-      if (QueryBuilder.this.ctxStack.headOption.orNull != QUERY_CTX || !hasParentQuery) None else {
-      def parentChildJoinExpr(table: Table, qname: List[String], refCol: Option[String] = None) = {
-        def exp(childCol: String, parentCol: String) = BinExpr("=",
-          IdentExpr(List(table.aliasOrName, childCol)), ResExpr(1, parentCol))
-        def exps(cols: List[(String, String)]): Expr = cols match {
-          case c :: Nil => exp(c._1, c._2)
-          case c :: l => BinExpr("&", exp(c._1, c._2), exps(l))
-        }
-        joinWithParent(qname.mkString("."), refCol).map(t => exps(t._1 zip t._2))
-      }
-      tables.headOption.flatMap {
-        //default join
-        case tb @ Table(IdentExpr(t), _, null, _, _) => parentChildJoinExpr(tb, t)
-        case tb @ Table(IdentExpr(t), _, TableJoin(true, null, _, _), _, _) => parentChildJoinExpr(tb, t)
-        case Table(x, _, TableJoin(true, null, _, _), _, _) =>
-          error("At the moment default join with parent query cannot be performed on table: " + x)
-        //foreign key join shortcut syntax
-        case tb @ Table(IdentExpr(t), _, TableJoin(false, IdentExpr(fk), _, _), _, _) =>
-          parentChildJoinExpr(tb, t, fk.lastOption)
-        case Table(x, _, TableJoin(false, IdentExpr(fk), _, _), _, _) =>
-          error("At the moment foreign key shortcut join with parent query cannot be performed on table: " + x)
-        //product join
-        case Table(_, _, TableJoin(false, ArrExpr(Nil), _, _), _, _) => None
-        case tb @ Table(_, _, j, _, _) => j match {
-          //ancestor alias shortcut join 
-          case TableJoin(false, ArrExpr(List(BinExpr(o, IdentExpr(List(ta, cn)), rop))), _, _)
-            if ta != tb.aliasOrName =>
-            Some(BinExpr(o, ResExpr(joinWithAncestor(ta, cn), ta + "_" + cn), rop))
-          //explicit join
-          case TableJoin(false, e, _, _) if e != null => Some(e)
-          case _ => None
-        }
-      }
     }
     lazy val defaultSQL = "select " + (if (distinct) "distinct " else "") +
       (if (cols == null) "*" else sqlCols) + " from " + tables.head.sqlName + join(tables) +
@@ -602,13 +561,19 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     case b: QueryBuilder => b.joinWithChild(table, refCol)
     case x => None
   }
+  //join with ancestor query
+  private def joinWithAncestor(ancestorTableAlias: String,
+      ancestorTableCol: String): Option[ResExpr] = 
+        if(!this.tablesAndAliases.exists(_._2 == ancestorTableAlias))
+            joinWithAncestor(ancestorTableAlias, ancestorTableCol, 1)
+            .map(ResExpr(_, ancestorTableAlias + "_" + ancestorTableCol)) else None
   private def joinWithAncestor(ancestorTableAlias: String, ancestorTableCol: String,
-      resIdx: Int = 1): Int = env.provider.map {
+      resIdx: Int): Option[Int] = env.provider.flatMap {
     case b: QueryBuilder =>
-      b.joinWithDescendant(ancestorTableAlias, ancestorTableCol).map(x=> resIdx).getOrElse(
+      b.joinWithDescendant(ancestorTableAlias, ancestorTableCol).map(x=> resIdx).orElse(
           b.joinWithAncestor(ancestorTableAlias, ancestorTableCol, resIdx + 1)) 
-    case _ => error("Parent column " + ancestorTableAlias + "." + ancestorTableCol + "not found!")
-  } getOrElse(error("Parent column " + ancestorTableAlias + "." + ancestorTableCol + "not found!"))
+    case _ => None
+  }
   private def joinWithDescendant(tableAlias: String, tableCol: String) =
     this.tablesAndAliases.find(tableAlias == _._2).map(x=> {
       this.joinsWithChildren += (tableAlias -> List(tableCol))
@@ -665,20 +630,62 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         this.tablesAndAliases = tablesAndAliases._1 flatMap (t => t.table match {
           case IdentExpr(n) =>
             val name = n.mkString(".")
-            if (t.alias == null) if(tablesAndAliases._2.contains(name)) Nil else List(name -> name) 
+            if (t.alias == null) if (tablesAndAliases._2.contains(name)) Nil else List(name -> name)
             else List(name -> t.alias)
           case _ => Nil
         })
       }
-      val sel = SelectExpr(tablesAndAliases._1, //tables
-        if (q.filter != null) { //filter
-          val f = (q.filter.elements map { buildInternal(_, WHERE_CTX) }).filter(_ != null)
-          if (f.length > 0) f else null
-        } else null,
-        buildCols(q.cols), q.distinct, buildInternal(q.group), //cols, distinct, group
-        if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null, //order
-        buildInternal(q.offset, LIMIT_CTX), buildInternal(q.limit, LIMIT_CTX), //offset, limit
-        tablesAndAliases._2)
+      val filter = if (q.filter != null) { //filter
+        val f = (q.filter.elements map { buildInternal(_, WHERE_CTX) }).filter(_ != null)
+        if (f.length > 0) f else null
+      } else null
+      val cols = buildCols(q.cols)
+      val distinct = q.distinct
+      val group = buildInternal(q.group)
+      val order = if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null
+      val offset = buildInternal(q.offset, LIMIT_CTX)
+      val limit = buildInternal(q.limit, LIMIT_CTX)
+      val aliases = tablesAndAliases._2
+      //check whether parent query with at least one primitive table exists
+      def hasParentQuery = env.provider.map {
+        case b: QueryBuilder => b.tablesAndAliases != Nil
+        case _ => false
+      } getOrElse (false)
+      //establish link between ancestors
+      val parentJoin =
+        if (QueryBuilder.this.ctxStack.headOption.orNull != QUERY_CTX || !hasParentQuery) None else {
+          def parentChildJoinExpr(table: Table, qname: List[String], refCol: Option[String] = None) = {
+            def exp(childCol: String, parentCol: String) = BinExpr("=",
+              IdentExpr(List(table.aliasOrName, childCol)), ResExpr(1, parentCol))
+            def exps(cols: List[(String, String)]): Expr = cols match {
+              case c :: Nil => exp(c._1, c._2)
+              case c :: l => BinExpr("&", exp(c._1, c._2), exps(l))
+            }
+            joinWithParent(qname.mkString("."), refCol).map(t => exps(t._1 zip t._2))
+          }
+          tablesAndAliases._1.headOption.flatMap {
+            //default join
+            case tb @ Table(IdentExpr(t), _, null, _, _) => parentChildJoinExpr(tb, t)
+            case tb @ Table(IdentExpr(t), _, TableJoin(true, null, _, _), _, _) => parentChildJoinExpr(tb, t)
+            case Table(x, _, TableJoin(true, null, _, _), _, _) =>
+              error("At the moment default join with parent query cannot be performed on table: " + x)
+            //foreign key join shortcut syntax
+            case tb @ Table(IdentExpr(t), _, TableJoin(false, IdentExpr(fk), _, _), _, _) =>
+              parentChildJoinExpr(tb, t, fk.lastOption)
+            case Table(x, _, TableJoin(false, IdentExpr(fk), _, _), _, _) =>
+              error("At the moment foreign key shortcut join with parent query cannot be performed on table: " + x)
+            //product join
+            case Table(_, _, TableJoin(false, ArrExpr(Nil), _, _), _, _) => None
+            case tb @ Table(_, _, TableJoin(false, e, _, _), _, _) if e != null =>
+              //transform ancestor alias join: replace IdentExpr referencing parent queries with ResExpr
+              Some(transform(e, {
+                case ie @ IdentExpr(List(tab, col)) =>
+                  joinWithAncestor(tab, col).getOrElse(ie)
+              }))
+          }
+        }
+      val sel = SelectExpr(tablesAndAliases._1, filter, cols, distinct, group, order, offset, limit,
+        tablesAndAliases._2, parentJoin)
       //if select expression is subquery in other's expression where clause, has where clause itself
       //but where clause was removed due to unbound optional variables remove subquery itself
       if (ctxStack.head == WHERE_CTX && q.filter != null && q.filter.elements != Nil &&
@@ -797,13 +804,13 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
             case _ =>
               val tablesAndAliases = buildTables(List(t))
               SelectExpr(tablesAndAliases._1, null, List(ColExpr(AllExpr(), null, null,
-                  Some(false))), false, null, null, null, null, tablesAndAliases._2)
+                  Some(false))), false, null, null, null, null, tablesAndAliases._2, None)
           }
           case TABLE_CTX =>
             val tablesAndAliases = buildTables(List(t))
             SelectExpr(tablesAndAliases._1, null,
               List(ColExpr(AllExpr(), null, null, Some(false))), false, null, null, null, null,
-              tablesAndAliases._2)
+              tablesAndAliases._2, None)
           case COL_CTX => buildColumnIdentOrBracesExpr(t)
           case _ => buildIdentOrBracesExpr(t)
         }

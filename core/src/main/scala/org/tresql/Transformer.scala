@@ -22,11 +22,13 @@ trait Transformer { self: QueryBuilder =>
         i.cols map cf, i.vals map cf)
       case Order((nulsfirst, e, nulslast), asc) =>
         Order((nulsfirst, e map cf, nulslast), asc)
-      case SelectExpr(tables, filter, cols, distinct, group, order, offset, limit, aliases) =>
+      case SelectExpr(tables, filter, cols, distinct, group, order,
+          offset, limit, aliases, parentJoin) =>
         SelectExpr(tables map (t => cf(t).asInstanceOf[Table]),
           if (filter == null) null else filter map cf,
           cols map (e => cf(e).asInstanceOf[ColExpr]), distinct, cf(group),
-          if (order == null) null else order map cf, cf(offset), cf(limit), aliases)
+          if (order == null) null else order map cf, cf(offset), cf(limit), aliases,
+          parentJoin map cf)
       case Table(texpr, alias, join, outerJoin, nullable) =>
         Table(cf(texpr), alias, cf(join).asInstanceOf[TableJoin], outerJoin, nullable)
       case TableJoin(default, expr, noJoin, defaultJoinCols) =>
