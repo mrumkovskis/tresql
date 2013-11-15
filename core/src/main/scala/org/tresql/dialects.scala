@@ -46,12 +46,13 @@ package object dialects {
           case s @ b.SelectExpr(_, _, _, _, _, _, o, l, _, _) =>
             val ns = s.copy(offset = null, limit = null)
             (o, l) match {
-              case (o, l) if l != null && o == null =>
+              case (null, null) => ns.sql
+              case (null, l) =>
                 "select * from (" + ns.sql + ") where rownum <= " + l.sql
-              case (o, l) if l == null && o != null =>
-                "select * from (select * from rownum rnum, w.* from (" + ns.sql + ") w) where rnum > " + o.sql
+              case (o, null) =>
+                "select * from (select w.*, rownum rnum from (" + ns.sql + ") w) where rnum > " + o.sql
               case _ =>
-                "select * from (select rownum rnum, w.* from (" + ns.sql +
+                "select * from (select w.*, rownum rnum from (" + ns.sql +
                 ") w where rownum <= " + l.sql + ") where rnum > " + o.sql
             }
         }
