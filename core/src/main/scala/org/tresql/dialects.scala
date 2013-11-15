@@ -43,15 +43,16 @@ package object dialects {
       case e: QueryBuilder#SelectExpr if e.limit != null || e.offset != null =>
         val b = e.builder //cannot match SelectExpr if builder is not extracted!!!
         e match {
-          case s @ b.SelectExpr(_, _, _, _, _, _, o, l, _) =>
+          case s @ b.SelectExpr(_, _, _, _, _, _, o, l, _, _) =>
             val ns = s.copy(offset = null, limit = null)
             (o, l) match {
-              case (l, o) if l != null && o == null =>
-                "(" + ns.sql + ") [rownum <= " + l.sql + "]"
-              case (l, o) if l == null && o != null =>
-                "((" + ns.sql + ") w {rownum rnum, w.*}) [rnum > " + o.sql + "]"
+              case (o, l) if l != null && o == null =>
+                "select * from (" + ns.sql + ") where rownum <= " + l.sql
+              case (o, l) if l == null && o != null =>
+                "select * from (select * from rownum rnum, w.* from (" + ns.sql + ") w) where rnum > " + o.sql
               case _ =>
-                "((" + ns.sql + ") w [rownum <= " + l.sql + "] {rownum rnum, w.*}) [rnum > " + o.sql + "]"
+                "select * from (select rownum rnum, w.* from (" + ns.sql +
+                ") w where rownum <= " + l.sql + ") where rnum > " + o.sql
             }
         }
     }
