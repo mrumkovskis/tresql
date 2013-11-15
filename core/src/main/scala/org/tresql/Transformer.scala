@@ -3,12 +3,11 @@ package org.tresql
 trait Transformer { self: QueryBuilder =>
 
   def transform(expr: Expr, f: PartialFunction[Expr, Expr]): Expr = {
-    val f1: PartialFunction[Expr, Expr] = {
+    var cf: PartialFunction[Expr, Expr] = null
+    cf = f.orElse[Expr, Expr]({
       case null => null
       case e if e.builder != self => e.builder.transform(e, f)
-    }
-    var cf: PartialFunction[Expr, Expr] = null
-    cf = f.orElse(f1).orElse[Expr, Expr]({
+    }).orElse[Expr, Expr]({
       case ArrExpr(e) => ArrExpr(e map cf)
       case AssignExpr(v, e) => AssignExpr(v, cf(e))
       case BinExpr(o, lop, rop) => BinExpr(o, cf(lop), cf(rop))
@@ -27,7 +26,7 @@ trait Transformer { self: QueryBuilder =>
         SelectExpr(tables map (t => cf(t).asInstanceOf[Table]),
           if (filter == null) null else filter map cf,
           cols map (e => cf(e).asInstanceOf[ColExpr]), distinct, cf(group),
-          if(order == null) null else order map cf, cf(offset), cf(limit), aliases)
+          if (order == null) null else order map cf, cf(offset), cf(limit), aliases)
       case Table(texpr, alias, join, outerJoin, nullable) =>
         Table(cf(texpr), alias, cf(join).asInstanceOf[TableJoin], outerJoin, nullable)
       case TableJoin(default, expr, noJoin, defaultJoinCols) =>
