@@ -40,7 +40,6 @@ package object dialects {
     def apply(e: Expr) = e match {
       case e.builder.BinExpr("-", lop, rop) =>
         lop.sql + (if (e.exprType.getSimpleName == "SelectExpr") " minus " else " - ") + rop.sql
-      case e.builder.UnExpr(o, op) => ""
       case e: QueryBuilder#SelectExpr if e.limit != null || e.offset != null =>
         val b = e.builder //cannot match SelectExpr if builder is not extracted!!!
         e match {
