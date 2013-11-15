@@ -34,11 +34,28 @@ package object dialects {
   object OracleRawDialect extends PartialFunction[Expr, String] {
     def isDefinedAt(e: Expr) = e match {
       case e.builder.BinExpr("-", _, _) => true
+      case e: QueryBuilder#SelectExpr if e.limit != null || e.offset != null => true
       case _ => false
     }
     def apply(e: Expr) = e match {
       case e.builder.BinExpr("-", lop, rop) =>
         lop.sql + (if (e.exprType.getSimpleName == "SelectExpr") " minus " else " - ") + rop.sql
+      case e: QueryBuilder#SelectExpr if e.limit != null || e.offset != null =>
+        val b = e.builder //cannot match SelectExpr if builder is not extracted!!!
+        e match {
+          case s @ b.SelectExpr(_, _, _, _, _, _, o, l, _, _) =>
+            val ns = s.copy(offset = null, limit = null)
+            (o, l) match {
+              case (null, null) => ns.sql
+              case (null, l) =>
+                "select * from (" + ns.sql + ") where rownum <= " + l.sql
+              case (o, null) =>
+                "select * from (select w.*, rownum rnum from (" + ns.sql + ") w) where rnum > " + o.sql
+              case _ =>
+                "select * from (select w.*, rownum rnum from (" + ns.sql +
+                ") w where rownum <= " + l.sql + ") where rnum > " + o.sql
+            }
+        }
     }
   }
 

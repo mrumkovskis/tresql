@@ -260,15 +260,16 @@ object QueryParser extends JavaTokenParsers {
   def orderAsc: Parser[Ord] = ("#" ~ "(") ~> orderCore <~ ")" ^^ (Ord(_, true))
   def orderDesc: Parser[Ord] = ("~#" ~ "(") ~> orderCore <~ ")" ^^ (Ord(_, false))
   def order: Parser[List[Ord]] = rep1(orderAsc | orderDesc)
-  def offsetLimit: Parser[(Any, Any)] = ("@" ~ "(") ~> ("[0-9]+".r | variable) ~
-    opt("[0-9]+".r | variable) <~ ")" ^^ {
-      case o ~ l =>
-        if (l == None) (null, o match { case v: Variable => v case s: String => BigDecimal(s) })
-        else (o match { case v: Variable => v case s: String => BigDecimal(s) },
-          l match {
-            case Some(v: Variable) => v case Some(s: String) => BigDecimal(s)
-            case None => error("Knipis")
-          })
+  def offsetLimit: Parser[(Any, Any)] = ("@" ~ "(") ~> ("[0-9]+".r | variable) ~ opt(",") ~
+    opt("[0-9]+".r | variable) <~ ")" ^^ { pr =>
+      {
+        def c(x: Any) = x match { case v: Variable => v case s: String => BigDecimal(s) }
+        pr match {
+          case o ~ comma ~ Some(l) => (c(o), c(l))
+          case o ~ Some(comma) ~ None => (c(o), null)
+          case o ~ None ~ None => (null, c(o))
+        }
+      }
     }
   def query: Parser[Any] = new Parser[Any] {
     def parser = objs ~ opt(QueryParser.filter) ~ opt(columns) ~ opt(group) ~ opt(order) ~
