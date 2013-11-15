@@ -1,18 +1,44 @@
 package org.tresql
 
-trait Transformer extends PartialFunction[Expr, Expr] { this: QueryBuilder =>
+trait Transformer { self: QueryBuilder =>
 
-  protected var transformer: PartialFunction[Expr, Expr] = {
-    case e => e
-  } 
-  
-  def isDefinedAt(e: Expr) = true
-  
-  def apply(e: Expr) = e match {
-    case BinExpr(o, lop, rop) => BinExpr(o, transformer(lop), transformer(rop))
-    case BracesExpr(b) => BracesExpr(transformer(b))
-    case e: ConstExpr => e
-    case _ => e
+  def transform(expr: Expr, f: PartialFunction[Expr, Expr]): Expr = {
+    val f1: PartialFunction[Expr, Expr] = {
+      case null => null
+      case e if e.builder != self => e.builder.transform(e, f)
+    }
+    var cf: PartialFunction[Expr, Expr] = null
+    cf = f.orElse(f1).orElse[Expr, Expr]({
+      case ArrExpr(e) => ArrExpr(e map cf)
+      case AssignExpr(v, e) => AssignExpr(v, cf(e))
+      case BinExpr(o, lop, rop) => BinExpr(o, cf(lop), cf(rop))
+      case BracesExpr(b) => BracesExpr(cf(b))
+      case ColExpr(col, alias, typ, sepQuery, hidden) => ColExpr(cf(col), alias, typ, sepQuery, hidden)
+      case ExternalFunExpr(n, p, m) => ExternalFunExpr(n, p map cf, m)
+      case FunExpr(n, p) => FunExpr(n, p map cf)
+      case Group(e, h) => Group(e map cf, cf(h))
+      case HiddenColRefExpr(e, typ) => HiddenColRefExpr(cf(e), typ)
+      case InExpr(lop, rop, not) => InExpr(cf(lop), rop map cf, not)
+      case i: InsertExpr => new InsertExpr(cf(i.table).asInstanceOf[IdentExpr], i.alias,
+        i.cols map cf, i.vals map cf)
+      case Order((nulsfirst, e, nulslast), asc) =>
+        Order((nulsfirst, e map cf, nulslast), asc)
+      case SelectExpr(tables, filter, cols, distinct, group, order, offset, limit, aliases) =>
+        SelectExpr(tables map (t => cf(t).asInstanceOf[Table]),
+          if (filter == null) null else filter map cf,
+          cols map (e => cf(e).asInstanceOf[ColExpr]), distinct, cf(group),
+          if(order == null) null else order map cf, cf(offset), cf(limit), aliases)
+      case Table(texpr, alias, join, outerJoin, nullable) =>
+        Table(cf(texpr), alias, cf(join).asInstanceOf[TableJoin], outerJoin, nullable)
+      case TableJoin(default, expr, noJoin, defaultJoinCols) =>
+        TableJoin(default, cf(expr), noJoin, defaultJoinCols)
+      case UnExpr(o, op) => UnExpr(o, cf(op))
+      case u: UpdateExpr => new UpdateExpr(cf(u.table).asInstanceOf[IdentExpr], u.alias,
+        u.filter map cf, u.cols map cf, u.vals map cf)
+      case d: DeleteExpr => //put delete at the end since it is superclass of insert and update
+        DeleteExpr(cf(d.table).asInstanceOf[IdentExpr], d.alias, d.filter map cf)
+      case e => e
+    })
+    cf(expr)
   }
-  
 }

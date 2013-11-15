@@ -26,7 +26,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private val childUpdates = scala.collection.mutable.ListBuffer[(Expr, String)]()
 
   //context stack as buildInternal method is called
-  private var ctxStack = List[String]()
+  protected var ctxStack = List[String]()
   //bind variables for jdbc prepared statement 
   private val _bindVariables = scala.collection.mutable.ListBuffer[Expr]()
   private lazy val bindVariables = _bindVariables.toList
@@ -54,6 +54,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   case class ConstExpr(val value: Any) extends BaseExpr {
     override def apply() = value
     def defaultSQL = value match {
+      case v: Int => v.toString
       case v: Number => v.toString
       case v: String => "'" + v + "'"
       case v: Boolean => v.toString
@@ -316,7 +317,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case _ => false
     } getOrElse(false)
     //establish link between ancestors
-    val parentJoin = if (QueryBuilder.this.ctxStack.head != QUERY_CTX || !hasParentQuery) None else {
+    val parentJoin =
+      if (QueryBuilder.this.ctxStack.headOption.orNull != QUERY_CTX || !hasParentQuery) None else {
       def parentChildJoinExpr(table: Table, qname: List[String], refCol: Option[String] = None) = {
         def exp(childCol: String, parentCol: String) = BinExpr("=",
           IdentExpr(List(table.aliasOrName, childCol)), ResExpr(1, parentCol))
@@ -394,7 +396,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       else "")
   }
   case class Table(val table: Expr, val alias: String, val join: TableJoin, val outerJoin: String,
-    val nullable: Boolean) {
+    val nullable: Boolean) extends PrimitiveExpr {
     def name = table.sql
     def sqlName = name + (if (alias != null) " " + alias else "")
     def aliasOrName = if (alias != null) alias else name
@@ -439,9 +441,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           })
       }
     }
+    override def defaultSQL = error("Not implemented")
   }
   case class TableJoin(val default: Boolean, val expr: Expr, val noJoin: Boolean,
-    defaultJoinCols: (List[String], List[String]))
+    defaultJoinCols: (List[String], List[String])) extends PrimitiveExpr {
+    def defaultSQL = error("Not implemented")
+  }
   case class ColExpr(val col: Expr, val alias: String, val typ: String,
       sepQuery: Option[Boolean] = None, hidden: Boolean = false)
     extends PrimitiveExpr {
@@ -508,7 +513,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       " set " + (cols zip vals map { v => v._1.sql + " = " + v._2.sql }).mkString(", ") +
       (if (filter == null) "" else " where " + where)
   }
-  class DeleteExpr(val table: IdentExpr, val alias: String, val filter: List[Expr]) extends BaseExpr {
+  case class DeleteExpr(val table: IdentExpr, val alias: String, val filter: List[Expr]) extends BaseExpr {
     override def apply() = {
       val r = org.tresql.Query.update(sql, QueryBuilder.this.bindVariables, env)
       executeChildren match {
@@ -864,12 +869,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private def build(ex: Exp): Expr = {
     buildInternal(ex)
   }
-  
-  private def transform(e: Expr, f: PartialFunction[Expr, Expr]) = {
-    transformer = f orElse this
-    transformer(e)
-  }
-    
+      
   override def toString = "QueryBuilder: " + queryDepth
 
 }
