@@ -400,7 +400,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           })
       }
     }
-    override def defaultSQL = error("Not implemented")
+    override def defaultSQL = table.sql + Option(alias).mkString
   }
   case class TableJoin(val default: Boolean, val expr: Expr, val noJoin: Boolean,
     defaultJoinCols: (List[String], List[String])) extends PrimitiveExpr {
@@ -665,19 +665,24 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           }
           tablesAndAliases._1.headOption.flatMap {
             //default join
-            case tb @ Table(IdentExpr(t), _, null, _, _) => parentChildJoinExpr(tb, t)
-            case tb @ Table(IdentExpr(t), _, TableJoin(true, null, _, _), _, _) => parentChildJoinExpr(tb, t)
-            case Table(x, _, TableJoin(true, null, _, _), _, _) =>
-              error("At the moment default join with parent query cannot be performed on table: " + x)
+            case tb @ Table(x, _, null, _, _) => x match {
+              case IdentExpr(t) => parentChildJoinExpr(tb, t)
+              case _ => error("At the moment default join with parent query cannot be performed on table: " + x)
+            }
+            case tb @ Table(x, _, TableJoin(true, null, _, _), _, _) => x match {
+              case IdentExpr(t) => parentChildJoinExpr(tb, t)
+              case _ => error("At the moment default join with parent query cannot be performed on table: " + x)
+            }
             //foreign key join shortcut syntax
-            case tb @ Table(IdentExpr(t), _, TableJoin(false, IdentExpr(fk), _, _), _, _) =>
-              parentChildJoinExpr(tb, t, fk.lastOption)
-            case Table(x, _, TableJoin(false, IdentExpr(fk), _, _), _, _) =>
-              error("At the moment foreign key shortcut join with parent query cannot be performed on table: " + x)
-            //product join
+            case tb @ Table(x, _, TableJoin(false, IdentExpr(fk), _, _), _, _) => x match {
+              case IdentExpr(t) => parentChildJoinExpr(tb, t, fk.lastOption)
+              case _ => error("At the moment foreign key shortcut join with parent query cannot be performed on table: " + x)
+            }
+            //product join, i.e. no join
             case Table(_, _, TableJoin(false, ArrExpr(Nil), _, _), _, _) => None
+            //ancestor join
+            //transform ancestor reference: replace IdentExpr referencing parent queries with ResExpr
             case tb @ Table(_, _, TableJoin(false, e, _, _), _, _) if e != null =>
-              //transform ancestor alias join: replace IdentExpr referencing parent queries with ResExpr
               Some(transform(e, {
                 case ie @ IdentExpr(List(tab, col)) =>
                   joinWithAncestor(tab, col).getOrElse(ie)
