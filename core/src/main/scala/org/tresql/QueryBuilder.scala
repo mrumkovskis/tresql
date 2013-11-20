@@ -59,6 +59,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case v: String => "'" + v + "'"
       case v: Boolean => v.toString
       case null => "null"
+      case x => String.valueOf(x)
     }
   }
 
