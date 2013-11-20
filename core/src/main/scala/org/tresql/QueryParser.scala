@@ -4,7 +4,7 @@ import scala.util.parsing.combinator.JavaTokenParsers
 import scala.util.parsing.input.Reader
 import sys._
 
-object QueryParser extends JavaTokenParsers {
+trait QueryParser extends JavaTokenParsers {
 
   trait Exp {
     def tresql: String
@@ -272,7 +272,7 @@ object QueryParser extends JavaTokenParsers {
       }
     }
   def query: Parser[Any] = new Parser[Any] {
-    def parser = objs ~ opt(QueryParser.filter) ~ opt(columns) ~ opt(group) ~ opt(order) ~
+    def parser = objs ~ opt(QueryParser.this.filter) ~ opt(columns) ~ opt(group) ~ opt(order) ~
       opt(offsetLimit) ^^ {
         case (t :: Nil) ~ None ~ None ~ None ~ None ~ None => t
         case t ~ f ~ c ~ g ~ o ~ l => Query(t, f.orNull, c.map(_.cols) orNull,
@@ -433,14 +433,6 @@ object QueryParser extends JavaTokenParsers {
     }
 
   }
-
-  def main(args: Array[String]) {
-    args.length match {
-      case 0 => println("usage: <string to parse>")
-      case 1 => {
-        println("parsing: " + args(0))
-        println(parse(expr, args(0)))
-      }
-    }
-  }
 }
+
+object QueryParser extends QueryParser

@@ -4,10 +4,10 @@ trait Transformer { self: QueryBuilder =>
 
   def transform(expr: Expr, f: PartialFunction[Expr, Expr]): Expr = {
     var cf: PartialFunction[Expr, Expr] = null
-    cf = f.orElse[Expr, Expr]({
+    cf = f.orElse[Expr, Expr] {
       case null => null
       case e if e.builder != self => e.builder.transform(e, f)
-    }).orElse[Expr, Expr]({
+    }.orElse[Expr, Expr] {
       case ArrExpr(e) => ArrExpr(e map cf)
       case AssignExpr(v, e) => AssignExpr(v, cf(e))
       case BinExpr(o, lop, rop) => BinExpr(o, cf(lop), cf(rop))
@@ -23,7 +23,7 @@ trait Transformer { self: QueryBuilder =>
       case Order((nulsfirst, e, nulslast), asc) =>
         Order((nulsfirst, e map cf, nulslast), asc)
       case SelectExpr(tables, filter, cols, distinct, group, order,
-          offset, limit, aliases, parentJoin) =>
+        offset, limit, aliases, parentJoin) =>
         SelectExpr(tables map (t => cf(t).asInstanceOf[Table]),
           if (filter == null) null else filter map cf,
           cols map (e => cf(e).asInstanceOf[ColExpr]), distinct, cf(group),
@@ -39,7 +39,7 @@ trait Transformer { self: QueryBuilder =>
       case d: DeleteExpr => //put delete at the end since it is superclass of insert and update
         DeleteExpr(cf(d.table).asInstanceOf[IdentExpr], d.alias, d.filter map cf)
       case e => e
-    })
+    }
     cf(expr)
   }
 }
