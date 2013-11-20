@@ -1,3 +1,6 @@
+--- 2013.11.20 tresql 5.1.1 ---
+Bugfixes. See tests added.
+
 --- 2013.11.16 tresql 5.1 ---
 1. Hierarchical query join shortcut syntax improvements - ancestor alias join better support.
 
