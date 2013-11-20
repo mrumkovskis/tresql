@@ -760,12 +760,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           val hiddenColPars = m.getParameterTypes.toList.zip(pars).map(tp =>
             HiddenColRefExpr(tp._2, tp._1))
           ColExpr(ExternalFunExpr(n, hiddenColPars, m), a, t, Some(true)) :: hiddenColPars.map(
-            ColExpr(_, null, null, hidden = true))
+            ColExpr(_, null, null, Some(false), true))
         case e => List(e)
       }).groupBy(_.hidden) match { //put hidden columns at the end
         case m: Map[Boolean, ColExpr] => m(false) ++ m.getOrElse(true, Nil)
       }
-      else colExprs) ++ joinsWithChildrenColExprs //add hidden columns used in filters of descendant queries 
+      else colExprs) ++ 
+      //for top level queries add hidden columns used in filters of descendant queries
+      (if (ctxStack.headOption.orNull == QUERY_CTX) joinsWithChildrenColExprs else Nil)
     }
     
     ctxStack ::= parseCtx

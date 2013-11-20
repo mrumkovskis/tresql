@@ -20,6 +20,7 @@ class QueryTest extends Suite {
     def echo(x: String) = x
     def plus(a: java.lang.Long, b: java.lang.Long) = a + b
     def average(a: BigDecimal, b: BigDecimal) = (a + b) / 2
+    def dept_desc(d: String, ec: String) = d + " (" + ec + ")"
     def nopars() = "ok"
   }
   Env.functions = new TestFunctions

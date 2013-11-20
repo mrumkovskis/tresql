@@ -91,6 +91,8 @@ emp/dept[10] {dname || ',' || ename name}#(1) --> [["ACCOUNTING,CLARK"], ["ACCOU
 
 //select in column clause
 emp[ename ~~ ?]{ename, (dept[?]{dname}) dname, (dept[?]{dname}) dname1} --> 'KIN%; 10; 20 --> [["KING", "ACCOUNTING", "RESEARCH"]]
+dept[?] {dname, (emp [emp.deptno = dept.deptno] {count(*)}) emp_count, |emp {ename}#(1)} --> 10 --> [["ACCOUNTING", 3, [["CLARK"], ["KING"], ["MILLER"]]]]
+dept[?] {dname, |emp {ename}#(1), (emp [emp.deptno = dept.deptno] {count(*)}) emp_count} --> 10 --> [["ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]], 3]]
 
 //order
 dept/emp[sal >= losal & sal <= hisal]salgrade {deptno, grade, empno, sal}#(deptno, grade)~#(sal) --> [[10, 2, 7934, 1300.00], [10, 4, 7782, 2450.00], [10, 5, 7839, 5000.00], [20, 1, 7876, 1100.00], [20, 1, 7369, 800.00], [20, 4, 7788, 3000.00], [20, 4, 7902, 3000.00], [20, 4, 7566, 2975.00], [30, 1, 7900, 950.00], [30, 2, 7521, 1250.00], [30, 2, 7654, 1250.00], [30, 3, 7499, 1600.00], [30, 3, 7844, 1500.00], [30, 4, 7698, 2850.00]]
@@ -338,6 +340,11 @@ salgrade {plus(losal, hisal), grade, average(losal, hisal), losal, hisal}#(2) --
 salgrade {plus(losal * 2, hisal / 2), grade, average(losal + 1000, hisal - 1000), losal, hisal}#(2) --> [[2000, 1, 950, 700, 1200], [3102, 2, 1300.5, 1201, 1400], [3802, 3, 1700.5, 1401, 2000], [5502, 4, 2500.5, 2001, 3000], [25500, 6, 10500, 10000, 11000]]
 dept[10] {nopars(), dname} --> [["ok", "ACCOUNTING"]]
 dept[10] {dname, nopars()} --> [["ACCOUNTING", "ok"]]
+
+//external function + column query +  child query
+dept d [?]{dept_desc(dname, (emp e[d.deptno = e.deptno] {count(*)})) desc, |emp{ename}#(1)} --> 10 --> [["ACCOUNTING (3)", [["CLARK"], ["KING"], ["MILLER"]]]] 
+dept d [?]{|emp{ename}#(1), dept_desc(dname, (emp e[d.deptno = e.deptno] {count(*)})) desc} --> 10 --> [[[["CLARK"], ["KING"], ["MILLER"]], "ACCOUNTING (3)"]]
+dept d [?]{|emp{ename}#(1), dept_desc(dname, (emp e[d.deptno = e.deptno] {count(*)})) desc, deptno} --> 10 --> [[[["CLARK"], ["KING"], ["MILLER"]], "ACCOUNTING (3)", 10]]
 
 //hierarchical query in from clause select //FIXME: does not return child query result!
 (dept{deptno, |emp{ename}})[deptno = 10] --> [[10]]
