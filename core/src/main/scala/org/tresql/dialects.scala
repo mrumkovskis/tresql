@@ -6,7 +6,7 @@ package object dialects {
     def isDefinedAt(e: Expr) = exec(e)._1
     def apply(e: Expr) = exec(e)._2
     private def exec(e: Expr) = e match {
-      case e.builder.FunExpr("case", pars, _) if pars.size > 1 => (true, pars.grouped(2).map(l =>
+      case e.builder.FunExpr("case", pars, false) if pars.size > 1 => (true, pars.grouped(2).map(l =>
         if (l.size == 1) "else " + l(0).sql else "when " + l(0).sql + " then " + l(1).sql)
         .mkString("case ", " ", " end"))
       case _ => (false, "<none>")
