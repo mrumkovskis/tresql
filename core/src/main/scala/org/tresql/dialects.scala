@@ -6,7 +6,7 @@ package object dialects {
     def isDefinedAt(e: Expr) = exec(e)._1
     def apply(e: Expr) = exec(e)._2
     private def exec(e: Expr) = e match {
-      case e.builder.FunExpr("case", pars) if pars.size > 1 => (true, pars.grouped(2).map(l =>
+      case e.builder.FunExpr("case", pars, _) if pars.size > 1 => (true, pars.grouped(2).map(l =>
         if (l.size == 1) "else " + l(0).sql else "when " + l(0).sql + " then " + l(1).sql)
         .mkString("case ", " ", " end"))
       case _ => (false, "<none>")
@@ -15,19 +15,19 @@ package object dialects {
 
   object HSQLRawDialect extends PartialFunction[Expr, String] {
     def isDefinedAt(e: Expr) = e match {
-      case e.builder.FunExpr("lower", _: List[_]) => true
+      case e.builder.FunExpr("lower", _: List[_], false) => true
       case e.builder.FunExpr("translate", List(_, e.builder.ConstExpr(from: String),
-        e.builder.ConstExpr(to: String))) if (from.length == to.length) => true
-      case e.builder.FunExpr("nextval", List(e.builder.ConstExpr(_))) => true
+        e.builder.ConstExpr(to: String)), false) if (from.length == to.length) => true
+      case e.builder.FunExpr("nextval", List(e.builder.ConstExpr(_)), false) => true
       case _ => false
     }
     def apply(e: Expr) = (e: @unchecked) match {
-      case e.builder.FunExpr("lower", List(p)) => "lcase(" + p.sql + ")"
+      case e.builder.FunExpr("lower", List(p), false) => "lcase(" + p.sql + ")"
       case e.builder.FunExpr("translate", List(col, e.builder.ConstExpr(from: String),
-        e.builder.ConstExpr(to: String))) if (from.length == to.length) => {
+        e.builder.ConstExpr(to: String)), false) if (from.length == to.length) => {
         (from zip to).foldLeft(col.sql)((s, a) => "replace(" + s + ", '" + a._1 + "', '" + a._2 + "')")
       }
-      case e.builder.FunExpr("nextval", List(e.builder.ConstExpr(seq))) => "next value for " + seq
+      case e.builder.FunExpr("nextval", List(e.builder.ConstExpr(seq)), false) => "next value for " + seq
     }
   }
 
@@ -85,7 +85,7 @@ package dialects {
 
     def isDefinedAt(e: Expr) = e match {
       case e.builder.FunExpr(mode @ ("cmp_i" | "cmp_i_start" | "cmp_i_end" | "cmp_i_any" | "cmp_i_exact"),
-        List(col, value)) => true
+        List(col, value), false) => true
       case v @ e.builder.VarExpr(_, _) if (cmp_i.get) => {
         var (acc, upp) = (false, false)
         v() match {
@@ -107,7 +107,7 @@ package dialects {
 
     def apply(e: Expr) = (e: @unchecked) match {
       case e.builder.FunExpr(mode @ ("cmp_i" | "cmp_i_start" | "cmp_i_end" | "cmp_i_any" | "cmp_i_exact"),
-        List(col, value)) => {
+        List(col, value), false) => {
         cleanup()
         try {
           //set thread indication that cmp_i function is in the stack. This is checked in VarExpr pattern guard

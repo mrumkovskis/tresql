@@ -258,7 +258,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     } else classOf[ConstExpr]
   }
 
-  case class FunExpr(name: String, params: List[Expr]) extends BaseExpr {
+  case class FunExpr(name: String, params: List[Expr], distinct: Boolean) extends BaseExpr {
     override def apply() = {
       val p = params map (_())
       val ts = p map {
@@ -282,7 +282,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         }
       } else org.tresql.Query.call("{call " + sql + "}", QueryBuilder.this.bindVariables, env)
     }
-    def defaultSQL = name + (params map (_.sql)).mkString("(", ",", ")")
+    def defaultSQL = name + (params map (_.sql))
+      .mkString("(" + (if (distinct) "distinct " else ""), ",", ")")
     override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
   }
 
@@ -762,10 +763,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       else {
         val colExprs = cols.map(buildInternal(_, COL_CTX).asInstanceOf[ColExpr])
         (if (colExprs.exists {
-          case ColExpr(FunExpr(n, _), _, _, _, _) => Env.isDefined(n)
+          case ColExpr(FunExpr(n, _, false), _, _, _, _) => Env.isDefined(n)
           case _ => false
         }) (colExprs flatMap { //external function found
-          case ColExpr(FunExpr(n, pars), a, t, _, _) if Env.isDefined(n) =>
+          case ColExpr(FunExpr(n, pars, false), a, t, _, _) if Env.isDefined(n) =>
             val m = Env.functions.flatMap(_.getClass.getMethods.filter(m => m.getName == n &&
               m.getParameterTypes.size == pars.size).headOption).getOrElse(
               error("External function " + n + " with " + pars.size + " parameters not found"))
@@ -855,9 +856,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
             val r = rop.map(buildInternal(_, parseCtx)).filter(_ != null)
             if (r.size == 0) null else InExpr(l, r, not)
           }
-        case Fun(n, pl: List[_]) =>
+        case Fun(n, pl: List[_], d) =>
           val pars = pl map { buildInternal(_, FUN_CTX) }
-          if (pars.exists(_ == null)) null else FunExpr(n, pars)
+          if (pars.exists(_ == null)) null else FunExpr(n, pars, d)
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => IdentAllExpr(i.ident)
         case Arr(l: List[_]) => ArrExpr(l map { buildInternal(_, parseCtx) })

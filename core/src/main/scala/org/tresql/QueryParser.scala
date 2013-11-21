@@ -28,7 +28,7 @@ trait QueryParser extends JavaTokenParsers {
   case class UnOp(operation: String, operand: Any) extends Exp {
     def tresql = operation + any2tresql(operand)
   }
-  case class Fun(name: String, parameters: List[Any]) extends Exp {
+  case class Fun(name: String, parameters: List[Any], distinct: Boolean) extends Exp {
     def tresql = name + "(" + parameters.map(any2tresql(_)).mkString(",") + ")"
   }
   case class In(lop: Any, rop: List[Any], not: Boolean) extends Exp {
@@ -168,8 +168,8 @@ trait QueryParser extends JavaTokenParsers {
   def not: Parser[UnOp] = "!" ~> operand ^^ (UnOp("!", _))
   //is used within column clause to indicate separate query
   def sep: Parser[UnOp] = "|" ~> operand ^^ (UnOp("|", _))
-  def function: Parser[Fun] = (qualifiedIdent <~ "(") ~ repsep(expr, ",") <~ ")" ^^ {
-    case Ident(a) ~ b => Fun(a.mkString("."), b)
+  def function: Parser[Fun] = (qualifiedIdent <~ "(") ~ opt("#") ~ repsep(expr, ",") <~ ")" ^^ {
+    case Ident(a) ~ d ~ b => Fun(a.mkString("."), b, d.map(x=> true).getOrElse(false))
   }
   def array: Parser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ (Arr(_))
 
@@ -388,7 +388,7 @@ trait QueryParser extends JavaTokenParsers {
         case Variable("?", _) =>
           bindIdx += 1; vars += bindIdx.toString
         case Variable(n, _) => vars += n
-        case Fun(_, pars) => pars foreach bindVars
+        case Fun(_, pars, _) => pars foreach bindVars
         case UnOp(_, operand) => bindVars(operand)
         case BinOp(_, lop, rop) =>
           bindVars(lop); bindVars(rop)
