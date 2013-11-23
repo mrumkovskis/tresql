@@ -49,7 +49,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   lazy val joinsWithChildrenColExprs = for {
     tc <- { if (this.joinsWithChildren.size > 0) this.hasHiddenCols = true; this.joinsWithChildren }
     c <- tc._2
-  } yield (ColExpr(IdentExpr(List(tc._1, c)), tc._1 + "_" + c, null, Some(false), true))
+  } yield (ColExpr(IdentExpr(List(tc._1, c)), tc._1 + "_" + c + "_", null, Some(false), true))
 
   case class ConstExpr(val value: Any) extends BaseExpr {
     override def apply() = value
@@ -563,7 +563,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case None => None
       case o @ Some(x) =>
         this.joinsWithChildren += (x._2 -> x._1._2)
-        o.map(j => j._1._1 -> j._1._2.map(j._2 + "_" + _))
+        o.map(j => j._1._1 -> j._1._2.map(j._2 + "_" + _ + "_"))
     }
   }
   //default or fk shortcut join with parent
@@ -576,7 +576,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       ancestorTableCol: String): Option[ResExpr] = 
         if(!this.tablesAndAliases.exists(_._2 == ancestorTableAlias))
             joinWithAncestor(ancestorTableAlias, ancestorTableCol, 1)
-            .map(ResExpr(_, ancestorTableAlias + "_" + ancestorTableCol)) else None
+            .map(ResExpr(_, ancestorTableAlias + "_" + ancestorTableCol + "_")) else None
   private def joinWithAncestor(ancestorTableAlias: String, ancestorTableCol: String,
       resIdx: Int): Option[Int] = env.provider.flatMap {
     case b: QueryBuilder =>
