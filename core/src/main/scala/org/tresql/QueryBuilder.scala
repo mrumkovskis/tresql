@@ -8,6 +8,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   val ROOT_CTX = "ROOT"
   val QUERY_CTX = "QUERY"
+  val FROM_CTX ="FROM_CTX"
   val TABLE_CTX = "TABLE"
   val JOIN_CTX = "JOIN"
   val WHERE_CTX = "WHERE"
@@ -740,7 +741,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case (tables: List[Table], aliases: Map[String, Table]) => (tables.reverse, aliases)
       }
     }
-    def buildTable(t: Obj) = Table(buildInternal(t.obj, TABLE_CTX), t.alias,
+    def buildTable(t: Obj) = Table(buildInternal(t.obj,
+      if (ctxStack.head == QUERY_CTX) FROM_CTX else TABLE_CTX), t.alias,
       if (t.join != null) TableJoin(t.join.default, buildInternal(t.join.expr, JOIN_CTX),
         t.join.noJoin, null)
       else null, t.outerJoin, t.nullable)
@@ -816,17 +818,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           val ex = b.buildInternal(oper, QUERY_CTX)
           this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
         case t: Obj => parseCtx match {
-          case ROOT_CTX => t match {
-            case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
-            case _ =>
-              val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-              val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
-          }
-          case QUERY_CTX => t match {
-            case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
+          case ROOT_CTX => //top level query (might be part of expression list) 
+            val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+            val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
+          case QUERY_CTX => t match { //top level query
+            case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx) //unwrap braces expression
             case _ => buildSelectFromObj(t)
           }
-          case TABLE_CTX => buildSelectFromObj(t)
+          case FROM_CTX | TABLE_CTX => buildSelectFromObj(t) //table in from clause of top level query or in any other subquery
           case COL_CTX => buildColumnIdentOrBracesExpr(t)
           case _ => buildIdentOrBracesExpr(t)
         }
