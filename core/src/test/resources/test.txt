@@ -63,6 +63,7 @@ car/dept[20]#(nr) --> [["2222", "BMW", true, 20, null, 20, "RESEARCH", "DALLAS"]
 car[2222]/dept[dname != null]#(nr) --> [["2222", "BMW", true, 20, null, 20, "RESEARCH", "DALLAS"]]
 tyres/car {name, brand}#(1,2) --> [["MERCEDES", "MICHELIN"], ["MERCEDES", "NOKIAN"]]
 car c/tyres t{c.name, t.brand, t.season}#(1) --> [["BMW", null, null], ["MERCEDES", "NOKIAN", "W"], ["PORCHE", null, null], ["VOLKSWAGEN", null, null]]
+emp e/emp m {e.empno, e.ename, m.empno, m.ename}#(1) --> [[7369, "SMITH", 7902, "FORD"], [7499, "ALLEN", 7698, "BLAKE"], [7521, "WARD", 7698, "BLAKE"], [7566, "JONES", 7839, "KING"], [7654, "MARTIN", 7698, "BLAKE"], [7698, "BLAKE", 7839, "KING"], [7782, "CLARK", 7839, "KING"], [7788, "SCOTT", 7566, "JONES"], [7839, "KING", null, null], [7844, "TURNER", 7698, "BLAKE"], [7876, "ADAMS", 7788, "SCOTT"], [7900, "JAMES", 7698, "BLAKE"], [7902, "FORD", 7566, "JONES"], [7934, "MILLER", 7782, "CLARK"]]
 
 //foreign key default join
 emp/car[2222]{ename, name}#(1,2) --> [["ADAMS", "BMW"], ["FORD", "BMW"], ["JONES", "BMW"], ["SCOTT", "BMW"], ["SMITH", "BMW"]]
@@ -182,7 +183,7 @@ dept[?]{loc, deptno, |emp[deptno = :1(2)] {job}, dname} --> 10 --> [["NEW YORK",
 dept[?]{loc, |emp {job}#(1), dname} --> 10 --> [["NEW YORK", [["CLERK"], ["MANAGER"], ["PRESIDENT"]], "ACCOUNTING"]]
 
 //hierarchical query default shortcut join
-emp/dept[10]{dname, ename, |emp{ename}#(1)} --> [["ACCOUNTING", "CLARK", [["CLARK"], ["KING"], ["MILLER"]]], ["ACCOUNTING", "KING", [["CLARK"], ["KING"], ["MILLER"]]], ["ACCOUNTING", "MILLER", [["CLARK"], ["KING"], ["MILLER"]]]]
+emp/dept[10]{dname, ename, |[deptno]emp{ename}#(1)} --> [["ACCOUNTING", "CLARK", [["CLARK"], ["KING"], ["MILLER"]]], ["ACCOUNTING", "KING", [["CLARK"], ["KING"], ["MILLER"]]], ["ACCOUNTING", "MILLER", [["CLARK"], ["KING"], ["MILLER"]]]]
 
 //hierarchical query foreign key shortcut syntax
 dept/emp[?] {dname, ename, |[empno_mgr]work{hours}#(1)} --> 7566 --> [["RESEARCH", "JONES", [[5]]]]

@@ -10,7 +10,7 @@ trait MetaData {
     val t1 = table(table1); val t2 = table(table2)
     (t1.refs(t2.name), t2.refs(t1.name)) match {
       case (k1, k2) if (k1.length + k2.length > 1) =>
-        if (k1.length > 1 || k2.length > 1 || table1 == table2)
+        if (k1.length > 1 || k2.length > 1)
           error("Ambiguous relation. Too many found between tables " + table1 + ", " + table2)
         else //take foreign key from the left table and primary key from the right table
           (k1.head.cols, t2.key.cols)
