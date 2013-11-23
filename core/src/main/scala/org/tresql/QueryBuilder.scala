@@ -534,32 +534,32 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   //default or fk shortcut join with child.
   //return value in form: (child query table col(s) -> parent query cols(s) alias(es))
-  private def joinWithChild(table: String,
+  private def joinWithChild(childTable: String,
     refCol: Option[String]): Option[(List[String], List[String])] = {
 
-    def findJoin(table: String,
+    def findJoin(childTable: String,
       tablesAndAliases: List[(Expr, String)]): Option[((List[String], List[String]), String)] =
       tablesAndAliases match {
         case Nil => None
         case (Table(IdentExpr(t), _, _, _, _), a) :: l =>
-          try Option(env.join(table, t mkString ".") -> a) catch {
+          try Option(env.join(childTable, t mkString ".") -> a) catch {
           case e: Exception => l match {
-            case Nil => error("Unable to find relationship between table " + table +
+            case Nil => error("Unable to find relationship between table " + childTable +
               " and parent query (tables, aliases) - " + this.tablesAndAliases)
-            case _ => findJoin(table, l)
+            case _ => findJoin(childTable, l)
           }
         }
-        case (x, a) :: l => findJoin(table, l) 
+        case (x, a) :: l => findJoin(childTable, l) 
       }
     (refCol map { ref =>
-      val refTable = env.table(table).refTable.getOrElse(metadata.Ref(List(ref)),
-          error("No referenced table found for table: " + table + ". Reference: " + ref))
+      val refTable = env.table(childTable).refTable.getOrElse(metadata.Ref(List(ref)),
+          error("No referenced table found for table: " + childTable + ". Reference: " + ref))
           List(ref) -> env.table(refTable).key.cols ->
             this.tablesAndAliases.find(_._1.table match {
               case IdentExpr(i) => (i mkString ".") == refTable case _ => false}).map(_._2)
-              .getOrElse(error("Unable to find relationship between table " + table +
+              .getOrElse(error("Unable to find relationship between table " + childTable +
                   ", reference column: " + ref + " and tables: " + this.tablesAndAliases))      
-    } orElse findJoin(table, this.tablesAndAliases)) match {
+    } orElse findJoin(childTable, this.tablesAndAliases)) match {
       case None => None
       case o @ Some(x) =>
         this.joinsWithChildren += (x._2 -> x._1._2)
@@ -567,8 +567,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
   }
   //default or fk shortcut join with parent
-  private def joinWithParent(table: String, refCol: Option[String] = None) = env.provider.flatMap {
-    case b: QueryBuilder => b.joinWithChild(table, refCol)
+  private def joinWithParent(childTable: String, refCol: Option[String] = None) = env.provider.flatMap {
+    case b: QueryBuilder => b.joinWithChild(childTable, refCol)
     case x => None
   }
   //join with ancestor query
