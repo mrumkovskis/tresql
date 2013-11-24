@@ -29,7 +29,8 @@ trait QueryParser extends JavaTokenParsers {
     def tresql = operation + any2tresql(operand)
   }
   case class Fun(name: String, parameters: List[Any], distinct: Boolean) extends Exp {
-    def tresql = name + "(" + parameters.map(any2tresql(_)).mkString(",") + ")"
+    def tresql = name + "(" + (if (distinct) "# " else "") +
+      ((parameters map any2tresql) mkString ",") + ")"
   }
   case class In(lop: Any, rop: List[Any], not: Boolean) extends Exp {
     def tresql = any2tresql(lop) + (if (not) " not" else "") + rop.map(any2tresql(_)).mkString(
