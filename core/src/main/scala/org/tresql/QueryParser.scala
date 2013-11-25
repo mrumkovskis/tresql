@@ -28,8 +28,9 @@ trait QueryParser extends JavaTokenParsers {
   case class UnOp(operation: String, operand: Any) extends Exp {
     def tresql = operation + any2tresql(operand)
   }
-  case class Fun(name: String, parameters: List[Any]) extends Exp {
-    def tresql = name + "(" + parameters.map(any2tresql(_)).mkString(",") + ")"
+  case class Fun(name: String, parameters: List[Any], distinct: Boolean) extends Exp {
+    def tresql = name + "(" + (if (distinct) "# " else "") +
+      ((parameters map any2tresql) mkString ",") + ")"
   }
   case class In(lop: Any, rop: List[Any], not: Boolean) extends Exp {
     def tresql = any2tresql(lop) + (if (not) " not" else "") + rop.map(any2tresql(_)).mkString(
@@ -43,6 +44,7 @@ trait QueryParser extends JavaTokenParsers {
     def tresql = this match {
       case Join(_, _, true) => ";"
       case Join(false, a: Arr, false) => a.tresql
+      case Join(false, e: Exp, false) => "[" + e.tresql + "]"
       case Join(true, null, false) => "/"
       case Join(true, e, false) => "/[" + any2tresql(e) + "]"
     }
@@ -168,8 +170,8 @@ trait QueryParser extends JavaTokenParsers {
   def not: Parser[UnOp] = "!" ~> operand ^^ (UnOp("!", _))
   //is used within column clause to indicate separate query
   def sep: Parser[UnOp] = "|" ~> operand ^^ (UnOp("|", _))
-  def function: Parser[Fun] = (qualifiedIdent <~ "(") ~ repsep(expr, ",") <~ ")" ^^ {
-    case Ident(a) ~ b => Fun(a.mkString("."), b)
+  def function: Parser[Fun] = (qualifiedIdent <~ "(") ~ opt("#") ~ repsep(expr, ",") <~ ")" ^^ {
+    case Ident(a) ~ d ~ b => Fun(a.mkString("."), b, d.map(x=> true).getOrElse(false))
   }
   def array: Parser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ (Arr(_))
 
@@ -388,7 +390,7 @@ trait QueryParser extends JavaTokenParsers {
         case Variable("?", _) =>
           bindIdx += 1; vars += bindIdx.toString
         case Variable(n, _) => vars += n
-        case Fun(_, pars) => pars foreach bindVars
+        case Fun(_, pars, _) => pars foreach bindVars
         case UnOp(_, operand) => bindVars(operand)
         case BinOp(_, lop, rop) =>
           bindVars(lop); bindVars(rop)

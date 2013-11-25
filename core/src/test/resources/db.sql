@@ -33,7 +33,8 @@ CREATE TABLE CAR
  (NR VARCHAR(10) NOT NULL,
   NAME VARCHAR(20) NOT NULL,
   IS_ACTIVE BOOLEAN,
-  DEPTNR INTEGER)
+  DEPTNR INTEGER,
+  TYRES_NR INTEGER)
 //
 CREATE TABLE CAR_USAGE
  (CAR_NR VARCHAR(10) NOT NULL,
@@ -43,6 +44,12 @@ CREATE TABLE CAR_USAGE
 CREATE TABLE CAR_IMAGE
  (CARNR INTEGER NOT NULL,
   IMAGE BLOB(1K))
+//
+CREATE TABLE TYRES
+  (NR INTEGER NOT NULL,
+   CARNR VARCHAR(10) NOT NULL,
+   BRAND VARCHAR(20) NOT NULL,
+   SEASON VARCHAR(1) NOT NULL)
 //
 CREATE TABLE SALGRADE
  (GRADE INTEGER,
@@ -78,6 +85,12 @@ alter table car_usage add primary key (car_nr, empno)
 alter table car_usage add foreign key (car_nr) references car(nr)
 //
 alter table car_usage add foreign key (empno) references emp(empno)
+//
+alter table tyres add primary key (nr)
+//
+alter table tyres add foreign key (carnr) references car(nr)
+//
+alter table car add foreign key (tyres_nr) references tyres(nr)
 //
 CREATE FUNCTION inc_val_5 (x INTEGER)
   RETURNS INTEGER

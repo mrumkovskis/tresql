@@ -9,13 +9,16 @@ trait MetaData {
   def join(table1: String, table2: String) = {
     val t1 = table(table1); val t2 = table(table2)
     (t1.refs(t2.name), t2.refs(t1.name)) match {
-      case (k1, k2) if (k1.length + k2.length > 1) => error("Ambiguous relation. Too many found between tables " +
-        table1 + ", " + table2)
+      case (k1, k2) if (k1.length + k2.length > 1) =>
+        if (k1.length > 1 || k2.length > 1)
+          error("Ambiguous relation. Too many found between tables " + table1 + ", " + table2)
+        else //take foreign key from the left table and primary key from the right table
+          (k1.head.cols, t2.key.cols)
       case (k1, k2) if (k1.length + k2.length == 0) => { //try to find two imported keys of the same primary key
         t1.rfs.filter(_._2.size == 1).foldLeft(List[(List[String], List[String])]()) {
           (res, t1refs) =>
               t2.rfs.foldLeft(res)((r, t2refs) => if (t2refs._2.size == 1 && t1refs._1 == t2refs._1)
-                (t1refs._2(0).cols -> t2refs._2(0).cols) :: r else r)
+                (t1refs._2.head.cols -> t2refs._2.head.cols) :: r else r)
         } match {
           case Nil => error("Relation not found between tables " + table1 + ", " + table2)
           case List(r) => r
@@ -23,7 +26,7 @@ trait MetaData {
             table2 + ". Relation columns: " + b)
         }
       }
-      case (k1, k2) => if (k1.length == 1) (k1(0).cols, t2.key.cols) else (t1.key.cols, k2(0).cols)
+      case (k1, k2) => if (k1.length == 1) (k1.head.cols, t2.key.cols) else (t1.key.cols, k2.head.cols)
     }
   }
 

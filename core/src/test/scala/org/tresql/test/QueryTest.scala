@@ -33,7 +33,7 @@ class QueryTest extends Suite {
         "car" -> Map("dname" -> ("deptnr", "(case((dept[dname = :dname] {count(deptno)}) = 1, (dept[dname = :dname] {deptno}), -1))"))))
   //create test db script
   new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
-    sql => val st = conn.createStatement; st.execute(sql); st.close
+    sql => val st = conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
   }
   
   def test {

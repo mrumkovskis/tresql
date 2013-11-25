@@ -28,12 +28,21 @@ WORK {WDATE, EMPNO, HOURS, EMPNO_MGR} + ["2012-06-06", 7839, 3, null], ["2012-06
 //CAR
 CAR {NR, NAME, IS_ACTIVE, DEPTNR} + [1111, "PORCHE", false, 10], [2222, "BMW", true, 20], [3333, "MERCEDES", false, 20], [4444, "VOLKSWAGEN", null, null] --> 4
 
+//TYRES
+TYRES + [1, 3333, "MICHELIN", "S"], [2, 3333, "NOKIAN", "W"] --> 2
+
+//CAR TYRES
+CAR[3333] {TYRES_NR} = [2] --> 1
+
 //DUMMY
 DUMMY {DUMMY} + [0] --> 1
 
 //----SELECT----
 dummy --> [[0]]
 (dummy) {*} ++ (dummy) {*} --> [[0], [0]]
+(dummy ++ dummy){count(dummy)} --> [[2]] 
+//distinct count
+(dummy ++ dummy){count(# dummy)} --> [[1]]
 
 emp {count(*)} --> [[14]]
 emp e/dept d [d.deptno = 20]{empno, ename, dname}#(empno) --> [[7369, "SMITH", "RESEARCH"], [7566, "JONES", "RESEARCH"], [7788, "SCOTT", "RESEARCH"], [7876, "ADAMS", "RESEARCH"], [7902, "FORD", "RESEARCH"]]
@@ -46,12 +55,15 @@ dept[:id] {deptno} #(deptno) --> id=10 --> [[10]]
 dept[:'id'] {deptno} #(deptno) --> id=10 --> [[10]]
 dept[:"id"] {deptno} #(deptno) --> id=10 --> [[10]]
 
-//join
+//default join
 emp e/dept[sal >= losal & sal <= hisal]salgrade {ename, dname, grade} #(empno) --> [["SMITH", "RESEARCH", 1], ["ALLEN", "SALES", 3], ["WARD", "SALES", 2], ["JONES", "RESEARCH", 4], ["MARTIN", "SALES", 2], ["BLAKE", "SALES", 4], ["CLARK", "ACCOUNTING", 4], ["SCOTT", "RESEARCH", 4], ["KING", "ACCOUNTING", 5], ["TURNER", "SALES", 3], ["ADAMS", "RESEARCH", 1], ["JAMES", "SALES", 1], ["FORD", "RESEARCH", 4], ["MILLER", "ACCOUNTING", 2]]
 work[empno]emp/dept {wdate, ename, dname} #(1,2,3) --> [["2012-06-06", "KING", "ACCOUNTING"], ["2012-06-06", "SCOTT", "RESEARCH"], ["2012-06-07", "KING", "ACCOUNTING"], ["2012-06-07", "SCOTT", "RESEARCH"]]
-dept/car[2222]#(nr) --> [[20, "RESEARCH", "DALLAS", "2222", "BMW", true, 20]]
-car/dept[20]#(nr) --> [["2222", "BMW", true, 20, 20, "RESEARCH", "DALLAS"], ["3333", "MERCEDES", false, 20, 20, "RESEARCH", "DALLAS"]]
-car[2222]/dept[dname != null]#(nr) --> [["2222", "BMW", true, 20, 20, "RESEARCH", "DALLAS"]]
+dept/car[2222]#(nr) --> [[20, "RESEARCH", "DALLAS", "2222", "BMW", true, 20, null]]
+car/dept[20]#(nr) --> [["2222", "BMW", true, 20, null, 20, "RESEARCH", "DALLAS"], ["3333", "MERCEDES", false, 20, 2, 20, "RESEARCH", "DALLAS"]]
+car[2222]/dept[dname != null]#(nr) --> [["2222", "BMW", true, 20, null, 20, "RESEARCH", "DALLAS"]]
+tyres/car {name, brand}#(1,2) --> [["MERCEDES", "MICHELIN"], ["MERCEDES", "NOKIAN"]]
+car c/tyres t{c.name, t.brand, t.season}#(1) --> [["BMW", null, null], ["MERCEDES", "NOKIAN", "W"], ["PORCHE", null, null], ["VOLKSWAGEN", null, null]]
+emp e/emp m {e.empno, e.ename, m.empno, m.ename}#(1) --> [[7369, "SMITH", 7902, "FORD"], [7499, "ALLEN", 7698, "BLAKE"], [7521, "WARD", 7698, "BLAKE"], [7566, "JONES", 7839, "KING"], [7654, "MARTIN", 7698, "BLAKE"], [7698, "BLAKE", 7839, "KING"], [7782, "CLARK", 7839, "KING"], [7788, "SCOTT", 7566, "JONES"], [7839, "KING", null, null], [7844, "TURNER", 7698, "BLAKE"], [7876, "ADAMS", 7788, "SCOTT"], [7900, "JAMES", 7698, "BLAKE"], [7902, "FORD", 7566, "JONES"], [7934, "MILLER", 7782, "CLARK"]]
 
 //foreign key default join
 emp/car[2222]{ename, name}#(1,2) --> [["ADAMS", "BMW"], ["FORD", "BMW"], ["JONES", "BMW"], ["SCOTT", "BMW"], ["SMITH", "BMW"]]
@@ -152,6 +164,8 @@ emp[sal >= losal & sal <= hisal]salgrade {grade, losal, hisal, count(*)} (grade,
 salgrade[?] {grade, losal, hisal, |[sal >= :1(2) & sal <= :1(3)]emp{ename, sal}} --> 5 --> [[5, 3001, 9999, [["KING", 5000.00]]]]
 salgrade[?] {grade, losal lo, hisal, |[]emp[sal >= :1('lo') & sal <= :1('hisal')]{ename, sal}} --> 5 --> [[5, 3001, 9999, [["KING", 5000.00]]]]
 salgrade[?] {grade, losal, hisal hi, |[sal >= :1(losal)]emp[sal <= :1(hi)]{ename, sal}} --> 5 --> [[5, 3001, 9999, [["KING", 5000.00]]]]
+car{name, |tyres{brand, season}#(1, 2)}#(1) --> [["BMW", []], ["MERCEDES", [["MICHELIN", "S"], ["NOKIAN", "W"]]], ["PORCHE", []], ["VOLKSWAGEN", []]]
+tyres {brand, |car{nr, name}#(1)}#(1) --> [["MICHELIN", []], ["NOKIAN", [["3333", "MERCEDES"]]]]
 
 //three level hierarchical query: dept -> salgrade -> emp
 dept d{deptno, dname, |emp[sal >= losal & sal <= hisal]salgrade[deptno = :1(1)] {grade, losal, hisal, count(empno) empcount, |[emp.deptno = :2(1)]emp/dept[sal >= :1(2) & sal <= :1(3)]{ename, emp.deptno, dname, sal}#(empno) emps} (grade, losal, hisal) #(1) salgrades}#(deptno) --> [[10, "ACCOUNTING", [[2, 1201, 1400, 1, [["MILLER", 10, "ACCOUNTING", 1300.00]]], [4, 2001, 3000, 1, [["CLARK", 10, "ACCOUNTING", 2450.00]]], [5, 3001, 9999, 1, [["KING", 10, "ACCOUNTING", 5000.00]]]]], [20, "RESEARCH", [[1, 700, 1200, 2, [["SMITH", 20, "RESEARCH", 800.00], ["ADAMS", 20, "RESEARCH", 1100.00]]], [4, 2001, 3000, 3, [["JONES", 20, "RESEARCH", 2975.00], ["SCOTT", 20, "RESEARCH", 3000.00], ["FORD", 20, "RESEARCH", 3000.00]]]]], [30, "SALES", [[1, 700, 1200, 1, [["JAMES", 30, "SALES", 950.00]]], [2, 1201, 1400, 2, [["WARD", 30, "SALES", 1250.00], ["MARTIN", 30, "SALES", 1250.00]]], [3, 1401, 2000, 2, [["ALLEN", 30, "SALES", 1600.00], ["TURNER", 30, "SALES", 1500.00]]], [4, 2001, 3000, 1, [["BLAKE", 30, "SALES", 2850.00]]]]], [40, "OPERATIONS", []]]
@@ -161,7 +175,7 @@ dept d{deptno, dname, |emp[sal >= losal & sal <= hisal]salgrade[deptno = :1(1)] 
 dept d{deptno, dname, |emp[sal >= losal & sal <= hisal]salgrade g {grade, losal, hisal, count(empno) empcount, |[d.deptno = emp.deptno & sal >= g.losal & sal <= g.hisal]emp/dept{ename, emp.deptno, dname, sal}#(empno) emps} (grade, losal, hisal) #(1) salgrades}#(deptno) --> [[10, "ACCOUNTING", [[2, 1201, 1400, 1, [["MILLER", 10, "ACCOUNTING", 1300.00]]], [4, 2001, 3000, 1, [["CLARK", 10, "ACCOUNTING", 2450.00]]], [5, 3001, 9999, 1, [["KING", 10, "ACCOUNTING", 5000.00]]]]], [20, "RESEARCH", [[1, 700, 1200, 2, [["SMITH", 20, "RESEARCH", 800.00], ["ADAMS", 20, "RESEARCH", 1100.00]]], [4, 2001, 3000, 3, [["JONES", 20, "RESEARCH", 2975.00], ["SCOTT", 20, "RESEARCH", 3000.00], ["FORD", 20, "RESEARCH", 3000.00]]]]], [30, "SALES", [[1, 700, 1200, 1, [["JAMES", 30, "SALES", 950.00]]], [2, 1201, 1400, 2, [["WARD", 30, "SALES", 1250.00], ["MARTIN", 30, "SALES", 1250.00]]], [3, 1401, 2000, 2, [["ALLEN", 30, "SALES", 1600.00], ["TURNER", 30, "SALES", 1500.00]]], [4, 2001, 3000, 1, [["BLAKE", 30, "SALES", 2850.00]]]]], [40, "OPERATIONS", []]]
 dept d{deptno, dname, |emp[sal >= losal & sal <= hisal]salgrade {grade, count(empno) empcount, |[emp.deptno = d.deptno & sal >= salgrade.losal & sal <= salgrade.hisal]emp/dept{ename, emp.deptno, dname, sal}#(empno) emps} (grade, losal, hisal) #(1) salgrades}#(deptno) --> [[10, "ACCOUNTING", [[2, 1, [["MILLER", 10, "ACCOUNTING", 1300.00]]], [4, 1, [["CLARK", 10, "ACCOUNTING", 2450.00]]], [5, 1, [["KING", 10, "ACCOUNTING", 5000.00]]]]], [20, "RESEARCH", [[1, 2, [["SMITH", 20, "RESEARCH", 800.00], ["ADAMS", 20, "RESEARCH", 1100.00]]], [4, 3, [["JONES", 20, "RESEARCH", 2975.00], ["SCOTT", 20, "RESEARCH", 3000.00], ["FORD", 20, "RESEARCH", 3000.00]]]]], [30, "SALES", [[1, 1, [["JAMES", 30, "SALES", 950.00]]], [2, 2, [["WARD", 30, "SALES", 1250.00], ["MARTIN", 30, "SALES", 1250.00]]], [3, 2, [["ALLEN", 30, "SALES", 1600.00], ["TURNER", 30, "SALES", 1500.00]]], [4, 1, [["BLAKE", 30, "SALES", 2850.00]]]]], [40, "OPERATIONS", []]]
 dept[10, 20]{dname, |[dept.deptno = e.deptno](emp) e {ename}#(1) }#(1) --> [["ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]], ["RESEARCH", [["ADAMS"], ["FORD"], ["JONES"], ["SCOTT"], ["SMITH"]]]]
-(dept[10]) d {dname, |[d.deptno = c.deptnr]car c #(nr)} --> [["ACCOUNTING", [["1111", "PORCHE", false, 10]]]]
+(dept[10]) d {dname, |[d.deptno = c.deptnr]car c #(nr)} --> [["ACCOUNTING", [["1111", "PORCHE", false, 10, null]]]]
 
 //two level hierarchical query, child query in the midst of parent query columns
 dept[?]{loc, deptno, |emp[deptno = :1(2)] {job}, dname} --> 10 --> [["NEW YORK", 10, [["PRESIDENT"], ["MANAGER"], ["CLERK"]], "ACCOUNTING"]]
@@ -169,7 +183,7 @@ dept[?]{loc, deptno, |emp[deptno = :1(2)] {job}, dname} --> 10 --> [["NEW YORK",
 dept[?]{loc, |emp {job}#(1), dname} --> 10 --> [["NEW YORK", [["CLERK"], ["MANAGER"], ["PRESIDENT"]], "ACCOUNTING"]]
 
 //hierarchical query default shortcut join
-emp/dept[10]{dname, ename, |emp{ename}#(1)} --> [["ACCOUNTING", "CLARK", [["CLARK"], ["KING"], ["MILLER"]]], ["ACCOUNTING", "KING", [["CLARK"], ["KING"], ["MILLER"]]], ["ACCOUNTING", "MILLER", [["CLARK"], ["KING"], ["MILLER"]]]]
+emp/dept[10]{dname, ename, |[deptno]emp{ename}#(1)} --> [["ACCOUNTING", "CLARK", [["CLARK"], ["KING"], ["MILLER"]]], ["ACCOUNTING", "KING", [["CLARK"], ["KING"], ["MILLER"]]], ["ACCOUNTING", "MILLER", [["CLARK"], ["KING"], ["MILLER"]]]]
 
 //hierarchical query foreign key shortcut syntax
 dept/emp[?] {dname, ename, |[empno_mgr]work{hours}#(1)} --> 7566 --> [["RESEARCH", "JONES", [[5]]]]

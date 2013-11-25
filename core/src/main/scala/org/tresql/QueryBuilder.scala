@@ -8,6 +8,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   val ROOT_CTX = "ROOT"
   val QUERY_CTX = "QUERY"
+  val FROM_CTX ="FROM_CTX"
   val TABLE_CTX = "TABLE"
   val JOIN_CTX = "JOIN"
   val WHERE_CTX = "WHERE"
@@ -49,7 +50,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   lazy val joinsWithChildrenColExprs = for {
     tc <- { if (this.joinsWithChildren.size > 0) this.hasHiddenCols = true; this.joinsWithChildren }
     c <- tc._2
-  } yield (ColExpr(IdentExpr(List(tc._1, c)), tc._1 + "_" + c, null, Some(false), true))
+  } yield (ColExpr(IdentExpr(List(tc._1, c)), tc._1 + "_" + c + "_", null, Some(false), true))
 
   case class ConstExpr(val value: Any) extends BaseExpr {
     override def apply() = value
@@ -258,7 +259,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     } else classOf[ConstExpr]
   }
 
-  case class FunExpr(name: String, params: List[Expr]) extends BaseExpr {
+  case class FunExpr(name: String, params: List[Expr], distinct: Boolean) extends BaseExpr {
     override def apply() = {
       val p = params map (_())
       val ts = p map {
@@ -282,7 +283,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         }
       } else org.tresql.Query.call("{call " + sql + "}", QueryBuilder.this.bindVariables, env)
     }
-    def defaultSQL = name + (params map (_.sql)).mkString("(", ",", ")")
+    def defaultSQL = name + (params map (_.sql))
+      .mkString("(" + (if (distinct) "distinct " else ""), ",", ")")
     override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
   }
 
@@ -533,41 +535,41 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   //default or fk shortcut join with child.
   //return value in form: (child query table col(s) -> parent query cols(s) alias(es))
-  private def joinWithChild(table: String,
+  private def joinWithChild(childTable: String,
     refCol: Option[String]): Option[(List[String], List[String])] = {
 
-    def findJoin(table: String,
+    def findJoin(childTable: String,
       tablesAndAliases: List[(Expr, String)]): Option[((List[String], List[String]), String)] =
       tablesAndAliases match {
         case Nil => None
         case (Table(IdentExpr(t), _, _, _, _), a) :: l =>
-          try Option(env.join(table, t mkString ".") -> a) catch {
+          try Option(env.join(childTable, t mkString ".") -> a) catch {
           case e: Exception => l match {
-            case Nil => error("Unable to find relationship between table " + table +
+            case Nil => error("Unable to find relationship between table " + childTable +
               " and parent query (tables, aliases) - " + this.tablesAndAliases)
-            case _ => findJoin(table, l)
+            case _ => findJoin(childTable, l)
           }
         }
-        case (x, a) :: l => findJoin(table, l) 
+        case (x, a) :: l => findJoin(childTable, l) 
       }
     (refCol map { ref =>
-      val refTable = env.table(table).refTable.getOrElse(metadata.Ref(List(ref)),
-          error("No referenced table found for table: " + table + ". Reference: " + ref))
+      val refTable = env.table(childTable).refTable.getOrElse(metadata.Ref(List(ref)),
+          error("No referenced table found for table: " + childTable + ". Reference: " + ref))
           List(ref) -> env.table(refTable).key.cols ->
             this.tablesAndAliases.find(_._1.table match {
               case IdentExpr(i) => (i mkString ".") == refTable case _ => false}).map(_._2)
-              .getOrElse(error("Unable to find relationship between table " + table +
+              .getOrElse(error("Unable to find relationship between table " + childTable +
                   ", reference column: " + ref + " and tables: " + this.tablesAndAliases))      
-    } orElse findJoin(table, this.tablesAndAliases)) match {
+    } orElse findJoin(childTable, this.tablesAndAliases)) match {
       case None => None
       case o @ Some(x) =>
         this.joinsWithChildren += (x._2 -> x._1._2)
-        o.map(j => j._1._1 -> j._1._2.map(j._2 + "_" + _))
+        o.map(j => j._1._1 -> j._1._2.map(j._2 + "_" + _ + "_"))
     }
   }
   //default or fk shortcut join with parent
-  private def joinWithParent(table: String, refCol: Option[String] = None) = env.provider.flatMap {
-    case b: QueryBuilder => b.joinWithChild(table, refCol)
+  private def joinWithParent(childTable: String, refCol: Option[String] = None) = env.provider.flatMap {
+    case b: QueryBuilder => b.joinWithChild(childTable, refCol)
     case x => None
   }
   //join with ancestor query
@@ -575,7 +577,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       ancestorTableCol: String): Option[ResExpr] = 
         if(!this.tablesAndAliases.exists(_._2 == ancestorTableAlias))
             joinWithAncestor(ancestorTableAlias, ancestorTableCol, 1)
-            .map(ResExpr(_, ancestorTableAlias + "_" + ancestorTableCol)) else None
+            .map(ResExpr(_, ancestorTableAlias + "_" + ancestorTableCol + "_")) else None
   private def joinWithAncestor(ancestorTableAlias: String, ancestorTableCol: String,
       resIdx: Int): Option[Int] = env.provider.flatMap {
     case b: QueryBuilder =>
@@ -739,7 +741,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case (tables: List[Table], aliases: Map[String, Table]) => (tables.reverse, aliases)
       }
     }
-    def buildTable(t: Obj) = Table(buildInternal(t.obj, TABLE_CTX), t.alias,
+    def buildTable(t: Obj) = Table(buildInternal(t.obj,
+      if (ctxStack.head == QUERY_CTX) FROM_CTX else TABLE_CTX), t.alias,
       if (t.join != null) TableJoin(t.join.default, buildInternal(t.join.expr, JOIN_CTX),
         t.join.noJoin, null)
       else null, t.outerJoin, t.nullable)
@@ -762,10 +765,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       else {
         val colExprs = cols.map(buildInternal(_, COL_CTX).asInstanceOf[ColExpr])
         (if (colExprs.exists {
-          case ColExpr(FunExpr(n, _), _, _, _, _) => Env.isDefined(n)
+          case ColExpr(FunExpr(n, _, false), _, _, _, _) => Env.isDefined(n)
           case _ => false
         }) (colExprs flatMap { //external function found
-          case ColExpr(FunExpr(n, pars), a, t, _, _) if Env.isDefined(n) =>
+          case ColExpr(FunExpr(n, pars, false), a, t, _, _) if Env.isDefined(n) =>
             val m = Env.functions.flatMap(_.getClass.getMethods.filter(m => m.getName == n &&
               m.getParameterTypes.size == pars.size).headOption).getOrElse(
               error("External function " + n + " with " + pars.size + " parameters not found"))
@@ -815,17 +818,14 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           val ex = b.buildInternal(oper, QUERY_CTX)
           this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
         case t: Obj => parseCtx match {
-          case ROOT_CTX => t match {
-            case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
-            case _ =>
-              val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-              val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
-          }
-          case QUERY_CTX => t match {
-            case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
+          case ROOT_CTX => //top level query (might be part of expression list) 
+            val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+            val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
+          case QUERY_CTX => t match { //top level query
+            case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx) //unwrap braces expression
             case _ => buildSelectFromObj(t)
           }
-          case TABLE_CTX => buildSelectFromObj(t)
+          case FROM_CTX | TABLE_CTX => buildSelectFromObj(t) //table in from clause of top level query or in any other subquery
           case COL_CTX => buildColumnIdentOrBracesExpr(t)
           case _ => buildIdentOrBracesExpr(t)
         }
@@ -855,9 +855,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
             val r = rop.map(buildInternal(_, parseCtx)).filter(_ != null)
             if (r.size == 0) null else InExpr(l, r, not)
           }
-        case Fun(n, pl: List[_]) =>
+        case Fun(n, pl: List[_], d) =>
           val pars = pl map { buildInternal(_, FUN_CTX) }
-          if (pars.exists(_ == null)) null else FunExpr(n, pars)
+          if (pars.exists(_ == null)) null else FunExpr(n, pars, d)
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => IdentAllExpr(i.ident)
         case Arr(l: List[_]) => ArrExpr(l map { buildInternal(_, parseCtx) })
