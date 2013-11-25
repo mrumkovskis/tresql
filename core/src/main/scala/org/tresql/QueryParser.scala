@@ -44,6 +44,7 @@ trait QueryParser extends JavaTokenParsers {
     def tresql = this match {
       case Join(_, _, true) => ";"
       case Join(false, a: Arr, false) => a.tresql
+      case Join(false, e: Exp, false) => "[" + e.tresql + "]"
       case Join(true, null, false) => "/"
       case Join(true, e, false) => "/[" + any2tresql(e) + "]"
     }
