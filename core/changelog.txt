@@ -1,3 +1,19 @@
+--- 2013.11.20 tresql 5.1.2 ---
+1. Default join improvement - if pair of mutual relationships is found between two tables foreign key is taken from the left table, primary key from the right
+
+Example:
+
+emp e/emp m {e.ename name, m.ename manager}
+
+2. Distinct syntax support for functions. (Used in aggregate functions)
+
+Example:
+
+(dummy ++ dummy){count(# dummy)} --> select count(distinct dummy) from (select * from dummy union all select * from dummy)
+
+3. Bugfixes.
+
+
 --- 2013.11.20 tresql 5.1.1 ---
 Bugfixes. See tests added.
 
