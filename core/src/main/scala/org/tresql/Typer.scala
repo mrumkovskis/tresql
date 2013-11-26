@@ -35,12 +35,12 @@ trait Typer { this: QueryBuilder =>
     find(tableDefs)
   }
 
-  def head = {
+  def headDef = {
     def h(d: Def): Def = d match { case t: TableDef => t case s: SelectDef => h(s.tables.head) }
     h(tableDefs.head)
   }
   
-  def last = {
+  def lastDef = {
     def l(d: Def): Def = d match { case t: TableDef => t case s: SelectDef => l(s.tables.last) }
     l(tableDefs.last)    
   }
