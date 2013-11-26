@@ -370,8 +370,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case _ if (implicitLeftJoinPossible && nullable) => "left "
         case _ => ""
       }) + "join "
-      def fkJoin(i: IdentExpr) = sqlName + " on " + i.sql + " = " +
-        aliasOrName + "." + env.table(name).key.cols.mkString
+      def fkJoin(i: IdentExpr) = sqlName + " on " + (if (i.name.size < 2 && joinTable.alias != null)
+        i.copy(name = joinTable.alias :: i.name) else i).sql +
+        " = " + aliasOrName + "." + env.table(name).key.cols.mkString
       def defaultJoin(jcols: (List[String], List[String])) = {
         //may be default join columns had been calculated during table build implicit left outer join calculation 
         val j = if (jcols != null) jcols else env.join(joinTable.name, name)
