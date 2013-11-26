@@ -169,8 +169,6 @@ trait Resources extends NameMap {
   /** Set name map for this NameMap implementation
    * 1. map: object name -> table name,
    * 2. map: object name -> map: (property name -> (column name -> column value clause)),
-   * 3. map: table name -> name tresql expression
-   * 4. map: object name -> map: (property name -> name tresql expression)
    */
   def update(map:(Map[String, String], Map[String, Map[String, (String, String)]])) =
     _nameMap = Option(map)
