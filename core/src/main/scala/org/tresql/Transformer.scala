@@ -20,15 +20,13 @@ trait Transformer { self: QueryBuilder =>
       case InExpr(lop, rop, not) => InExpr(cf(lop), rop map cf, not)
       case i: InsertExpr => new InsertExpr(cf(i.table).asInstanceOf[IdentExpr], i.alias,
         i.cols map cf, i.vals map cf)
-      case Order((nulsfirst, e, nulslast), asc) =>
-        Order((nulsfirst, e map cf, nulslast), asc)
+      case Order(exprs) => Order(exprs map (e => (cf(e._1), cf(e._2), cf(e._3))))
       case SelectExpr(tables, filter, cols, distinct, group, order,
         offset, limit, aliases, parentJoin) =>
         SelectExpr(tables map (t => cf(t).asInstanceOf[Table]),
           if (filter == null) null else filter map cf,
-          cols map (e => cf(e).asInstanceOf[ColExpr]), distinct, cf(group),
-          if (order == null) null else order map cf, cf(offset), cf(limit), aliases,
-          parentJoin map cf)
+          cols map (e => cf(e).asInstanceOf[ColExpr]), distinct, cf(group), cf(order),
+          cf(offset), cf(limit), aliases, parentJoin map cf)
       case Table(texpr, alias, join, outerJoin, nullable) =>
         Table(cf(texpr), alias, cf(join).asInstanceOf[TableJoin], outerJoin, nullable)
       case TableJoin(default, expr, noJoin, defaultJoinCols) =>

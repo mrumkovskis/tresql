@@ -307,7 +307,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
 
   case class SelectExpr(tables: List[Table], filter: List[Expr], cols: List[ColExpr],
-    distinct: Boolean, group: Expr, order: List[Expr],
+    distinct: Boolean, group: Expr, order: Expr,
     offset: Expr, limit: Expr, aliases: Map[String, Table], parentJoin: Option[Expr]) extends BaseExpr {
     override def apply() = {
       org.tresql.Query.sel(sql, cols, QueryBuilder.this.bindVariables, env,
@@ -318,7 +318,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       //(filter map where).getOrElse("")
       Option(where).map(" where " + _).getOrElse("") +
       (if (group == null) "" else " group by " + group.sql) +
-      (if (order == null) "" else " order by " + (order map (_.sql)).mkString(", ")) +
+      (if (order == null) "" else " order by " + order.sql) +
       (if (offset == null) "" else " offset " + offset.sql) +
       (if (limit == null) "" else " limit " + limit.sql)
     def sqlCols = cols.withFilter(!_.separateQuery).map(_.sql).mkString(", ")
@@ -454,9 +454,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   case class IdentExpr(val name: List[String]) extends PrimitiveExpr {
     def defaultSQL = name.mkString(".")
   }
-  case class Order(val ordExprs: (Null, List[Expr], Null), val asc: Boolean) extends PrimitiveExpr {
-    def defaultSQL = (ordExprs._2 map (_.sql)).mkString(",") + (if (asc) " asc" else " desc") +
-      (if (ordExprs._1 != null) " nulls first" else if (ordExprs._3 != null) " nulls last" else "")
+  case class Order(val ordExprs: List[(Expr, Expr, Expr)]) extends PrimitiveExpr {
+    def defaultSQL = ordExprs.map(o => (o._2 match {
+      case UnExpr("~", e) => e.sql + " desc"
+      case e => e.sql + " asc"
+    }) + (if (o._1 != null) " nulls first" else if (o._3 != null) " nulls last" else "")).mkString(", ")
   }
   case class Group(val groupExprs: List[Expr], val having: Expr) extends PrimitiveExpr {
     def defaultSQL = (groupExprs map (_.sql)).mkString(",") +
@@ -627,8 +629,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       } else null
       val cols = buildCols(q.cols)
       val distinct = q.distinct
-      val group = buildInternal(q.group)
-      val order = if (q.order != null) q.order map { buildInternal(_, ORD_CTX) } else null
+      val group = buildInternal(q.group, GROUP_CTX)
+      val order = buildInternal(q.order, ORD_CTX)
       val offset = buildInternal(q.offset, LIMIT_CTX)
       val limit = buildInternal(q.limit, LIMIT_CTX)
       val aliases = tablesAndAliases._2
@@ -767,7 +769,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case x: Number => ConstExpr(x)
         case x: String => ConstExpr(x)
         case x: Boolean => ConstExpr(x)
-        case Null() => ConstExpr(null)
+        case Null => ConstExpr(null)
         //variable assignment
         case BinOp("=", Variable(n, o), v) if (parseCtx == ROOT_CTX) =>
           AssignExpr(n, buildInternal(v, parseCtx))
@@ -846,8 +848,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           ColExpr(buildInternal(c, parseCtx), a, t)
         case Grp(cols, having) => Group(cols map { buildInternal(_, GROUP_CTX) },
           buildInternal(having, HAVING_CTX))
-        case Ord(cols, asc) => Order((cols._1, cols._2 map { buildInternal(_, parseCtx) },
-          cols._3), asc)
+        case Ord(cols) => Order(cols map (c=> (buildInternal(c._1, parseCtx),
+            buildInternal(c._2, parseCtx), buildInternal(c._3, parseCtx))))
         case All() => AllExpr()
         case null => null
         case Braces(expr) =>

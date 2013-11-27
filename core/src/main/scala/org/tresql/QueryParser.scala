@@ -68,17 +68,17 @@ trait QueryParser extends JavaTokenParsers {
       (if (having != null) "^(" + any2tresql(having) + ")" else "")
   }
   //cols expression is tuple in the form - ([<nulls first>], <order col list>, [<nulls last>])
-  case class Ord(cols: (Null, List[Any], Null), asc: Boolean) extends Exp {
-    def tresql = (if (asc) "#" else "~#") + "(" + (if (cols._1 == Null()) "null " else "") +
-      cols._2.map(any2tresql(_)).mkString(",") + (if (cols._3 == Null()) " null" else "") + ")"
+  case class Ord(cols: List[(Exp, Any, Exp)]) extends Exp {
+    def tresql = "#(" + cols.map(c=> (if (c._1 == Null) "null " else "") +
+      any2tresql(c._2) + (if (c._1 == Null) "null " else "")).mkString(",") + ")"
   }
   case class Query(tables: List[Obj], filter: Arr, cols: List[Col], distinct: Boolean,
-    group: Grp, order: List[Ord], offset: Any, limit: Any) extends Exp {
+    group: Grp, order: Ord, offset: Any, limit: Any) extends Exp {
     def tresql = tables.map(any2tresql(_)).mkString +
       (if (filter != null) any2tresql(filter) else "") + (if (distinct) "#" else "") +
       (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") +
       (if (group != null) any2tresql(group) else "") +
-      (if (order != null) order.map(_.tresql).mkString else "") +
+      (if (order != null) order.tresql else "") +
       (if (limit != null) "@(" + (if (offset != null) any2tresql(offset) + " " else "") +
         any2tresql(limit) + ")"
       else "")
@@ -104,7 +104,7 @@ trait QueryParser extends JavaTokenParsers {
   case class IdentAll(ident: Ident) extends Exp {
     def tresql = ident.ident.mkString(".") + ".*"
   }
-  case class Null() extends Exp {
+  object Null extends Exp {
     def tresql = "null"
   }
 
@@ -138,7 +138,7 @@ trait QueryParser extends JavaTokenParsers {
   def decimalNr: Parser[BigDecimal] = decimalNumber ^^ (BigDecimal(_))
   def TRUE: Parser[Boolean] = "true" ^^^ true
   def FALSE: Parser[Boolean] = "false" ^^^ false
-  def NULL = "null" ^^^ Null()
+  def NULL = "null" ^^^ Null
   def ALL: Parser[All] = "*" ^^^ All()
 
   def qualifiedIdent: Parser[Ident] = rep1sep(excludeKeywordsIdent, ".") ^^ (Ident(_))
@@ -170,6 +170,8 @@ trait QueryParser extends JavaTokenParsers {
   def not: Parser[UnOp] = "!" ~> operand ^^ (UnOp("!", _))
   //is used within column clause to indicate separate query
   def sep: Parser[UnOp] = "|" ~> operand ^^ (UnOp("|", _))
+  //is used in order by desc
+  def desc: Parser[UnOp] = "~" ~> operand ^^ (UnOp("~", _))
   def function: Parser[Fun] = (qualifiedIdent <~ "(") ~ opt("#") ~ repsep(expr, ",") <~ ")" ^^ {
     case Ident(a) ~ d ~ b => Fun(a.mkString("."), b, d.map(x=> true).getOrElse(false))
   }
@@ -255,13 +257,11 @@ trait QueryParser extends JavaTokenParsers {
   }
   def group: Parser[Grp] = ("(" ~> rep1sep(expr, ",") <~ ")") ~
     opt(("^" ~ "(") ~> expr <~ ")") ^^ { case g ~ h => Grp(g, if (h == None) null else h.get) }
-  def orderCore: Parser[(Null, List[Any], Null)] = opt(NULL) ~ rep1sep(expr, ",") ~ opt(NULL) ^^ {
+  def orderMember: Parser[(Exp, Any, Exp)] = opt(NULL) ~ expr ~ opt(NULL) ^^ {
     case Some(nf) ~ e ~ Some(nl) => error("Cannot be nulls first and nulls last at the same time")
     case nf ~ e ~ nl => (if (nf == None) null else nf.get, e, if (nl == None) null else nl.get)
   }
-  def orderAsc: Parser[Ord] = ("#" ~ "(") ~> orderCore <~ ")" ^^ (Ord(_, true))
-  def orderDesc: Parser[Ord] = ("~#" ~ "(") ~> orderCore <~ ")" ^^ (Ord(_, false))
-  def order: Parser[List[Ord]] = rep1(orderAsc | orderDesc)
+  def order: Parser[Ord] = ("#" ~ "(") ~> rep1sep(orderMember, ",") <~ ")" ^^ (Ord(_)) 
   def offsetLimit: Parser[(Any, Any)] = ("@" ~ "(") ~> ("[0-9]+".r | variable) ~ opt(",") ~
     opt("[0-9]+".r | variable) <~ ")" ^^ { pr =>
       {
@@ -319,7 +319,7 @@ trait QueryParser extends JavaTokenParsers {
   //operation parsers
   //delete must be before negation since it can start with - sign and
   //before operand so it is not translated into minus expression!
-  def unaryExpr = delete | operand | negation | not | sep
+  def unaryExpr = delete | operand | negation | not | sep | desc
   def mulDiv: Parser[Any] = unaryExpr ~ rep("*" ~ unaryExpr | "/" ~ unaryExpr) ^^ (binOp(_))
   def plusMinus: Parser[Any] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ (binOp(_))
   def comp: Parser[~[Any, List[~[String, Any]]]] = plusMinus ~
@@ -403,12 +403,12 @@ trait QueryParser extends JavaTokenParsers {
         case Cols(_, cols) => cols foreach bindVars
         case Grp(cols, hv) =>
           cols foreach bindVars; bindVars(hv)
-        case Ord(cols, _) => cols._2 foreach bindVars
+        case Ord(cols) => cols.foreach(c=> bindVars(c._2))
         case Query(objs, filter, cols, _, gr, ord, _, _) => {
           objs foreach bindVars; bindVars(filter)
           if (cols != null) cols foreach bindVars
           bindVars(gr)
-          if (ord != null) ord foreach bindVars
+          if (ord != null) bindVars(ord)
         }
         case Insert(_, _, cols, vals) => {
           cols foreach bindVars
@@ -423,7 +423,7 @@ trait QueryParser extends JavaTokenParsers {
         case Arr(els) => els foreach bindVars
         case Braces(expr) => bindVars(expr)
         //for the security
-        case _: Ident | _: Id | _: IdRef | _: Res | _: All | _: Null | _: IdentAll =>
+        case _: Ident | _: Id | _: IdRef | _: Res | _: All | _: IdentAll | Null =>
         case x => error("Unknown expression: " + x)
       }
     parseAll(ex) match {
