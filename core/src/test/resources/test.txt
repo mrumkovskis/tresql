@@ -367,5 +367,13 @@ dept d [?]{dept_desc(dname, (emp e[d.deptno = e.deptno] {count(*)})) desc, |emp{
 dept d [?]{|emp{ename}#(1), dept_desc(dname, (emp e[d.deptno = e.deptno] {count(*)})) desc} --> 10 --> [[[["CLARK"], ["KING"], ["MILLER"]], "ACCOUNTING (3)"]]
 dept d [?]{|emp{ename}#(1), dept_desc(dname, (emp e[d.deptno = e.deptno] {count(*)})) desc, deptno} --> 10 --> [[[["CLARK"], ["KING"], ["MILLER"]], "ACCOUNTING (3)", 10]]
 
+//insert with select instead of values
++dummy{dummy} dummy{dummy + 1} --> 1
++dummy{dummy} dummy[dummy = ?]{dummy + 1} --> 1 --> 1
+//update with select instead of values
+=dummy[dummy = 1]{dummy} dummy[dummy = 2] {dummy} --> 1
+//cleanup
+-dummy[dummy != 0] --> 2
+
 //hierarchical query in from clause select //FIXME: does not return child query result!
 (dept{deptno, |emp{ename}})[deptno = 10] --> [[10]]

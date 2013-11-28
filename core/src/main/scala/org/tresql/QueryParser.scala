@@ -83,14 +83,14 @@ trait QueryParser extends JavaTokenParsers {
         any2tresql(limit) + ")"
       else "")
   }
-  case class Insert(table: Ident, alias: String, cols: List[Col], vals: List[Arr]) extends Exp {
+  case class Insert(table: Ident, alias: String, cols: List[Col], vals: Any) extends Exp {
     def tresql = "+" + table.tresql + Option(alias).getOrElse("") +
-      cols.map(_.tresql).mkString("{", ",", "}") + vals.map(_.tresql).mkString(",")
+      cols.map(_.tresql).mkString("{", ",", "}") + any2tresql(vals)
   }
-  case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Arr) extends Exp {
+  case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Any) extends Exp {
     def tresql = "=" + table.tresql + Option(alias).getOrElse("") +
       (if (filter != null) filter.tresql else "") +
-      cols.map(_.tresql).mkString("{", ",", "}") + vals.tresql
+      cols.map(_.tresql).mkString("{", ",", "}") + any2tresql(vals)
   }
   case class Delete(table: Ident, alias: String, filter: Arr) extends Exp {
     def tresql = "-" + table.tresql + Option(alias).getOrElse("") + filter.tresql
@@ -294,21 +294,28 @@ trait QueryParser extends JavaTokenParsers {
       case r => r
     }
   }
+  def queryWithCols: Parser[Any] = new Parser[Any] {
+    def apply(in: Input) = query(in) match {
+      case r @ Success(Query(objs, _, cols, _, _, _, _, _), i) if cols != null => r
+      case r @ Success(x, i) => Failure("Query must contain column clause: " + x, i)
+      case r => r
+    }
+  }
   def insert: Parser[Insert] = (("+" ~> qualifiedIdent ~ opt(excludeKeywordsIdent) ~ opt(columns) ~
-    repsep(array, ",")) |
+    opt(queryWithCols | repsep(array, ","))) |
     ((qualifiedIdent ~ opt(excludeKeywordsIdent) ~ opt(columns) <~ "+") ~ rep1sep(array, ","))) ^^ {
-      case t ~ a ~ Some(Cols(_, c)) ~ v => Insert(t, a.orNull, c, v)
-      case t ~ a ~ None ~ v => Insert(t, a.orNull, null, v)
+      case t ~ a ~ c ~ (v: Option[_]) => Insert(t, a.orNull, c.map(_.cols).orNull, v.orNull)
+      case t ~ a ~ c ~ v => Insert(t, a.orNull, c.map(_.cols).orNull, v)
     }
   def update: Parser[Update] = (("=" ~> qualifiedIdent ~ opt(excludeKeywordsIdent) ~
-    opt(filter) ~ opt(columns) ~ opt(array)) |
+    opt(filter) ~ opt(columns) ~ opt(queryWithCols | array)) |
     ((qualifiedIdent ~ opt(excludeKeywordsIdent) ~ opt(filter) ~ opt(columns) <~ "=") ~ array)) ^^ {
       case t ~ a ~ f ~ c ~ v => Update(t, a orNull, f orNull, c match {
         case Some(Cols(_, c)) => c
         case None => null
       }, v match {
         case a: Arr => a
-        case Some(a: Arr) => a
+        case Some(vals) => vals
         case None => null
       })
     }
@@ -375,10 +382,11 @@ trait QueryParser extends JavaTokenParsers {
     case lop ~ ((o ~ rop) :: l) => BinOp(o, lop, binOp(this.~(rop, l)))
   }
 
-  def any2tresql(any: Any) = any match {
+  def any2tresql(any: Any): String = any match {
     case a: String => if (a.contains("'")) "\"" + a + "\"" else "'" + a + "'"
     case e: Exp => e.tresql
     case null => "null"
+    case l: List[_] => l map any2tresql mkString ", "
     case x => x.toString
   }
 
@@ -387,43 +395,45 @@ trait QueryParser extends JavaTokenParsers {
     val vars = scala.collection.mutable.ListBuffer[String]()
     def bindVars(parsedExpr: Any): Any =
       parsedExpr match {
+        case _: Ident | _: Id | _: IdRef | _: Res | _: All | _: IdentAll | Null | null =>
+        case l: List[_] => l foreach bindVars
         case Variable("?", _) =>
           bindIdx += 1; vars += bindIdx.toString
         case Variable(n, _) => vars += n
-        case Fun(_, pars, _) => pars foreach bindVars
+        case Fun(_, pars, _) => bindVars(pars)
         case UnOp(_, operand) => bindVars(operand)
         case BinOp(_, lop, rop) =>
           bindVars(lop); bindVars(rop)
         case In(lop, rop, _) =>
-          bindVars(lop); rop foreach bindVars
+          bindVars(lop); bindVars(rop)
         case Obj(t, _, j, _, _) =>
           bindVars(j); bindVars(t)
         case Join(_, j, _) => bindVars(j)
         case Col(c, _, _) => bindVars(c)
-        case Cols(_, cols) => cols foreach bindVars
+        case Cols(_, cols) => bindVars(cols)
         case Grp(cols, hv) =>
-          cols foreach bindVars; bindVars(hv)
+          bindVars(cols); bindVars(hv)
         case Ord(cols) => cols.foreach(c=> bindVars(c._2))
         case Query(objs, filter, cols, _, gr, ord, _, _) => {
-          objs foreach bindVars; bindVars(filter)
-          if (cols != null) cols foreach bindVars
+          bindVars(objs)
+          bindVars(filter)
+          bindVars(cols)
           bindVars(gr)
-          if (ord != null) bindVars(ord)
+          bindVars(ord)
         }
         case Insert(_, _, cols, vals) => {
-          cols foreach bindVars
-          vals foreach bindVars
+          bindVars(cols)
+          bindVars(vals)
         }
         case Update(_, _, filter, cols, vals) => {
-          if (filter != null) bindVars(filter)
-          cols foreach bindVars
+          bindVars(filter)
+          bindVars(cols)
           bindVars(vals)
         }
         case Delete(_, _, filter) => bindVars(filter)
-        case Arr(els) => els foreach bindVars
+        case Arr(els) => bindVars(els)
         case Braces(expr) => bindVars(expr)
         //for the security
-        case _: Ident | _: Id | _: IdRef | _: Res | _: All | _: IdentAll | Null =>
         case x => error("Unknown expression: " + x)
       }
     parseAll(ex) match {

@@ -465,21 +465,23 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       (if (having != null) " having " + having.sql else "")
   }
 
-  class InsertExpr(table: IdentExpr, alias: String, val cols: List[Expr], val vals: List[Expr])
+  class InsertExpr(table: IdentExpr, alias: String, val cols: List[Expr], val vals: Expr)
     extends DeleteExpr(table, alias, null) {
     override protected def _sql = "insert into " + table.sql + (if (alias == null) "" else " " + alias) +
-      " (" + cols.map(_.sql).mkString(", ") + ")" + (vals match {
-        case v :: Nil => " values " + v.sql
-        case _ => " values (" + vals.map(_.sql).mkString(", ") + ")"
-      })
+      " (" + cols.map(_.sql).mkString(", ") + ")" + " " + vals.sql
+  }
+  case class ValuesExpr(vals: List[Expr]) extends PrimitiveExpr {
+    def defaultSQL = vals map (_.sql) mkString("values " + (if (vals.size > 1) "(" else ""), ",",
+        if (vals.size > 1) ")" else "")
   }
   class UpdateExpr(table: IdentExpr, alias: String, filter: List[Expr], val cols: List[Expr],
-    val vals: List[Expr]) extends DeleteExpr(table, alias, filter) {
-    if (cols.length != vals.length) error("update statement columns and values count differ: " +
-      cols.length + "," + vals.length)
+    val vals: Expr) extends DeleteExpr(table, alias, filter) {
     override protected def _sql = "update " + table.sql + (if (alias == null) "" else " " + alias) +
-      " set " + (cols zip vals map { v => v._1.sql + " = " + v._2.sql }).mkString(", ") +
-      (if (filter == null) "" else " where " + where)
+      " set " + (vals match {
+        case ValuesExpr(v) => (cols zip v map { v => v._1.sql + " = " + v._2.sql }).mkString(", ")
+        case q: SelectExpr => cols.map(_.sql).mkString("(", ", ", ")") + " = " + "(" + q.sql + ")"
+        case x => error("Knipis: " + x)
+      }) + (if (filter == null) "" else " where " + where)
   }
   case class DeleteExpr(val table: IdentExpr, val alias: String, val filter: List[Expr]) extends BaseExpr {
     override def apply() = {
@@ -579,29 +581,38 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     })
 
   //DML statements are defined outsided buildInternal method since they are called from other QueryBuilder
-  private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: List[Arr]) = {
+  private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: Any) = {
     new InsertExpr(IdentExpr(table.ident), alias, Option(cols) map (_ map (buildInternal(_, COL_CTX)) filter {
       case x @ ColExpr(IdentExpr(_), _, _, _, _) => true
       case e: ColExpr => this.childUpdates += { (e.col, e.name) }; false
-    }) getOrElse this.table(table).cols.map(c => IdentExpr(List(c.name))), vals map {
-      buildInternal(_, VALUES_CTX) match {
-        case ArrExpr(l) => ArrExpr(patchVals(table, cols, l))
-        case e => e
-      }
-    } match {
-      case Nil => patchVals(table, cols, Nil)
-      case l => l
+    }) getOrElse this.table(table).cols.map(c => IdentExpr(List(c.name))), vals match {
+      case arr: List[_] => ValuesExpr(arr map {
+        buildInternal(_, VALUES_CTX) match {
+          case ArrExpr(l) => ArrExpr(patchVals(table, cols, l))
+          case e => e
+        }
+      } match {
+        case Nil => patchVals(table, cols, Nil)
+        case l => l
+      })
+      case q => buildInternal(q, VALUES_CTX)
     })
   }
-  private def buildUpdate(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Arr) = {
+  private def buildUpdate(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Any) = {
     new UpdateExpr(IdentExpr(table.ident), alias, if (filter != null)
       filter.elements map { buildInternal(_, WHERE_CTX) } else null,
       Option(cols) map (_ map (buildInternal(_, COL_CTX)) filter {
         case ColExpr(IdentExpr(_), _, _, _, _) => true
         case e: ColExpr => this.childUpdates += { (e.col, e.name) }; false
-      }) getOrElse this.table(table).cols.map(c => IdentExpr(List(c.name))), patchVals(table, cols,
-        Option(vals).map(_.elements).getOrElse(Nil) map { buildInternal(_, VALUES_CTX) }))
+      }) getOrElse this.table(table).cols.map(c => IdentExpr(List(c.name))),
+      buildInternal(vals, VALUES_CTX) match {
+        case v: ArrExpr => ValuesExpr(patchVals(table, cols, v.elements))
+        case q: SelectExpr => q
+        case null => ValuesExpr(patchVals(table, cols, Nil))
+        case x => error("Knipis: " + x)
+      })
   }
+    
   private def buildDelete(table: Ident, alias: String, filter: Arr) = {
     new DeleteExpr(IdentExpr(table.ident), alias,
       if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null)

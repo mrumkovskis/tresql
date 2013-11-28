@@ -19,7 +19,7 @@ trait Transformer { self: QueryBuilder =>
       case HiddenColRefExpr(e, typ) => HiddenColRefExpr(cf(e), typ)
       case InExpr(lop, rop, not) => InExpr(cf(lop), rop map cf, not)
       case i: InsertExpr => new InsertExpr(cf(i.table).asInstanceOf[IdentExpr], i.alias,
-        i.cols map cf, i.vals map cf)
+        i.cols map cf, cf(i.vals))
       case Order(exprs) => Order(exprs map (e => (cf(e._1), cf(e._2), cf(e._3))))
       case SelectExpr(tables, filter, cols, distinct, group, order,
         offset, limit, aliases, parentJoin) =>
@@ -33,9 +33,10 @@ trait Transformer { self: QueryBuilder =>
         TableJoin(default, cf(expr), noJoin, defaultJoinCols)
       case UnExpr(o, op) => UnExpr(o, cf(op))
       case u: UpdateExpr => new UpdateExpr(cf(u.table).asInstanceOf[IdentExpr], u.alias,
-        u.filter map cf, u.cols map cf, u.vals map cf)
+        u.filter map cf, u.cols map cf, cf(u.vals))
       case d: DeleteExpr => //put delete at the end since it is superclass of insert and update
         DeleteExpr(cf(d.table).asInstanceOf[IdentExpr], d.alias, d.filter map cf)
+      case ValuesExpr(vals) => ValuesExpr(vals map cf)
       case e => e
     }
     cf(expr)
