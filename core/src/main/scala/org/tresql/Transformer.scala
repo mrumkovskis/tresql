@@ -19,25 +19,23 @@ trait Transformer { self: QueryBuilder =>
       case HiddenColRefExpr(e, typ) => HiddenColRefExpr(cf(e), typ)
       case InExpr(lop, rop, not) => InExpr(cf(lop), rop map cf, not)
       case i: InsertExpr => new InsertExpr(cf(i.table).asInstanceOf[IdentExpr], i.alias,
-        i.cols map cf, i.vals map cf)
-      case Order((nulsfirst, e, nulslast), asc) =>
-        Order((nulsfirst, e map cf, nulslast), asc)
+        i.cols map cf, cf(i.vals))
+      case Order(exprs) => Order(exprs map (e => (cf(e._1), cf(e._2), cf(e._3))))
       case SelectExpr(tables, filter, cols, distinct, group, order,
         offset, limit, aliases, parentJoin) =>
-        SelectExpr(tables map (t => cf(t).asInstanceOf[Table]),
-          if (filter == null) null else filter map cf,
-          cols map (e => cf(e).asInstanceOf[ColExpr]), distinct, cf(group),
-          if (order == null) null else order map cf, cf(offset), cf(limit), aliases,
-          parentJoin map cf)
+        SelectExpr(tables map (t => cf(t).asInstanceOf[Table]), cf(filter),
+          cols map (e => cf(e).asInstanceOf[ColExpr]), distinct, cf(group), cf(order),
+          cf(offset), cf(limit), aliases, parentJoin map cf)
       case Table(texpr, alias, join, outerJoin, nullable) =>
         Table(cf(texpr), alias, cf(join).asInstanceOf[TableJoin], outerJoin, nullable)
       case TableJoin(default, expr, noJoin, defaultJoinCols) =>
         TableJoin(default, cf(expr), noJoin, defaultJoinCols)
       case UnExpr(o, op) => UnExpr(o, cf(op))
       case u: UpdateExpr => new UpdateExpr(cf(u.table).asInstanceOf[IdentExpr], u.alias,
-        u.filter map cf, u.cols map cf, u.vals map cf)
+        u.filter map cf, u.cols map cf, cf(u.vals))
       case d: DeleteExpr => //put delete at the end since it is superclass of insert and update
         DeleteExpr(cf(d.table).asInstanceOf[IdentExpr], d.alias, d.filter map cf)
+      case ValuesExpr(vals) => ValuesExpr(vals map cf)
       case e => e
     }
     cf(expr)
