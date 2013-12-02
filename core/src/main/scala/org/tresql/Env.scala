@@ -108,7 +108,7 @@ object Env extends Resources {
   //this is for single thread usage
   var sharedConn: java.sql.Connection = null
   //meta data object must be thread safe!
-  private var _metaData: Option[MetaData] = None
+  private var _metaData: Option[MetaData] = Some(metadata.JDBCMetaData(""))
   private var _dialect: Option[PartialFunction[Expr, String]] = None
   private var _idExpr: Option[String => String] = None
   //available functions
@@ -121,7 +121,7 @@ object Env extends Resources {
   
   def apply(params: Map[String, Any], reusableExpr: Boolean) = new Env(params, this, reusableExpr)
   def conn = { val c = threadConn.get; if (c == null) sharedConn else c }
-  override def metaData = _metaData.getOrElse(super.metaData)
+  override def metaData = _metaData.get
   override def dialect = _dialect.getOrElse(super.dialect)
   override def idExpr = _idExpr.getOrElse(super.idExpr)
   override def functions = _functions
@@ -144,12 +144,11 @@ object Env extends Resources {
 }
 
 trait Resources extends NameMap {
-  private val _metaData = metadata.JDBCMetaData("")
   private var _nameMap:Option[(Map[String, String], Map[String, Map[String, (String, String)]])] = None
   private var _delegateNameMap:Option[NameMap] = None
 
   def conn: java.sql.Connection
-  def metaData: MetaData = _metaData
+  def metaData: MetaData
   def dialect: PartialFunction[Expr, String] = null
   def idExpr: String => String = s => "nextval('" + s + "')"
   def functions: Option[Any] = Option(new Functions)
