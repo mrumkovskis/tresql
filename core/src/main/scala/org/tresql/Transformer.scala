@@ -23,8 +23,7 @@ trait Transformer { self: QueryBuilder =>
       case Order(exprs) => Order(exprs map (e => (cf(e._1), cf(e._2), cf(e._3))))
       case SelectExpr(tables, filter, cols, distinct, group, order,
         offset, limit, aliases, parentJoin) =>
-        SelectExpr(tables map (t => cf(t).asInstanceOf[Table]),
-          if (filter == null) null else filter map cf,
+        SelectExpr(tables map (t => cf(t).asInstanceOf[Table]), cf(filter),
           cols map (e => cf(e).asInstanceOf[ColExpr]), distinct, cf(group), cf(order),
           cf(offset), cf(limit), aliases, parentJoin map cf)
       case Table(texpr, alias, join, outerJoin, nullable) =>

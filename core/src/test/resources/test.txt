@@ -333,6 +333,7 @@ salgrade[?] {grade} + dummy, "A" + " " + "B", dept[dname ~~ ?]{deptno} + dummy, 
 inc_val_5(5) --> [[10]]
 inc_val_5(?) --> 10 --> [[15]]
 mkString(emp{ename}#(ename), " ", ",") --> ADAMS,ALLEN,BLAKE,CLARK,FORD,JAMES,JONES,KING,MARTIN,MILLER,SCOTT,SMITH,TURNER,WARD
+dept {dname, mkString(|emp{ename}#(1), ",", ",")}#(1) --> [["ACCOUNTING", "CLARK,KING,MILLER"], ["OPERATIONS", ""], ["RESEARCH", "ADAMS,FORD,JONES,SCOTT,SMITH"], ["SALES", "ALLEN,BLAKE,JAMES,MARTIN,TURNER,WARD"]]
 
 //sequence test
 nextval("seq") --> [[10000]]
@@ -374,6 +375,9 @@ dept d [?]{|emp{ename}#(1), dept_desc(dname, (emp e[d.deptno = e.deptno] {count(
 =dummy[dummy = 1]{dummy} dummy[dummy = 2] {dummy} --> 1
 //cleanup
 -dummy[dummy != 0] --> 2
+
+//multiple where clause
+dept/emp[deptno = 10][mgr = null]{dname, ename}#(1, 2) --> [["ACCOUNTING", "KING"]]
 
 //hierarchical query in from clause select //FIXME: does not return child query result!
 (dept{deptno, |emp{ename}})[deptno = 10] --> [[10]]

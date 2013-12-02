@@ -72,10 +72,10 @@ trait QueryParser extends JavaTokenParsers {
     def tresql = "#(" + cols.map(c=> (if (c._1 == Null) "null " else "") +
       any2tresql(c._2) + (if (c._1 == Null) "null " else "")).mkString(",") + ")"
   }
-  case class Query(tables: List[Obj], filter: Arr, cols: List[Col], distinct: Boolean,
+  case class Query(tables: List[Obj], filter: Filters, cols: List[Col], distinct: Boolean,
     group: Grp, order: Ord, offset: Any, limit: Any) extends Exp {
     def tresql = tables.map(any2tresql(_)).mkString +
-      (if (filter != null) any2tresql(filter) else "") + (if (distinct) "#" else "") +
+      filter.tresql + (if (distinct) "#" else "") +
       (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") +
       (if (group != null) any2tresql(group) else "") +
       (if (order != null) order.tresql else "") +
@@ -96,7 +96,10 @@ trait QueryParser extends JavaTokenParsers {
     def tresql = "-" + table.tresql + Option(alias).getOrElse("") + filter.tresql
   }
   case class Arr(elements: List[Any]) extends Exp {
-    def tresql = elements.map(any2tresql(_)).mkString("[", ",", "]")
+    def tresql = "[" + any2tresql(elements) + "]"
+  }
+  case class Filters(filters: List[Arr]) extends Exp {
+    def tresql = filters map any2tresql mkString
   }
   case class All() extends Exp {
     def tresql = "*"
@@ -188,6 +191,7 @@ trait QueryParser extends JavaTokenParsers {
       case a => Join(false, a, false)
     }
   def filter: Parser[Arr] = array
+  def filters: Parser[Filters] = rep(filter) ^^ (Filters(_))
   def obj: Parser[Obj] = opt(join) ~ opt("?") ~ (qualifiedIdent | bracesExp) ~
     opt("?") ~ opt(excludeKeywordsIdent) ~ opt("?") ^^ {
       case a ~ Some(b) ~ c ~ Some(d) ~ e ~ f => error("Cannot be right and left join at the same time")
@@ -274,10 +278,10 @@ trait QueryParser extends JavaTokenParsers {
       }
     }
   def query: Parser[Any] = new Parser[Any] {
-    def parser = objs ~ opt(QueryParser.this.filter) ~ opt(columns) ~ opt(group) ~ opt(order) ~
+    def parser = objs ~ filters ~ opt(columns) ~ opt(group) ~ opt(order) ~
       opt(offsetLimit) ^^ {
-        case (t :: Nil) ~ None ~ None ~ None ~ None ~ None => t
-        case t ~ f ~ c ~ g ~ o ~ l => Query(t, f.orNull, c.map(_.cols) orNull,
+        case (t :: Nil) ~ Filters(Nil) ~ None ~ None ~ None ~ None => t
+        case t ~ f ~ c ~ g ~ o ~ l => Query(t, f, c.map(_.cols) orNull,
           c.map(_.distinct) getOrElse false, g.orNull, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
       }
     def toDivChain(objs: List[Obj]): Any = objs match {
@@ -286,7 +290,7 @@ trait QueryParser extends JavaTokenParsers {
     }
     def apply(in: Input) = parser(in) match {
       //check for division chain
-      case r @ Success(Query(objs, null, null, false, null, null, null, null), i) =>
+      case r @ Success(Query(objs, Filters(Nil), null, false, null, null, null, null), i) =>
         if (objs.forall {
           case Obj(_, null, DefaultJoin, null, _) | Obj(_, null, null, null, _) => true
           case _ => false
@@ -414,9 +418,9 @@ trait QueryParser extends JavaTokenParsers {
         case Grp(cols, hv) =>
           bindVars(cols); bindVars(hv)
         case Ord(cols) => cols.foreach(c=> bindVars(c._2))
-        case Query(objs, filter, cols, _, gr, ord, _, _) => {
+        case Query(objs, filters, cols, _, gr, ord, _, _) => {
           bindVars(objs)
-          bindVars(filter)
+          bindVars(filters)
           bindVars(cols)
           bindVars(gr)
           bindVars(ord)
@@ -432,6 +436,7 @@ trait QueryParser extends JavaTokenParsers {
         }
         case Delete(_, _, filter) => bindVars(filter)
         case Arr(els) => bindVars(els)
+        case Filters(f) => bindVars(f)
         case Braces(expr) => bindVars(expr)
         //for the security
         case x => error("Unknown expression: " + x)

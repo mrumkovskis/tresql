@@ -306,7 +306,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def toString = elements map { _.toString } mkString ("[", ", ", "]")
   }
 
-  case class SelectExpr(tables: List[Table], filter: List[Expr], cols: List[ColExpr],
+  case class SelectExpr(tables: List[Table], filter: Expr, cols: List[ColExpr],
     distinct: Boolean, group: Expr, order: Expr,
     offset: Expr, limit: Expr, aliases: Map[String, Table], parentJoin: Option[Expr]) extends BaseExpr {
     override def apply() = {
@@ -334,22 +334,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }
     }
     def where = {
-      def filterSql = filter match {
-        case null => null
-        //primary key equals search
-        case List(_: ConstExpr | _: VarExpr | _: ResExpr) => tables.last.aliasOrName + "." +
-          env.tableOption(tables.last.name)
-          .getOrElse(error("Table not found in primary key search: " + tables.last.name))
-          .key.cols.head + " = " + filter.head.sql
-        //normal filter expression
-        case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
-        //primary key in search
-        case l => tables.last.aliasOrName + "." +
-          env.table(tables.last.name).key.cols(0) +
-          " in(" + (l map { _.sql }).mkString(",") + ")"
-      }
-      parentJoin.map(e => Option(filterSql).map("(" + _ + ") and " + e.sql).getOrElse(e.sql)).
-        getOrElse(filterSql)
+      val fsql = Option(filter).map(
+          e => (if (e.exprType == classOf[SelectExpr]) "exists " else "") + e.sql).orNull
+      parentJoin.map(e => Option(fsql).map("(" + _ + ") and " + e.sql)
+        .getOrElse(e.sql)).getOrElse(fsql)
     }
     val queryDepth = QueryBuilder.this.queryDepth
     override def toString = sql + " (" + QueryBuilder.this + ")\n" +
@@ -384,7 +372,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         //no join (used for table alias join)
         case TableJoin(_, _, true, _) => ""
         //product join
-        case TableJoin(false, ArrExpr(Nil), _, _) => ", " + sqlName
+        case TableJoin(false, ArrExpr(Nil) | null, _, _) => ", " + sqlName
         //foreign key join shortcut syntax
         case TableJoin(false, e @ IdentExpr(_), _, _) => joinPrefix(true) + fkJoin(e)
         //normal join
@@ -589,6 +577,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case arr: List[_] => ValuesExpr(arr map {
         buildInternal(_, VALUES_CTX) match {
           case ArrExpr(l) => ArrExpr(patchVals(table, cols, l))
+          case null => ArrExpr(patchVals(table, cols, Nil))
           case e => e
         }
       } match {
@@ -634,10 +623,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def buildSelect(q: Query) = {
       val tablesAndAliases = buildTables(q.tables)
       if (ctxStack.head == QUERY_CTX && this.tableDefs == Nil) this.tableDefs = defs(tablesAndAliases._1)
-      val filter = if (q.filter != null) { //filter
-        val f = (q.filter.elements map { buildInternal(_, WHERE_CTX) }).filter(_ != null)
-        if (f.length > 0) f else null
-      } else null
+      val filter = if (q.filter == null) null else buildFilter(tablesAndAliases._1.last, q.filter.filters)
       val cols = buildCols(q.cols)
       val distinct = q.distinct
       val group = buildInternal(q.group, GROUP_CTX)
@@ -678,7 +664,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
               case _ => error("At the moment foreign key shortcut join with parent query cannot be performed on table: " + x)
             }
             //product join, i.e. no join
-            case Table(_, _, TableJoin(false, ArrExpr(Nil), _, _), _, _) => None
+            case Table(_, _, TableJoin(false, ArrExpr(Nil) | null, _, _), _, _) => None
             //ancestor join
             //transform ancestor reference: replace IdentExpr referencing parent queries with ResExpr
             case tb @ Table(_, _, TableJoin(false, e, _, _), _, _) if e != null =>
@@ -692,8 +678,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         tablesAndAliases._2, parentJoin)
       //if select expression is subquery in other's expression where clause, has where clause itself
       //but where clause was removed due to unbound optional variables remove subquery itself
-      if (ctxStack.head == WHERE_CTX && q.filter != null && q.filter.elements != Nil &&
-        sel.filter == null) null else sel
+      if (ctxStack.head == WHERE_CTX && q.filter.filters != Nil && sel.filter == null) null else sel
     }
     def buildSelectFromObj(o: Obj) =
       buildSelect(QueryParser.Query(List(o), null, null, false, null, null, null, null))
@@ -755,7 +740,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           case ColExpr(FunExpr(n, _, false), _, _, _, _) => Env.isDefined(n)
           case _ => false
         }) (colExprs flatMap { //external function found
-          case ColExpr(FunExpr(n, pars, false), a, t, _, _) if Env.isDefined(n) =>
+          case ce @ ColExpr(FunExpr(n, pars, false), a, t, _, _) if Env.isDefined(n) && !ce.separateQuery =>
             val m = Env.functions.flatMap(_.getClass.getMethods.filter(m => m.getName == n &&
               m.getParameterTypes.size == pars.size).headOption).getOrElse(
               error("External function " + n + " with " + pars.size + " parameters not found"))
@@ -763,7 +748,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
             val hiddenColPars = m.getParameterTypes.toList.zip(pars).map(tp =>
               HiddenColRefExpr(tp._2, tp._1))
             ColExpr(ExternalFunExpr(n, hiddenColPars, m), a, t, Some(true)) :: hiddenColPars.map(
-              ColExpr(_, null, null, Some(false), true))
+              ColExpr(_, null, null, Some(ce.separateQuery), true))
           case e => List(e)
         }).groupBy(_.hidden) match { //put hidden columns at the end
           case m: Map[Boolean, ColExpr] => m(false) ++ m.getOrElse(true, Nil)
@@ -773,7 +758,28 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           (if (ctxStack.headOption.orNull == QUERY_CTX) joinsWithChildrenColExprs else Nil)
       }
     }
-    
+    def buildFilter(pkTable: Table, filterList: List[Arr]): Expr = {
+      def transformExpr(e: Expr) = e match {
+        case a @ ArrExpr(List(_: ConstExpr | _: VarExpr | _: ResExpr)) => BinExpr("=",
+          IdentExpr(List(pkTable.aliasOrName, env.tableOption(pkTable.name)
+            .getOrElse(error("Table not found in primary key search: " + pkTable.name))
+            .key.cols.head)), a.elements.head)
+        case a: ArrExpr if a.elements.size > 1 => InExpr(IdentExpr(List(pkTable.aliasOrName,
+          env.table(pkTable.name).key.cols.head)), a.elements, false)
+        case ArrExpr(List(f)) => f
+        case null => null
+      }
+      def filterExpr(fl: List[Arr]): Expr = fl match {
+        case Nil => null
+        case a :: Nil => transformExpr(buildInternal(a, WHERE_CTX))
+        case a :: t => transformExpr(buildInternal(a, WHERE_CTX)) match {
+          case null => filterExpr(t) case x => filterExpr(t) match {
+            case null => x case y => BinExpr("&", BracesExpr(x), BracesExpr(y))
+          }
+        }
+      }
+      filterExpr(filterList)
+    }
     ctxStack ::= parseCtx
     try {
       parsedExpr match {
@@ -847,7 +853,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           if (pars.exists(_ == null)) null else FunExpr(n, pars, d)
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => IdentAllExpr(i.ident)
-        case Arr(l: List[_]) => ArrExpr(l map { buildInternal(_, parseCtx) })
+        case Arr(l: List[_]) => l map { buildInternal(_, parseCtx) } filter (_ != null) match {
+          case al if al.size > 0 => ArrExpr(al) case _ => null 
+        }
         case Variable("?", o) =>
           this.bindIdx += 1; VarExpr(this.bindIdx.toString, o)
         case Variable(n, o) => if (!env.reusableExpr && o && !(env contains n)) null else VarExpr(n, o)
