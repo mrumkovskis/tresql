@@ -1,6 +1,6 @@
 package org.tresql
 
-import scala.util.Try
+//import scala.util.Try
 import sys._
 
 trait Typer { this: QueryBuilder =>
@@ -24,7 +24,7 @@ trait Typer { this: QueryBuilder =>
       case d :: l => findDef(d) orElse findNested(l)
     }
     def findDef(d: Def) = d match {
-      case TableDef(t, _) => Try(env.join(table, t)).toOption
+      case TableDef(t, _) => try Some(env.join(table, t)) catch { case _: Exception => None }//Try(env.join(table, t)).toOption
       case SelectDef(ts, _) => findNested(ts)
     }
     def find(defs: List[Def]): Option[((List[String], List[String]), String)] = defs match {
