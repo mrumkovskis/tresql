@@ -1,3 +1,25 @@
+--- 2013.12.03 tresql 5.2 ---
+1. order by syntax improved
+
+  Example:
+
+    emp#(ename, ~birthdate) --> select * from emp order by ename asc, birthdate desc
+
+2. insert, update statement support with query instead of values clause
+
+  Example:
+
+    +emp{ename, birthdate} emp1{name, bdate} --> insert into emp (ename, birthdate) select name, bdate from emp1
+    =emp[empno = 1]{ename, birthdate} emp1[nr = 5]{name, bdate} --> update emp set (ename, birthdate) = (select name, bdate from emp1 where nr = 5) where empno = 1
+
+
+3. multiple filter support
+
+  Example:
+
+    dept d[d.deptno = e.deptno]emp e[deptno = 10][mgr = null]{dname, ename} --> select dname, ename from dept d join emp e on (d.deptno = e.deptno) where (deptno = 10) and (mgr is null)
+    
+
 --- 2013.11.20 tresql 5.1.2 ---
 1. Default join improvement - if pair of mutual relationships is found between two tables foreign key is taken from the left table, primary key from the right
 
