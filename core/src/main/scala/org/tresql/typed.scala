@@ -95,18 +95,27 @@ trait TypedResult { this: Result =>
   }
 
   def toListOfMaps[M[String, Any] <: scala.collection.Map[String, Any]](
-    implicit bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): List[M[String, Any]] =
+    implicit transformer: PartialFunction[(String, Any), Any] = null,
+    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): List[M[String, Any]] =
     this.map(r => rowAsMap[M]).toList
 
   def rowAsMap[M[String, Any] <: scala.collection.Map[String, Any]](
-    implicit bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
-    (bf() ++= ((0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
-      case r: Result => r.toListOfMaps[M]
-      case x => x
-    })).toMap)).result
+    implicit transformer: PartialFunction[(String, Any), Any] = null,
+    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] = {
+    val defaultTransform: PartialFunction[(String, Any), Any] = { case (x, y) => y }
+    val tr = if (transformer == null) defaultTransform else transformer orElse defaultTransform
+    (bf() ++= ((0 to (columnCount - 1)).map(i => {
+      val name = column(i).name
+      name -> (this(i) match {
+        case r: Result => tr(name, r.toListOfMaps[M])
+        case x => tr(name, x)
+      })
+    }).toMap)).result
+  }
 
   def headAsMap[M[String, Any] <: scala.collection.Map[String, Any]](
-    implicit bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
+    implicit transformer: PartialFunction[(String, Any), Any] = null,
+    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
     hasNext match {
       case true =>
         next
@@ -117,11 +126,13 @@ trait TypedResult { this: Result =>
     }
 
   def headOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](
-    implicit bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
+    implicit transformer: PartialFunction[(String, Any), Any] = null,
+    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
     try Some(headAsMap[M]) catch { case e: NoSuchElementException => None }
 
   def uniqueAsMap[M[String, Any] <: scala.collection.Map[String, Any]](
-    implicit bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
+    implicit transformer: PartialFunction[(String, Any), Any] = null,
+    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
     hasNext match {
     case true =>
       next
@@ -133,7 +144,8 @@ trait TypedResult { this: Result =>
   }
 
   def uniqueOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](
-    implicit bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
+    implicit transformer: PartialFunction[(String, Any), Any] = null,
+    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
     hasNext match {
     case true =>
       next
@@ -273,23 +285,28 @@ trait TypedQuery {
   }
   
   def toListOfMaps[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
-    implicit bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): List[M[String, Any]] =
+    implicit transformer: PartialFunction[(String, Any), Any] = null,
+    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): List[M[String, Any]] =
     select(expr, normalizePars(params)).toListOfMaps[M]
 
   def headAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
-    implicit bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
+    implicit transformer: PartialFunction[(String, Any), Any] = null,
+    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
     select(expr, normalizePars(params)).headAsMap[M]
 
   def headOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
-    implicit bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
+    implicit transformer: PartialFunction[(String, Any), Any] = null,
+    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
     select(expr, normalizePars(params)).headOptionAsMap[M]
 
   def uniqueAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
-    implicit bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
+    implicit transformer: PartialFunction[(String, Any), Any] = null,
+    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
     select(expr, normalizePars(params)).uniqueAsMap[M]
 
   def uniqueOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
-    implicit bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
+    implicit transformer: PartialFunction[(String, Any), Any] = null,
+    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
     select(expr, normalizePars(params)).uniqueOptionAsMap[M]
 
   def list[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]) =
