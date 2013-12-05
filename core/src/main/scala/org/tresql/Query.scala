@@ -6,7 +6,7 @@ import org.tresql.metadata._
 import sys._
 import java.sql.Connection
 
-object Query extends TypedQuery {
+trait Query extends TypedQuery {
 
   def apply(expr: String, params: Any*): Any = apply(expr, normalizePars(params))
 
@@ -261,3 +261,5 @@ object InOutPar {
   def apply(value: Any) = new InOutPar(value)
   def unapply(par: InOutPar): Option[Any] = Some(par.value)
 }
+
+object Query extends Query

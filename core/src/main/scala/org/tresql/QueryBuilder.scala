@@ -620,7 +620,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
   
   private def buildInternal(parsedExpr: Any, parseCtx: String = ROOT_CTX): Expr = {
-    def buildSelect(q: Query) = {
+    def buildSelect(q: QueryParser.Query) = {
       val tablesAndAliases = buildTables(q.tables)
       if (ctxStack.head == QUERY_CTX && this.tableDefs == Nil) this.tableDefs = defs(tablesAndAliases._1)
       val filter = if (q.filter == null) null else buildFilter(tablesAndAliases._1.last, q.filter.filters)
@@ -822,7 +822,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           case COL_CTX => buildColumnIdentOrBracesExpr(t)
           case _ => buildIdentOrBracesExpr(t)
         }
-        case q: Query => parseCtx match {
+        case q: QueryParser.Query => parseCtx match {
           case ROOT_CTX =>
             val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
             val ex = b.buildInternal(q, QUERY_CTX); this.bindIdx = b.bindIdx; ex
