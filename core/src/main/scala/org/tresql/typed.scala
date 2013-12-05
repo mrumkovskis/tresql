@@ -104,13 +104,13 @@ trait TypedResult { this: Result =>
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] = {
     val defaultTransform: PartialFunction[(String, Any), Any] = { case (x, y) => y }
     val tr = if (transformer == null) defaultTransform else transformer orElse defaultTransform
-    (bf() ++= ((0 to (columnCount - 1)).map(i => {
+    (bf() ++= (0 to (columnCount - 1)).map(i => {
       val name = column(i).name
       name -> (this(i) match {
         case r: Result => tr(name, r.toListOfMaps[M])
         case x => tr(name, x)
       })
-    }).toMap)).result
+    })).result
   }
 
   def headAsMap[M[String, Any] <: scala.collection.Map[String, Any]](
