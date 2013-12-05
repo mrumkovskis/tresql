@@ -271,6 +271,26 @@ trait TypedQuery {
   def uniqueOption[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]): Option[T] = {
     select(expr, normalizePars(params)).uniqueOption[T]
   }
+  
+  def toListOfMaps[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
+    implicit bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): List[M[String, Any]] =
+    select(expr, normalizePars(params)).toListOfMaps[M]
+
+  def headAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
+    implicit bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
+    select(expr, normalizePars(params)).headAsMap[M]
+
+  def headOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
+    implicit bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
+    select(expr, normalizePars(params)).headOptionAsMap[M]
+
+  def uniqueAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
+    implicit bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
+    select(expr, normalizePars(params)).uniqueAsMap[M]
+
+  def uniqueOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
+    implicit bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
+    select(expr, normalizePars(params)).uniqueOptionAsMap[M]
 
   def list[T](expr: String, params: Any*)(implicit m: scala.reflect.Manifest[T]) =
     select(expr, normalizePars(params)).list[T]
