@@ -180,6 +180,13 @@ class QueryTest extends Suite {
       Query.select("emp/dept[10] {(sal + -sal) salary}#(1)") map (_.salary) toList
     }
     
+    //transformer test
+    implicit val transformer: PartialFunction[(String, Any), Any] = {case ("dname", v) => "!" + v}
+    expectResult(List(Map("dname" -> "!ACCOUNTING", "emps" -> List(Map("ename" -> "CLARK"),
+        Map("ename" -> "KING"), Map("ename" -> "MILLER"))))) {
+      Query.toListOfMaps[Map]("dept[10]{dname, |emp{ename}#(1) emps}")
+    }
+    
     //bind variables test
     expectResult(List(10, 20, 30, 40)){
       val ex = Query.build("dept[?]{deptno}")

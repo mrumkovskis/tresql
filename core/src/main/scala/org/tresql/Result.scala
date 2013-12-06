@@ -214,7 +214,6 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _co
 
   /** needs to be overriden since super class implementation calls hasNext method */
   override def toString = getClass.toString + ":" + (cols.mkString(","))
-
   private def asAny(pos: Int): Any = {
     import java.sql.Types._
     md.getColumnType(pos) match {
@@ -254,103 +253,261 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _co
 }
 
 trait RowLike extends Dynamic with Typed {
+  /* Dynamic objects */
+  /**
+   * Wrapper for dynamical result column access as Int
+   * This uses scala.Dynamic feature.
+   * Example usages:
+   * {{{
+   * val result: RowLike = ...
+   * println(result.i.salary)
+   * }}}
+   *
+   */
+  private[tresql] object DynamicInt extends Dynamic {
+    def selectDynamic(col: String) = int(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+  private[tresql] object DynamicJInt extends Dynamic {
+    def selectDynamic(col: String) = jInt(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+  /**
+   * Wrapper for dynamical result column access as Long
+   * This uses scala.Dynamic feature.
+   * Example usages:
+   * {{{
+   * val result: RowLike = ...
+   * println(result.l.salary)
+   * }}}
+   *
+   */
+  private[tresql] object DynamicLong extends Dynamic {
+    def selectDynamic(col: String) = long(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+  private[tresql] object DynamicJLong extends Dynamic {
+    def selectDynamic(col: String) = jLong(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+  /**
+   * Wrapper for dynamical result column access as Double
+   * This uses scala.Dynamic feature.
+   * Example usages:
+   * {{{
+   * val result: RowLike = ...
+   * println(result.dbl.salary)
+   * }}}
+   *
+   */
+  private[tresql] object DynamicDouble extends Dynamic {
+    def selectDynamic(col: String) = double(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+  private[tresql] object DynamicJDouble extends Dynamic {
+    def selectDynamic(col: String) = jDouble(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+  /**
+   * Wrapper for dynamical result column access as BigDecimal
+   * This uses scala.Dynamic feature.
+   * Example usages:
+   * {{{
+   * val result: RowLike = ...
+   * println(result.bd.salary)
+   * }}}
+   *
+   */
+  private[tresql] object DynamicBigDecimal extends Dynamic {
+    def selectDynamic(col: String) = bigdecimal(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+  private[tresql] object DynamicJBigDecimal extends Dynamic {
+    def selectDynamic(col: String) = jBigDecimal(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+  /**
+   * Wrapper for dynamical result column access as String
+   * This uses scala.Dynamic feature.
+   * Example usages:
+   * {{{
+   * val result: RowLike = ...
+   * println(result.s.name)
+   * }}}
+   *
+   */
+  private[tresql] object DynamicString extends Dynamic {
+    def selectDynamic(col: String) = string(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+  /**
+   * Wrapper for dynamical result column access as java.sql.Date
+   * This uses scala.Dynamic feature.
+   * Example usages:
+   * {{{
+   * val result: RowLike = ...
+   * println(result.d.birthdate)
+   * }}}
+   *
+   */
+  private[tresql] object DynamicDate extends Dynamic {
+    def selectDynamic(col: String) = date(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+  /**
+   * Wrapper for dynamical result column access as java.sql.Timestamp
+   * This uses scala.Dynamic feature.
+   * Example usages:
+   * {{{
+   * val result: RowLike = ...
+   * println(result.t.eventTime)
+   * }}}
+   *
+   */
+  private[tresql] object DynamicTimestamp extends Dynamic {
+    def selectDynamic(col: String) = timestamp(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+  /**
+   * Wrapper for dynamical result column access as Boolean
+   * This uses scala.Dynamic feature.
+   * Example usages:
+   * {{{
+   * val result: RowLike = ...
+   * println(result.bl.is_active)
+   * }}}
+   *
+   */
+  private[tresql] object DynamicBoolean extends Dynamic {
+    def selectDynamic(col: String) = boolean(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+	
+  private[tresql] object DynamicJBoolean extends Dynamic {
+    def selectDynamic(col: String) = jBoolean(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+  /**
+   * Wrapper for dynamical result column access as org.tresql.Result
+   * This uses scala.Dynamic feature.
+   * Example usages:
+   * {{{
+   * val result: RowLike = ...
+   * println(result.r.childResult)
+   * }}}
+   *
+   */
+  private[tresql] object DynamicResult extends Dynamic {
+    def selectDynamic(col: String) = result(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+  //wrappers for array and stream
+  private[tresql] object DynamicByteArray extends Dynamic {
+    def selectDynamic(col: String) = bytes(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+  private[tresql] object DynamicStream extends Dynamic {
+    def selectDynamic(col: String) = stream(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+  
   def apply(idx: Int): Any
   def apply(name: String): Any
   def selectDynamic(name: String) = apply(name)
   def applyDynamic(name: String)(args: Any*) = selectDynamic(name)
   def int(idx: Int) = typed[Int](idx)
   def int(name: String) = typed[Int](name)
-  def int = new DynamicInt(this)
+  def int = DynamicInt
   def i = int
   def i(idx: Int) = int(idx)
   def i(name: String) = int(name)
   def long(idx: Int) = typed[Long](idx)
   def long(name: String) = typed[Long](name)
-  def long = new DynamicLong(this)
+  def long = DynamicLong
   def l = long
   def l(idx: Int) = long(idx)
   def l(name: String) = long(name)
   def double(idx: Int) = typed[Double](idx)
   def double(name: String) = typed[Double](name)
-  def double = new DynamicDouble(this)
+  def double = DynamicDouble
   def dbl = double
   def dbl(idx: Int) = double(idx)
   def dbl(name: String) = double(name)
   def bigdecimal(idx: Int) = typed[BigDecimal](idx)
   def bigdecimal(name: String) = typed[BigDecimal](name)
-  def bigdecimal = new DynamicBigDecimal(this)
+  def bigdecimal = DynamicBigDecimal
   def bd = bigdecimal
   def bd(idx: Int) = bigdecimal(idx)
   def bd(name: String) = bigdecimal(name)
   def string(idx: Int) = typed[String](idx)
   def string(name: String) = typed[String](name)
-  def string = new DynamicString(this)
+  def string = DynamicString
   def s = string
   def s(idx: Int) = string(idx)
   def s(name: String) = string(name)
   def date(idx: Int) = typed[java.sql.Date](idx)
   def date(name: String) = typed[java.sql.Date](name)
-  def date = new DynamicDate(this)
+  def date = DynamicDate
   def d = date
   def d(idx: Int) = date(idx)
   def d(name: String) = date(name)
   def timestamp(idx: Int) = typed[java.sql.Timestamp](idx)
   def timestamp(name: String) = typed[java.sql.Timestamp](name)
-  def timestamp = new DynamicTimestamp(this)
+  def timestamp = DynamicTimestamp
   def t = timestamp
   def t(idx: Int) = timestamp(idx)
   def t(name: String) = timestamp(name)
   def boolean(idx: Int) = typed[Boolean](idx)
   def boolean(name: String) = typed[Boolean](name)
-  def boolean = new DynamicBoolean(this)
+  def boolean = DynamicBoolean
   def bl = boolean
   def bl(idx: Int) = boolean(idx)
   def bl(name: String) = boolean(name)
   def bytes(idx: Int) = typed[Array[Byte]](idx)
   def bytes(name: String) = typed[Array[Byte]](name)
-  def bytes = new DynamicByteArray(this)
+  def bytes = DynamicByteArray
   def b = bytes
   def b(idx: Int) = bytes(idx)
   def b(name: String) = bytes(name)
   def stream(idx: Int) = typed[java.io.InputStream](idx)
   def stream(name: String) = typed[java.io.InputStream](name)
-  def stream = new DynamicStream(this)
+  def stream = DynamicStream
   def bs = stream
   def bs(idx: Int) = stream(idx)
   def bs(name: String) = stream(name)
   def result(idx: Int) = typed[Result](idx)
   def result(name: String) = typed[Result](name)
-  def result = new DynamicResult(this)
+  def result = DynamicResult
   def r = result
   def r(idx: Int) = result(idx)
   def r(name: String) = result(name)
   def jInt(idx: Int) = typed[java.lang.Integer](idx)
   def jInt(name: String) = typed[java.lang.Integer](name)
-  def jInt = new DynamicJInt(this)
+  def jInt = DynamicJInt
   def ji = jInt
   def ji(idx: Int) = jInt(idx)
   def ji(name: String) = jInt(name)
   def jLong(idx: Int) = typed[java.lang.Long](idx)
   def jLong(name: String) = typed[java.lang.Long](name)
-  def jLong = new DynamicJLong(this)
+  def jLong = DynamicJLong
   def jl = jLong
   def jl(idx: Int) = jLong(idx)
   def jl(name: String) = jLong(name)
   def jBoolean(idx: Int) = typed[java.lang.Boolean](idx)
   def jBoolean(name: String) = typed[java.lang.Boolean](name)
-  def jBoolean = new DynamicJBoolean(this)
+  def jBoolean = DynamicJBoolean
   def jbl = jBoolean
   def jbl(idx: Int) = jBoolean(idx)
   def jbl(name: String) = jBoolean(name)
   def jDouble(idx: Int) = typed[java.lang.Double](idx)
   def jDouble(name: String) = typed[java.lang.Double](name)
-  def jDouble = new DynamicJDouble(this)
+  def jDouble = DynamicJDouble
   def jdbl = jDouble
   def jdbl(idx: Int) = jDouble(idx)
   def jdbl(name: String) = jDouble(name)
   def jBigDecimal(idx: Int) = typed[java.math.BigDecimal](idx)
   def jBigDecimal(name: String) = typed[java.math.BigDecimal](name)
-  def jBigDecimal = new DynamicJBigDecimal(this)
+  def jBigDecimal = DynamicJBigDecimal
   def jbd = jBigDecimal
   def jbd(idx: Int) = jBigDecimal(idx)
   def jbd(name: String) = jBigDecimal(name)
@@ -360,160 +517,3 @@ trait RowLike extends Dynamic with Typed {
 }
 
 case class Column(val idx: Int, val name: String, private[tresql] val expr: Expr)
-
-/* Dynamic classes */
-/**
- * Wrapper for dynamical result column access as Int
- * This uses scala.Dynamic feature.
- * Example usages:
- * {{{
- * val result: RowLike = ...
- * println(result.i.salary)
- * }}}
- *
- */
-class DynamicInt(row: RowLike) extends Dynamic {
-  def selectDynamic(col: String) = row.int(col)
-  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-}
-class DynamicJInt(row: RowLike) extends Dynamic {
-  def selectDynamic(col: String) = row.jInt(col)
-  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-}
-/**
- * Wrapper for dynamical result column access as Long
- * This uses scala.Dynamic feature.
- * Example usages:
- * {{{
- * val result: RowLike = ...
- * println(result.l.salary)
- * }}}
- *
- */
-class DynamicLong(row: RowLike) extends Dynamic {
-  def selectDynamic(col: String) = row.long(col)
-  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-}
-class DynamicJLong(row: RowLike) extends Dynamic {
-  def selectDynamic(col: String) = row.jLong(col)
-  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-}
-/**
- * Wrapper for dynamical result column access as Double
- * This uses scala.Dynamic feature.
- * Example usages:
- * {{{
- * val result: RowLike = ...
- * println(result.dbl.salary)
- * }}}
- *
- */
-class DynamicDouble(row: RowLike) extends Dynamic {
-  def selectDynamic(col: String) = row.double(col)
-  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-}
-class DynamicJDouble(row: RowLike) extends Dynamic {
-  def selectDynamic(col: String) = row.jDouble(col)
-  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-}
-/**
- * Wrapper for dynamical result column access as BigDecimal
- * This uses scala.Dynamic feature.
- * Example usages:
- * {{{
- * val result: RowLike = ...
- * println(result.bd.salary)
- * }}}
- *
- */
-class DynamicBigDecimal(row: RowLike) extends Dynamic {
-  def selectDynamic(col: String) = row.bigdecimal(col)
-  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-}
-class DynamicJBigDecimal(row: RowLike) extends Dynamic {
-  def selectDynamic(col: String) = row.jBigdecimal(col)
-  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-}
-/**
- * Wrapper for dynamical result column access as String
- * This uses scala.Dynamic feature.
- * Example usages:
- * {{{
- * val result: RowLike = ...
- * println(result.s.name)
- * }}}
- *
- */
-class DynamicString(row: RowLike) extends Dynamic {
-  def selectDynamic(col: String) = row.string(col)
-  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-}
-/**
- * Wrapper for dynamical result column access as java.sql.Date
- * This uses scala.Dynamic feature.
- * Example usages:
- * {{{
- * val result: RowLike = ...
- * println(result.d.birthdate)
- * }}}
- *
- */
-class DynamicDate(row: RowLike) extends Dynamic {
-  def selectDynamic(col: String) = row.date(col)
-  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-}
-/**
- * Wrapper for dynamical result column access as java.sql.Timestamp
- * This uses scala.Dynamic feature.
- * Example usages:
- * {{{
- * val result: RowLike = ...
- * println(result.t.eventTime)
- * }}}
- *
- */
-class DynamicTimestamp(row: RowLike) extends Dynamic {
-  def selectDynamic(col: String) = row.timestamp(col)
-  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-}
-/**
- * Wrapper for dynamical result column access as Boolean
- * This uses scala.Dynamic feature.
- * Example usages:
- * {{{
- * val result: RowLike = ...
- * println(result.bl.is_active)
- * }}}
- *
- */
-class DynamicBoolean(row: RowLike) extends Dynamic {
-  def selectDynamic(col: String) = row.boolean(col)
-  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-}
-class DynamicJBoolean(row: RowLike) extends Dynamic {
-  def selectDynamic(col: String) = row.jBoolean(col)
-  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-}
-/**
- * Wrapper for dynamical result column access as org.tresql.Result
- * This uses scala.Dynamic feature.
- * Example usages:
- * {{{
- * val result: RowLike = ...
- * println(result.r.childResult)
- * }}}
- *
- */
-class DynamicResult(row: RowLike) extends Dynamic {
-  def selectDynamic(col: String) = row.result(col)
-  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-}
-//wrappers for array and stream
-class DynamicByteArray(row: RowLike) extends Dynamic {
-  def selectDynamic(col: String) = row.bytes(col)
-  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-}
-class DynamicStream(row: RowLike) extends Dynamic {
-  def selectDynamic(col: String) = row.stream(col)
-  def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-}
