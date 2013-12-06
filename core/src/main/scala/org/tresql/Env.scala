@@ -93,7 +93,6 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   override def metaData = provider.map(_.env.metaData).getOrElse(resources.metaData)
   override def dialect: PartialFunction[Expr, String] = provider.map(_.env.dialect).getOrElse(resources.dialect)
   override def idExpr = provider.map(_.env.idExpr).getOrElse(resources.idExpr)
-  override def functions = provider.map(_.env.functions).getOrElse(resources.functions)
   
   //meta data methods
   def dbName = metaData.dbName
@@ -114,7 +113,7 @@ object Env extends Resources {
   //available functions
   private var _functions: Option[Any] = None
   private var _functionNames: Option[Set[String]] = None
-  functions = super.functions.get
+  functions = new Functions //invoke setter to set function names
   //cache
   private var _cache: Option[Cache] = None
   private var logger: (=> String, Int) => Unit = null
@@ -124,9 +123,9 @@ object Env extends Resources {
   override def metaData = _metaData.get
   override def dialect = _dialect.getOrElse(super.dialect)
   override def idExpr = _idExpr.getOrElse(super.idExpr)
-  override def functions = _functions
+  def functions = _functions
   def isDefined(functionName: String) = _functionNames.map(_.contains(functionName)).getOrElse(false)
-  override def cache = _cache
+  def cache = _cache
   
   def conn_=(conn: java.sql.Connection) = this.threadConn set conn
   def metaData_=(metaData: MetaData) = this._metaData = Option(metaData)
@@ -151,8 +150,6 @@ trait Resources extends NameMap {
   def metaData: MetaData
   def dialect: PartialFunction[Expr, String] = null
   def idExpr: String => String = s => "nextval('" + s + "')"
-  def functions: Option[Any] = Option(new Functions)
-  def cache: Option[Cache] = None
   //name map methods
   override def tableName(objectName: String): String = _delegateNameMap.map(_.tableName(
       objectName)).getOrElse(_nameMap.flatMap(_._1.get(objectName)).getOrElse(objectName))
