@@ -38,6 +38,8 @@ package object dialects {
       case _ => false
     }
     def apply(e: Expr) = e match {
+      case e.builder.ConstExpr(true) => "'Y'"
+      case e.builder.ConstExpr(false) => "'N'"
       case e.builder.BinExpr("-", lop, rop) =>
         lop.sql + (if (e.exprType.getSimpleName == "SelectExpr") " minus " else " - ") + rop.sql
       case e: QueryBuilder#SelectExpr if e.limit != null || e.offset != null =>
