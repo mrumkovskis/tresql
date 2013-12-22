@@ -39,7 +39,10 @@ trait Query extends TypedQuery {
   }
 
   private[tresql] def normalizePars(pars: Any*): Map[String, Any] =
-    pars.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
+    pars.zipWithIndex.map(t => (t._2 + 1).toString -> t._1) match {
+      case Seq(("1", m: Map[String, Any])) => m
+      case l => l.toMap
+    }
 
   private[tresql] def sel(sql: String, cols: List[QueryBuilder#ColExpr],
     bindVariables: List[Expr], env: Env, allCols: Boolean, identAll: Boolean,
