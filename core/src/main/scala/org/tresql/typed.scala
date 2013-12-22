@@ -245,8 +245,7 @@ trait TypedResult { this: Result =>
 
 }
 
-trait TypedQuery {
-  import Query._
+trait TypedQuery {this: Query =>
 
   def head[T](expr: String, params: Any*)(implicit converter: Converter[T],
       m: scala.reflect.Manifest[T]): T = {
