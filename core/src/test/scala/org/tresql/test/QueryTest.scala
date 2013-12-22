@@ -171,6 +171,8 @@ class QueryTest extends Suite {
             Query.list[Int, String, List[(Int, String, List[(Date, Int)])], List[String]] {
       "dept[10]{deptno, dname, |emp[deptno = :1(deptno)]{empno, ename, |[empno]work{wdate, hours}#(1,2) work}#(1) emps," +
       " |car[deptnr = :1(deptno)]{name}#(1) cars}"})
+    expectResult(List((10, "ACCOUNTING"), (20, "RESEARCH")))(
+        Query.list[Int, String]("dept[deptno = ? | deptno = ?]#(1)", 10, 20))
     //typed objects tests
     trait Poha
     case class Car(nr: Int, brand: String) extends Poha
