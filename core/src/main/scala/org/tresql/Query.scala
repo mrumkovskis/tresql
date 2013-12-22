@@ -38,8 +38,10 @@ trait Query extends TypedQuery {
     override def metaData = metadata.JDBCMetaData("", resources = this)
   }
 
-  private[tresql] def normalizePars(pars: Any*): Map[String, Any] =
-    pars.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
+  private[tresql] def normalizePars(pars: Any*): Map[String, Any] = pars match {
+    case Seq(m: Map[String, Any]) => m
+    case l => l.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
+  }
 
   private[tresql] def sel(sql: String, cols: List[QueryBuilder#ColExpr],
     bindVariables: List[Expr], env: Env, allCols: Boolean, identAll: Boolean,
