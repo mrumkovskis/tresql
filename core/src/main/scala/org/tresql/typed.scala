@@ -21,7 +21,7 @@ trait Typed { this: RowLike =>
     case "java.lang.Double" => jDouble(columnIndex).asInstanceOf[T]
     case "java.math.BigDecimal" => jBigDecimal(columnIndex).asInstanceOf[T]
     case "java.lang.Boolean" => jBoolean(columnIndex).asInstanceOf[T]
-    case x if x.startsWith("scala.Tuple") => typed((convTuple[Product] _).asInstanceOf[(RowLike, Manifest[T]) => T], m)
+    case x if x.startsWith("scala.Tuple") => typed((convTuple[Product] _).asInstanceOf[Converter[T]], m)
     case x if x.startsWith("scala.collection.immutable.List") && m.typeArguments.size == 1 =>
       result(columnIndex).map(_.typed(0)(m.typeArguments.head)).toList.asInstanceOf[T]
     case x => apply(columnIndex).asInstanceOf[T]
@@ -29,12 +29,12 @@ trait Typed { this: RowLike =>
 
   def typed[T](name: String)(implicit m: scala.reflect.Manifest[T]): T
 
-  def typed[T](implicit converter: (RowLike, Manifest[T]) => T, m: Manifest[T]): T =
+  def typed[T](implicit converter: Converter[T], m: Manifest[T]): T =
     if (converter != null) converter(this, m) else typed(0).asInstanceOf[T]
 }
 
 trait TypedResult { this: Result =>
-  def head[T](implicit converter: (RowLike, Manifest[T]) => T, m: Manifest[T]): T = hasNext match {
+  def head[T](implicit converter: Converter[T], m: Manifest[T]): T = hasNext match {
     case true =>
       next
       val v = this.asInstanceOf[RowLike].typed[T]
@@ -43,12 +43,12 @@ trait TypedResult { this: Result =>
     case false => throw new NoSuchElementException("No rows in result")
   }
 
-  def headOption[T](implicit converter: (RowLike, Manifest[T]) => T,
+  def headOption[T](implicit converter: Converter[T],
       m: Manifest[T]): Option[T] = try Some(head[T]) catch {
     case e: NoSuchElementException => None
   }
 
-  def unique[T](implicit converter: (RowLike, Manifest[T]) => T,
+  def unique[T](implicit converter: Converter[T],
       m: Manifest[T]): T = hasNext match {
     case true =>
       next
@@ -59,7 +59,7 @@ trait TypedResult { this: Result =>
     case false => error("No rows in result")
   }
 
-  def uniqueOption[T](implicit converter: (RowLike, Manifest[T]) => T,
+  def uniqueOption[T](implicit converter: Converter[T],
       m: Manifest[T]): Option[T] = hasNext match {
     case true =>
       next
@@ -132,7 +132,7 @@ trait TypedResult { this: Result =>
     case false => None
   }
   
-  def list[T](implicit converter: (RowLike, Manifest[T]) => T,
+  def list[T](implicit converter: Converter[T],
       m: Manifest[T]) = this.map(r => this.asInstanceOf[RowLike].typed[T]).toList
 
   //--------------- GENERATED CODE------------------//
@@ -248,19 +248,19 @@ trait TypedResult { this: Result =>
 trait TypedQuery {
   import Query._
 
-  def head[T](expr: String, params: Any*)(implicit converter: (RowLike, Manifest[T]) => T,
+  def head[T](expr: String, params: Any*)(implicit converter: Converter[T],
       m: scala.reflect.Manifest[T]): T = {
     select(expr, normalizePars(params)).head[T]
   }
-  def headOption[T](expr: String, params: Any*)(implicit converter: (RowLike, Manifest[T]) => T,
+  def headOption[T](expr: String, params: Any*)(implicit converter: Converter[T],
       m: scala.reflect.Manifest[T]): Option[T] = {
     select(expr, normalizePars(params)).headOption[T]
   }
-  def unique[T](expr: String, params: Any*)(implicit converter: (RowLike, Manifest[T]) => T,
+  def unique[T](expr: String, params: Any*)(implicit converter: Converter[T],
       m: scala.reflect.Manifest[T]): T = {
     select(expr, normalizePars(params)).unique[T]
   }
-  def uniqueOption[T](expr: String, params: Any*)(implicit converter: (RowLike, Manifest[T]) => T,
+  def uniqueOption[T](expr: String, params: Any*)(implicit converter: Converter[T],
       m: scala.reflect.Manifest[T]): Option[T] = {
     select(expr, normalizePars(params)).uniqueOption[T]
   }
@@ -290,11 +290,11 @@ trait TypedQuery {
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
     select(expr, normalizePars(params)).uniqueOptionAsMap[M]
 
-  def list[T](expr: String, params: Any*)(implicit converter: (RowLike, Manifest[T]) => T,
+  def list[T](expr: String, params: Any*)(implicit converter: Converter[T],
       m: scala.reflect.Manifest[T]) = select(expr, normalizePars(params)).list[T](converter, m)
 
   def list[T](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection = null,
-       converter: (RowLike, Manifest[T]) => T, m: scala.reflect.Manifest[T]) =
+       converter: Converter[T], m: scala.reflect.Manifest[T]) =
         select(expr, params)(tresqlConn).list[T]
 
   //--------------- GENERATED CODE------------------//

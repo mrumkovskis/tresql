@@ -10,6 +10,7 @@ package object tresql {
   }
 
   //converters
+  type Converter[T] = (RowLike, Manifest[T]) => T
   implicit def convInt(r: RowLike, m: Manifest[Int]) = r.int(0)
   implicit def convLong(r: RowLike, m: Manifest[Long]) = r.long(0)
   implicit def convDouble(r: RowLike, m: Manifest[Double]) = r.double(0)
