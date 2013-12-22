@@ -245,53 +245,52 @@ trait TypedResult { this: Result =>
 
 }
 
-trait TypedQuery {
-  import Query._
+trait TypedQuery {this: Query =>
 
   def head[T](expr: String, params: Any*)(implicit converter: Converter[T],
       m: scala.reflect.Manifest[T]): T = {
-    select(expr, normalizePars(params)).head[T]
+    select(expr, normalizePars(params: _*)).head[T]
   }
   def headOption[T](expr: String, params: Any*)(implicit converter: Converter[T],
       m: scala.reflect.Manifest[T]): Option[T] = {
-    select(expr, normalizePars(params)).headOption[T]
+    select(expr, normalizePars(params: _*)).headOption[T]
   }
   def unique[T](expr: String, params: Any*)(implicit converter: Converter[T],
       m: scala.reflect.Manifest[T]): T = {
-    select(expr, normalizePars(params)).unique[T]
+    select(expr, normalizePars(params: _*)).unique[T]
   }
   def uniqueOption[T](expr: String, params: Any*)(implicit converter: Converter[T],
       m: scala.reflect.Manifest[T]): Option[T] = {
-    select(expr, normalizePars(params)).uniqueOption[T]
+    select(expr, normalizePars(params: _*)).uniqueOption[T]
   }
   
   def toListOfMaps[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
     implicit transformer: PartialFunction[(String, Any), Any] = null,
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): List[M[String, Any]] =
-    select(expr, normalizePars(params)).toListOfMaps[M]
+    select(expr, normalizePars(params: _*)).toListOfMaps[M]
 
   def headAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
     implicit transformer: PartialFunction[(String, Any), Any] = null,
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
-    select(expr, normalizePars(params)).headAsMap[M]
+    select(expr, normalizePars(params: _*)).headAsMap[M]
 
   def headOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
     implicit transformer: PartialFunction[(String, Any), Any] = null,
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
-    select(expr, normalizePars(params)).headOptionAsMap[M]
+    select(expr, normalizePars(params: _*)).headOptionAsMap[M]
 
   def uniqueAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
     implicit transformer: PartialFunction[(String, Any), Any] = null,
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
-    select(expr, normalizePars(params)).uniqueAsMap[M]
+    select(expr, normalizePars(params: _*)).uniqueAsMap[M]
 
   def uniqueOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
     implicit transformer: PartialFunction[(String, Any), Any] = null,
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
-    select(expr, normalizePars(params)).uniqueOptionAsMap[M]
+    select(expr, normalizePars(params: _*)).uniqueOptionAsMap[M]
 
   def list[T](expr: String, params: Any*)(implicit converter: Converter[T],
-      m: scala.reflect.Manifest[T]) = select(expr, normalizePars(params)).list[T](converter, m)
+      m: scala.reflect.Manifest[T]) = select(expr, normalizePars(params: _*)).list[T](converter, m)
 
   def list[T](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection = null,
        converter: Converter[T], m: scala.reflect.Manifest[T]) =

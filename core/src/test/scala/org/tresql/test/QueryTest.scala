@@ -41,7 +41,7 @@ class QueryTest extends Suite {
   }
     
   private def execStatements {
-    def parsePars(pars: String, sep:String = ";"): Any = {
+    def parsePars(pars: String, sep:String = ";"): Map[String, Any] = {
       val DF = new java.text.SimpleDateFormat("yyyy-MM-dd")
       val TF = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
       val D = """(\d{4}-\d{1,2}-\d{1,2})""".r
@@ -59,17 +59,19 @@ class QueryTest extends Suite {
         case D(d) => DF.parse(d)
         case T(t) => TF.parse(t)
         case N(n,_) => BigDecimal(n)
-        case A(a, ac) => if (ac.length == 0) List() else parsePars(ac, ",")
+        case A(a, ac) =>
+          if (ac.length == 0) List()
+          else ac.split(",").map(par).toList
         case x => error("unparseable parameter: " + x)        
       }
       val pl = pars.split(sep).map(par).toList
       if (map) {
         var i = 0
-        pl map {_ match {
-          case t@(k, v) => t
-          case x => {i += 1; (i toString, x)}
-        }} toMap
-      } else pl
+        pl map {
+          case (k, v) => (k toString, v)
+          case x => i += 1; (i toString, x)
+        } toMap
+      } else pl.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
     }
     println("\n------------------------ Test TreSQL statements ----------------------\n")
     var nr = 0
