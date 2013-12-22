@@ -26,6 +26,8 @@ package object tresql {
   implicit def convJDouble(r: RowLike, m: Manifest[java.lang.Double]) = r.jDouble(0)
   implicit def convJBigDecimal(r: RowLike, m: Manifest[java.math.BigDecimal]) = r.jBigDecimal(0)
   implicit def convJBoolean(r: RowLike, m: Manifest[java.lang.Boolean]) = r.jBoolean(0)
+  implicit def convByteArray(r: RowLike, m: Manifest[Array[Byte]]) = r.bytes(0)
+  implicit def convInputStream(r: RowLike, m: Manifest[java.io.InputStream]) = r.stream(0)
   //do not make Product conversion implicit since it spans also case classes
   def convTuple[T <: Product](r: RowLike, m: Manifest[T]) = if (m.toString.startsWith("scala.Tuple"))
     (m.typeArguments: @unchecked) match {
