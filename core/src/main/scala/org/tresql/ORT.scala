@@ -9,20 +9,27 @@ object ORT {
   /** <object name | property name>[:<linked property name>][#(insert | update | delete)] */
   val PROP_PATTERN = """(\w+)(:(\w+))?(#(\w+))?"""r
   
-  def insert(name:String, obj:Map[String, _])(implicit resources:Resources = Env):Any = {
+  type ObjToMapConverter[T] = (T, Manifest[T]) => Map[String, _]
+  
+  def insert(name: String, obj: Map[String, _])(implicit resources: Resources = Env): Any = {
     val insert = insert_tresql(name, obj, null, resources)
     if(insert == null) error("Cannot insert data. Table not found for object: " + name)
     Env log insert
     Query.build(insert, resources, obj, false)()
   }
+  def insert[T](obj: T)(implicit resources: Resources = Env,
+      conv: ObjToMapConverter[T], m: Manifest[T]): Any =
+        insert(m.runtimeClass.getName, conv(obj, m))
   //TODO update where unique key (not only pk specified)
-  def update(name:String, obj:Map[String, _])(implicit resources:Resources = Env):Any = {
+  def update(name: String, obj: Map[String, _])(implicit resources: Resources = Env): Any = {
     val update = update_tresql(name, obj, resources)
     if(update == null) error("Cannot update data. Table not found or primary key not found " +
     		"for the object: " + name)
     Env log update
     Query.build(update, resources, obj, false)()    
   }
+  def update[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T],
+      m: Manifest[T]): Any = update(m.runtimeClass.getName, conv(obj, m)) 
   /**
    * Saves object obj specified by parameter name. If object primary key is set object
    * is updated, if object primary key is not set object is inserted. Children are merged
@@ -30,13 +37,15 @@ object ORT {
    * Children structure i.e. property set must be identical, since one tresql statement is used
    * for all of the children
    */
-  def save(name:String, obj:Map[String, _])(implicit resources:Resources = Env):Any = {
+  def save(name: String, obj: Map[String, _])(implicit resources: Resources = Env): Any = {
     val (save, saveable) = save_tresql(name, obj, resources)
     Env log save
     Env log saveable.toString
     Query.build(save, resources, saveable, false)()
   }
-  def delete(name:String, id:Any)(implicit resources:Resources = Env):Any = {
+  def save[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T],
+      m: Manifest[T]): Any = save(m.runtimeClass.getName, conv(obj, m)) 
+  def delete(name: String, id: Any)(implicit resources: Resources = Env): Any = {
     val delete = "-" + resources.tableName(name) + "[?]"
     Env log delete
     Query.build(delete, resources, Map("1"->id), false)()

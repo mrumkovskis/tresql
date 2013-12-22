@@ -268,11 +268,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       if (Env.isDefined(name)) {
         try {
           Env log ts.mkString("Trying to call locally defined function: " + name + "(", ", ", ")")
-          env.functions.map(f => f.getClass.getMethod(name, ts: _*).invoke(
+          Env.functions.map(f => f.getClass.getMethod(name, ts: _*).invoke(
             f, p.asInstanceOf[List[Object]]: _*)).get
         } catch {
           case ex: NoSuchMethodException => {
-            env.functions.flatMap(f => f.getClass.getMethods.filter(m =>
+            Env.functions.flatMap(f => f.getClass.getMethods.filter(m =>
               m.getName == name && (m.getParameterTypes match {
                 case Array(par) => par.isInstance(p)
                 case _ => false
