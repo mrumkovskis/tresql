@@ -169,6 +169,15 @@ class QueryTest extends Suite {
             Query.list[Int, String, List[(Int, String, List[(Date, Int)])], List[String]] {
       "dept[10]{deptno, dname, |emp[deptno = :1(deptno)]{empno, ename, |[empno]work{wdate, hours}#(1,2) work}#(1) emps," +
       " |car[deptnr = :1(deptno)]{name}#(1) cars}"})
+    //typed objects tests
+    trait Poha
+    case class Car(nr: Int, brand: String) extends Poha
+    implicit def convertRowLiketoPoha[T <: Poha](r: RowLike, m: Manifest[T]): T = m.toString match {
+      case s if s.contains("Car") => Car(r.i.nr, r.s.name).asInstanceOf[T]
+      case x => error("Unable to convert to object of type: " + x)
+    }
+    expectResult(List(Car(1111, "PORCHE"), Car(2222, "BMW"), Car(3333, "MERCEDES"),
+        Car(4444, "VOLKSWAGEN")))(Query.list[Car]("car {nr, name} #(1)"))
     //column alias test
     expectResult(List(("ACCOUNTING,CLARK", -2450.00), ("ACCOUNTING,KING", -5000.00), ("ACCOUNTING,MILLER", -2300.35))) {
       Query.select("emp/dept[10] {dname || ',' || ename name, -sal salary}#(1)") map (r=> (r.name, r.dbl.salary)) toList
