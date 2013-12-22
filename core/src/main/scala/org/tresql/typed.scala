@@ -426,31 +426,3 @@ trait TypedQuery {
   def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10], m11: Manifest[T11], m12: Manifest[T12], m13: Manifest[T13], m14: Manifest[T14], m15: Manifest[T15], m16: Manifest[T16], m17: Manifest[T17], m18: Manifest[T18], m19: Manifest[T19], m20: Manifest[T20], m21: Manifest[T21], m22: Manifest[T22]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22)](expr, params)
   //--------------- END OF GENERATED CODE------------------//
 }
-/* this is used from console to generate methods
-object CodeGen {
-  def typed(method: String, template: (String, String)) {
-    2 to 22 foreach { i =>
-      val types = 1 to i map ("T" + _) mkString ","
-      val mfs = 1 to i map (j => "m" + j + ":Manifest[T" + j + "]") mkString ","
-      println("def " + method + "[" + types + "]" + template._1 + mfs + ") = " + method +
-        "[(" + types + ")]" + template._2)
-    }
-  }
-
-  val typedTemplate = ("(implicit ", "")
-
-  println("-------------typed methods--------------")
-  List("head", "headOption", "unique", "uniqueOption", "list") foreach { typed(_, typedTemplate) }
-
-  println()
-  println("-------------query methods---------------")
-
-  val queryTemplate = ("(expr: String, params: Any*)(implicit ", "(expr, params)")
-
-  List("head", "headOption", "unique", "uniqueOption", "list") foreach { typed(_, queryTemplate) }
-
-  val queryListTemplate = ("(expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection,", "(expr, params)")
-
-  typed("list", queryListTemplate)
-}
-*/
