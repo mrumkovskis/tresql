@@ -8,20 +8,20 @@ import java.sql.Connection
 
 trait Query extends TypedQuery {
 
-  def apply(expr: String, params: Any*): Any = apply(expr, normalizePars(params))
+  def apply(expr: String, params: Any*): Any = apply(expr, normalizePars(params: _*))
 
   def apply(expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection =
     null): Any = build(expr, params, false)(tresqlConn)()
   
   def select(expr: String, params: Any*) = {
-    apply(expr, normalizePars(params)).asInstanceOf[Result]
+    apply(expr, normalizePars(params: _*)).asInstanceOf[Result]
   }
 
   def select(expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection = 
     null) = apply(expr, params)(tresqlConn).asInstanceOf[Result]
    
   def foreach(expr: String, params: Any*)(f: (RowLike) => Unit = (row) => ()) {
-    select(expr, normalizePars(params)) foreach f
+    select(expr, normalizePars(params: _*)) foreach f
   }
   
   def build(expr: String, params: Map[String, Any] = null, reusableExpr: Boolean = true)
@@ -37,15 +37,9 @@ trait Query extends TypedQuery {
     def conn = connection
     override def metaData = metadata.JDBCMetaData("", resources = this)
   }
-  
-  private[tresql] def normalizePars(pars: Seq[Any]):Map[String, Any] = {
-    def map(p:Seq[Any]) = p.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
-    if (pars.size == 1) pars(0) match {
-      case l:Seq[_] => map(l)
-      case m:Map[String, _] => m
-      case x => map(pars)
-    } else map(pars)    
-  }
+
+  private[tresql] def normalizePars(pars: Any*): Map[String, Any] =
+    pars.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
 
   private[tresql] def sel(sql: String, cols: List[QueryBuilder#ColExpr],
     bindVariables: List[Expr], env: Env, allCols: Boolean, identAll: Boolean,
