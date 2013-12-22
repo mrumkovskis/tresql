@@ -79,7 +79,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   
   private[tresql] def nextId(seqName: String): Any = provider.map(_.env.nextId(seqName)).getOrElse {
     //TODO perhaps built expressions can be used to improve performance?
-    val id = Query.unique[Any](resources.idExpr(seqName))(null, scala.reflect.ManifestFactory.Any)
+    val id = Query.unique[Any](resources.idExpr(seqName))
     ids(seqName) = id
     id
   }
