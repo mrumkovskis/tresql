@@ -5,11 +5,6 @@ import scala.reflect.Manifest
 import scala.collection.generic.CanBuildFrom
 
 trait Typed { this: RowLike =>
-  
-  private val primitiveTypes = Set("Int", "Long", "Double", "Boolean", "scala.math.BigDecimal",
-      "java.lang.String", "java.util.Date", "java.sql.Date", "java.sql.Timestamp",
-      "java.lang.Integer", "java.lang.Long", "java.lang.Double", "java.math.BigDecimal",
-      "java.lang.Boolean", "Any")
 
   def typed[T](columnIndex: Int)(implicit m: Manifest[T]): T = m.toString match {
     case "Int" => int(columnIndex).asInstanceOf[T]
@@ -26,52 +21,20 @@ trait Typed { this: RowLike =>
     case "java.lang.Double" => jDouble(columnIndex).asInstanceOf[T]
     case "java.math.BigDecimal" => jBigDecimal(columnIndex).asInstanceOf[T]
     case "java.lang.Boolean" => jBoolean(columnIndex).asInstanceOf[T]
-    case x if x.startsWith("scala.Tuple") => typed[T]
+    case x if x.startsWith("scala.Tuple") => typed((convTuple[Product] _).asInstanceOf[(RowLike, Manifest[T]) => T], m)
     case x if x.startsWith("scala.collection.immutable.List") && m.typeArguments.size == 1 =>
-      result(columnIndex).map(_.typed(null, m.typeArguments.head)).toList.asInstanceOf[T]
+      result(columnIndex).map(_.typed(0)(m.typeArguments.head)).toList.asInstanceOf[T]
     case x => apply(columnIndex).asInstanceOf[T]
   }
 
   def typed[T](name: String)(implicit m: scala.reflect.Manifest[T]): T
 
-  def typed[T](implicit converter: (RowLike, Manifest[T]) => T = null, m: Manifest[T]): T =
-    if (converter != null) converter(this, m)
-    else if (primitiveTypes.contains(m toString)) typed[T](0)
-    else if (m.toString.startsWith("scala.Tuple")) {
-      (m.typeArguments: @unchecked) match {
-        case m1 :: Nil => (typed(0)(m1)).asInstanceOf[T]
-        case m1 :: m2 :: Nil => (typed(0)(m1), typed(1)(m2)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17), typed(17)(m18)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17), typed(17)(m18), typed(18)(m19)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: m20 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17), typed(17)(m18), typed(18)(m19), typed(19)(m20)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: m20 :: m21 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17), typed(17)(m18), typed(18)(m19), typed(19)(m20), typed(20)(m21)).asInstanceOf[T]
-        case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: m20 :: m21 :: m22 :: Nil => (typed(0)(m1), typed(1)(m2), typed(2)(m3), typed(3)(m4), typed(4)(m5), typed(5)(m6), typed(6)(m7), typed(7)(m8), typed(8)(m9), typed(9)(m10), typed(10)(m11), typed(11)(m12), typed(12)(m13), typed(13)(m14), typed(14)(m15), typed(15)(m16), typed(16)(m17), typed(17)(m18), typed(18)(m19), typed(19)(m20), typed(20)(m21), typed(21)(m22)).asInstanceOf[T]
-      }
-    } else {
-      Env.log("Converter not found, primitive or tuple type expected. Found: " + m +
-          ". Trying to use simple cast.", 0)
-      typed[T](0)
-    }
+  def typed[T](implicit converter: (RowLike, Manifest[T]) => T, m: Manifest[T]): T =
+    if (converter != null) converter(this, m) else typed(0).asInstanceOf[T]
 }
 
 trait TypedResult { this: Result =>
-  def head[T](implicit converter: (RowLike, Manifest[T]) => T = null,
-      m: Manifest[T]): T = hasNext match {
+  def head[T](implicit converter: (RowLike, Manifest[T]) => T, m: Manifest[T]): T = hasNext match {
     case true =>
       next
       val v = this.asInstanceOf[RowLike].typed[T]
@@ -80,12 +43,12 @@ trait TypedResult { this: Result =>
     case false => throw new NoSuchElementException("No rows in result")
   }
 
-  def headOption[T](implicit converter: (RowLike, Manifest[T]) => T = null,
+  def headOption[T](implicit converter: (RowLike, Manifest[T]) => T,
       m: Manifest[T]): Option[T] = try Some(head[T]) catch {
     case e: NoSuchElementException => None
   }
 
-  def unique[T](implicit converter: (RowLike, Manifest[T]) => T = null,
+  def unique[T](implicit converter: (RowLike, Manifest[T]) => T,
       m: Manifest[T]): T = hasNext match {
     case true =>
       next
@@ -96,7 +59,7 @@ trait TypedResult { this: Result =>
     case false => error("No rows in result")
   }
 
-  def uniqueOption[T](implicit converter: (RowLike, Manifest[T]) => T = null,
+  def uniqueOption[T](implicit converter: (RowLike, Manifest[T]) => T,
       m: Manifest[T]): Option[T] = hasNext match {
     case true =>
       next
@@ -169,7 +132,7 @@ trait TypedResult { this: Result =>
     case false => None
   }
   
-  def list[T](implicit converter: (RowLike, Manifest[T]) => T = null,
+  def list[T](implicit converter: (RowLike, Manifest[T]) => T,
       m: Manifest[T]) = this.map(r => this.asInstanceOf[RowLike].typed[T]).toList
 
   //--------------- GENERATED CODE------------------//
@@ -285,19 +248,19 @@ trait TypedResult { this: Result =>
 trait TypedQuery {
   import Query._
 
-  def head[T](expr: String, params: Any*)(implicit converter: (RowLike, Manifest[T]) => T = null,
+  def head[T](expr: String, params: Any*)(implicit converter: (RowLike, Manifest[T]) => T,
       m: scala.reflect.Manifest[T]): T = {
     select(expr, normalizePars(params)).head[T]
   }
-  def headOption[T](expr: String, params: Any*)(implicit converter: (RowLike, Manifest[T]) => T = null,
+  def headOption[T](expr: String, params: Any*)(implicit converter: (RowLike, Manifest[T]) => T,
       m: scala.reflect.Manifest[T]): Option[T] = {
     select(expr, normalizePars(params)).headOption[T]
   }
-  def unique[T](expr: String, params: Any*)(implicit converter: (RowLike, Manifest[T]) => T = null,
+  def unique[T](expr: String, params: Any*)(implicit converter: (RowLike, Manifest[T]) => T,
       m: scala.reflect.Manifest[T]): T = {
     select(expr, normalizePars(params)).unique[T]
   }
-  def uniqueOption[T](expr: String, params: Any*)(implicit converter: (RowLike, Manifest[T]) => T = null,
+  def uniqueOption[T](expr: String, params: Any*)(implicit converter: (RowLike, Manifest[T]) => T,
       m: scala.reflect.Manifest[T]): Option[T] = {
     select(expr, normalizePars(params)).uniqueOption[T]
   }
@@ -327,11 +290,11 @@ trait TypedQuery {
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
     select(expr, normalizePars(params)).uniqueOptionAsMap[M]
 
-  def list[T](expr: String, params: Any*)(implicit converter: (RowLike, Manifest[T]) => T = null,
+  def list[T](expr: String, params: Any*)(implicit converter: (RowLike, Manifest[T]) => T,
       m: scala.reflect.Manifest[T]) = select(expr, normalizePars(params)).list[T](converter, m)
 
   def list[T](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection = null,
-       converter: (RowLike, Manifest[T]) => T = null, m: scala.reflect.Manifest[T]) =
+       converter: (RowLike, Manifest[T]) => T, m: scala.reflect.Manifest[T]) =
         select(expr, params)(tresqlConn).list[T]
 
   //--------------- GENERATED CODE------------------//
