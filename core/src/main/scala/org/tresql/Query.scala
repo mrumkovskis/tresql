@@ -51,11 +51,10 @@ trait Query extends TypedQuery {
     bindVars(st, bindVariables)
     var i = 0
     val rs = st.executeQuery
-    def jdbcRcols = Option(rs.getMetaData).map { md =>
-      (1 to md.getColumnCount).foldLeft(List[Column]()) {
+    val md = rs.getMetaData
+    def jdbcRcols = (1 to md.getColumnCount).foldLeft(List[Column]()) {
         (l, j) => i += 1; Column(i, md.getColumnLabel(j), null) :: l
       } reverse
-    } get
     def rcol(c: QueryBuilder#ColExpr) = if (c.separateQuery) Column(-1, c.name, c.col) else {
       i += 1; Column(i, c.name, null)
     }
