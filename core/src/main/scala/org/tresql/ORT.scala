@@ -4,7 +4,7 @@ import scala.collection.immutable.ListMap
 import sys._
 
 /** Object Relational Transformations - ORT */
-object ORT {
+trait ORT {
   
   /** <object name | property name>[:<linked property name>][#(insert | update | delete)] */
   val PROP_PATTERN = """(\w+)(:(\w+))?(#(\w+))?"""r
@@ -17,9 +17,9 @@ object ORT {
     Env log insert
     Query.build(insert, resources, obj, false)()
   }
-  def insert[T](obj: T)(implicit resources: Resources = Env,
+  def insertObj[T](obj: T)(implicit resources: Resources = Env,
       conv: ObjToMapConverter[T], m: Manifest[T]): Any =
-        insert(m.runtimeClass.getName, conv(obj, m))
+        insert(m.erasure.getName, conv(obj, m))
   //TODO update where unique key (not only pk specified)
   def update(name: String, obj: Map[String, _])(implicit resources: Resources = Env): Any = {
     val update = update_tresql(name, obj, resources)
@@ -28,8 +28,8 @@ object ORT {
     Env log update
     Query.build(update, resources, obj, false)()    
   }
-  def update[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T],
-      m: Manifest[T]): Any = update(m.runtimeClass.getName, conv(obj, m)) 
+  def updateObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T],
+      m: Manifest[T]): Any = update(m.erasure.getName, conv(obj, m)) 
   /**
    * Saves object obj specified by parameter name. If object primary key is set object
    * is updated, if object primary key is not set object is inserted. Children are merged
@@ -43,8 +43,8 @@ object ORT {
     Env log saveable.toString
     Query.build(save, resources, saveable, false)()
   }
-  def save[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T],
-      m: Manifest[T]): Any = save(m.runtimeClass.getName, conv(obj, m)) 
+  def saveObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T],
+      m: Manifest[T]): Any = save(m.erasure.getName, conv(obj, m)) 
   def delete(name: String, id: Any)(implicit resources: Resources = Env): Any = {
     val delete = "-" + resources.tableName(name) + "[?]"
     Env log delete
@@ -243,3 +243,5 @@ object ORT {
     refs(0).cols(0)
   } 
 }
+
+object ORT extends ORT
