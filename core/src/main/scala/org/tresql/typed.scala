@@ -7,10 +7,10 @@ import scala.collection.generic.CanBuildFrom
 trait Typed { this: RowLike =>
 
   def typed[T](columnIndex: Int)(implicit m: Manifest[T]): T = m.toString match {
-    case "Int" | "int" => int(columnIndex).asInstanceOf[T]
-    case "Long" | "long" => long(columnIndex).asInstanceOf[T]
-    case "Double" | "double" => double(columnIndex).asInstanceOf[T]
-    case "Boolean" | "boolean" => boolean(columnIndex).asInstanceOf[T]
+    case "Int" => int(columnIndex).asInstanceOf[T]
+    case "Long" => long(columnIndex).asInstanceOf[T]
+    case "Double" => double(columnIndex).asInstanceOf[T]
+    case "Boolean" => boolean(columnIndex).asInstanceOf[T]
     case "scala.math.BigDecimal" => bigdecimal(columnIndex).asInstanceOf[T]
     case "java.lang.String" => string(columnIndex).asInstanceOf[T]
     case "java.util.Date" => date(columnIndex).asInstanceOf[T]
