@@ -402,7 +402,16 @@ class QueryTest extends Suite {
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(), "calculated_children"->List(Map("x"->5)), "deptno"->20)
     expectResult(List(1, List(2)))(ORT.save("emp", obj))
-        
+
+    println("\n---- Object INSERT, UPDATE ------\n")
+    
+    implicit def pohatoMap[T <: Poha](o: T): (String, Map[String, _]) = o match {
+      case Car(nr, name) => "car" -> Map("nr" -> nr, "name" -> name)
+    }
+    expectResult(1)(ORT.insertObj(Car(8888, "OPEL")))
+    expectResult(1)(ORT.updateObj(Car(8888, "SAAB")))
+
+    
     println("\n-------------- CACHE -----------------\n")
     Env.cache map println
     
