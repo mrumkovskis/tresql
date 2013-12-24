@@ -9,7 +9,7 @@ trait ORT {
   /** <object name | property name>[:<linked property name>][#(insert | update | delete)] */
   val PROP_PATTERN = """(\w+)(:(\w+))?(#(\w+))?"""r
   
-  type ObjToMapConverter[T] = (T, Manifest[T]) => Map[String, _]
+  type ObjToMapConverter[T] = (T) => Map[String, _]
   
   def insert(name: String, obj: Map[String, _])(implicit resources: Resources = Env): Any = {
     val insert = insert_tresql(name, obj, null, resources)
@@ -17,9 +17,8 @@ trait ORT {
     Env log insert
     Query.build(insert, resources, obj, false)()
   }
-  def insertObj[T](obj: T)(implicit resources: Resources = Env,
-      conv: ObjToMapConverter[T], m: Manifest[T]): Any =
-        insert(m.erasure.getName, conv(obj, m))
+  def insertObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any =
+        insert(obj.getClass.getName.toLowerCase, conv(obj))
   //TODO update where unique key (not only pk specified)
   def update(name: String, obj: Map[String, _])(implicit resources: Resources = Env): Any = {
     val update = update_tresql(name, obj, resources)
@@ -28,8 +27,8 @@ trait ORT {
     Env log update
     Query.build(update, resources, obj, false)()    
   }
-  def updateObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T],
-      m: Manifest[T]): Any = update(m.erasure.getName, conv(obj, m)) 
+  def updateObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any =
+    update(obj.getClass.getName.toLowerCase, conv(obj)) 
   /**
    * Saves object obj specified by parameter name. If object primary key is set object
    * is updated, if object primary key is not set object is inserted. Children are merged
@@ -43,8 +42,8 @@ trait ORT {
     Env log saveable.toString
     Query.build(save, resources, saveable, false)()
   }
-  def saveObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T],
-      m: Manifest[T]): Any = save(m.erasure.getName, conv(obj, m)) 
+  def saveObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any =
+    save(obj.getClass.getName.toLowerCase, conv(obj)) 
   def delete(name: String, id: Any)(implicit resources: Resources = Env): Any = {
     val delete = "-" + resources.tableName(name) + "[?]"
     Env log delete
