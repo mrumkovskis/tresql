@@ -1,2 +1,2 @@
-version := "5.3-M7-SNAPSHOT"
+version := "5.3-M8-SNAPSHOT"
 
