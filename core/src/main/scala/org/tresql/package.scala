@@ -18,7 +18,7 @@ package object tresql {
   implicit def convBoolean(r: RowLike, m: Manifest[Boolean]) = r.boolean(0)
   implicit def convBigDecimal(r: RowLike, m: Manifest[BigDecimal]) = r.bigdecimal(0)
   implicit def convString(r: RowLike, m: Manifest[String]) = r.string(0)
-  implicit def convDate(r: RowLike, m: Manifest[java.util.Date]): java.util.Date = r.date(0)
+  implicit def convDate(r: RowLike, m: Manifest[java.util.Date]): java.util.Date = r.timestamp(0)
   implicit def convSqlDate(r: RowLike, m: Manifest[java.sql.Date]) = r.date(0)
   implicit def convSqlTimestamp(r: RowLike, m: Manifest[java.sql.Timestamp]) = r.timestamp(0)
   implicit def convJInt(r: RowLike, m: Manifest[java.lang.Integer]) = r.jInt(0)
