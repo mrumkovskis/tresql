@@ -422,7 +422,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       else if (resType == classOf[Boolean]) res.boolean(idx)
       else if (resType == classOf[BigDecimal]) res.bigdecimal(idx)
       else if (resType == classOf[String]) res.string(idx)
-      else if (resType == classOf[java.util.Date]) res.date(idx)
+      else if (resType == classOf[java.util.Date]) res.timestamp(idx)
       else if (resType == classOf[java.sql.Date]) res.date(idx)
       else if (resType == classOf[java.sql.Timestamp]) res.timestamp(idx)
       else if (resType == classOf[java.lang.Integer]) res.jInt(idx)

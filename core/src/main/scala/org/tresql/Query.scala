@@ -174,7 +174,7 @@ trait Query extends TypedQuery {
         case t: java.sql.Time => st.setTime(idx, t)
         /* java.util.Date has to go last, since the java.sql date/time classes subclass it. By default we
 * assume a java.sql.Date value */
-        case d: java.util.Date => st.setDate(idx, new java.sql.Date(d.getTime))
+        case d: java.util.Date => st.setTimestamp(idx, new java.sql.Timestamp(d.getTime))
         case b: Boolean => st.setBoolean(idx, b)
         case b: java.lang.Boolean => st.setBoolean(idx, b)
         case s: String => st.setString(idx, s)
