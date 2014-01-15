@@ -6,8 +6,7 @@ import sys._
 
 //TODO improve json parser so it accepts property names without quotes
 
-case class JSONMetaData(override val dbName:String,
-        val metaData:Map[String, Table]) extends MetaData {
+case class JSONMetaData(val metaData:Map[String, Table]) extends MetaData {
   
   def table(name: String) = metaData(name)
   def tableOption(name:String) = metaData.get(name)
@@ -24,7 +23,7 @@ object JSONMetaData {
   }
 
   def fromFile(file: String) = fromString(scala.io.Source.fromFile(file).mkString)
-  def fromString(s: String) = {val t = build(JSON.parseFull(s)); new JSONMetaData(t._1, t._2)}
+  def fromString(s: String) = {val t = build(JSON.parseFull(s)); new JSONMetaData(t._2)}
 
   private def build(md: Option[Any]) = {
     val hm = scala.collection.mutable.HashMap[String, Table]()

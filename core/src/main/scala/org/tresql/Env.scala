@@ -95,7 +95,6 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   override def idExpr = provider.map(_.env.idExpr).getOrElse(resources.idExpr)
   
   //meta data methods
-  def dbName = metaData.dbName
   def table(name: String) = metaData.table(name)
   def tableOption(name:String) = metaData.tableOption(name)
   def procedure(name: String) = metaData.procedure(name)
@@ -107,7 +106,7 @@ object Env extends Resources {
   //this is for single thread usage
   var sharedConn: java.sql.Connection = null
   //meta data object must be thread safe!
-  private var _metaData: Option[MetaData] = Some(metadata.JDBCMetaData(""))
+  private var _metaData: Option[MetaData] = Some(metadata.JDBCMetaData())
   private var _dialect: Option[PartialFunction[Expr, String]] = None
   private var _idExpr: Option[String => String] = None
   //available functions

@@ -37,7 +37,6 @@ trait MetaData {
   def colOption(col: String): Option[Col] = tableOption(col.substring(0, col.lastIndexOf('.'))).flatMap(
     _.colOption(col.substring(col.lastIndexOf('.') + 1)))
 
-  def dbName: String
   def table(name: String): Table
   def tableOption(name: String): Option[Table]
   def procedure(name: String): Procedure

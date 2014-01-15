@@ -9,12 +9,11 @@ import java.sql.DatabaseMetaData
 
 //TODO all names perhaps should be stored in upper case?
 //This class is thread safe i.e. instance can be used across multiple threads
-class JDBCMetaData(private val db: String, private val defaultSchema: String = null,
+class JDBCMetaData(private val defaultSchema: String = null,
     resources: Resources = Env)
   extends MetaData {
   private val tableCache = new java.util.concurrent.ConcurrentHashMap[String, Table]
   private val procedureCache = new java.util.concurrent.ConcurrentHashMap[String, Procedure]
-  def dbName = db
   def table(name: String) = {
     val conn = resources.conn
     try {
@@ -202,7 +201,7 @@ class JDBCMetaData(private val db: String, private val defaultSchema: String = n
 }
 
 object JDBCMetaData {
-  def apply(db: String, defaultSchema: String = null, resources: Resources = Env) = {
-    new JDBCMetaData(db, defaultSchema, resources)
+  def apply(defaultSchema: String = null, resources: Resources = Env) = {
+    new JDBCMetaData(defaultSchema, resources)
   }
 }
