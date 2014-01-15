@@ -84,6 +84,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
               //return null for empty collection (not to fail in 'in' operator)
               "null"
             }
+          case _: Array[Byte] => "?"
           case a: Array[_] => if (a.length > 0) "?," * (a length) dropRight 1 else {
             if (!binded) QueryBuilder.this._bindVariables.trimEnd(1)
             //return null for empty array (not to fail in 'in' operator)
