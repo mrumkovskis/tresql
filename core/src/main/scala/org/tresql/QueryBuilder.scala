@@ -407,12 +407,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     extends PrimitiveExpr {
     val separateQuery = sepQuery.getOrElse(QueryBuilder.this.separateQueryFlag)
     if (!QueryBuilder.this.allCols) QueryBuilder.this.allCols = col.isInstanceOf[AllExpr]
-    def defaultSQL = col.sql + (if (alias != null) " " + alias else "")
+    def defaultSQL = col.sql + (if (alias != null) " as " + alias else "")
     def name = if (alias != null) alias.stripPrefix("\"").stripSuffix("\"") else col match {
       case IdentExpr(n) => n(n.length - 1)
       case _ => null
     }
-    override def toString = col.toString + (if (alias != null) " " + alias else "")
+    override def toString = col.toString + (if (alias != null) " as " + alias else "")
   }
   case class HiddenColRefExpr(expr: Expr, resType: Class[_]) extends PrimitiveExpr {
     override def apply() = {
