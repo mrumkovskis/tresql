@@ -193,6 +193,8 @@ trait Query extends TypedQuery {
         //OutPar must be matched bellow InOutPar since it is superclass of InOutPar
         case p@OutPar(_) => registerOutPar(st.asInstanceOf[CallableStatement], p, idx)
         //unknown object
+        case Some(o) => bindVar(o); idx -= 1
+        case None => bindVar(null); idx -= 1
         case obj => st.setObject(idx, obj)
       } catch {
         case e:Exception => throw new RuntimeException("Failed to bind variable at index " +
