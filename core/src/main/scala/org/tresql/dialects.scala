@@ -61,6 +61,16 @@ package object dialects {
     }
   }
 
+  object SqlEscapeDialect extends PartialFunction[Expr, String] {
+    def isDefinedAt(e: Expr) = e match {
+      case e.builder.FunExpr("sql", List(e.builder.ConstExpr(s: String)), _) => true
+      case _ => false
+    }
+    def apply(e: Expr) = (e: @unchecked) match {
+      case e.builder.FunExpr("sql", List(e.builder.ConstExpr(s: String)), _) => s
+    }
+  } 
+
   def HSQLDialect = HSQLRawDialect orElse ANSISQLDialect
 
   def OracleDialect = OracleRawDialect orElse ANSISQLDialect
