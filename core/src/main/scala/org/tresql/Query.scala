@@ -181,6 +181,7 @@ trait Query extends TypedQuery {
         case bn: java.math.BigDecimal => st.setBigDecimal(idx, bn)
         case bd: BigDecimal => st.setBigDecimal(idx, bd.bigDecimal)
         case in: java.io.InputStream => st.setBinaryStream(idx, in)
+        case ab: Array[Byte] => st.setBytes(idx, ab)
         //array binding
         case i: scala.collection.Traversable[_] => i foreach (bindVar(_)); idx -= 1
         case a: Array[_] => a foreach (bindVar(_)); idx -= 1
