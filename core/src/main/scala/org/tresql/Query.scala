@@ -8,20 +8,20 @@ import java.sql.Connection
 
 trait Query extends TypedQuery {
 
-  def apply(expr: String, params: Any*): Any = apply(expr, normalizePars(params))
+  def apply(expr: String, params: Any*): Any = apply(expr, normalizePars(params: _*))
 
   def apply(expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection =
     null): Any = build(expr, params, false)(tresqlConn)()
   
   def select(expr: String, params: Any*) = {
-    apply(expr, normalizePars(params)).asInstanceOf[Result]
+    apply(expr, normalizePars(params: _*)).asInstanceOf[Result]
   }
 
   def select(expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection = 
     null) = apply(expr, params)(tresqlConn).asInstanceOf[Result]
    
   def foreach(expr: String, params: Any*)(f: (RowLike) => Unit = (row) => ()) {
-    select(expr, normalizePars(params)) foreach f
+    select(expr, normalizePars(params: _*)) foreach f
   }
   
   def build(expr: String, params: Map[String, Any] = null, reusableExpr: Boolean = true)
@@ -37,14 +37,10 @@ trait Query extends TypedQuery {
     def conn = connection
     override def metaData = metadata.JDBCMetaData("", resources = this)
   }
-  
-  private[tresql] def normalizePars(pars: Seq[Any]):Map[String, Any] = {
-    def map(p:Seq[Any]) = p.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
-    if (pars.size == 1) pars(0) match {
-      case l:Seq[_] => map(l)
-      case m:Map[String, _] => m
-      case x => map(pars)
-    } else map(pars)    
+
+  private[tresql] def normalizePars(pars: Any*): Map[String, Any] = pars match {
+    case Seq(m: Map[String, Any]) => m
+    case l => l.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
   }
 
   private[tresql] def sel(sql: String, cols: List[QueryBuilder#ColExpr],
@@ -55,11 +51,10 @@ trait Query extends TypedQuery {
     bindVars(st, bindVariables)
     var i = 0
     val rs = st.executeQuery
-    def jdbcRcols = Option(rs.getMetaData).map { md =>
-      (1 to md.getColumnCount).foldLeft(List[Column]()) {
+    val md = rs.getMetaData
+    def jdbcRcols = (1 to md.getColumnCount).foldLeft(List[Column]()) {
         (l, j) => i += 1; Column(i, md.getColumnLabel(j), null) :: l
       } reverse
-    } get
     def rcol(c: QueryBuilder#ColExpr) = if (c.separateQuery) Column(-1, c.name, c.col) else {
       i += 1; Column(i, c.name, null)
     }
@@ -179,7 +174,7 @@ trait Query extends TypedQuery {
         case t: java.sql.Time => st.setTime(idx, t)
         /* java.util.Date has to go last, since the java.sql date/time classes subclass it. By default we
 * assume a java.sql.Date value */
-        case d: java.util.Date => st.setDate(idx, new java.sql.Date(d.getTime))
+        case d: java.util.Date => st.setTimestamp(idx, new java.sql.Timestamp(d.getTime))
         case b: Boolean => st.setBoolean(idx, b)
         case b: java.lang.Boolean => st.setBoolean(idx, b)
         case s: String => st.setString(idx, s)

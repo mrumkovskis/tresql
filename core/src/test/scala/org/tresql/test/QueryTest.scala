@@ -41,7 +41,7 @@ class QueryTest extends Suite {
   }
     
   private def execStatements {
-    def parsePars(pars: String, sep:String = ";"): Any = {
+    def parsePars(pars: String, sep:String = ";"): Map[String, Any] = {
       val DF = new java.text.SimpleDateFormat("yyyy-MM-dd")
       val TF = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
       val D = """(\d{4}-\d{1,2}-\d{1,2})""".r
@@ -59,17 +59,19 @@ class QueryTest extends Suite {
         case D(d) => DF.parse(d)
         case T(t) => TF.parse(t)
         case N(n,_) => BigDecimal(n)
-        case A(a, ac) => if (ac.length == 0) List() else parsePars(ac, ",")
+        case A(a, ac) =>
+          if (ac.length == 0) List()
+          else ac.split(",").map(par).toList
         case x => error("unparseable parameter: " + x)        
       }
       val pl = pars.split(sep).map(par).toList
       if (map) {
         var i = 0
-        pl map {_ match {
-          case t@(k, v) => t
-          case x => {i += 1; (i toString, x)}
-        }} toMap
-      } else pl
+        pl map {
+          case (k, v) => (k toString, v)
+          case x => i += 1; (i toString, x)
+        } toMap
+      } else pl.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
     }
     println("\n------------------------ Test TreSQL statements ----------------------\n")
     var nr = 0
@@ -137,7 +139,9 @@ class QueryTest extends Suite {
     expectResult(List(10, "x"))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x"))
     expectResult("x")(op.value)
     expectResult(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)", 10, "ACC%"))
-    expectResult(None)(Query.headOption[Option[_]]("dept[?]", -1))
+    expectResult(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)",
+        Map("1" -> 10, "2" -> "ACC%")))
+    expectResult(None)(Query.headOption[Int]("dept[?]", -1))
     //dynamic tests
     expectResult(1900)(Query.select("salgrade[1] {hisal, losal}").foldLeft(0)((x, r) => x + 
         r.i.hisal + r.i.losal))
@@ -169,6 +173,21 @@ class QueryTest extends Suite {
             Query.list[Int, String, List[(Int, String, List[(Date, Int)])], List[String]] {
       "dept[10]{deptno, dname, |emp[deptno = :1(deptno)]{empno, ename, |[empno]work{wdate, hours}#(1,2) work}#(1) emps," +
       " |car[deptnr = :1(deptno)]{name}#(1) cars}"})
+    expectResult(List((10, "ACCOUNTING"), (20, "RESEARCH")))(
+        Query.list[Int, String]("dept[deptno = ? | deptno = ?]#(1)", 10, 20))
+    //typed objects tests
+    trait Poha
+    case class Car(nr: Int, brand: String) extends Poha
+    case class Tyre(carNr: Int, brand: String) extends Poha
+    implicit def convertRowLiketoPoha[T <: Poha](r: RowLike, m: Manifest[T]): T = m.toString match {
+      case s if s.contains("Car") => Car(r.i.nr, r.s.name).asInstanceOf[T]
+      case s if s.contains("Tyre") => Tyre(r.i.nr, r.s.brand).asInstanceOf[T]
+      case x => error("Unable to convert to object of type: " + x)
+    }
+    expectResult(List(Car(1111, "PORCHE"), Car(2222, "BMW"), Car(3333, "MERCEDES"),
+        Car(4444, "VOLKSWAGEN")))(Query.list[Car]("car {nr, name} #(1)"))
+    expectResult(List(Tyre(3333, "MICHELIN"), Tyre(3333, "NOKIAN")))(
+        Query.list[Tyre]("tyres {carnr nr, brand} #(1, 2)"))
     //column alias test
     expectResult(List(("ACCOUNTING,CLARK", -2450.00), ("ACCOUNTING,KING", -5000.00), ("ACCOUNTING,MILLER", -2300.35))) {
       Query.select("emp/dept[10] {dname || ',' || ename name, -sal salary}#(1)") map (r=> (r.name, r.dbl.salary)) toList
@@ -206,10 +225,16 @@ class QueryTest extends Suite {
       res.read(bytes)
       bytes.toList
     }
+    expectResult(List[Byte](0, 32, 100, 99)){
+      val b = Query.head[Any]("car_image[carnr = ?] {image}", 2222).asInstanceOf[java.sql.Blob].getBinaryStream
+      Stream.continually(b.read).takeWhile(-1 !=).map(_.toByte).toArray.toList
+    }
     expectResult(1)(Query("car_image[carnr = ?]{image} = [?]", 2222,
         new java.io.ByteArrayInputStream(scala.Array[Byte](1, 2, 3, 4, 5, 6, 7))))
     expectResult(List(1, 2, 3, 4, 5, 6, 7))(
         Query.select("car_image[carnr = ?] {image}", 2222).flatMap(_.b("image")).toList)
+    //array binding
+    expectResult(List(10, 20, 30))(Query.list[Int]("dept[deptno in ?]{deptno}#(1)", List(30, 20, 10)))
     //hierarchical inserts, updates test
     expectResult(List(1, List(List(1, 1))))(Query(
       """dept{deptno, dname, loc, +emp {empno, ename, deptno}[:empno, :ename, :deptno] emps} +
@@ -377,7 +402,16 @@ class QueryTest extends Suite {
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(), "calculated_children"->List(Map("x"->5)), "deptno"->20)
     expectResult(List(1, List(2)))(ORT.save("emp", obj))
-        
+
+    println("\n---- Object INSERT, UPDATE ------\n")
+    
+    implicit def pohatoMap[T <: Poha](o: T): (String, Map[String, _]) = o match {
+      case Car(nr, name) => "car" -> Map("nr" -> nr, "name" -> name)
+    }
+    expectResult(1)(ORT.insertObj(Car(8888, "OPEL")))
+    expectResult(1)(ORT.updateObj(Car(8888, "SAAB")))
+
+    
     println("\n-------------- CACHE -----------------\n")
     Env.cache map println
     

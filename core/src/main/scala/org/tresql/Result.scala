@@ -31,14 +31,11 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _co
     if (cols(columnIndex).idx != -1) asAny(cols(columnIndex).idx)
     else row(columnIndex)
   }
-  def apply(columnLabel: String) = {
-    try {
-      apply(colMap(columnLabel))
-    } catch { case _: NoSuchElementException => asAny(rs.findColumn(columnLabel)) }
-  }
-  def typed[T](columnLabel: String)(implicit m: scala.reflect.Manifest[T]): T = {
+  def apply(columnLabel: String) = try apply(colMap(columnLabel))
+    catch { case _: NoSuchElementException => asAny(rs.findColumn(columnLabel)) }
+  def typed[T](columnLabel: String)(implicit m: scala.reflect.Manifest[T]): T =
     typed[T](colMap(columnLabel))
-  }
+
   def columnCount = if (_columnCount == -1) cols.length else _columnCount
   def column(idx: Int) = cols(idx)
   def jdbcResult = rs
