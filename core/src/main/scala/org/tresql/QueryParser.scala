@@ -1,7 +1,7 @@
 package org.tresql
 
 import scala.util.parsing.combinator.JavaTokenParsers
-import scala.util.parsing.input.Reader
+import scala.util.parsing.input.CharSequenceReader
 import sys._
 
 trait QueryParser extends JavaTokenParsers {
@@ -14,7 +14,9 @@ trait QueryParser extends JavaTokenParsers {
     def tresql = ident.mkString(".")
   }
   case class Variable(variable: String, opt: Boolean) extends Exp {
-    def tresql = (if (variable == "?") "?" else ":" + variable) + (if (opt) "?" else "")
+    def tresql = (if (variable == "?") "?" else ":") +
+      (if (variable contains "'") "\"" + variable + "\"" else "'" + variable + "'") +
+      (if (opt) "?" else "")
   }
   case class Id(name: String) extends Exp {
     def tresql = "#" + name
