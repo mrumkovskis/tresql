@@ -110,8 +110,10 @@ class QueryTest extends Suite {
     intercept[Exception](Query.unique[Int]("dept{deptno}#(deptno)"))
     intercept[Exception](Query.unique[Int]("dept[100]{deptno}#(deptno)"))    
     intercept[Exception](Query.head[Int]("dept[100]{deptno}#(deptno)"))    
-    expectResult(None)(Query.headOption[Int]("dept[100]{deptno}#(deptno)"))    
+    expectResult(None)(Query.headOption[Int]("dept[100]{deptno}#(deptno)"))
     expectResult("ACCOUNTING")(Query.unique[String]("dept[10]{dname}#(deptno)"))
+    //option binding
+    expectResult("ACCOUNTING")(Query.unique[String]("dept[?]{dname}#(deptno)", Some(10)))
     expectResult("1981-11-17")(Query.unique[java.sql.Date]("emp[sal = 5000]{hiredate}").toString)    
     expectResult(BigDecimal(10))(Query.unique[BigDecimal]("dept[10]{deptno}#(deptno)"))
     expectResult(5)(Query.unique[Int]("inc_val_5(?)", 0))
