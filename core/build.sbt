@@ -16,7 +16,9 @@ libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "1.9.1" % "test",
 
 publishTo <<= version { v: String =>
   val nexus = "https://oss.sonatype.org/"
-  if (v.trim.endsWith("SNAPSHOT"))
+  if (v.trim.endsWith("LOCAL"))
+    Some( Resolver.file("Local", Path.userHome / ".m2" / "repository" asFile))
+  else if (v.trim.endsWith("SNAPSHOT"))
     Some("snapshots" at nexus + "content/repositories/snapshots")
   else
     Some("releases" at nexus + "service/local/staging/deploy/maven2")
