@@ -1,0 +1,355 @@
+--- 2013.12.03 tresql 5.2 ---
+1. order by syntax improved
+
+  Example:
+
+    emp#(ename, ~birthdate) --> select * from emp order by ename asc, birthdate desc
+
+2. insert, update statement support with query instead of values clause
+
+  Example:
+
+    +emp{ename, birthdate} emp1{name, bdate} --> insert into emp (ename, birthdate) select name, bdate from emp1
+    =emp[empno = 1]{ename, birthdate} emp1[nr = 5]{name, bdate} --> update emp set (ename, birthdate) = (select name, bdate from emp1 where nr = 5) where empno = 1
+
+
+3. multiple filter support
+
+  Example:
+
+    dept d[d.deptno = e.deptno]emp e[deptno = 10][mgr = null]{dname, ename} --> select dname, ename from dept d join emp e on (d.deptno = e.deptno) where (deptno = 10) and (mgr is null)
+    
+
+--- 2013.11.20 tresql 5.1.2 ---
+1. Default join improvement - if pair of mutual relationships is found between two tables foreign key is taken from the left table, primary key from the right
+
+Example:
+
+emp e/emp m {e.ename name, m.ename manager}
+
+2. Distinct syntax support for functions. (Used in aggregate functions)
+
+Example:
+
+(dummy ++ dummy){count(# dummy)} --> select count(distinct dummy) from (select * from dummy union all select * from dummy)
+
+3. Bugfixes.
+
+
+--- 2013.11.20 tresql 5.1.1 ---
+Bugfixes. See tests added.
+
+--- 2013.11.16 tresql 5.1 ---
+1. Hierarchical query join shortcut syntax improvements - ancestor alias join better support.
+
+Example:
+
+dept d{deptno, dname, 
+    |emp[sal >= losal & sal <= hisal]salgrade g {grade, losal, hisal, count(empno) empcount,
+        |[d.deptno = emp.deptno & sal >= g.losal & sal <= g.hisal]emp/dept{ename, emp.deptno, dname, sal}#(empno) emps
+    } (grade, losal, hisal) #(1) salgrades
+}#(deptno)
+
+Fragment 'sal >= g.losal & sal <= g.hisal' during execution is transformed to 'sal >= :1(g_hisal) & sal <= :1(g_losal)'
+
+2. Limit offset syntax improvements.
+
+Example:
+
+dept#(deptno)@(1, 2)
+dept#(deptno)@(3, )  //only offset
+
+--- 2013.11.13 tresql 5.0 ---
+1. Hierarchical query join shortcut syntax support
+
+  1) Default join (join is searched between first table of child query and parent query tables starting from first)
+  
+     dept{dname, |emp{ename}}
+
+  2) Foreign key join
+
+     emp {ename, |[empno_mgr]work{hours}}
+
+  3) Ancestor alias join (at the moment ancestor column id must be rightemost operand of join expresion)
+
+     dept d {dname, |emp {ename, |[d.deptno = emp.deptno]work/emp {hours, ename}}}
+
+  4) No join
+
+     dept{dname, |[]emp{ename}}
+
+  Previous syntax of parent result expressions i.e. :1(empno), :2(deptno) also continues to be valid.
+
+2. Function name can be also qualified identifier. This is added because sometimes db functions need to be prefixed with schema name.
+
+  Example:
+
+  public.my_fun('a')
+
+--- 2013.11.07 tresql 4.2 ---
+valueClause(objectName, propertyName) method is added in NameMap trait.
+Method is used to increase flexibility in ORT insert and update methods
+when forming value clause for column value expressions.
+Default implementation returns bindingVariable expression - :propertyName
+However, if overriden method can return tresql statements etc.
+
+See NameMap trait in Env.scala and QueryTest.scala for details.
+
+--- 2013.10.31 tresql 4.1.1 ---
+insert, update shortcut syntax support enhanced:
+1. * sign can be placed at any position in values clause
+2. * sign can be used in multiple values clauses of insert statement
+
+Examples:
+
+dept {deptno, dname, loc} + [*, "RIGA"]
+dept + [*], [*]
+
+--- 2013.10.31 tresql 4.1 ---
+insert, update shortcut syntax support
+
+Values expression in insert and update statements can be omitted or left empty i.e. [] or
+set as [*]. In this case values expression is generated implicitly with bind variables ?
+Variable count equals to column count.
+
+Columns expression also can be omitted. In this case columns expression is generated implicitly from table
+metadata on which DML statement is performed.
+
+Some examples:
+
+tresql: +emp
+sql: insert into emp (empno, ename, job, mgr, hiredate, sal, comm, deptno) values (?, ?, ?, ?, ?, ?, ?, ?)
+
+tresql: +emp{empno, ename, job}
+sql: insert into emp (empno, ename, job) values (?, ?, ?)
+
+tresql: emp + [7844, *]
+sql: insert into emp (empno, ename, job, mgr, hiredate, sal, comm, deptno) values (7844, ?, ?, ?, ?, ?, ?, ?)
+
+
+tresql: =emp e[?]{e.ename}
+sql: update emp e set e.ename = ? where e.empno = ?
+
+tresql: =emp[?]
+sql: update emp set empno = ?, ename = ?, job = ?, mgr = ?, hiredate = ?, sal = ?, comm = ?, deptno = ? where emp.empno = ?
+
+
+--- 2013.10.15 tresql 4.0.1 ---
+Parsed expression cache fixes.
+
+WeakHashCache is renamed to SimpleCache and is based on java.util.concurrent.ConcurrentHashMap
+Difference from previous version is that cache: java.util.concurrent.ConcurrentHashMap is not
+constructed with java.util.WeakHashMap as a parameter (since Map as a parameter is not delegated map
+as mistakenly taken for earlier).
+
+WeakHashCache is added which is based on java.util.WeakHashMap
+
+--- 2013.10.15 tresql 4.0 ---
+Parsed expression cache added to improve performance.
+
+Upon invocation of method org.tresql.QueryParser.parseExp(expr: String)
+parameter expr is used as a key to find already parsed expression in cache
+(in the case cache is set for the environment) so no actual parsing is done.
+This gives significant performance boost since parsing is very time consuming.
+
+Cache is implemented as a trait org.tresql.Cache
+Configuration is done through org.tresql.Env
+
+Example:
+Env.cache = new WeakHashCache
+
+Default cache implementation is based on java.util.concurrent.ConcurrentHashMap and
+java.util.WeakHashMap
+
+--- 2013.09.16 tresql 3.14 ---
+External functions invocation improvements.
+
+Instead of:
+
+  salgrade {losal, hisal, |plus(:1(1), :1(2))}
+
+now can be written:
+
+  salgrade {plus(losal, hisal)}
+
+Restrictions:
+
+1. Column clause with external function cannot contain all column marker * or all column marker for certain alias i.e. a.*
+2. External function invocation cannot be used in subqueries or from clause queries.
+3. External function cannot be used as an operand in expression or as an argument of another function.
+
+
+--- 2013.09.06 tresql 3.13 ---
+1. Pluggable functions support.
+Example:
+
+  class TestFunctions {
+    def echo(x: String) = x
+    def plus(a: java.lang.Long, b: java.lang.Long) = a + b
+  }
+  Env.functions = new TestFunctions
+
+  salgrade {losal, hisal, |plus(:1(1), :1(2))}#(1,2)
+
+2. Division operation bugfix (since table join shortcut has the same syntax).
+It's possible now to execute statement like this:
+
+emp[](emp{avg(sal) avgsal}) [sal/avgsal <= 1] {count(*)}
+
+--- 2013.08.21 tresql 3.12.1 ---
+ORT support for children insert where child primary key field is also foreign key field to parent
+
+--- 2013.08.17 tresql 3.12 ---
+ORT improvements. See git log.
+
+--- 2013.08.15 tresql 3.11.1 ---
+Implicit left outer join bugfix
+
+Fixed foreign key shortcut join with one member and with foreign key identifier prefixed with table alias i.e.
+
+work w[w.empno_mgr]emp
+
+--- 2013.08.12 tresql 3.11 ---
+1. Implicit left outer join feature.
+
+In the case of join shortcut syntax (default join '/' or foreign key shortcut join '[<fk_olumn>]') implicit outer
+join feature is applied.
+
+For example for statement
+
+work[empno_mgr]emp/dept
+
+following sql select statement is generated
+
+select * from work left join emp on empno_mgr = emp.empno left join dept on dept.deptno = emp.deptno
+
+emp table is left outer joined to work because empno_mgr field of the work table is nullable, dept table is left
+outer joined to emp table because all fields of the emp table are nullable since emp table is left outer joined itself.
+
+Implicit left outer joins are applied only if join shortcut syntax is used!
+
+2. execute method added to Result
+
+Execute method iterates through result rows as well as these of descendant result.
+This ensures execution of dml (update, insert, delete) expressions in colums otherwise
+has no side effect.
+
+--- 2013.06.28 tresql 3.10.1 ---
+Bugfix provided so that this simple case works:
+
+Query.list[String]("dept{dname}#(1)")
+
+--- 2013.06.28 tresql 3.10 ---
+Typesafe capabilities.
+
+Instead of
+
+val (username, companyId) = Query.head[ ( String, Long ) ]("usr[?] {username, company_id}", userId)
+
+or
+
+Query.list[ ( String, String, Double ) ]("emp/dept[?]{ename, dname, sal}#(1)", 10)
+
+one can write like this:
+
+val (username, companyId) = Query.head[String, Long]("usr[?] {username, company_id}", userId)
+
+Query.list[String, String, Double]("emp/dept[?]{ename, dname, sal}#(1)", 10)
+
+--- 2013.06.27 tresql 3.9.1 ---
+Little bugfix.
+
+Parenthesis around column expression can be omited before alias in the case alias is without quotes and if column is binary or unary expression.
+
+Example:
+
+instead of
+
+emp/dept[10] { ( dname || ',' || ename ) name, ( -sal ) salary}
+
+you can write as expected:
+
+emp/dept[10] { dname || ',' || ename name, -sal salary}
+
+--- 2013.06.22 tresql 3.9 ---
+1. Enhanced typesafe capabilities. Now instead of:
+
+    val (username, companyId) = 
+      Query.select("usr[?] {username, company_id}", userId)
+        .map(r => (r.s(0), r.l(1))).toList.head
+    
+one can write like this:
+
+  val (username, companyId) = Query.head[(String, Long)]("usr[?] {username, company_id}", userId)
+
+This means that single value methods now support tuple type.
+
+Also list method is added to Query which returns result as a List of expected Tuple type.
+
+For example:
+
+Query.list[(String, String, Double)]("emp/dept[?]{ename, dname, sal}#(1)", 10)
+
+will return list of desired tuples:
+
+List(("CLARK", "ACCOUNTING", 2450.00), ("KING", "ACCOUNTING", 5000.00),
+      ("MILLER", "ACCOUNTING", 2300.35))
+
+2. first method is removed from Query API on Guntis proposal.
+
+3. dialects are refactored as partial functions. It can create little backward compatibility break
+at the benefit of flexible partial function features i.e. if you have created your own dialect
+it will have to be refactored into partial function.
+
+--- 2013.06.14 tresql 3.8 ---
+Improvements:
+
+1) parenthesis may be omited for in operator with one parameter i.e
+
+emp [id in ?]
+
+instead of
+
+emp [id in (?)]
+
+2) array binding for empty array results in "null". this is useful for passing empty arrays (collection) to tresql so that sql statement does not fail
+
+Example:
+
+Query.select("dept[deptno in ?]", List(List())).toList
+
+will result in followind sql statement:
+
+select * from dept where deptno in (null)
+
+--- 2013.05.16 tresql 3.6 ---
+Ternary comparison feature.
+
+Instead of 
+
+emp [ salary > 100 & salary < 200 ]
+
+one can write
+
+emp [ 100 < salary < 200 ]
+
+--- 2013.05.04 tresql 3.5 ---
+Classic support for in operator.
+
+Before syntax was like this:
+
+dept[deptno in [ 10, 20 ] ]
+dept[deptno !in [ 10, 20 ] ]
+
+now one can write also like this:
+
+dept[deptno in ( 10, 20 ) ]
+dept[deptno !in ( 10, 20 ) ]
+
+--- 2013.03.09 - tresql 3.4 ---
+1. Blob support.
+
+2. Foreign key alias outer join support:
+
+scala> QueryBuilder("work [ empno e, empno_mgr m? ] emp").sql
+res2: String = select * from work join emp e on empno = e.empno left join emp m on empno_mgr = m.empno
