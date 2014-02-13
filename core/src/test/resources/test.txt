@@ -362,6 +362,8 @@ salgrade {plus(losal, hisal), grade, average(losal, hisal), losal, hisal}#(2) --
 salgrade {plus(losal * 2, hisal / 2), grade, average(losal + 1000, hisal - 1000), losal, hisal}#(2) --> [[2000, 1, 950, 700, 1200], [3102, 2, 1300.5, 1201, 1400], [3802, 3, 1700.5, 1401, 2000], [5502, 4, 2500.5, 2001, 3000], [25500, 6, 10500, 10000, 11000]]
 dept[10] {nopars(), dname} --> [["ok", "ACCOUNTING"]]
 dept[10] {dname, nopars()} --> [["ACCOUNTING", "ok"]]
+dummy{concat('a', 'b', 'c')} --> [["abc"]]
+dummy{concat(1, 2, 3)} --> [["123"]]
 
 //external function + column query +  child query
 dept d [?]{dept_desc(dname, (emp e[d.deptno = e.deptno] {count(*)})) desc, |emp{ename}#(1)} --> 10 --> [["ACCOUNTING (3)", [["CLARK"], ["KING"], ["MILLER"]]]] 

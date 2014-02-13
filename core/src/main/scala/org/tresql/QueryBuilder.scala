@@ -275,7 +275,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           case ex: NoSuchMethodException => {
             Env.functions.flatMap(f => f.getClass.getMethods.filter(m =>
               m.getName == name && (m.getParameterTypes match {
-                case Array(par) => par.isInstance(p)
+                case Array(par) => par.isAssignableFrom(classOf[Seq[_]])
                 case _ => false
               })).headOption.map(_.invoke(f, List(p).asInstanceOf[List[Object]]: _*)).orElse(Some(
               org.tresql.Query.call("{call " + sql + "}", QueryBuilder.this.bindVariables, env)))).get
@@ -292,9 +292,11 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     method: java.lang.reflect.Method) extends BaseExpr {
     override def apply() = {
       val p = params map (_())
-      if (method.getParameterTypes.size != params.size) error("Wrong parameter count for method "
-        + method + " " + method.getParameterTypes.size + " != " + params.size)
-      Env.functions.map(method.invoke(_, p.asInstanceOf[List[Object]]: _*))
+      val parTypes = method.getParameterTypes
+      val varargs = parTypes.size == 1 && parTypes(0).isAssignableFrom(classOf[Seq[_]])
+      if (parTypes.size != params.size && !varargs) error("Wrong parameter count for method "
+        + method + " " + parTypes.size + " != " + params.size)
+      Env.functions.map(method.invoke(_, (if (varargs) List(p) else p).asInstanceOf[List[Object]]: _*))
         .getOrElse("Functions not defined in Env!")
     }
     def defaultSQL = error("Method not implemented for external function")
@@ -742,12 +744,23 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           case _ => false
         }) (colExprs flatMap { //external function found
           case ce @ ColExpr(FunExpr(n, pars, false), a, t, _, _) if Env.isDefined(n) && !ce.separateQuery =>
-            val m = Env.functions.flatMap(_.getClass.getMethods.filter(m => m.getName == n &&
-              m.getParameterTypes.size == pars.size).headOption).getOrElse(
+            val m = Env.functions.flatMap(_.getClass.getMethods.filter(m => m.getName == n && {
+              val pt = m.getParameterTypes
+              //parameter count must match or must be of variable count
+              pt.size == pars.size || (pt.size == 1 && pt(0).isAssignableFrom(classOf[Seq[_]]))
+            }).headOption).getOrElse(
               error("External function " + n + " with " + pars.size + " parameters not found"))
             QueryBuilder.this.hasHiddenCols = true
-            val hiddenColPars = m.getParameterTypes.toList.zip(pars).map(tp =>
-              HiddenColRefExpr(tp._2, tp._1))
+            val parameterTypes = (m.getParameterTypes match {
+              case scala.Array(l) if (l.isAssignableFrom(classOf[Seq[_]])) =>
+                m.getGenericParameterTypes()(0).asInstanceOf[java.lang.reflect.ParameterizedType]
+                 .getActualTypeArguments()(0) match {
+                  case c: Class[_] => scala.Array(c) //vararg parameter type
+                }
+              case l => l
+            }) toList
+            val hiddenColPars = parameterTypes.padTo(pars.size,
+                parameterTypes.headOption.orNull).zip(pars).map(tp => HiddenColRefExpr(tp._2, tp._1))
             ColExpr(ExternalFunExpr(n, hiddenColPars, m), a, t, Some(true)) :: hiddenColPars.map(
               ColExpr(_, null, null, Some(ce.separateQuery), true))
           case e => List(e)
