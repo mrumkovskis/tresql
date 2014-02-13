@@ -752,10 +752,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
               error("External function " + n + " with " + pars.size + " parameters not found"))
             QueryBuilder.this.hasHiddenCols = true
             val parameterTypes = (m.getParameterTypes match {
-              case scala.Array(l) if (l.isAssignableFrom(classOf[Seq[_]])) =>
+              case Array(l) if (l.isAssignableFrom(classOf[Seq[_]])) =>
                 m.getGenericParameterTypes()(0).asInstanceOf[java.lang.reflect.ParameterizedType]
                  .getActualTypeArguments()(0) match {
-                  case c: Class[_] => scala.Array(c) //vararg parameter type
+                  case c: Class[_] => Array(c) //vararg parameter type
                 }
               case l => l
             }) toList
