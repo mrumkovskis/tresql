@@ -45,8 +45,8 @@ trait MetaData {
 
 //TODO pk col storing together with ref col (for multi col key secure support)?
 package metadata {
-  case class Table(name: String, comments: String, cols: List[Col], key: Key,
-      rfs: Map[String, List[Ref]], dbname: String) {
+  case class Table(name: String, cols: List[Col], key: Key,
+      rfs: Map[String, List[Ref]]) {
     private val colMap = cols map (c => c.name -> c) toMap
     val refTable: Map[Ref, String] = rfs.flatMap(t => t._2.map(_ -> t._1))
     def col(name: String) = colMap(name)
@@ -55,12 +55,10 @@ package metadata {
   }
   object Table {
     def apply(t: Map[String, Any]): Table = {
-      Table(t("name").toString.toLowerCase, t("comments").asInstanceOf[String], t("cols") match {
+      Table(t("name").toString.toLowerCase, t("cols") match {
         case l: List[Map[String, String]] => l map { c =>
-          Col(c("name").toString.toLowerCase, c("sqlType").asInstanceOf[Int],
-            c("typeName").toString.toLowerCase, c("nullable").asInstanceOf[Boolean],
-            c("size").asInstanceOf[Int], c("decimalDigits").asInstanceOf[Int],
-            c("comments").asInstanceOf[String])
+          Col(c("name").toString.toLowerCase,
+            c("nullable").asInstanceOf[Boolean])
         }
       }, t("key") match { case l: List[String] => Key(l map (_.toLowerCase)) }, t("refs") match {
         case l: List[Map[String, Any]] => (l map { r =>
@@ -69,11 +67,10 @@ package metadata {
               case l: List[List[String]] => l map (rc => Ref(rc map (_.toLowerCase)))
             })
         }).toMap
-      }, if (t.get("dbname") == None) null else t("dbname").asInstanceOf[String])
+      })
     }
   }
-  case class Col(name: String, sqlType: Int, typeName: String, nullable: Boolean,
-    size: Int, decimalDigits: Int, comments: String)
+  case class Col(name: String, nullable: Boolean)
   case class Key(cols: List[String])
   case class Ref(cols: List[String])
   case class Procedure(name: String, comments: String, procType: Int,
