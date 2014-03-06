@@ -398,13 +398,13 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     override def defaultSQL = table.sql + Option(alias).mkString
   }
-  case class TableJoin(val default: Boolean, val expr: Expr, val noJoin: Boolean,
+  case class TableJoin(default: Boolean, expr: Expr, noJoin: Boolean,
     defaultJoinCols: (List[String], List[String])) extends PrimitiveExpr {
     def defaultSQL = error("Not implemented")
     override def toString = "TableJoin(\ndefault: " + default + "\nexpr: " + expr +
       "\nno join flag: " + noJoin + ")\n"
   }
-  case class ColExpr(val col: Expr, val alias: String, val typ: String,
+  case class ColExpr(col: Expr, alias: String, typ: String,
       sepQuery: Option[Boolean] = None, hidden: Boolean = false)
     extends PrimitiveExpr {
     val separateQuery = sepQuery.getOrElse(QueryBuilder.this.separateQueryFlag)
@@ -414,7 +414,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       case IdentExpr(n) => n(n.length - 1)
       case _ => null
     }
-    override def toString = col.toString + (if (alias != null) " " + alias else "")
+    override def toString = col.toString + (if (alias != null) " " + alias else "") + ", hidden = " + hidden
   }
   case class HiddenColRefExpr(expr: Expr, resType: Class[_]) extends PrimitiveExpr {
     override def apply() = {
@@ -739,6 +739,20 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         List(ColExpr(AllExpr(), null, null, Some(false)))
       else {
         val colExprs = cols.map(buildInternal(_, COL_CTX).asInstanceOf[ColExpr])
+        var aliases = colExprs flatMap {
+          case ColExpr(_, a, _, _, _) if a != null => List(a)
+          case ColExpr(IdentExpr(i), null, _, _, _) => List(i.last)
+          case _ => Nil
+        } toSet
+        var uid = 1
+        @scala.annotation.tailrec def uniqueAlias(id: Int): String = {
+          val a = "t" + id
+          if (!(aliases contains a)) {
+            aliases += a
+            uid = id + 1
+            a
+          } else uniqueAlias(id + 1)
+        }
         (if (colExprs.exists {
           case ColExpr(FunExpr(n, _, false), _, _, _, _) => Env.isDefined(n)
           case _ => false
@@ -761,15 +775,15 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
             }) toList
             val hiddenColPars = parameterTypes.padTo(pars.size,
                 parameterTypes.headOption.orNull).zip(pars).map(tp => HiddenColRefExpr(tp._2, tp._1))
-            ColExpr(ExternalFunExpr(n, hiddenColPars, m), a, t, Some(true)) :: hiddenColPars.map(
-              ColExpr(_, null, null, Some(ce.separateQuery), true))
+           ColExpr(ExternalFunExpr(n, hiddenColPars, m), a, t, Some(true)) ::
+              hiddenColPars.map(ColExpr(_, uniqueAlias(uid), null, Some(ce.separateQuery), true))
           case e => List(e)
         }).groupBy(_.hidden) match { //put hidden columns at the end
           case m: Map[Boolean, ColExpr] => m(false) ++ m.getOrElse(true, Nil)
         }
         else colExprs) ++
           //for top level queries add hidden columns used in filters of descendant queries
-          (if (ctxStack.headOption.orNull == QUERY_CTX) joinsWithChildrenColExprs else Nil)
+          (if (ctxStack.headOption.orNull == QUERY_CTX) joinsWithChildrenColExprs else Nil)  
       }
     }
     def buildFilter(pkTable: Table, filterList: List[Arr]): Expr = {
