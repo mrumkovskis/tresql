@@ -102,7 +102,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   case class IdExpr(val seqName: String) extends BaseExpr {
     override def apply() = {
       env.tableOption(seqName).map(_.key.cols).filter(_.size == 1).map(_(0))
-        .filter(env.contains(_)).flatMap(key => Option(env(key))).map { id =>
+        .filter(env contains).flatMap(key => Option(env(key))).map { id =>
           //if primary key is set as an environment variable use it instead of sequence
           env.currId(seqName, id)
           id
