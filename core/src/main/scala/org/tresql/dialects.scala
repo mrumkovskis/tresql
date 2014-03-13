@@ -35,11 +35,19 @@ package object dialects {
     def isDefinedAt(e: Expr) = e match {
       case e.builder.BinExpr("-", _, _) => true
       case e: QueryBuilder#SelectExpr if e.limit != null || e.offset != null => true
+      case e: QueryBuilder#SelectExpr if e.cols.headOption.map {
+        _.col match {
+          case f: QueryBuilder#FunExpr if f.name == "optimizer_hint" && f.params.size == 1 &&
+            f.params.head.isInstanceOf[QueryBuilder#ConstExpr] => true
+          case _ => false
+        }
+      } getOrElse false => true
       case _ => false
     }
     def apply(e: Expr) = e match {
       case e.builder.ConstExpr(true) => "'Y'"
       case e.builder.ConstExpr(false) => "'N'"
+      case e.builder.FunExpr("optimizer_hint", List(e.builder.ConstExpr(s: String)), false) => s
       case e.builder.BinExpr("-", lop, rop) =>
         lop.sql + (if (e.exprType.getSimpleName == "SelectExpr") " minus " else " - ") + rop.sql
       case e: QueryBuilder#SelectExpr if e.limit != null || e.offset != null =>
@@ -55,8 +63,21 @@ package object dialects {
                 "select * from (select w.*, rownum rnum from (" + ns.sql + ") w) where rnum > " + o.sql
               case _ =>
                 "select * from (select w.*, rownum rnum from (" + ns.sql +
-                ") w where rownum <= " + l.sql + ") where rnum > " + o.sql
+                  ") w where rownum <= " + l.sql + ") where rnum > " + o.sql
             }
+        }
+      case e: QueryBuilder#SelectExpr if e.cols.headOption.map {
+        _.col match {
+          case f: QueryBuilder#FunExpr if f.name == "optimizer_hint" && f.params.size == 1 &&
+            f.params.head.isInstanceOf[QueryBuilder#ConstExpr] => true
+          case _ => false
+        }
+      } getOrElse false =>
+        val b = e.builder
+        e match {
+          case s @ b.SelectExpr(_, _,
+              b.ColExpr(b.FunExpr(_, List(b.ConstExpr(h)), _), _, _, _, _) :: t, _, _, _, _, _, _, _) =>
+                 "select " + String.valueOf(h) + (s.copy(cols = t).sql substring 6)
         }
     }
   }
@@ -69,7 +90,7 @@ package object dialects {
     def apply(e: Expr) = (e: @unchecked) match {
       case e.builder.FunExpr("sql", List(e.builder.ConstExpr(s: String)), _) => s
     }
-  } 
+  }
 
   def HSQLDialect = HSQLRawDialect orElse ANSISQLDialect
 
