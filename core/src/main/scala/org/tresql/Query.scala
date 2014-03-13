@@ -31,7 +31,7 @@ trait Query extends TypedQuery {
   def build(expr: String, resources: Resources, params: Map[String, Any], reusableExpr: Boolean): Expr = 
     QueryBuilder(expr, new Env(params, resources, reusableExpr))
        
-  def parse(expr: String) = QueryParser.parseAll(expr)
+  def parse(expr: String) = QueryParser.parseExp(expr)
 
   private def resources(connection: java.sql.Connection) = new Resources {
     def conn = connection
