@@ -228,30 +228,29 @@ trait QueryParsers extends StandardTokenParsers {
       case x => res.zipWithIndex.map(t => if (t._2 < x && !t._1.nullable) t._1.copy(nullable = true) else t._1)
     }
   }
-  def column = new Parser[Col] {
-    def parser = (qualifiedIdentAll |
-      (expr ~ opt(":" ~> ident) ~ opt(stringLit | qualifiedIdent))) ^^ {
-        case i: IdentAll => Col(i, null, null)
-        case (o @ Obj(_, a, _, _, _)) ~ (typ: Option[String]) ~ None => Col(o, a, typ orNull)
-        case e ~ (typ: Option[String]) ~ (a: Option[_]) => Col(e, a map {
-          case Ident(i) => i.mkString; case s => "\"" + s + "\""
-        } orNull, typ orNull)
+  def column = (qualifiedIdentAll |
+    (expr ~ opt(":" ~> ident) ~ opt(stringLit | qualifiedIdent))) ^^ {
+      case i: IdentAll => Col(i, null, null)
+      case (o @ Obj(_, a, _, _, _)) ~ (typ: Option[String]) ~ None => Col(o, a, typ orNull)
+      case e ~ (typ: Option[String]) ~ (a: Option[_]) => Col(e, a map {
+        case Ident(i) => i.mkString; case s => "\"" + s + "\""
+      } orNull, typ orNull)
+    } ^^ { pr =>
+      def extractAlias(expr: Any): String = expr match {
+        case BinOp(_, lop, rop) => extractAlias(rop)
+        case UnOp(_, op) => extractAlias(op)
+        case Obj(_, alias, _, null, _) => alias
+        case _ => null
       }
-    def extractAlias(expr: Any): String = expr match {
-      case BinOp(_, lop, rop) => extractAlias(rop)
-      case UnOp(_, op) => extractAlias(op)
-      case Obj(_, alias, _, null, _) => alias
-      case _ => null
-    }
-    def apply(in: Input) = parser(in) match {
-      case r @ Success(Col(_: IdentAll | _: Obj, _, _), i) => r
-      case s @ Success(c @ Col(e, null, _), i) => extractAlias(e) match {
-        case null => s
-        case x => Success(c.copy(alias = x), i)
+      pr match {
+        case c @ Col(_: IdentAll | _: Obj, _, _) => c
+        case c @ Col(e, null, _) => extractAlias(e) match {
+          case null => c
+          case x => c.copy(alias = x)
+        }
+        case r => r
       }
-      case r => r
     }
-  }
   def columns: Parser[Cols] = (opt("#") <~ "{") ~ rep1sep(column, ",") <~ "}" ^^ {
     case d ~ c => Cols(d != None, c)
   }
@@ -273,34 +272,29 @@ trait QueryParsers extends StandardTokenParsers {
         }
       }
     }
-  def query: Parser[Any] = new Parser[Any] {
-    def parser = objs ~ filters ~ opt(columns) ~ opt(group) ~ opt(order) ~
-      opt(offsetLimit) ^^ {
-        case (t :: Nil) ~ Filters(Nil) ~ None ~ None ~ None ~ None => t
-        case t ~ f ~ c ~ g ~ o ~ l => Query(t, f, c.map(_.cols) orNull,
-          c.map(_.distinct) getOrElse false, g.orNull, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
+  def query: Parser[Any] = objs ~ filters ~ opt(columns) ~ opt(group) ~ opt(order) ~
+    opt(offsetLimit) ^^ {
+      case (t :: Nil) ~ Filters(Nil) ~ None ~ None ~ None ~ None => t
+      case t ~ f ~ c ~ g ~ o ~ l => Query(t, f, c.map(_.cols) orNull,
+        c.map(_.distinct) getOrElse false, g.orNull, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
+    } ^^ { pr =>
+      def toDivChain(objs: List[Obj]): Any = objs match {
+        case o :: Nil => o.obj
+        case l => BinOp("/", l.head.obj, toDivChain(l.tail))
       }
-    def toDivChain(objs: List[Obj]): Any = objs match {
-      case o :: Nil => o.obj
-      case l => BinOp("/", l.head.obj, toDivChain(l.tail))
-    }
-    def apply(in: Input) = parser(in) match {
-      //check for division chain
-      case r @ Success(Query(objs, Filters(Nil), null, false, null, null, null, null), i) =>
-        if (objs.forall {
+      pr match {
+        case Query(objs, Filters(Nil), null, false, null, null, null, null) if objs forall {
           case Obj(_, null, DefaultJoin, null, _) | Obj(_, null, null, null, _) => true
           case _ => false
-        }) Success(toDivChain(objs), i) /*division chain found*/ else r
-      case r => r
+        } => toDivChain(objs)
+        case q => q
+      }
     }
-  }
-  def queryWithCols: Parser[Any] = new Parser[Any] {
-    def apply(in: Input) = query(in) match {
-      case r @ Success(Query(objs, _, cols, _, _, _, _, _), i) if cols != null => r
-      case r @ Success(x, i) => Failure("Query must contain column clause: " + x, i)
-      case r => r
-    }
-  }
+      
+  def queryWithCols: Parser[Any] = query ^? ({
+      case q @ Query(objs, _, cols, _, _, _, _, _) if cols != null => q
+    }, {case x => "Query must contain column clause: " + x})
+
   def insert: Parser[Insert] = (("+" ~> qualifiedIdent ~ opt(ident) ~ opt(columns) ~
     opt(queryWithCols | repsep(array, ","))) |
     ((qualifiedIdent ~ opt(ident) ~ opt(columns) <~ "+") ~ rep1sep(array, ","))) ^^ {
@@ -329,30 +323,23 @@ trait QueryParsers extends StandardTokenParsers {
   def unaryExpr = delete | operand | negation | not | sep | desc
   def mulDiv: Parser[Any] = unaryExpr ~ rep("*" ~ unaryExpr | "/" ~ unaryExpr) ^^ binOp
   def plusMinus: Parser[Any] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ binOp
-  def comp: Parser[~[Any, List[~[String, Any]]]] = plusMinus ~
-    rep(("<=" | ">=" | "<" | ">" | "!=" | "=" | "~~" | "!~~" | "~" | "!~" | "in" | "!in") ~ plusMinus)
-  //this is for friendly error message
-  def compTernary = new Parser[Any] {
-    def apply(in: Input) = comp(in) match {
-      case s @ Success(r, i) => try Success(compBinOp(r), i) catch {
-        case e => Failure(e.getMessage, i)
-      }
-      case r => r
-    }
-    def compBinOp(p: ~[Any, List[~[String, Any]]]): Any = p match {
-      case lop ~ Nil => lop
-      case lop ~ ((o ~ rop) :: Nil) => BinOp(o, lop, rop)
-      case lop ~ List((o1 ~ mop), (o2 ~ rop)) => BinOp("&", BinOp(o1, lop, mop), BinOp(o2, mop, rop))
-      case lop ~ x => sys.error("Ternary comparison operation is allowed, however, here " + (x.size + 1) +
-        " operands encountered.")
-    }
-  }
+  def comp: Parser[Any] = plusMinus ~
+    rep(("<=" | ">=" | "<" | ">" | "!=" | "=" | "~~" | "!~~" | "~" | "!~" | "in" | "!in") ~ plusMinus) ^? (
+      {
+        case lop ~ Nil => lop
+        case lop ~ ((o ~ rop) :: Nil) => BinOp(o, lop, rop)
+        case lop ~ List((o1 ~ mop), (o2 ~ rop)) => BinOp("&", BinOp(o1, lop, mop), BinOp(o2, mop, rop))
+      },
+      {
+        case lop ~ x => "Ternary comparison operation is allowed, however, here " + (x.size + 1) +
+          " operands encountered."
+      })
   def in: Parser[In] = plusMinus ~ ("in" | "!in") ~ "(" ~ rep1sep(plusMinus, ",") <~ ")" ^^ {
     case lop ~ "in" ~ "(" ~ rop => In(lop, rop, false)
     case lop ~ "!in" ~ "(" ~ rop => In(lop, rop, true)
   }
   //in parser should come before comp so that it is not taken for in function which is illegal
-  def logicalOp = in | compTernary
+  def logicalOp = in | comp
   def expr: Parser[Any] = logicalOp ~ rep("&" ~ logicalOp | "|" ~ logicalOp) ^^ binOp
   def exprList: Parser[Any] = repsep(expr, ",") ^^ {
     case e :: Nil => e
