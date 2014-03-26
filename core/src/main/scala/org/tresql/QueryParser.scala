@@ -1,10 +1,11 @@
 package org.tresql
 
-object QueryParser extends parsing.QueryParsers /*with scala.util.parsing.combinator.PackratParsers*/ {
+object QueryParser extends parsing.QueryMemParsers {
 
   def parseExp(expr: String): Any = {
     Env.cache.flatMap(_.get(expr)).getOrElse {
-      val e = phrase(exprList)(/*new PackratReader(*/new lexical.Scanner(expr)/*)*/) match {
+      intermediateResults.value.clear
+      val e = phrase(exprList)(new lexical.Scanner(expr)) match {
         case Success(r, _) => r
         case x => sys.error(x.toString)
       }
