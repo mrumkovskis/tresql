@@ -1,7 +1,7 @@
 package org.tresql.parsing
 
 trait MemParsers extends scala.util.parsing.combinator.Parsers {
-  val intermediateResults = new scala.util.DynamicVariable(scala.collection.mutable.Map[(String, Int), ParseResult[Any]]())
+  protected val intermediateResults = new scala.util.DynamicVariable(scala.collection.mutable.Map[(String, Int), ParseResult[Any]]())
 
   class MemParser[+T](underlying: Parser[T]) extends Parser[T] {
     def apply(in: Input) = intermediateResults.value.get(underlying.toString -> in.offset)
