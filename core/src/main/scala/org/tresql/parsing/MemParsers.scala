@@ -7,11 +7,9 @@ trait MemParsers extends scala.util.parsing.combinator.Parsers {
 
   class MemParser[+T](underlying: Parser[T]) extends Parser[T] {
     def apply(in: Input) = intermediateResults.get.get(underlying.toString -> in.offset)
-      .map(_.asInstanceOf[ParseResult[T]])
-      .getOrElse {
-        val o = in.offset
+      .map(_.asInstanceOf[ParseResult[T]]).getOrElse {
         val r = underlying(in)
-        intermediateResults.get += ((underlying.toString -> o) -> r)
+        intermediateResults.get += ((underlying.toString -> in.offset) -> r)
         r
       }
   }
