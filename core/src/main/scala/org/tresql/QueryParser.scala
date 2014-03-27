@@ -4,13 +4,15 @@ object QueryParser extends parsing.QueryMemParsers {
 
   def parseExp(expr: String): Any = {
     Env.cache.flatMap(_.get(expr)).getOrElse {
-      intermediateResults.value.clear
-      val e = phrase(exprList)(new lexical.Scanner(expr)) match {
-        case Success(r, _) => r
-        case x => sys.error(x.toString)
-      }
-      Env.cache.map(_.put(expr, e))
-      e
+      try {
+        intermediateResults.get.clear
+        val e = phrase(exprList)(new lexical.Scanner(expr)) match {
+          case Success(r, _) => r
+          case x => sys.error(x.toString)
+        }
+        Env.cache.map(_.put(expr, e))
+        e
+      } finally intermediateResults.get.clear
     }
   }
 
@@ -37,7 +39,7 @@ object QueryParser extends parsing.QueryMemParsers {
         case Cols(_, cols) => bindVars(cols)
         case Grp(cols, hv) =>
           bindVars(cols); bindVars(hv)
-        case Ord(cols) => cols.foreach(c=> bindVars(c._2))
+        case Ord(cols) => cols.foreach(c => bindVars(c._2))
         case Query(objs, filters, cols, _, gr, ord, _, _) => {
           bindVars(objs)
           bindVars(filters)
