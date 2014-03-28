@@ -40,22 +40,19 @@ object QueryParser extends parsing.QueryMemParsers {
         case Grp(cols, hv) =>
           bindVars(cols); bindVars(hv)
         case Ord(cols) => cols.foreach(c => bindVars(c._2))
-        case Query(objs, filters, cols, _, gr, ord, _, _) => {
+        case Query(objs, filters, cols, _, gr, ord, _, _) =>
           bindVars(objs)
           bindVars(filters)
           bindVars(cols)
           bindVars(gr)
           bindVars(ord)
-        }
-        case Insert(_, _, cols, vals) => {
+        case Insert(_, _, cols, vals) =>
           bindVars(cols)
           bindVars(vals)
-        }
-        case Update(_, _, filter, cols, vals) => {
+        case Update(_, _, filter, cols, vals) =>
           bindVars(filter)
           bindVars(cols)
           bindVars(vals)
-        }
         case Delete(_, _, filter) => bindVars(filter)
         case Arr(els) => bindVars(els)
         case Filters(f) => bindVars(f)
