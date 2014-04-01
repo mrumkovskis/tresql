@@ -38,6 +38,7 @@ class QueryTest extends Suite {
   
   def test {
     execStatements
+    (new TresqlJavaApiTest).run
   }
     
   private def execStatements {
