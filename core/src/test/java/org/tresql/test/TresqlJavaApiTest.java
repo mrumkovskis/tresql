@@ -9,16 +9,17 @@ import org.tresql.SimpleCache;
 import org.tresql.java_api.*;
 
 public class TresqlJavaApiTest implements Runnable {
-    static class TresqlJavaApiTestFunctions {
-        public String echo(String s) {
-            return s;
-        }
+	
+	public static class TresqlJavaApiTestFunctions {
+	    public String echo(String s) {
+	        return s;
+	    }
 
-        public Long plus(Long a, Long b) {
-            return a + b;
-        }
-    }
-
+	    public Long plus(Long a, Long b) {
+	        return a + b;
+	    }
+	}
+	
     public void run() {
         println("");
         println("---- Testing Java API ----");
@@ -68,6 +69,11 @@ public class TresqlJavaApiTest implements Runnable {
         for (Row r : Query.select("dept[deptno < ?]{deptno, dname}", 40)) {
             println("" + r.int_(0) + ": " + r.string(1));
         }
+        
+        println("");
+        for (Row r : Query.select("dummy {plus(1, 2)}")) {
+            println("" + r.long_(0));
+        }        
         println("--------------------------");
         println("");
     }
