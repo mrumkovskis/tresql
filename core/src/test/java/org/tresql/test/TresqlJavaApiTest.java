@@ -72,7 +72,7 @@ public class TresqlJavaApiTest implements Runnable {
         
         println("");
         for (Row r : Query.select("dummy {plus(1, 2)}")) {
-            println("" + r.long_(0));
+            println("" + r.l(0));
         }        
         println("--------------------------");
         println("");
