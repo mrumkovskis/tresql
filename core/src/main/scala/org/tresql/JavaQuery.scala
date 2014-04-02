@@ -2,6 +2,7 @@ package org.tresql;
 import java.util.{ ArrayList, List => JList, Map => JMap }
 import scala.collection.JavaConversions._
 
+@deprecated
 object JavaQuery {
 
   def ids(expr: String, params: JMap[String, Any]): JList[java.lang.Long] = {
