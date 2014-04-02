@@ -38,7 +38,6 @@ public class TresqlJavaApiTest implements Runnable {
         Env.setDialect(Dialects.InsensitiveCmp("ĀŠāš", "ASas").orElse(
                 Dialects.HSQL()));
         Env.getFunctions();
-        // TODO TEST function execution, check function results
         Env.setFunctions(new TresqlJavaApiTestFunctions());
         println("id expr: " + Env.getIdExprFunc().getIdExpr("my_table"));
         Env.setIdExprFunc(new IdExprFunc() {
@@ -79,6 +78,16 @@ public class TresqlJavaApiTest implements Runnable {
                 println("  " + er.s("ename"));
             }
         }
+
+        println("");
+        for (Row r : Query.select("dept[60]{deptno, dname}")) {
+            println("" + r.i(0) + ": " + r.s(1));
+        }
+        Query.execute("dept[60]{dname} = ['POLAR FOX']");
+        for (Row r : Query.select("dept[60]{deptno, dname}")) {
+            println("" + r.i("deptno") + ": " + r.s("dname"));
+        }
+
         println("");
         for (Row r : Query.select("dummy {plus(1, 2)}")) {
             println("" + r.l(0));
