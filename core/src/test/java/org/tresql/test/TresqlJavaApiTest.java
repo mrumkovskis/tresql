@@ -20,6 +20,7 @@ public class TresqlJavaApiTest {
     }
 
     public void run() throws Exception {
+        println("");
         println("---- Testing Java API ----");
         Env.setLogger(new Logger() {
             // TODO test msg laziness
@@ -57,7 +58,18 @@ public class TresqlJavaApiTest {
         println(deptnos);
         if (!ids.contains(10L) || !ids.contains(20L))
             throw new RuntimeException("Failed to select ids");
+
+        println("");
+        for (Row r : Query.select("dept[deptno < 100]{deptno, dname}")) {
+            println("" + r.i(0) + ": " + r.s(1));
+        }
+
+        println("");
+        for (Row r : Query.select("dept[deptno < ?]{deptno, dname}", 40)) {
+            println("" + r.int_(0) + ": " + r.string(1));
+        }
         println("--------------------------");
+        println("");
     }
 
     private void println(String s) {
