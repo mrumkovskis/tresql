@@ -513,4 +513,4 @@ trait RowLike extends Dynamic with Typed {
   def column(idx: Int): Column
 }
 
-case class Column(val idx: Int, val name: String, private[tresql] val expr: Expr)
+case class Column(idx: Int, name: String, private[tresql] val expr: Expr)
