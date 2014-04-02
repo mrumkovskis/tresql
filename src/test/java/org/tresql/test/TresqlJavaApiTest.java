@@ -9,17 +9,17 @@ import org.tresql.SimpleCache;
 import org.tresql.java_api.*;
 
 public class TresqlJavaApiTest implements Runnable {
-	
-	public static class TresqlJavaApiTestFunctions {
-	    public String echo(String s) {
-	        return s;
-	    }
 
-	    public Long plus(Long a, Long b) {
-	        return a + b;
-	    }
-	}
-	
+    public static class TresqlJavaApiTestFunctions {
+        public String echo(String s) {
+            return s;
+        }
+
+        public Long plus(Long a, Long b) {
+            return a + b;
+        }
+    }
+
     public void run() {
         println("");
         println("---- Testing Java API ----");
@@ -69,20 +69,20 @@ public class TresqlJavaApiTest implements Runnable {
         for (Row r : Query.select("dept[deptno < ?]{deptno, dname}", 40)) {
             println("" + r.int_(0) + ": " + r.string(1));
         }
-        
+
         println("");
         java.util.Map<String, Object> pars = new java.util.HashMap<String, Object>();
         pars.put("id", 10);
         for (Row r : Query.select("dept[deptno = :id]{deptno, dname, |emp {ename} emps}", pars)) {
             println("" + r.int_(0) + ": " + r.string(1) + ": " + "emps:");
             for (Row er : r.result("emps")) {
-            	println("  " + er.s("ename"));
+                println("  " + er.s("ename"));
             }
-        }       
+        }
         println("");
         for (Row r : Query.select("dummy {plus(1, 2)}")) {
             println("" + r.l(0));
-        }        
+        }
         println("--------------------------");
         println("");
     }
