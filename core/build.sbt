@@ -14,6 +14,10 @@ scalacOptions <<= (scalaVersion, scalacOptions) map
 libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "1.9.1" % "test", 
                             "org.hsqldb" % "hsqldb" % "2.2.8" % "test")
 
+unmanagedSources in Test <<= (scalaVersion, unmanagedSources in Test) map {
+  (v, d) => (if (v.startsWith("2.10")) d else d filterNot (_.getPath endsWith ".java")).get
+}
+
 publishTo <<= version { v: String =>
   val nexus = "https://oss.sonatype.org/"
   if (v.trim.endsWith("SNAPSHOT"))

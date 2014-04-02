@@ -8,7 +8,7 @@ import org.tresql.JavaQuery;
 import org.tresql.SimpleCache;
 import org.tresql.java_api.*;
 
-public class TresqlJavaApiTest {
+public class TresqlJavaApiTest implements Runnable {
     static class TresqlJavaApiTestFunctions {
         public String echo(String s) {
             return s;
@@ -19,7 +19,7 @@ public class TresqlJavaApiTest {
         }
     }
 
-    public void run() throws Exception {
+    public void run() {
         println("");
         println("---- Testing Java API ----");
         Env.setLogger(new Logger() {

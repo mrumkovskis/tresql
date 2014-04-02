@@ -38,7 +38,8 @@ class QueryTest extends Suite {
   
   def test {
     execStatements
-    (new TresqlJavaApiTest).run
+    if (util.Properties.versionString contains "2.10") 
+      Class.forName("org.tresql.test.TresqlJavaApiTest").newInstance.asInstanceOf[Runnable].run
   }
     
   private def execStatements {
