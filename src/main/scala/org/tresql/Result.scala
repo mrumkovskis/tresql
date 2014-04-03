@@ -191,8 +191,6 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _co
     }
     Row(Vector(b: _*))
   }
-  
-  def iterator = toRow iterator
 
   /**
    * iterates through this result rows as well as these of descendant result
@@ -516,7 +514,6 @@ trait RowLike extends Dynamic with Typed {
   def columnCount: Int
   def rowToMap: Map[String, Any]
   def column(idx: Int): Column
-  def iterator: Iterator[Any]
 }
 
 case class Column(idx: Int, name: String, private[tresql] val expr: Expr)
