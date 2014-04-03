@@ -15,7 +15,8 @@ class Functions {
   def mkString(res: Result, colSep: String): String = mkString(res, colSep, "\n")
   def mkString(res: Result, colSep: String, rowSep: String) = {
     val sb = new scala.collection.mutable.StringBuilder()
-    res foreach { r => sb.append(r.content.filter(_ != null).mkString(colSep)).append(rowSep) }
+    res foreach { r => sb.append(0 to (r.columnCount - 1) map (r(_)) filter(_ != null) mkString(colSep))
+      .append(rowSep) }
     res.close
     if (sb.length >= rowSep.length) sb.delete(sb.length - rowSep.length, sb.length).toString
     else sb.toString

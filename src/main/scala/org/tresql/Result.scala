@@ -169,28 +169,30 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _co
       case _: NoSuchElementException => jBoolean(rs.findColumn(columnLabel))
     }
 
-  override def toList = this.map(r => Row(this.content)).toList
+  override def toList = this.map(_ => toRow).toList
 
-  def toListOfMaps: List[Map[String, _]] = this.map(r => rowAsMap).toList
+  def toListOfMaps: List[Map[String, _]] = this.map(r => rowToMap).toList
+  def toListOfRows: List[Row] = toList.asInstanceOf[List[Row]]
 
-  override def rowToMap = rowAsMap
-  def rowAsMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
+  def rowToMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
     case r: Result => r.toListOfMaps
     case x => x
   })).toMap
 
-  def content = {
+  def toRow: Row = {
     val b = new scala.collection.mutable.ListBuffer[Any]
     var i = 0
     while (i < columnCount) {
       b += (this(i) match {
-        case r: Result => r.toList
+        case r: Result => r.toListOfRows
         case x => x
       })
       i += 1
     }
-    Vector(b: _*)
+    Row(Vector(b: _*))
   }
+  
+  def iterator = toRow iterator
 
   /**
    * iterates through this result rows as well as these of descendant result
@@ -234,22 +236,18 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _co
     }
   }
 
-  case class Row(row: Seq[Any]) extends RowLike {
+  case class Row(row: Seq[Any]) extends Seq[Any] with RowLike {
     def apply(idx: Int) = row(idx)
-    def apply(name: String) = error("unsupported method")
-    def typed[T](name: String)(implicit m: scala.reflect.Manifest[T]) = error("unsupported method")
-    def content = row
-    def columnCount = row.length
+    def iterator = row.iterator
+    def length = row.length
+    def columnCount = length
+    def apply(name: String) = row(Result.this.colMap(name))
+    def typed[T](name: String)(implicit m: scala.reflect.Manifest[T]) = this(name).asInstanceOf[T]
     def column(idx: Int) = Result.this.column(idx)
-    override def rowToMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
+    def rowToMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
       case r: Result => r.toListOfMaps
       case x => x
     })).toMap
-    override def equals(row: Any) = row match {
-      case r: RowLike => this.row == r.content
-      case r: Seq[_] => this.row == r
-      case _ => false
-    }
   }
 
 }
@@ -513,10 +511,12 @@ trait RowLike extends Dynamic with Typed {
   def jbd = jBigDecimal
   def jbd(idx: Int) = jBigDecimal(idx)
   def jbd(name: String) = jBigDecimal(name)
+  def listOfRows(idx: Int) = result(idx) toListOfRows
+  def listOfRows(name: String) = result(name) toListOfRows
   def columnCount: Int
-  def content: Seq[Any]
   def rowToMap: Map[String, Any]
   def column(idx: Int): Column
+  def iterator: Iterator[Any]
 }
 
 case class Column(idx: Int, name: String, private[tresql] val expr: Expr)
