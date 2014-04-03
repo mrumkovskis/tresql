@@ -248,11 +248,11 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _co
     })).toMap
     // TODO after Result trait introduction remove these methods
     override def result(idx: Int) =
-      throw new UnsupportedOperationException("Result not available, us listOfMaps method instead.")
+      throw new UnsupportedOperationException("Result not available, use listOfRows method instead.")
     override def result(name: String) =
-      throw new UnsupportedOperationException("Result not available, us listOfMaps method instead.")
+      throw new UnsupportedOperationException("Result not available, use listOfRows method instead.")
     override def result =
-      throw new UnsupportedOperationException("Result not available, us listOfMaps method instead.")
+      throw new UnsupportedOperationException("Result not available, use listOfRows method instead.")
   }
 
 }
