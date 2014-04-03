@@ -261,6 +261,10 @@ class QueryTest extends Suite {
         [#dept, :dname, :loc]""",
       Map("dname" -> "LAW", "loc" -> "DALLAS", "emps" -> scala.Array(
         Map("ename" -> "SMITH"), Map("ename" -> "LEWIS")))))
+      
+    //row API
+    expectResult(List("CLARK, KING, MILLER"))(Query.select("dept[10] {dname, |emp {ename}#(1) emps}")
+        .toListOfRows.map(r => r.listOfRows("emps").map(_.ename).mkString(", ")))
         
     println("\n----------- ORT tests ------------\n")
     
