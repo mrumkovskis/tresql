@@ -30,7 +30,7 @@ object Env {
   def getDialect: PartialFunction[Expr, String] = env.dialect
   def setDialect(d: PartialFunction[Expr, String]) { env.dialect = d }
   def getFunctions: Object = env.functions.map(_.asInstanceOf[AnyRef]).orNull
-  def setFunctions(funcs: Any): Unit = { env.functions = funcs }
+  def setFunctions(funcs: Object): Unit = { env.functions = funcs }
   def getIdExprFunc: IdExprFunc = new IdExprFunc {
     override def getIdExpr(table: String) = env.idExpr(table)
   }
