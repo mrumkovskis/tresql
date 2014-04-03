@@ -509,8 +509,8 @@ trait RowLike extends Dynamic with Typed {
   def jbd = jBigDecimal
   def jbd(idx: Int) = jBigDecimal(idx)
   def jbd(name: String) = jBigDecimal(name)
-  def listOfRows(idx: Int) = result(idx) toListOfRows
-  def listOfRows(name: String) = result(name) toListOfRows
+  def listOfRows(idx: Int): List[this.type] = this(idx).asInstanceOf[List[this.type]]
+  def listOfRows(name: String) = this(name).asInstanceOf[List[this.type]]
   def columnCount: Int
   def rowToMap: Map[String, Any]
   def column(idx: Int): Column
