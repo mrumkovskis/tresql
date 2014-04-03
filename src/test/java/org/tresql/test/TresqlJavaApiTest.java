@@ -3,7 +3,6 @@ package org.tresql.test;
 import java.sql.Connection;
 import java.util.*;
 
-import org.tresql.JavaQuery;
 import org.tresql.SimpleCache;
 import org.tresql.java_api.*;
 
@@ -46,17 +45,8 @@ public class TresqlJavaApiTest implements Runnable {
             }
         });
         println("id expr: " + Env.getIdExprFunc().getIdExpr("my_table[2]"));
-        List<Long> ids = JavaQuery.ids("dept{deptno}", Collections.emptyList());
         Env.getMetadata();
         Env.setMetadata(Metadata.JDBC(null));
-
-        String deptnos = "deptnos:";
-        for (Long id : ids) {
-            deptnos = deptnos + " " + id;
-        }
-        println(deptnos);
-        if (!ids.contains(10L) || !ids.contains(20L))
-            throw new RuntimeException("Failed to select ids");
 
         println("");
         for (Row r : Query.select("dept[deptno < 100]{deptno, dname}")) {
