@@ -28,8 +28,10 @@ object Query {
     override def close = x.close
     /* TODO
     override def toList = seqAsJavaList(x.toList.map(new RowWrapperImpl(_)))
-    override def toListOfMaps
     */
+    override def toListOfMaps = seqAsJavaList(x.toListOfMaps
+      .map(deepMapToJavaMap)
+      .map(_.asInstanceOf[java.util.Map[String, Object]]))
     override def execute = x.execute
 
     // iterable

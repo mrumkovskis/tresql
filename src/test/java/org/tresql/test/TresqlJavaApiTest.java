@@ -1,8 +1,7 @@
 package org.tresql.test;
 
 import java.sql.Connection;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 import org.tresql.JavaQuery;
 import org.tresql.SimpleCache;
@@ -76,6 +75,18 @@ public class TresqlJavaApiTest implements Runnable {
             println("" + r.int_(0) + ": " + r.string(1) + ": " + "emps:");
             for (Row er : r.result("emps")) {
                 println("  " + er.s("ename"));
+            }
+        }
+
+        println("");
+        for (Map<String, Object> r : Query.select(
+                "dept[deptno < 30]{deptno, dname, |emp {ename} emps}")
+                .toListOfMaps()) {
+            println("toListOfMaps() - " + r.get("deptno") + ": "
+                    + r.get("dname") + ", " + "emps:");
+            for (Map<String, Object> er : (List<Map<String, Object>>) r
+                    .get("emps")) {
+                println("toListOfMaps() -   " + er.get("ename"));
             }
         }
 

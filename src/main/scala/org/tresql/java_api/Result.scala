@@ -5,8 +5,8 @@ trait Result extends Row with java.lang.Iterable[Row] with java.util.Iterator[Ro
   def close: Unit
   /* TODO
   def toList: java.util.List[Row]
-  def toListOfMaps: java.util.List[java.util.Map[String, Object]]
   */
+  def toListOfMaps: java.util.List[java.util.Map[String, Object]]
   /**
    * iterates through this result rows as well as these of descendant result
    * ensures execution of dml (update, insert, delete) expressions in colums otherwise
