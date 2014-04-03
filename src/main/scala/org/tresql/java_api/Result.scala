@@ -75,6 +75,6 @@ trait Row {
   def columnCount: Int
   /* TODO
   def rowToList: java.util.List[Object]
-  def rowToMap: java.util.Map[String, Object]
   */
+  def rowToMap: java.util.Map[String, Object]
 }

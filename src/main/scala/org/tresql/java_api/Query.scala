@@ -101,7 +101,13 @@ object Query {
     override def columnCount: Int = x.columnCount
     /* TODO
     override def rowToList: java.util.List[Object]
-    override def rowToMap: java.util.Map[String, Object]
     */
+    override def rowToMap =
+      deepMapToJavaMap(x.rowToMap).asInstanceOf[java.util.Map[String, Object]]
+    def deepMapToJavaMap(m: Map[String, Any]): java.util.Map[String, Any] =
+      mapAsJavaMap(m map {
+        case (k, v: Map[String, _]) => (k, deepMapToJavaMap(v))
+        case (k, v) => (k, v)
+      })
   }
 }

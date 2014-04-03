@@ -173,6 +173,7 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _co
 
   def toListOfMaps: List[Map[String, _]] = this.map(r => rowAsMap).toList
 
+  override def rowToMap = rowAsMap
   def rowAsMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
     case r: Result => r.toListOfMaps
     case x => x
@@ -240,6 +241,10 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _co
     def content = row
     def columnCount = row.length
     def column(idx: Int) = Result.this.column(idx)
+    override def rowToMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
+      case r: Result => r.toListOfMaps
+      case x => x
+    })).toMap
     override def equals(row: Any) = row match {
       case r: RowLike => this.row == r.content
       case r: Seq[_] => this.row == r
@@ -510,6 +515,7 @@ trait RowLike extends Dynamic with Typed {
   def jbd(name: String) = jBigDecimal(name)
   def columnCount: Int
   def content: Seq[Any]
+  def rowToMap: Map[String, Any]
   def column(idx: Int): Column
 }
 
