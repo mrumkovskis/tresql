@@ -14,11 +14,11 @@ trait Query extends TypedQuery {
     null): Any = build(expr, params, false)(tresqlConn)()
   
   def select(expr: String, params: Any*) = {
-    apply(expr, normalizePars(params: _*)).asInstanceOf[Result]
+    apply(expr, normalizePars(params: _*)).asInstanceOf[SelectResult]
   }
 
   def select(expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection = 
-    null) = apply(expr, params)(tresqlConn).asInstanceOf[Result]
+    null) = apply(expr, params)(tresqlConn).asInstanceOf[SelectResult]
    
   def foreach(expr: String, params: Any*)(f: (RowLike) => Unit = (row) => ()) {
     select(expr, normalizePars(params: _*)) foreach f
@@ -68,14 +68,14 @@ trait Query extends TypedQuery {
       (res._1.reverse, res._3)
     } else (cols map rcol, -1)
     
-    val result = if (allCols) new Result(rs, Vector(cols.flatMap {c => 
+    val result = if (allCols) new SelectResult(rs, Vector(cols.flatMap {c => 
       if (c.col.isInstanceOf[QueryBuilder#AllExpr]) jdbcRcols else List(rcol(c))
     }: _*), env)
-    else if (identAll) new Result(rs,
+    else if (identAll) new SelectResult(rs,
         Vector(jdbcRcols ++ (cols.filter(_.separateQuery) map rcol) :_*), env)
     else rcols match {
-      case (c, -1) => new Result(rs, Vector(c: _*), env)
-      case (c, s) => new Result(rs, Vector(c: _*), env, s)
+      case (c, -1) => new SelectResult(rs, Vector(c: _*), env)
+      case (c, s) => new SelectResult(rs, Vector(c: _*), env, s)
     }
     env.result = result
     result
@@ -100,7 +100,7 @@ trait Query extends TypedQuery {
     val result = if(st.execute) {
       val rs = st.getResultSet
       val md = rs.getMetaData
-      val res = new Result(rs, Vector(1 to md.getColumnCount map 
+      val res = new SelectResult(rs, Vector(1 to md.getColumnCount map 
           {i=> Column(i, md.getColumnLabel(i), null)}:_*), env)
       env.result = res
       res

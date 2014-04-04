@@ -1,7 +1,6 @@
 package org.tresql.java_api
 
 trait Result extends Row with java.lang.Iterable[Row] with java.util.Iterator[Row] {
-  def jdbcResult: java.sql.ResultSet
   def close: Unit
   /* TODO
   def toList: java.util.List[Row]

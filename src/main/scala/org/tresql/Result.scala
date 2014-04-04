@@ -4,8 +4,95 @@ import java.sql.ResultSet
 import java.sql.ResultSetMetaData
 import sys._
 
-class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _columnCount: Int = -1)
-  extends Iterator[RowLike] with RowLike with TypedResult {
+trait Result extends Iterator[RowLike] with RowLike with TypedResult {
+  class Row(row: Seq[Any]) extends Seq[Any] with RowLike {
+    def apply(idx: Int) = row(idx)
+    def iterator = row.iterator
+    def length = row.length
+    def columnCount = length
+    def apply(name: String) = row(columns indexWhere (_.name == name))
+    def typed[T](name: String)(implicit m: scala.reflect.Manifest[T]) = this(name).asInstanceOf[T]
+    def column(idx: Int) = Result.this.column(idx)
+    def columns = (0 to (columnCount - 1)) map column
+    def values = this
+    def rowToMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
+      case r: Result => r.toListOfMaps
+      case x => x
+    })).toMap
+    // TODO after Result trait introduction remove these methods
+    override def result(idx: Int) =
+      throw new UnsupportedOperationException("Result not available, use listOfRows method instead.")
+    override def result(name: String) =
+      throw new UnsupportedOperationException("Result not available, use listOfRows method instead.")
+    override def result =
+      throw new UnsupportedOperationException("Result not available, use listOfRows method instead.")
+  }
+  
+  def columns = (0 to (columnCount - 1)) map column
+  def values = (0 to (columnCount - 1)).map(this(_))
+  
+  override def toList = this.map(_ => toRow).toList
+
+  def toListOfMaps: List[Map[String, _]] = this.map(r => rowToMap).toList
+  def toListOfRows: List[Row] = toList.asInstanceOf[List[Row]]
+
+  def rowToMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
+    case r: Result => r.toListOfMaps
+    case x => x
+  })).toMap
+
+  def toRow: Row = {
+    val b = new scala.collection.mutable.ListBuffer[Any]
+    var i = 0
+    while (i < columnCount) {
+      b += (this(i) match {
+        case r: Result => r.toListOfRows
+        case x => x
+      })
+      i += 1
+    }
+    new Row(Vector(b: _*))
+  }
+
+  /**
+   * iterates through this result rows as well as these of descendant result
+   * ensures execution of dml (update, insert, delete) expressions in colums otherwise
+   * has no side effect.
+   */
+  def execute: Unit = foreach { r =>
+    {
+      var i = 0
+      while (i < columnCount) {
+        this(i) match {
+          case r: Result => r.execute
+          case _ =>
+        }
+        i += 1
+      }
+    }
+  }
+  
+  def close {}
+
+  /** needs to be overriden since super class implementation calls hasNext method */
+  override def toString = getClass.toString + ":" + (columns.mkString(","))
+}
+
+case class UpdateResult(res: (Int, Option[Any])) extends Result {
+  var n = true
+  val row = new Row(result._1 :: (res._2 map (List(_))).getOrElse(Nil))
+  val cols = List(Column(-1, "affected row count", null), Column(-1, "id", null))
+  def hasNext = if (n) {n = false; true} else false
+  def next = row
+  def columnCount = res._2 map(_ => 2) getOrElse 1
+  def column(idx: Int) = cols(idx)
+  def apply(idx: Int) = row(idx)
+  def typed[T](name: String)(implicit m: Manifest[T]) = throw new UnsupportedOperationException
+  def apply(name: String) = throw new UnsupportedOperationException
+}
+
+class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _columnCount: Int = -1)
+  extends Result {
   private[this] val md = rs.getMetaData
   private[this] val st = rs.getStatement
   private[this] val row = new Array[Any](cols.length)
@@ -31,17 +118,15 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _co
     if (cols(columnIndex).idx != -1) asAny(cols(columnIndex).idx)
     else row(columnIndex)
   }
-  def apply(columnLabel: String) = try apply(colMap(columnLabel))
-    catch { case _: NoSuchElementException => asAny(rs.findColumn(columnLabel)) }
+  //fall back to rs.findColumn method in the case hidden column is referenced
+  def apply(columnLabel: String) = colMap get columnLabel map (this(_)) getOrElse asAny(rs.findColumn(columnLabel))
   def typed[T](columnLabel: String)(implicit m: scala.reflect.Manifest[T]): T =
     typed[T](colMap(columnLabel))
 
   def columnCount = if (_columnCount == -1) cols.length else _columnCount
-  def column(idx: Int) = cols(idx)
-  def columns = (0 to (columnCount - 1)) map column
-  def values = (0 to (columnCount - 1)).map(this(_))
+  override def column(idx: Int) = cols(idx)
   def jdbcResult = rs
-  def close {
+  override def close {
     if (closed) return
     rs.close
     env.result = null
@@ -54,75 +139,53 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _co
     if (cols(columnIndex).idx != -1) rs.getInt(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[Int]
   }
-  override def int(columnLabel: String): Int = try int(colMap(columnLabel)) catch {
-    case _: NoSuchElementException => int(rs.findColumn(columnLabel))
-  }
+  override def int(columnLabel: String): Int = int(colMap(columnLabel))
   override def long(columnIndex: Int): Long = {
     if (cols(columnIndex).idx != -1) rs.getLong(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[Long]
   }
-  override def long(columnLabel: String): Long = try long(colMap(columnLabel)) catch {
-    case _: NoSuchElementException => long(rs.findColumn(columnLabel))
-  }
+  override def long(columnLabel: String): Long = long(colMap(columnLabel))
   override def double(columnIndex: Int): Double = {
     if (cols(columnIndex).idx != -1) rs.getDouble(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[Double]
   }
-  override def double(columnLabel: String): Double = try double(colMap(columnLabel)) catch {
-    case _: NoSuchElementException => double(rs.findColumn(columnLabel))
-  }
+  override def double(columnLabel: String): Double = double(colMap(columnLabel))
   override def bigdecimal(columnIndex: Int): BigDecimal = {
     if (cols(columnIndex).idx != -1) {
       val bd = rs.getBigDecimal(cols(columnIndex).idx); if (rs.wasNull) null else BigDecimal(bd)
     } else row(columnIndex).asInstanceOf[BigDecimal]
   }
-  override def bigdecimal(columnLabel: String): BigDecimal = try bigdecimal(colMap(columnLabel)) catch {
-    case _: NoSuchElementException => bigdecimal(rs.findColumn(columnLabel))
-  }
+  override def bigdecimal(columnLabel: String): BigDecimal = bigdecimal(colMap(columnLabel))
   override def string(columnIndex: Int): String = {
     if (cols(columnIndex).idx != -1) rs.getString(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[String]
   }
-  override def string(columnLabel: String): String = try string(colMap(columnLabel)) catch {
-    case _: NoSuchElementException => string(rs.findColumn(columnLabel))
-  }
+  override def string(columnLabel: String): String = string(colMap(columnLabel))
   override def date(columnIndex: Int): java.sql.Date = {
     if (cols(columnIndex).idx != -1) rs.getDate(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[java.sql.Date]
   }
-  override def date(columnLabel: String): java.sql.Date = try date(colMap(columnLabel)) catch {
-    case _: NoSuchElementException => date(rs.findColumn(columnLabel))
-  }
+  override def date(columnLabel: String): java.sql.Date = date(colMap(columnLabel))
   override def timestamp(columnIndex: Int): java.sql.Timestamp = {
     if (cols(columnIndex).idx != -1) rs.getTimestamp(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[java.sql.Timestamp]
   }
-  override def timestamp(columnLabel: String): java.sql.Timestamp =
-    try timestamp(colMap(columnLabel)) catch {
-      case _: NoSuchElementException => timestamp(rs.findColumn(columnLabel))
-    }
+  override def timestamp(columnLabel: String): java.sql.Timestamp = timestamp(colMap(columnLabel))
   override def boolean(columnIndex: Int): Boolean = {
     if (cols(columnIndex).idx != -1) rs.getBoolean(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[Boolean]
   }
-  override def boolean(columnLabel: String): Boolean =
-    try boolean(colMap(columnLabel)) catch {
-      case _: NoSuchElementException => boolean(rs.findColumn(columnLabel))
-    }
+  override def boolean(columnLabel: String): Boolean = boolean(colMap(columnLabel))
   override def bytes(columnIndex: Int): Array[Byte] = {
     if (cols(columnIndex).idx != -1) rs.getBytes(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[Array[Byte]]
   }
-  override def bytes(columnLabel: String) = try bytes(colMap(columnLabel)) catch {
-    case _: NoSuchElementException => bytes(rs.findColumn(columnLabel))
-  }
+  override def bytes(columnLabel: String) = bytes(colMap(columnLabel))
   override def stream(columnIndex: Int) = {
     if (cols(columnIndex).idx != -1) rs.getBinaryStream(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[java.io.InputStream]
   }
-  override def stream(columnLabel: String) = try stream(colMap(columnLabel)) catch {
-    case _: NoSuchElementException => stream(rs.findColumn(columnLabel))
-  }
+  override def stream(columnLabel: String) = stream(colMap(columnLabel))
 
   //java type support
   override def jInt(columnIndex: Int): java.lang.Integer = {
@@ -131,89 +194,34 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _co
       if (rs.wasNull()) null else new java.lang.Integer(x)
     } else row(columnIndex).asInstanceOf[java.lang.Integer]
   }
-  override def jInt(columnLabel: String): java.lang.Integer = try jInt(colMap(columnLabel)) catch {
-    case _: NoSuchElementException => jInt(rs.findColumn(columnLabel))
-  }
+  override def jInt(columnLabel: String): java.lang.Integer = jInt(colMap(columnLabel))
   override def jLong(columnIndex: Int): java.lang.Long = {
     if (cols(columnIndex).idx != -1) {
       val x = rs.getLong(cols(columnIndex).idx)
       if (rs.wasNull()) null else new java.lang.Long(x)
     } else row(columnIndex).asInstanceOf[java.lang.Long]
   }
-  override def jLong(columnLabel: String): java.lang.Long = try jLong(colMap(columnLabel)) catch {
-    case _: NoSuchElementException => jLong(rs.findColumn(columnLabel))
-  }
+  override def jLong(columnLabel: String): java.lang.Long = jLong(colMap(columnLabel))
   override def jDouble(columnIndex: Int): java.lang.Double = {
     if (cols(columnIndex).idx != -1) {
       val x = rs.getDouble(cols(columnIndex).idx)
       if (rs.wasNull()) null else new java.lang.Double(x)
     } else row(columnIndex).asInstanceOf[java.lang.Double]
   }
-  override def jDouble(columnLabel: String): java.lang.Double = try jDouble(colMap(columnLabel)) catch {
-    case _: NoSuchElementException => jDouble(rs.findColumn(columnLabel))
-  }
+  override def jDouble(columnLabel: String): java.lang.Double = jDouble(colMap(columnLabel))
   override def jBigDecimal(columnIndex: Int): java.math.BigDecimal = {
     if (cols(columnIndex).idx != -1) rs.getBigDecimal(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[java.math.BigDecimal]
   }
-  override def jBigDecimal(columnLabel: String): java.math.BigDecimal =
-    try jBigDecimal(colMap(columnLabel)) catch {
-      case _: NoSuchElementException => jBigDecimal(rs.findColumn(columnLabel))
-    }
+  override def jBigDecimal(columnLabel: String): java.math.BigDecimal = jBigDecimal(colMap(columnLabel))
   override def jBoolean(columnIndex: Int): java.lang.Boolean = {
     if (cols(columnIndex).idx != -1) {
       val x = rs.getBoolean(cols(columnIndex).idx)
       if (rs.wasNull()) null else new java.lang.Boolean(x)
     } else row(columnIndex).asInstanceOf[java.lang.Boolean]
   }
-  override def jBoolean(columnLabel: String): java.lang.Boolean =
-    try jBoolean(colMap(columnLabel)) catch {
-      case _: NoSuchElementException => jBoolean(rs.findColumn(columnLabel))
-    }
+  override def jBoolean(columnLabel: String): java.lang.Boolean = jBoolean(colMap(columnLabel))
 
-  override def toList = this.map(_ => toRow).toList
-
-  def toListOfMaps: List[Map[String, _]] = this.map(r => rowToMap).toList
-  def toListOfRows: List[Row] = toList.asInstanceOf[List[Row]]
-
-  def rowToMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
-    case r: Result => r.toListOfMaps
-    case x => x
-  })).toMap
-
-  def toRow: Row = {
-    val b = new scala.collection.mutable.ListBuffer[Any]
-    var i = 0
-    while (i < columnCount) {
-      b += (this(i) match {
-        case r: Result => r.toListOfRows
-        case x => x
-      })
-      i += 1
-    }
-    Row(Vector(b: _*))
-  }
-
-  /**
-   * iterates through this result rows as well as these of descendant result
-   * ensures execution of dml (update, insert, delete) expressions in colums otherwise
-   * has no side effect.
-   */
-  def execute: Unit = foreach { r =>
-    {
-      var i = 0
-      while (i < columnCount) {
-        this(i) match {
-          case r: Result => r.execute
-          case _ =>
-        }
-        i += 1
-      }
-    }
-  }
-
-  /** needs to be overriden since super class implementation calls hasNext method */
-  override def toString = getClass.toString + ":" + (cols.mkString(","))
   private def asAny(pos: Int): Any = {
     import java.sql.Types._
     md.getColumnType(pos) match {
@@ -235,29 +243,24 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _co
       case DOUBLE | FLOAT | REAL => val v = rs.getDouble(pos); if (rs.wasNull) null else v
     }
   }
-
-  case class Row(row: Seq[Any]) extends Seq[Any] with RowLike {
-    def apply(idx: Int) = row(idx)
-    def iterator = row.iterator
-    def length = row.length
-    def columnCount = length
-    def apply(name: String) = row(Result.this.colMap(name))
-    def typed[T](name: String)(implicit m: scala.reflect.Manifest[T]) = this(name).asInstanceOf[T]
-    def column(idx: Int) = Result.this.column(idx)
-    def columns = (0 to (columnCount - 1)) map column
-    def values = this
-    def rowToMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
-      case r: Result => r.toListOfMaps
-      case x => x
-    })).toMap
-    // TODO after Result trait introduction remove these methods
-    override def result(idx: Int) =
-      throw new UnsupportedOperationException("Result not available, use listOfRows method instead.")
-    override def result(name: String) =
-      throw new UnsupportedOperationException("Result not available, use listOfRows method instead.")
-    override def result =
-      throw new UnsupportedOperationException("Result not available, use listOfRows method instead.")
+  
+  //optimize value retrieval by name
+  class R(row: Seq[Any]) extends Row(row) {
+    override def apply(name: String) = row(SelectResult.this.colMap(name))
   }
+  //code duplication with Result trait to return more efficient R instead o Row 
+  override def toRow: Row = {
+    val b = new scala.collection.mutable.ListBuffer[Any]
+    var i = 0
+    while (i < columnCount) {
+      b += (this(i) match {
+        case r: Result => r.toListOfRows
+        case x => x
+      })
+      i += 1
+    }
+    new R(Vector(b: _*))
+  }  
 
 }
 

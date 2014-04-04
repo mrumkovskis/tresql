@@ -24,7 +24,6 @@ object Query {
   }
 
   private class ResultWrapper(x: org.tresql.Result) extends RowDelegate(x) with Result with RowWrapper {
-    override def jdbcResult = x.jdbcResult
     override def close = x.close
     /* TODO
     override def toList = seqAsJavaList(x.toList.map(new RowWrapperImpl(_)))

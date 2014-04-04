@@ -11,9 +11,9 @@ class Functions {
   def dt(s: String, f: String = "yyyy-MM-dd HH:mm:ss") = dateTime(s, f)
   def concat(s: String*) = s mkString
 
-  def mkString(res: Result): String = mkString(res, ";")
-  def mkString(res: Result, colSep: String): String = mkString(res, colSep, "\n")
-  def mkString(res: Result, colSep: String, rowSep: String) = {
+  def mkString(res: SelectResult): String = mkString(res, ";")
+  def mkString(res: SelectResult, colSep: String): String = mkString(res, colSep, "\n")
+  def mkString(res: SelectResult, colSep: String, rowSep: String) = {
     val sb = new scala.collection.mutable.StringBuilder()
     res foreach { r => sb.append(r.values.filter(_ != null) mkString(colSep))
       .append(rowSep) }
