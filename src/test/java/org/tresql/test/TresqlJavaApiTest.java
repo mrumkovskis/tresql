@@ -97,6 +97,15 @@ public class TresqlJavaApiTest implements Runnable {
         }
 
         println("");
+        Result res = Query.select("dept[60]{deptno, dname}");
+        println("columns(0).name, index: " + res.column(0).name + ", "
+                + res.column(0).index);
+        println("columns(1).name, index: " + res.columns().get(1).name + ", "
+                + res.columns().get(1).index);
+        println("column count: " + res.columnCount() + " ("
+                + res.columns().size() + ", actually)");
+
+        println("");
         for (Row r : Query.select("dummy {plus(1, 2)}")) {
             println("" + r.l(0));
         }

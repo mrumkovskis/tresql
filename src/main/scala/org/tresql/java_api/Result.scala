@@ -73,6 +73,8 @@ trait Row {
   def jbd(idx: Int): java.math.BigDecimal
   def jbd(name: String): java.math.BigDecimal
   def columnCount: Int
+  def column(idx: Int): Column
+  def columns: java.util.List[Column]
   /* TODO
   def rowToList: java.util.List[Object]
   */

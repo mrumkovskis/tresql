@@ -101,6 +101,9 @@ object Query {
     override def jbd(idx: Int) = x.jbd(idx)
     override def jbd(name: String) = x.jbd(name)
     override def columnCount: Int = x.columnCount
+    override def column(idx: Int) = new Column(x.column(idx).idx, x.column(idx).name)
+    override def columns: java.util.List[Column] =
+      seqAsJavaList(x.columns.map(c => new Column(c.idx, c.name)))
     /* TODO
     override def rowToList: java.util.List[Object]
     */
