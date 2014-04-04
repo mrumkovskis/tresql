@@ -76,7 +76,7 @@ trait Row {
   def column(idx: Int): Column
   def columns: java.util.List[Column]
   /* TODO
-  def rowToList: java.util.List[Object]
+  def values: java.util.List[Object]
   */
   def rowToMap: java.util.Map[String, Object]
 }

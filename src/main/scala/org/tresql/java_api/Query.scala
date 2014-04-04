@@ -105,7 +105,7 @@ object Query {
     override def columns: java.util.List[Column] =
       seqAsJavaList(x.columns.map(c => new Column(c.idx, c.name)))
     /* TODO
-    override def rowToList: java.util.List[Object]
+    override def values = deepRowToValues(x)
     */
     override def rowToMap =
       deepMapToJavaMap(x.rowToMap).asInstanceOf[java.util.Map[String, Object]]
