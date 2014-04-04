@@ -1,3 +1,16 @@
+--- 2014.04.04 tresql 5.3 ---
+1. API changes and improvemnts
+   Result.toListOfMaps (through TypedResult trait) method is parametrizied to return specific type of map.
+   
+   Typed methods support conversion to arbitrary types via converter (used in object relational transformations)
+   
+   API for java language added in org.tresql.java_api package
+   
+2. Expression parsing performance improvements by introducing mem parser which remembers intermediate parsing results.
+   
+3. project refactoring (core directory moved to top level) and cleanup
+   
+
 --- 2013.12.03 tresql 5.2 ---
 1. order by syntax improved
 
