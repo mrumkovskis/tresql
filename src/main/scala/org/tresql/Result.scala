@@ -39,6 +39,7 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _co
   def columnCount = if (_columnCount == -1) cols.length else _columnCount
   def column(idx: Int) = cols(idx)
   def columns = (0 to (columnCount - 1)) map column
+  def values = (0 to (columnCount - 1)).map(this(_))
   def jdbcResult = rs
   def close {
     if (closed) return
@@ -244,6 +245,7 @@ class Result private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _co
     def typed[T](name: String)(implicit m: scala.reflect.Manifest[T]) = this(name).asInstanceOf[T]
     def column(idx: Int) = Result.this.column(idx)
     def columns = (0 to (columnCount - 1)) map column
+    def values = this
     def rowToMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
       case r: Result => r.toListOfMaps
       case x => x
@@ -524,6 +526,7 @@ trait RowLike extends Dynamic with Typed {
   def rowToMap: Map[String, Any]
   def column(idx: Int): Column
   def columns: Seq[Column]
+  def values: Seq[Any]
 }
 
 case class Column(idx: Int, name: String, private[tresql] val expr: Expr)
