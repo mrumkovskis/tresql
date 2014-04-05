@@ -2,40 +2,40 @@
 //<statement> --> [<semicolon separated bind params (array elements are comma separated)>] --> <result as returned from method uniso.query.result.Jsonizer.jsonize(..., Jsonizer.Arrays)>
 //INSERT
 //DEPTS
-DEPT {DEPTNO, DNAME, LOC} + [10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"] --> 2
-DEPT {DEPTNO, DNAME, LOC} + [], [*] --> 30; 'SALES; 'CHICAGO; 40; 'OPERATIONS; 'BOSTON --> 2
+DEPT {DEPTNO, DNAME, LOC} + [10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"] --> [[2]]
+DEPT {DEPTNO, DNAME, LOC} + [], [*] --> 30; 'SALES; 'CHICAGO; 40; 'OPERATIONS; 'BOSTON --> [[2]]
 //EMPS
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7839, "KING",   "PRESIDENT", null, "1981-11-17", 5000, null, 10] --> 1
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7698, "BLAKE",  "MANAGER",   7839, "1981-05-01",  2850, null, *] --> 30 --> 1
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7782, "CLARK",  *,   7839, "1981-06-9", 2450, null, 10] --> 'MANAGER --> 1
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [*, "JONES",  "MANAGER",   7839, "1981-04-02",  2975, null, 20] --> 7566 --> 1
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7499, "ALLEN",  "SALESMAN",  7698, "1981-02-20", *] --> 1600; 300; 30 --> 1
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7521, *,  7698, "1981-02-22", 1250,  500, 30] --> 'WARD; 'SALESMAN --> 1
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [*] --> 7654; 'MARTIN; 'SALESMAN; 7698; '1981-09-28; 1250; 1400; 30 --> 1
-EMP + [7844, *] --> 'TURNER; 'SALESMAN;  7698; '1981-09-8; 1500; 0; 30 --> 1
-EMP + [] --> 7900; 'JAMES; 'CLERK; 7698; '1981-12-3; 950; null; 30 --> 1
-+EMP --> 7934; 'MILLER; 'CLERK; 7782; '1982-01-23; 1300; null; 10 --> 1
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7788, "SCOTT",  "ANALYST", 7566, "1982-12-09", 3000, null, 20], [7902, "FORD", "ANALYST", 7566, "1981-12-3", 3000, null, 20], [7876, "ADAMS", "CLERK", 7788, "1983-01-12", 1100, null, 20] --> 3
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7839, "KING",   "PRESIDENT", null, "1981-11-17", 5000, null, 10] --> [[1]]
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7698, "BLAKE",  "MANAGER",   7839, "1981-05-01",  2850, null, *] --> 30 --> [[1]]
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7782, "CLARK",  *,   7839, "1981-06-9", 2450, null, 10] --> 'MANAGER --> [[1]]
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [*, "JONES",  "MANAGER",   7839, "1981-04-02",  2975, null, 20] --> 7566 --> [[1]]
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7499, "ALLEN",  "SALESMAN",  7698, "1981-02-20", *] --> 1600; 300; 30 --> [[1]]
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7521, *,  7698, "1981-02-22", 1250,  500, 30] --> 'WARD; 'SALESMAN --> [[1]]
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [*] --> 7654; 'MARTIN; 'SALESMAN; 7698; '1981-09-28; 1250; 1400; 30 --> [[1]]
+EMP + [7844, *] --> 'TURNER; 'SALESMAN;  7698; '1981-09-8; 1500; 0; 30 --> [[1]]
+EMP + [] --> 7900; 'JAMES; 'CLERK; 7698; '1981-12-3; 950; null; 30 --> [[1]]
++EMP --> 7934; 'MILLER; 'CLERK; 7782; '1982-01-23; 1300; null; 10 --> [[1]]
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7788, "SCOTT",  "ANALYST", 7566, "1982-12-09", 3000, null, 20], [7902, "FORD", "ANALYST", 7566, "1981-12-3", 3000, null, 20], [7876, "ADAMS", "CLERK", 7788, "1983-01-12", 1100, null, 20] --> [[3]]
 //insert table with alias
-+EMP E {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} --> 7369; 'SMITH; 'CLERK; 7902; 1980-12-17; 800; null; 20 --> 1
++EMP E {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} --> 7369; 'SMITH; 'CLERK; 7902; 1980-12-17; 800; null; 20 --> [[1]]
 
 //SALGRADES
-SALGRADE + [1, 700, 1200],[2, 1201, 1400],[3, 1401, 2000],[4, 2001, 3000],[5, 3001, 9999] --> 5
+SALGRADE + [1, 700, 1200],[2, 1201, 1400],[3, 1401, 2000],[4, 2001, 3000],[5, 3001, 9999] --> [[5]]
 
 //WORK
-WORK {WDATE, EMPNO, HOURS, EMPNO_MGR} + ["2012-06-06", 7839, 3, null], ["2012-06-07", 7839, 4, null], ["2012-06-06", 7788, 5, 7566], ["2012-06-07", 7788, 8, 7782] --> 4
+WORK {WDATE, EMPNO, HOURS, EMPNO_MGR} + ["2012-06-06", 7839, 3, null], ["2012-06-07", 7839, 4, null], ["2012-06-06", 7788, 5, 7566], ["2012-06-07", 7788, 8, 7782] --> [[4]]
 
 //CAR
-CAR {NR, NAME, IS_ACTIVE, DEPTNR} + [1111, "PORCHE", false, 10], [2222, "BMW", true, 20], [3333, "MERCEDES", false, 20], [4444, "VOLKSWAGEN", null, null] --> 4
+CAR {NR, NAME, IS_ACTIVE, DEPTNR} + [1111, "PORCHE", false, 10], [2222, "BMW", true, 20], [3333, "MERCEDES", false, 20], [4444, "VOLKSWAGEN", null, null] --> [[4]]
 
 //TYRES
-TYRES + [1, 3333, "MICHELIN", "S"], [2, 3333, "NOKIAN", "W"] --> 2
+TYRES + [1, 3333, "MICHELIN", "S"], [2, 3333, "NOKIAN", "W"] --> [[2]]
 
 //CAR TYRES
-CAR[3333] {TYRES_NR} = [2] --> 1
+CAR[3333] {TYRES_NR} = [2] --> [[1]]
 
 //DUMMY
-DUMMY {DUMMY} + [0] --> 1
+DUMMY {DUMMY} + [0] --> [[1]]
 
 //----SELECT----
 dummy --> [[0]]
@@ -261,7 +261,7 @@ dept[(:id? & (dname ~~ :name? & (loc ~~ :loc?)))] --> loc = 'bost% --> [[40, "OP
 dept [deptno in (emp[ename ~~ :n?]{deptno})]{deptno}#(deptno) --> [[10], [20], [30], [40]]
 dept [deptno in (emp[ename ~~ :n?]{deptno}) | deptno = 40]#(deptno) --> [[40, "OPERATIONS", "BOSTON"]]
 dept [deptno in (emp[ename ~~ :n?]{deptno}) | deptno = 40 | deptno in (emp{deptno})]{deptno}#(deptno) --> [[10], [20], [30], [40]]
-dept [deptno in (emp[ename ~~ :n?]{deptno})]{deptno}#(deptno),dept [deptno in (emp{deptno})]{deptno}#(deptno) --> [[[10], [20], [30], [40]], [[10], [20], [30]]]
+dept [deptno in (emp[ename ~~ :n?]{deptno})]{deptno}#(deptno),dept [deptno in (emp{deptno})]{deptno}#(deptno) --> [[[[[10], [20], [30], [40]], [[10], [20], [30]]]]]
 dept d[d.deptno in (emp e[e.deptno in (dept d1[:id?]{d1.deptno})]{e.deptno})]{deptno}#(deptno) --> [[10], [20], [30], [40]]
 dept d[d.deptno in (emp e[e.deptno in (dept d1[:id?]{d1.deptno})]{e.deptno}) & d.deptno in (emp e{e.deptno})]{deptno}#(deptno) --> [[10], [20], [30]]
 dept[deptno in (/(dept[:id?]{deptno}){deptno})]{deptno}#(1) --> [[10], [20], [30], [40]]
@@ -284,7 +284,7 @@ dept{deptno}#(deptno)@(:o? :l?) --> l=1 --> [[10]]
 
 //braces test
 dept[deptno = ((? + ?) * ((? - ?) / (?)))] {deptno} --> 2; 3; 6; 2; 2 --> [[10]]
-((1 + 2) * (((3 - 4)) / (5))) --> -0.6
+((1 + 2) * (((3 - 4)) / (5))) --> [[-0.6]]
 
 //division test (because of language peculiarities since / sign is used also as default join)
 emp[](emp{avg(sal) avgsal}) {ename, sal, avgsal, sal/avgsal}#(4, 1) --> [["SMITH", 800.00, 2073.21, 0.38], ["JAMES", 950.00, 2073.21, 0.45], ["ADAMS", 1100.00, 2073.21, 0.53], ["MARTIN", 1250.00, 2073.21, 0.60], ["WARD", 1250.00, 2073.21, 0.60], ["MILLER", 1300.00, 2073.21, 0.62], ["TURNER", 1500.00, 2073.21, 0.72], ["ALLEN", 1600.00, 2073.21, 0.77], ["CLARK", 2450.00, 2073.21, 1.18], ["BLAKE", 2850.00, 2073.21, 1.37], ["JONES", 2975.00, 2073.21, 1.43], ["FORD", 3000.00, 2073.21, 1.44], ["SCOTT", 3000.00, 2073.21, 1.44], ["KING", 5000.00, 2073.21, 2.41]]
@@ -294,52 +294,52 @@ emp[](emp{avg(sal) avgsal}) [sal/(avgsal) <= 1] {count(*)} --> [[8]]
 emp[](emp{avg(sal) avgsal}) [(sal)/avgsal <= 1] {count(*)} --> [[8]]
 
 //----UPDATE----
-emp[hiredate >= ? & hiredate <= ?]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;1000.35 --> 2
+emp[hiredate >= ? & hiredate <= ?]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;1000.35 --> [[2]]
 emp[hiredate >= ? & hiredate <= ?]{sal} #(~1) --> '1982-01-23;'1982-12-09 --> [[4000.35], [2300.35]]
-=emp[?] [7876, *, 20] --> 7876; null; 'DESIGNER; null; null; null; null --> 1
+=emp[?] [7876, *, 20] --> 7876; null; 'DESIGNER; null; null; null; null --> [[1]]
 emp[7876] --> [[7876, null, "DESIGNER", null, null, null, null, 20]]
-=emp[?] --> 7876; 7876; null; null; null; null; null; null; 20 --> 1
+=emp[?] --> 7876; 7876; null; null; null; null; null; null; 20 --> [[1]]
 emp[7876] --> [[7876, null, null, null, null, null, null, 20]]
 //update table with alias
-emp e[:id]{e.ename} = [:n] --> id=7876;n='kuku --> 1
+emp e[:id]{e.ename} = [:n] --> id=7876;n='kuku --> [[1]]
 emp[7876] {ename} --> [["kuku"]]
-=emp e[?]{e.ename} --> 7876; 'kukuz --> 1
+=emp e[?]{e.ename} --> 7876; 'kukuz --> [[1]]
 emp[7876] {ename} --> [["kukuz"]]
 
 //child update
 emp{empno, job, emp[empno = :1(1)]{job} = [:1(2)]}#(1) --> [[7369, "CLERK", 1], [7499, "SALESMAN", 1], [7521, "SALESMAN", 1], [7566, "MANAGER", 1], [7654, "SALESMAN", 1], [7698, "MANAGER", 1], [7782, "MANAGER", 1], [7788, "ANALYST", 1], [7839, "PRESIDENT", 1], [7844, "SALESMAN", 1], [7876, null, 1], [7900, "CLERK", 1], [7902, "ANALYST", 1], [7934, "CLERK", 1]]
 
 //----DELETE----
-salgrade - [?] --> 5 --> 1
+salgrade - [?] --> 5 --> [[1]]
 //delete table with alias
-dummy d - [], DUMMY {DUMMY} + [0], -dummy[], DUMMY {DUMMY} + [0] --> [1, 1, 1, 1]
+dummy d - [], DUMMY {DUMMY} + [0], -dummy[], DUMMY {DUMMY} + [0] --> [[[1, 1, 1, 1]]]
 
 //negation
--1 - 2 --> -3
--1 - -2 --> 1
--1 - (-2) --> 1
+-1 - 2 --> [[-3]]
+-1 - -2 --> [[1]]
+-1 - (-2) --> [[1]]
 
 //--ASSIGN EXPR
-:v = 5, :s = "kuku" --> [5, "kuku"]
+:v = 5, :s = "kuku" --> [[[5, "kuku"]]]
 
 //----BATCH----
-SALGRADE {GRADE, LOSAL, HISAL} + [?, ?, ?], emp[?] {ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} = [?, ?, ?, ?, ?, ?, ?], emp[?] --> 6; 10000; 11000; 7876; 'ADAMS;  'CLERK; 7788; '1983-01-12; 1100; null; 20; 7788 --> [1, 1, [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 4000.35, null, 20]]]
+SALGRADE {GRADE, LOSAL, HISAL} + [?, ?, ?], emp[?] {ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} = [?, ?, ?, ?, ?, ?, ?], emp[?] --> 6; 10000; 11000; 7876; 'ADAMS;  'CLERK; 7788; '1983-01-12; 1100; null; 20; 7788 --> [[[1, 1, [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 4000.35, null, 20]]]]]
 //two unions in batch
-salgrade[?] {grade} + dummy, "A" + " " + "B", dept[dname ~~ ?]{deptno} + dummy, 1 + 3 --> -1; 'kuku% --> [[[0]], "A B", [[0]], 4]
+salgrade[?] {grade} + dummy, "A" + " " + "B", dept[dname ~~ ?]{deptno} + dummy, 1 + 3 --> -1; 'kuku% --> [[[[[0]], "A B", [[0]], 4]]]
 //merging of two results with variables
-:r1 = /(dept[dname ~~ ?]{deptno} + dummy)#(1), :r2 = salgrade[?] {grade} + dummy, :r1 | :r2 --> 'acc%; -1 --> [[], [], [[0, 0], [10]]]
+:r1 = /(dept[dname ~~ ?]{deptno} + dummy)#(1), :r2 = salgrade[?] {grade} + dummy, :r1 | :r2 --> 'acc%; -1 --> [[[[], [], [[0, 0], [10]]]]]
 
 //----Scala and DB PROCEDURE CALL
 inc_val_5(5) --> [[10]]
 inc_val_5(?) --> 10 --> [[15]]
-mkString(emp{ename}#(ename), " ", ",") --> ADAMS,ALLEN,BLAKE,CLARK,FORD,JAMES,JONES,KING,MARTIN,MILLER,SCOTT,SMITH,TURNER,WARD
+mkString(emp{ename}#(ename), " ", ",") --> [["ADAMS,ALLEN,BLAKE,CLARK,FORD,JAMES,JONES,KING,MARTIN,MILLER,SCOTT,SMITH,TURNER,WARD"]]
 dept {dname, mkString(|emp{ename}#(1), ",", ",")}#(1) --> [["ACCOUNTING", "CLARK,KING,MILLER"], ["OPERATIONS", ""], ["RESEARCH", "ADAMS,FORD,JONES,SCOTT,SMITH"], ["SALES", "ALLEN,BLAKE,JAMES,MARTIN,TURNER,WARD"]]
 
 //sequence test
 nextval("seq") --> [[10000]]
 
 //----insensitive comparison function test using dialect----
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [9999, "MĀRTIŅŠ ŽVŪKŠĶIS",  "CLERK", 7788, "1983-01-12", 1100, null, 20] --> 1
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [9999, "MĀRTIŅŠ ŽVŪKŠĶIS",  "CLERK", 7788, "1983-01-12", 1100, null, 20] --> [[1]]
 emp[cmp_i(ename, ?)]{ename} --> 'zvuksk --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
 emp[cmp_i_any(ename, ?)]{ename} --> 'zvuksk --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
 emp[cmp_i_start(ename, ?)]{ename} --> 'mar --> [["MARTIN"], ["MĀRTIŅŠ ŽVŪKŠĶIS"]]
@@ -372,12 +372,12 @@ dept d [?]{|emp{ename}#(1), dept_desc(dname, (emp e[d.deptno = e.deptno] {count(
 dept d [?]{|emp{ename}#(1), dept_desc(dname, (emp e[d.deptno = e.deptno] {count(*)})) desc, deptno} --> 10 --> [[[["CLARK"], ["KING"], ["MILLER"]], "ACCOUNTING (3)", 10]]
 
 //insert with select instead of values
-+dummy{dummy} dummy{dummy + 1} --> 1
-+dummy{dummy} dummy[dummy = ?]{dummy + 1} --> 1 --> 1
++dummy{dummy} dummy{dummy + 1} --> [[1]]
++dummy{dummy} dummy[dummy = ?]{dummy + 1} --> 1 --> [[1]]
 //update with select instead of values
-=dummy[dummy = 1]{dummy} dummy[dummy = 2] {dummy} --> 1
+=dummy[dummy = 1]{dummy} dummy[dummy = 2] {dummy} --> [[1]]
 //cleanup
--dummy[dummy != 0] --> 2
+-dummy[dummy != 0] --> [[2]]
 
 //multiple where clause
 dept/emp[deptno = 10][mgr = null]{dname, ename}#(1, 2) --> [["ACCOUNTING", "KING"]]

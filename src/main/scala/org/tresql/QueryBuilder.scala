@@ -51,7 +51,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     c <- tc._2
   } yield (ColExpr(IdentExpr(List(tc._1, c)), tc._1 + "_" + c + "_", null, Some(false), true))
 
-  case class ConstExpr(val value: Any) extends BaseExpr {
+  case class ConstExpr(value: Any) extends BaseExpr {
     override def apply() = value
     def defaultSQL = value match {
       case v: Int => v.toString
@@ -66,12 +66,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   case class AllExpr() extends PrimitiveExpr {
     def defaultSQL = "*"
   }
-  case class IdentAllExpr(val name: List[String]) extends PrimitiveExpr {
+  case class IdentAllExpr(name: List[String]) extends PrimitiveExpr {
     QueryBuilder.this.identAll = true
     def defaultSQL = name.mkString(".") + ".*"
   }
 
-  case class VarExpr(val name: String, val opt: Boolean) extends BaseExpr {
+  case class VarExpr(name: String, opt: Boolean) extends BaseExpr {
     override def apply() = env.get(name) getOrElse (error("Bind variable with name " + name + " not found."))
     var binded = false
     def defaultSQL = {
@@ -99,7 +99,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def toString = if (env contains name) name + " = " + env(name) else name
   }
 
-  case class IdExpr(val seqName: String) extends BaseExpr {
+  case class IdExpr(seqName: String) extends BaseExpr {
     override def apply() = {
       env.tableOption(seqName).map(_.key.cols).filter(_.size == 1).map(_(0))
         .filter(env contains).flatMap(key => Option(env(key))).map { id =>
@@ -116,7 +116,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def toString = "#" + seqName
   }
 
-  case class IdRefExpr(val seqName: String) extends BaseExpr {
+  case class IdRefExpr(seqName: String) extends BaseExpr {
     override def apply() = env.currId(seqName)
     var binded = false
     def defaultSQL = {
@@ -126,7 +126,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def toString = ":#" + seqName
   }
 
-  case class ResExpr(val nr: Int, val col: Any) extends PrimitiveExpr {
+  case class ResExpr(nr: Int, col: Any) extends PrimitiveExpr {
     override def apply() = env(nr) match {
       case null => error("Ancestor result with number " + nr + " not found for expression " + this)
       case r => col match {
@@ -144,7 +144,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def toString = nr + "(" + col + ")"
   }
 
-  case class AssignExpr(val variable: String, val value: Expr) extends BaseExpr {
+  case class AssignExpr(variable: String, value: Expr) extends BaseExpr {
     //add variable to environment so that variable is found when referenced in further expressions
     env(variable) = null
     override def apply() = {
@@ -155,7 +155,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def toString = variable + " = " + value
   }
 
-  case class UnExpr(val op: String, val operand: Expr) extends BaseExpr {
+  case class UnExpr(op: String, operand: Expr) extends BaseExpr {
     override def apply() = op match {
       case "-" => -operand().asInstanceOf[Number]
       case "!" => !operand().asInstanceOf[Boolean]
@@ -172,13 +172,13 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def exprType: Class[_] = if ("-" == op) operand.exprType else classOf[ConstExpr]
   }
 
-  case class InExpr(val lop: Expr, val rop: List[Expr], val not: Boolean) extends BaseExpr {
+  case class InExpr(lop: Expr, rop: List[Expr], not: Boolean) extends BaseExpr {
     override def apply = if (not) lop notIn rop else lop in rop
     def defaultSQL = lop.sql + (if (not) " not" else "") + rop.map(_.sql).mkString(" in(", ", ", ")")
     override def exprType = classOf[ConstExpr]
   }
 
-  case class BinExpr(val op: String, val lop: Expr, val rop: Expr) extends BaseExpr {
+  case class BinExpr(op: String, lop: Expr, rop: Expr) extends BaseExpr {
     override def apply() = {
       def selCols(ex: Expr): List[QueryBuilder#ColExpr] = {
         ex match {
@@ -349,8 +349,8 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }.mkString
       else "")
   }
-  case class Table(val table: Expr, val alias: String, val join: TableJoin, val outerJoin: String,
-    val nullable: Boolean) extends PrimitiveExpr {
+  case class Table(table: Expr, alias: String, join: TableJoin, outerJoin: String, nullable: Boolean)
+  extends PrimitiveExpr {
     def name = table.sql
     def sqlName = name + (if (alias != null) " " + alias else "")
     def aliasOrName = if (alias != null) alias else name
@@ -442,22 +442,31 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     override def defaultSQL = expr.sql
     override def toString = expr + ":" + resType
   }  
-  case class IdentExpr(val name: List[String]) extends PrimitiveExpr {
+  case class IdentExpr(name: List[String]) extends PrimitiveExpr {
     def defaultSQL = name.mkString(".")
   }
-  case class Order(val ordExprs: List[(Expr, Expr, Expr)]) extends PrimitiveExpr {
+  case class Order(ordExprs: List[(Expr, Expr, Expr)]) extends PrimitiveExpr {
     def defaultSQL = ordExprs.map(o => (o._2 match {
       case UnExpr("~", e) => e.sql + " desc"
       case e => e.sql + " asc"
     }) + (if (o._1 != null) " nulls first" else if (o._3 != null) " nulls last" else "")).mkString(", ")
   }
-  case class Group(val groupExprs: List[Expr], val having: Expr) extends PrimitiveExpr {
+  case class Group(groupExprs: List[Expr], having: Expr) extends PrimitiveExpr {
     def defaultSQL = (groupExprs map (_.sql)).mkString(",") +
       (if (having != null) " having " + having.sql else "")
   }
 
   class InsertExpr(table: IdentExpr, alias: String, val cols: List[Expr], val vals: Expr)
     extends DeleteExpr(table, alias, null) {
+    //include env.currId(idExpr.seqName) in result if vals contains IdExpr
+    override def apply() = {
+      val r = super.apply() 
+      vals match {
+        case ValuesExpr(ArrExpr(v) :: _) => v.find(_.isInstanceOf[IdExpr])
+          .map(e => env.currId(e.asInstanceOf[IdExpr].seqName)).map((r, _)).getOrElse(r)
+        case _ => r
+      }
+    }
     override protected def _sql = "insert into " + table.sql + (if (alias == null) "" else " " + alias) +
       " (" + cols.map(_.sql).mkString(", ") + ")" + " " + vals.sql
   }
@@ -465,8 +474,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def defaultSQL = vals map (_.sql) mkString("values " + (if (vals.size > 1) "(" else ""), ",",
         if (vals.size > 1) ")" else "")
   }
-  class UpdateExpr(table: IdentExpr, alias: String, filter: List[Expr], val cols: List[Expr],
-    val vals: Expr) extends DeleteExpr(table, alias, filter) {
+  class UpdateExpr(table: IdentExpr, alias: String, filter: List[Expr],
+      val cols: List[Expr], val vals: Expr)
+  extends DeleteExpr(table, alias, filter) {
     override protected def _sql = "update " + table.sql + (if (alias == null) "" else " " + alias) +
       " set " + (vals match {
         case ValuesExpr(v) => (cols zip v map { v => v._1.sql + " = " + v._2.sql }).mkString(", ")
@@ -474,7 +484,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case x => error("Knipis: " + x)
       }) + (if (filter == null) "" else " where " + where)
   }
-  case class DeleteExpr(val table: IdentExpr, val alias: String, val filter: List[Expr]) extends BaseExpr {
+  case class DeleteExpr(table: IdentExpr, alias: String, filter: List[Expr]) extends BaseExpr {
     override def apply() = {
       val r = org.tresql.Query.update(sql, QueryBuilder.this.bindVariables, env)
       executeChildren match {
@@ -496,7 +506,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
   }
 
-  case class BracesExpr(val expr: Expr) extends BaseExpr {
+  case class BracesExpr(expr: Expr) extends BaseExpr {
     override def apply() = expr()
     def defaultSQL = "(" + expr.sql + ")"
     override def exprType = expr.exprType

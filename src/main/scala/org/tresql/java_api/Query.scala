@@ -13,11 +13,11 @@ object Query {
   def execute(expr: String, params: Object*): Object =
     q(expr, params: _*).asInstanceOf[Object]
   def select(expr: String, params: JMap[String, Object]): Result = {
-    new ResultWrapper(q.select(expr, mapAsScalaMap(params).toMap))
+    new ResultWrapper(q(expr, mapAsScalaMap(params).toMap))
   }
   @annotation.varargs
   def select(expr: String, params: Object*): Result =
-    new ResultWrapper(q.select(expr, params: _*))
+    new ResultWrapper(q(expr, params: _*))
 
   private class RowDelegate(delegate: RowLike) {
     def x = delegate

@@ -38,6 +38,7 @@ object Jsonizer {
         }
       case a: Seq[_] => jsonizeArray(a, buf, rType)
       case a: Array[_] => jsonizeArray(a, buf, rType)
+      case p: Product => jsonizeArray(p productIterator, buf, rType)
       case m: Map[String, _] => jsonizeMap(m, buf, rType)
       case b: Boolean => buf append b.toString
       case n: Byte => buf append n.toString
@@ -117,7 +118,7 @@ object Jsonizer {
     buf append (if (rType == Arrays) ']' else '}')
   }
 
-  def jsonizeArray(result: Iterable[_], buf: Writer, rType: ResultType = Objects) {
+  def jsonizeArray(result: TraversableOnce[_], buf: Writer, rType: ResultType = Objects) {
     buf append '['
     var i = 0
     result foreach { r: Any =>

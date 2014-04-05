@@ -33,26 +33,29 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
   
   override def toList = this.map(_ => toRow).toList
 
-  def toListOfMaps: List[Map[String, _]] = this.map(r => rowToMap).toList
+  def toListOfMaps: List[Map[String, _]] = this.map(_ => rowToMap).toList
   def toListOfRows: List[Row] = toList.asInstanceOf[List[Row]]
+  def toListOfVectors: List[Vector[_]] = this.map(_ => rowToVector(false)).toList
 
   def rowToMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
     case r: Result => r.toListOfMaps
     case x => x
   })).toMap
 
-  def toRow: Row = {
+  def rowToVector(childResultRows: Boolean) = {
     val b = new scala.collection.mutable.ListBuffer[Any]
     var i = 0
     while (i < columnCount) {
       b += (this(i) match {
-        case r: Result => r.toListOfRows
+        case r: Result => if (childResultRows) r.toListOfRows else r.toListOfVectors
         case x => x
       })
       i += 1
     }
-    new Row(Vector(b: _*))
+    Vector(b: _*)
   }
+  
+  def toRow: Row = new Row(rowToVector(true))
 
   /**
    * iterates through this result rows as well as these of descendant result
@@ -78,17 +81,17 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
   override def toString = getClass.toString + ":" + (columns.mkString(","))
 }
 
-case class UpdateResult(res: (Int, Option[Any])) extends Result {
+case class SingleValueResult(res: Any) extends Result {
   var n = true
-  val row = new Row(result._1 :: (res._2 map (List(_))).getOrElse(Nil))
-  val cols = List(Column(-1, "affected row count", null), Column(-1, "id", null))
+  val row = new Row(List(res))
+  val cols = List(Column(-1, "value", null))
   def hasNext = if (n) {n = false; true} else false
   def next = row
-  def columnCount = res._2 map(_ => 2) getOrElse 1
+  def columnCount = 1
   def column(idx: Int) = cols(idx)
   def apply(idx: Int) = row(idx)
-  def typed[T](name: String)(implicit m: Manifest[T]) = throw new UnsupportedOperationException
-  def apply(name: String) = throw new UnsupportedOperationException
+  def typed[T](name: String)(implicit m: Manifest[T]) = this(name).asInstanceOf[T]
+  def apply(name: String) = if (name == "value") res else sys.error("column not found: " + name)
 }
 
 class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _columnCount: Int = -1)
@@ -248,19 +251,8 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
   class R(row: Seq[Any]) extends Row(row) {
     override def apply(name: String) = row(SelectResult.this.colMap(name))
   }
-  //code duplication with Result trait to return more efficient R instead o Row 
-  override def toRow: Row = {
-    val b = new scala.collection.mutable.ListBuffer[Any]
-    var i = 0
-    while (i < columnCount) {
-      b += (this(i) match {
-        case r: Result => r.toListOfRows
-        case x => x
-      })
-      i += 1
-    }
-    new R(Vector(b: _*))
-  }  
+   
+  override def toRow: Row = new R(rowToVector(true))
 
 }
 

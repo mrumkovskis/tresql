@@ -86,22 +86,9 @@ class QueryTest extends Suite {
           case scala.Array(s, p, r) => (s, p, r)
         }
         println("Executing test #" + nr + ":\n" + st)
-        val testRes = if (params == null) Query(st) else Query(st, parsePars(params))
-        testRes match {
-          case i: Int => println("Result: " + i); assert(i === Integer.parseInt(patternRes.trim))
-          case d: BigDecimal => println("Result: " + d); assert(d === BigDecimal(patternRes.trim))
-          case s: String => println("Result: " + s); assert(s === patternRes.trim)
-          case r: Result => {
-            val rs = jsonize(testRes, Arrays)
-            println("Result: " + rs)
-            assert(JSON.parseFull(rs).get === JSON.parseFull(patternRes).get)
-          }
-          case s: Seq[_] => {
-            val rs = jsonize(testRes, Arrays)
-            println("Result: " + rs)
-            assert(JSON.parseFull(rs).get === JSON.parseFull(patternRes).get)
-          }
-        }
+        val testRes = jsonize(if (params == null) Query(st) else Query(st, parsePars(params)), Arrays)
+        println("Result: " + testRes)
+        assert(JSON.parseFull(testRes).get === JSON.parseFull(patternRes).get)
       }
       case _ =>
     }
@@ -124,7 +111,7 @@ class QueryTest extends Suite {
     intercept[Exception](Query.head[Int]("emp[?]{empno}", 'z'))
     //result closing
     intercept[SQLException] {
-      val res = Query.select("emp")
+      val res = Query("emp")
       res.toList
       res(0)
     }
@@ -140,28 +127,29 @@ class QueryTest extends Suite {
     assert(intercept[RuntimeException](Query("emp[:nr]")).getMessage() === "Bind variable with name nr not found.")
     
     var op = OutPar()
-    expectResult(List(10, "x"))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x"))
+    expectResult(List(Vector(List(10, "x"))))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x")
+        .toListOfVectors)
     expectResult("x")(op.value)
     expectResult(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)", 10, "ACC%"))
     expectResult(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)",
         Map("1" -> 10, "2" -> "ACC%")))
     expectResult(None)(Query.headOption[Int]("dept[?]", -1))
     //dynamic tests
-    expectResult(1900)(Query.select("salgrade[1] {hisal, losal}").foldLeft(0)((x, r) => x + 
+    expectResult(1900)(Query("salgrade[1] {hisal, losal}").foldLeft(0)((x, r) => x + 
         r.i.hisal + r.i.losal))
-    expectResult(1900)(Query.select("salgrade[1] {hisal, losal}").foldLeft(0L)((x, r) => x + 
+    expectResult(1900)(Query("salgrade[1] {hisal, losal}").foldLeft(0L)((x, r) => x + 
         r.l.hisal + r.l.losal))
-    expectResult(1900.00)(Query.select("salgrade[1] {hisal, losal}").foldLeft(0D)((x, r) => x + 
+    expectResult(1900.00)(Query("salgrade[1] {hisal, losal}").foldLeft(0D)((x, r) => x + 
         r.dbl.hisal + r.dbl.losal))
-    expectResult(1900)(Query.select("salgrade[1] {hisal, losal}").foldLeft(BigDecimal(0))((x, r) => x + 
+    expectResult(1900)(Query("salgrade[1] {hisal, losal}").foldLeft(BigDecimal(0))((x, r) => x + 
         r.bd.hisal + r.bd.losal))
-    expectResult("KING PRESIDENT")(Query.select("emp[7839] {ename, job}").foldLeft("")((x, r) => 
+    expectResult("KING PRESIDENT")(Query("emp[7839] {ename, job}").foldLeft("")((x, r) => 
         r.s.ename + " " + r.s.job))
-    expectResult("1982-12-09")(Query.select("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) => 
+    expectResult("1982-12-09")(Query("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) => 
         r.d.hiredate.toString))
-    expectResult("1982-12-09 00:00:00.0")(Query.select("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) => 
+    expectResult("1982-12-09 00:00:00.0")(Query("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) => 
         r.t.hiredate.toString))
-    expectResult("KING PRESIDENT")(Query.select("emp[7839] {ename, job}").foldLeft("")((x, r) => 
+    expectResult("KING PRESIDENT")(Query("emp[7839] {ename, job}").foldLeft("")((x, r) => 
         r.ename + " " + r.job))
     //typed tests
     expectResult(("MILLER", BigDecimal(2300.35)))(Query.head[(String, BigDecimal)]("emp[hiredate = '1982-01-23']{ename, sal}"))
@@ -194,13 +182,13 @@ class QueryTest extends Suite {
         Query.list[Tyre]("tyres {carnr nr, brand} #(1, 2)"))
     //column alias test
     expectResult(List(("ACCOUNTING,CLARK", -2450.00), ("ACCOUNTING,KING", -5000.00), ("ACCOUNTING,MILLER", -2300.35))) {
-      Query.select("emp/dept[10] {dname || ',' || ename name, -sal salary}#(1)") map (r=> (r.name, r.dbl.salary)) toList
+      Query("emp/dept[10] {dname || ',' || ename name, -sal salary}#(1)") map (r=> (r.name, r.dbl.salary)) toList
     }
     expectResult(List(0.00, 0.00, 0.00)) {
-      Query.select("emp/dept[10] {sal + -sal salary}#(1)") map (_.salary) toList
+      Query("emp/dept[10] {sal + -sal salary}#(1)") map (_.salary) toList
     }
     expectResult(List(0.00, 0.00, 0.00)) {
-      Query.select("emp/dept[10] {(sal + -sal) salary}#(1)") map (_.salary) toList
+      Query("emp/dept[10] {(sal + -sal) salary}#(1)") map (_.salary) toList
     }
     
     //transformer test
@@ -218,13 +206,13 @@ class QueryTest extends Suite {
       res
     }
     //arrays, streams test
-    expectResult(2)(Query("car_image{carnr, image} + [?, ?], [?, ?]", 1111,
+    expectResult(List(Vector(2)))(Query("car_image{carnr, image} + [?, ?], [?, ?]", 1111,
         new java.io.ByteArrayInputStream(scala.Array[Byte](1, 4, 127, -128, 57)), 2222,
-        scala.Array[Byte](0, 32, 100, 99)))
+        scala.Array[Byte](0, 32, 100, 99)).toListOfVectors)
     expectResult(List(1, 4, 127, -128, 57))(
-        Query.select("car_image[carnr = ?] {image}", 1111).flatMap(_.b.image).toList)
+        Query("car_image[carnr = ?] {image}", 1111).flatMap(_.b.image).toList)
     expectResult(List[Byte](0, 32, 100, 99)) {
-      val res = Query.select("car_image[carnr = ?] {image}", 2222).map(_.bs(0)).toList(0)
+      val res = Query("car_image[carnr = ?] {image}", 2222).map(_.bs(0)).toList(0)
       val bytes = new scala.Array[Byte](4)
       res.read(bytes)
       bytes.toList
@@ -233,37 +221,37 @@ class QueryTest extends Suite {
       val b = Query.head[Any]("car_image[carnr = ?] {image}", 2222).asInstanceOf[java.sql.Blob].getBinaryStream
       Stream.continually(b.read).takeWhile(-1 !=).map(_.toByte).toArray.toList
     }
-    expectResult(1)(Query("car_image[carnr = ?]{image} = [?]", 2222,
-        new java.io.ByteArrayInputStream(scala.Array[Byte](1, 2, 3, 4, 5, 6, 7))))
+    expectResult(List(Vector(1)))(Query("car_image[carnr = ?]{image} = [?]", 2222,
+        new java.io.ByteArrayInputStream(scala.Array[Byte](1, 2, 3, 4, 5, 6, 7))).toListOfVectors)
     expectResult(List(1, 2, 3, 4, 5, 6, 7))(
-        Query.select("car_image[carnr = ?] {image}", 2222).flatMap(_.b("image")).toList)
+        Query("car_image[carnr = ?] {image}", 2222).flatMap(_.b("image")).toList)
     //array binding
     expectResult(List(10, 20, 30))(Query.list[Int]("dept[deptno in ?]{deptno}#(1)", List(30, 20, 10)))
     expectResult(List(10, 20, 30))(Query.list[Int]("dept[deptno in ?]{deptno}#(1)", scala.Array(30, 20, 10)))
     //hierarchical inserts, updates test
-    expectResult(List(1, List(List(1, 1))))(Query(
+    expectResult(List(Vector(List(1, List(List(1, 1))))))(Query(
       """dept{deptno, dname, loc, +emp {empno, ename, deptno}[:empno, :ename, :deptno] emps} +
         [:deptno, :dname, :loc]""",
       Map("deptno" -> 50, "dname" -> "LAW", "loc" -> "DALLAS",
         "emps" -> List(Map("empno" -> 1111, "ename" -> "SMITH", "deptno" -> 50),
-          Map("empno" -> 2222, "ename" -> "LEWIS", "deptno" -> 50)))))
-    expectResult(List(1, List(2, List(1, 1))))(Query(
+          Map("empno" -> 2222, "ename" -> "LEWIS", "deptno" -> 50)))).toListOfVectors)
+    expectResult(List(Vector(List(1, List(2, List(1, 1))))))(Query(
       """dept[:deptno]{deptno, dname, loc,
                -emp[deptno = :deptno],
                +emp {empno, ename, deptno} [:empno, :ename, :deptno] emps} =
         [:deptno, :dname, :loc]""",
       Map("deptno" -> 50, "dname" -> "LAW", "loc" -> "FLORIDA",
         "emps" -> List(Map("empno" -> 1111, "ename" -> "BROWN", "deptno" -> 50),
-          Map("empno" -> 2222, "ename" -> "CHRIS", "deptno" -> 50)))))
-    expectResult(List(2, 1))(Query("emp - [deptno = 50], dept - [50]"))
-    expectResult(List(1, List(List(1, 1))))(Query(
+          Map("empno" -> 2222, "ename" -> "CHRIS", "deptno" -> 50)))).toListOfVectors)
+    expectResult(List(Vector(List(2, 1))))(Query("emp - [deptno = 50], dept - [50]").toListOfVectors)
+    expectResult(List(Vector((List(1, List(List((1,10002), (1,10003)))),10001))))(Query(
       """dept{deptno, dname, loc, +emp {empno, ename, deptno} [#emp, :ename, :#dept] emps} +
         [#dept, :dname, :loc]""",
       Map("dname" -> "LAW", "loc" -> "DALLAS", "emps" -> scala.Array(
-        Map("ename" -> "SMITH"), Map("ename" -> "LEWIS")))))
+        Map("ename" -> "SMITH"), Map("ename" -> "LEWIS")))).toListOfVectors)
       
     //row API
-    expectResult(List("CLARK, KING, MILLER"))(Query.select("dept[10] {dname, |emp {ename}#(1) emps}")
+    expectResult(List("CLARK, KING, MILLER"))(Query("dept[10] {dname, |emp {ename}#(1) emps}")
         .toListOfRows.map(r => r.listOfRows("emps").map(_.ename).mkString(", ")))
         
     println("\n----------- ORT tests ------------\n")
@@ -279,7 +267,8 @@ class QueryTest extends Suite {
         Map("empno" -> null, "ename" -> "LEWIS", "deptno" -> null,
             "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")),
             "work:empno"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))))
-    expectResult(List(1, List(List(List(1, List(List(1, 1))), List(1, List(List(1)))))))(ORT.insert("dept", obj))
+    expectResult((List(1, List(List((List(1, List(List(1, 1))),10005), (List(1, List(List(1))),10006)))),10004))(
+        ORT.insert("dept", obj))
     intercept[Exception](ORT.insert("no_table", obj))
         
     //insert with set parent id and do not insert existing tables with no link to parent
@@ -288,14 +277,14 @@ class QueryTest extends Suite {
         "emp" -> List(Map("empno" -> null, "ename" -> "BROWN", "deptno" -> null),
           Map("empno" -> null, "ename" -> "CHRIS", "deptno" -> null)),
         "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))
-    expectResult(List(1, List(List(1, 1))))(ORT.insert("dept", obj))
+    expectResult((List(1, List(List((1,10007), (1,10008)))),50))(ORT.insert("dept", obj))
 
     obj = Map("dname" -> "FOOTBALL", "loc" -> "MIAMI",
         "emp" -> List(Map("ename" -> "BROWN"), Map("ename" -> "CHRIS")))
-    expectResult(List(1, List(List(1, 1))))(ORT.insert("dept", obj))
+    expectResult((List(1, List(List((1,10010), (1,10011)))),10009))(ORT.insert("dept", obj))
     
     obj = Map("ename" -> "KIKI", "deptno" -> 50, "car"-> List(Map("name"-> "GAZ")))
-    expectResult(1)(ORT.insert("emp", obj))
+    expectResult((1,10012))(ORT.insert("emp", obj))
     
     //Ambiguous references to table: emp. Refs: List(Ref(List(empno)), Ref(List(empno_mgr)))
     obj = Map("emp" -> Map("empno" -> null, "ename" -> "BROWN", "deptno" -> null,
@@ -305,15 +294,15 @@ class QueryTest extends Suite {
     //child foreign key is also its primary key
     obj = Map("deptno" -> 60, "dname" -> "POLAR", "loc" -> "ALASKA",
               "dept_addr" -> List(Map("addr" -> "Halibut")))
-    expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
+    expectResult((List(1, List(List(1))),60))(ORT.insert("dept", obj))
     //child foreign key is also its primary key
     obj = Map("dname" -> "BEACH", "loc" -> "HAWAII",
               "dept_addr" -> List(Map("deptnr" -> 1, "addr" -> "Honolulu", "zip_code" -> "1010")))
-    expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
+    expectResult((List(1, List(List(1))),10013))(ORT.insert("dept", obj))
             
     obj = Map("deptno" -> null, "dname" -> "DRUGS",
               "car" -> List(Map("nr" -> "UUU", "name" -> "BEATLE")))
-    expectResult(List(1, List(List(1))))(ORT.insert("dept", obj))
+    expectResult((List(1, List(List((1, "UUU")))),10014))(ORT.insert("dept", obj))
         
     //multiple column primary key
     obj = Map("empno"->7788, "car_nr" -> "1111")
@@ -344,9 +333,11 @@ class QueryTest extends Suite {
         "work"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
             Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
             "car" -> List(Map("nr" -> "EEE", "name" -> "BEATLE"), Map("nr" -> "III", "name" -> "FIAT")))
-    expectResult(List(1, List(0, List(List(1, List(List(1, 1))),
-                                      List(1, List(List()))),
-                              0, List(1, 1))))(ORT.update("dept", obj))
+    expectResult(List(1, 
+        List(0, 
+            List((List(1, List(List(1, 1))),10015), 
+                (List(1, List(List())),10016)),
+            0, List((1,"EEE"), (1,"III")))))(ORT.update("dept", obj))
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
               Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
@@ -389,7 +380,7 @@ class QueryTest extends Suite {
         Map("empno" -> 7698, "ename" -> "BLAKE", "job" -> "SALESMAN", "mgr" -> 7839,
             "mgr_name" -> null, "deptno" -> 30)),         
       "calculated_children" -> List(Map("x" -> 5)), "deptno" -> 30)
-      expectResult(List(1, List(3, List(1, 1, 1), List(1))))(ORT.save("dept", obj))
+      expectResult(List(1, List(3, List(1, 1, 1), List((1,10017)))))(ORT.save("dept", obj))
 
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->7788, "hours"->10, "empno_mgr"->7839),
@@ -406,7 +397,8 @@ class QueryTest extends Suite {
                 "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->null, "hours"->5, "empno_mgr"->7839),
               Map("wdate"->"2012-7-13", "empno"->null, "hours"->2, "empno_mgr"->7839)))),
         "calculated_children"->List(Map("x"->5)), "deptno"->40)
-    expectResult(List(1, List(2, List(List(1, List(0, List(1, 1))), List(1, List(0, List(1, 1)))))))(ORT.save("dept", obj))
+    expectResult(List(1, List(2, List((List(1, List(0, List(1, 1))),10018),
+        (List(1, List(0, List(1, 1))),10019)))))(ORT.save("dept", obj))
     
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(), "calculated_children"->List(Map("x"->5)), "deptno"->20)
@@ -417,7 +409,7 @@ class QueryTest extends Suite {
     implicit def pohatoMap[T <: Poha](o: T): (String, Map[String, _]) = o match {
       case Car(nr, name) => "car" -> Map("nr" -> nr, "name" -> name)
     }
-    expectResult(1)(ORT.insertObj(Car(8888, "OPEL")))
+    expectResult((1,8888))(ORT.insertObj(Car(8888, "OPEL")))
     expectResult(1)(ORT.updateObj(Car(8888, "SAAB")))
 
     

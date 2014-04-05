@@ -8,20 +8,12 @@ import java.sql.Connection
 
 trait Query extends TypedQuery {
 
-  def apply(expr: String, params: Any*): Any = apply(expr, normalizePars(params: _*))
+  def apply(expr: String, params: Any*): Result = apply(expr, normalizePars(params: _*))
 
   def apply(expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection =
-    null): Any = build(expr, params, false)(tresqlConn)()
-  
-  def select(expr: String, params: Any*) = {
-    apply(expr, normalizePars(params: _*)).asInstanceOf[SelectResult]
-  }
-
-  def select(expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection = 
-    null) = apply(expr, params)(tresqlConn).asInstanceOf[SelectResult]
-   
-  def foreach(expr: String, params: Any*)(f: (RowLike) => Unit = (row) => ()) {
-    select(expr, normalizePars(params: _*)) foreach f
+    null): Result = build(expr, params, false)(tresqlConn)() match {
+    case r: Result => r
+    case x => SingleValueResult(x)
   }
   
   def build(expr: String, params: Map[String, Any] = null, reusableExpr: Boolean = true)
