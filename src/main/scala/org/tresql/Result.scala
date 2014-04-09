@@ -35,19 +35,19 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
 
   def toListOfMaps: List[Map[String, _]] = this.map(_ => rowToMap).toList
   def toListOfRows: List[Row] = toList.asInstanceOf[List[Row]]
-  def toListOfVectors: List[Vector[_]] = this.map(_ => rowToVector(false)).toList
+  def toListOfVectors: List[Vector[_]] = this.map(_ => rowToVector).toList
 
   def rowToMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
     case r: Result => r.toListOfMaps
     case x => x
   })).toMap
 
-  def rowToVector(childResultRows: Boolean) = {
+  def rowToVector = {
     val b = new scala.collection.mutable.ListBuffer[Any]
     var i = 0
     while (i < columnCount) {
       b += (this(i) match {
-        case r: Result => if (childResultRows) r.toListOfRows else r.toListOfVectors
+        case r: Result => r.toListOfVectors
         case x => x
       })
       i += 1
@@ -55,7 +55,10 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
     Vector(b: _*)
   }
   
-  def toRow: Row = new Row(rowToVector(true))
+  def toRow: Row = new Row ((0 to (columnCount - 1)) map (this(_) match {
+    case r: Result => r.toListOfRows
+    case x => x
+  }) toVector)
 
   /**
    * iterates through this result rows as well as these of descendant result
@@ -252,7 +255,10 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
     override def apply(name: String) = row(SelectResult.this.colMap(name))
   }
    
-  override def toRow: Row = new R(rowToVector(true))
+  override def toRow: Row = new R((0 to (columnCount - 1)) map (this(_) match {
+    case r: Result => r.toListOfRows
+    case x => x
+  }) toVector)
 
 }
 
