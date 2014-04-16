@@ -40,12 +40,14 @@ object QueryParser extends parsing.QueryMemParsers {
         case Grp(cols, hv) =>
           bindVars(cols); bindVars(hv)
         case Ord(cols) => cols.foreach(c => bindVars(c._2))
-        case Query(objs, filters, cols, _, gr, ord, _, _) =>
+        case Query(objs, filters, cols, _, gr, ord, off, lim) =>
           bindVars(objs)
           bindVars(filters)
           bindVars(cols)
           bindVars(gr)
           bindVars(ord)
+          bindVars(off)
+          bindVars(lim)
         case Insert(_, _, cols, vals) =>
           bindVars(cols)
           bindVars(vals)
@@ -60,13 +62,7 @@ object QueryParser extends parsing.QueryMemParsers {
         //for the security
         case x => sys.error("Unknown expression: " + x)
       }
-    parseExp(ex) match {
-      case Success(r, _) => {
-        bindVars(r)
-        vars.toList
-      }
-      case x => sys.error(x.toString)
-    }
-
+    bindVars(parseExp(ex))
+    vars.toList
   }
 }
