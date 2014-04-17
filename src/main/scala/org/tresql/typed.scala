@@ -22,7 +22,8 @@ trait Typed { this: RowLike =>
     case "java.math.BigDecimal" => jBigDecimal(columnIndex).asInstanceOf[T]
     case "java.lang.Boolean" => jBoolean(columnIndex).asInstanceOf[T]
     case "Array[Byte]" => bytes(columnIndex).asInstanceOf[T]
-    case "java.io.InputStream" => stream(columnIndex).asInstanceOf[T] 
+    case "java.io.InputStream" => stream(columnIndex).asInstanceOf[T]
+    case "java.sql.Blob" => blob(columnIndex).asInstanceOf[T]
     case x if x.startsWith("scala.Tuple") => typed((convTuple[Product] _).asInstanceOf[Converter[T]], m)
     case x if x.startsWith("scala.collection.immutable.List") && m.typeArguments.size == 1 =>
       result(columnIndex).map(_.typed(0)(m.typeArguments.head)).toList.asInstanceOf[T]

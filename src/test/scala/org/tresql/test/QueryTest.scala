@@ -218,9 +218,12 @@ class QueryTest extends Suite {
       bytes.toList
     }
     expectResult(List[Byte](0, 32, 100, 99)){
-      val b = Query.head[Any]("car_image[carnr = ?] {image}", 2222).asInstanceOf[java.sql.Blob].getBinaryStream
+      val b = Query.head[java.sql.Blob]("car_image[carnr = ?] {image}", 2222).getBinaryStream
       Stream.continually(b.read).takeWhile(-1 !=).map(_.toByte).toArray.toList
     }
+    expectResult(4){
+      Query.head[java.sql.Blob]("car_image[carnr = ?] {image}", 2222).length
+    } 
     expectResult(List(Vector(1)))(Query("car_image[carnr = ?]{image} = [?]", 2222,
         new java.io.ByteArrayInputStream(scala.Array[Byte](1, 2, 3, 4, 5, 6, 7))).toListOfVectors)
     expectResult(List(1, 2, 3, 4, 5, 6, 7))(

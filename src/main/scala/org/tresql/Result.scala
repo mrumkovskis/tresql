@@ -192,6 +192,11 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
     else row(columnIndex).asInstanceOf[java.io.InputStream]
   }
   override def stream(columnLabel: String) = stream(colMap(columnLabel))
+  override def blob(columnIndex: Int) = {
+    if (cols(columnIndex).idx != -1) rs.getBlob(cols(columnIndex).idx)
+    else row(columnIndex).asInstanceOf[java.sql.Blob]    
+  }
+  override def blob(columnLabel: String) = blob(colMap(columnLabel))
 
   //java type support
   override def jInt(columnIndex: Int): java.lang.Integer = {
@@ -420,6 +425,10 @@ trait RowLike extends Dynamic with Typed {
     def selectDynamic(col: String) = stream(col)
     def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
   }
+  private[tresql] object DynamicBlob extends Dynamic {
+    def selectDynamic(col: String) = blob(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }  
   
   def apply(idx: Int): Any
   def apply(name: String): Any
@@ -485,6 +494,9 @@ trait RowLike extends Dynamic with Typed {
   def bs = stream
   def bs(idx: Int) = stream(idx)
   def bs(name: String) = stream(name)
+  def blob(idx: Int) = typed[java.sql.Blob](idx)
+  def blob(name: String) = typed[java.sql.Blob](name)
+  def blob = DynamicBlob
   def result(idx: Int) = typed[Result](idx)
   def result(name: String) = typed[Result](name)
   def result = DynamicResult
