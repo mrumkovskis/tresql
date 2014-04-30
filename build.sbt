@@ -2,17 +2,19 @@ name := "tresql"
 
 organization := "org.tresql"
 
-scalaVersion := "2.10.3"
+scalaVersion := "2.11.0"
 
-crossScalaVersions := Seq("2.9.1", "2.9.2", "2.9.3", "2.10.3")
+crossScalaVersions := Seq("2.10.4", "2.11.0")
 
 scalacOptions ++= Seq("-deprecation", "-Xexperimental")
 
 scalacOptions <<= (scalaVersion, scalacOptions) map 
-  {(v, o)=> if(v.startsWith("2.10")) o ++ Seq("-language:dynamics") else o}
+  {(v, o)=> if(!v.startsWith("2.9")) o ++ Seq("-language:dynamics") else o}
 
-libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "1.9.1" % "test", 
-                            "org.hsqldb" % "hsqldb" % "2.2.8" % "test")
+libraryDependencies ++= ((if (scalaVersion.value startsWith "2.11")
+        Seq("org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.1") else Seq()) ++
+        Seq("org.scalatest" %% "scalatest" % "2.1.5" % "test", 
+        "org.hsqldb" % "hsqldb" % "2.2.8" % "test"))
 
 unmanagedSources in Test <<= (scalaVersion, unmanagedSources in Test) map {
   (v, d) => (if (v.startsWith("2.10")) d else d filterNot (_.getPath endsWith ".java")).get
