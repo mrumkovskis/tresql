@@ -192,11 +192,21 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
     else row(columnIndex).asInstanceOf[java.io.InputStream]
   }
   override def stream(columnLabel: String) = stream(colMap(columnLabel))
+  override def reader(columnIndex: Int) = {
+    if (cols(columnIndex).idx != -1) rs.getCharacterStream(cols(columnIndex).idx)
+    else row(columnIndex).asInstanceOf[java.io.Reader]
+  }
+  override def reader(columnLabel: String) = reader(colMap(columnLabel)) 
   override def blob(columnIndex: Int) = {
     if (cols(columnIndex).idx != -1) rs.getBlob(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[java.sql.Blob]    
   }
   override def blob(columnLabel: String) = blob(colMap(columnLabel))
+  override def clob(columnIndex: Int) = {
+    if (cols(columnIndex).idx != -1) rs.getClob(cols(columnIndex).idx)
+    else row(columnIndex).asInstanceOf[java.sql.Clob]    
+  }
+  override def clob(columnLabel: String) = clob(colMap(columnLabel))
 
   //java type support
   override def jInt(columnIndex: Int): java.lang.Integer = {
@@ -429,7 +439,14 @@ trait RowLike extends Dynamic with Typed {
     def selectDynamic(col: String) = blob(col)
     def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
   }  
-  
+  private[tresql] object DynamicReader extends Dynamic {
+    def selectDynamic(col: String) = reader(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }
+  private[tresql] object DynamicClob extends Dynamic {
+    def selectDynamic(col: String) = clob(col)
+    def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
+  }    
   def apply(idx: Int): Any
   def apply(name: String): Any
   def selectDynamic(name: String) = apply(name)
@@ -497,6 +514,12 @@ trait RowLike extends Dynamic with Typed {
   def blob(idx: Int) = typed[java.sql.Blob](idx)
   def blob(name: String) = typed[java.sql.Blob](name)
   def blob = DynamicBlob
+  def reader(idx: Int) = typed[java.io.Reader](idx)
+  def reader(name: String) = typed[java.io.Reader](name)
+  def reader = DynamicReader
+  def clob(idx: Int) = typed[java.sql.Clob](idx)
+  def clob(name: String) = typed[java.sql.Clob](name)
+  def clob = DynamicClob  
   def result(idx: Int) = typed[Result](idx)
   def result(name: String) = typed[Result](name)
   def result = DynamicResult

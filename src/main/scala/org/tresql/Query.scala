@@ -176,6 +176,9 @@ trait Query extends TypedQuery {
         case bn: java.math.BigDecimal => st.setBigDecimal(idx, bn)
         case bd: BigDecimal => st.setBigDecimal(idx, bd.bigDecimal)
         case in: java.io.InputStream => st.setBinaryStream(idx, in)
+        case bl: java.sql.Blob => st.setBlob(idx, bl)
+        case rd: java.io.Reader => st.setCharacterStream(idx, rd)
+        case cl: java.sql.Clob => st.setClob(idx, cl)
         case ab: Array[Byte] => st.setBytes(idx, ab)
         //array binding
         case i: scala.collection.Traversable[_] => i foreach (bindVar(_)); idx -= 1
