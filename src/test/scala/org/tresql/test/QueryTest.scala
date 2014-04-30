@@ -205,7 +205,7 @@ class QueryTest extends Suite {
       ex.close
       res
     }
-    //arrays, streams test
+    //array, stream, reader, blob, clob test
     expectResult(List(Vector(2)))(Query("car_image{carnr, image} + [?, ?], [?, ?]", 1111,
         new java.io.ByteArrayInputStream(scala.Array[Byte](1, 4, 127, -128, 57)), 2222,
         scala.Array[Byte](0, 32, 100, 99)).toListOfVectors)
@@ -223,7 +223,21 @@ class QueryTest extends Suite {
     }
     expectResult(4){
       Query.head[java.sql.Blob]("car_image[carnr = ?] {image}", 2222).length
-    } 
+    }
+    expectResult(List("ACCOUNTING", "OPERATIONS", "RESEARCH", "SALES")) {
+      Query.list[java.io.Reader]("dept{dname}#(1)").map(r => 
+        new String(Stream.continually(r.read).takeWhile(-1 !=).map(_.toChar).toArray)).toList
+    }
+    expectResult(List("ACCOUNTING", "OPERATIONS", "RESEARCH", "SALES")) {
+      Query.list[java.sql.Clob]("dept{dname}#(1)").map(c => {
+        val r = c.getCharacterStream
+        new String(Stream.continually(r.read).takeWhile(-1 !=).map(_.toChar).toArray)
+      }).toList
+    }
+    expectResult(List(Vector(1))) {
+      Query("+dept_addr", 10, new java.io.StringReader("Strelnieku str."),
+          new java.io.StringReader("LV-1010")).toListOfVectors
+    }
     expectResult(List(Vector(1)))(Query("car_image[carnr = ?]{image} = [?]", 2222,
         new java.io.ByteArrayInputStream(scala.Array[Byte](1, 2, 3, 4, 5, 6, 7))).toListOfVectors)
     expectResult(List(1, 2, 3, 4, 5, 6, 7))(
