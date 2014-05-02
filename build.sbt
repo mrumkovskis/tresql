@@ -11,10 +11,17 @@ scalacOptions ++= Seq("-deprecation", "-Xexperimental")
 scalacOptions <<= (scalaVersion, scalacOptions) map 
   {(v, o)=> if(!v.startsWith("2.9")) o ++ Seq("-language:dynamics") else o}
 
-libraryDependencies ++= ((if (scalaVersion.value startsWith "2.11")
-        Seq("org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.1") else Seq()) ++
-        Seq("org.scalatest" %% "scalatest" % "2.1.5" % "test", 
-        "org.hsqldb" % "hsqldb" % "2.2.8" % "test"))
+libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "2.1.5" % "test", 
+                            "org.hsqldb" % "hsqldb" % "2.2.8" % "test")
+
+libraryDependencies := {
+  CrossVersion.partialVersion(scalaVersion.value) match {
+    case Some((2, scalaMajor)) if scalaMajor >= 11 =>
+      libraryDependencies.value :+ "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.1"
+    case _ =>
+      libraryDependencies.value
+  }
+}
 
 unmanagedSources in Test <<= (scalaVersion, unmanagedSources in Test) map {
   (v, d) => (if (v.startsWith("2.10")) d else d filterNot (_.getPath endsWith ".java")).get
