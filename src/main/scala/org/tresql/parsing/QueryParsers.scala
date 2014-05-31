@@ -17,9 +17,10 @@ trait QueryParsers extends StandardTokenParsers {
   case class Ident(ident: List[String]) extends Exp {
     def tresql = ident.mkString(".")
   }
-  case class Variable(variable: String, opt: Boolean) extends Exp {
+  case class Variable(variable: String, typ: String, opt: Boolean) extends Exp {
     def tresql = (if (variable == "?") "?" else ":") +
       (if (variable contains "'") "\"" + variable + "\"" else "'" + variable + "'") +
+      (if (typ == null) "" else ": " + typ) +
       (if (opt) "?" else "")
   }
   case class Id(name: String) extends Exp {
@@ -143,9 +144,10 @@ trait QueryParsers extends StandardTokenParsers {
 
   def qualifiedIdent: Parser[Ident] = rep1sep(ident, ".") ^^ Ident named "qualified-ident"
   def qualifiedIdentAll: Parser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
-  def variable: Parser[Variable] = ((":" ~> ((ident | stringLit) ~ opt("?"))) | "?") ^^ {
-    case "?" => Variable("?", false)
-    case (i: String) ~ o => Variable(i, o != None)
+  def variable: Parser[Variable] = ((":" ~> ((ident | stringLit) ~ opt(":" ~> ident) ~ opt("?")))
+      | "?") ^^ {
+    case "?" => Variable("?", null, false)
+    case (i: String) ~ (t: Option[String]) ~ o => Variable(i, t orNull, o != None)
   } named "variable"
   def id: Parser[Id] = "#" ~> ident ^^ Id named "id"
   def idref: Parser[IdRef] = ":#" ~> ident ^^ IdRef named "id-ref"

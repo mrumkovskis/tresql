@@ -119,7 +119,7 @@ package dialects {
     def isDefinedAt(e: Expr) = e match {
       case e.builder.FunExpr(mode @ ("cmp_i" | "cmp_i_start" | "cmp_i_end" | "cmp_i_any" | "cmp_i_exact"),
         List(col, value), false) => true
-      case v @ e.builder.VarExpr(_, _) if (cmp_i.get) => {
+      case v @ e.builder.VarExpr(_, _, _) if (cmp_i.get) => {
         var (acc, upp) = (false, false)
         v() match {
           case x if x != null => {

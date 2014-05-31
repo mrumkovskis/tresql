@@ -16,16 +16,16 @@ object QueryParser extends parsing.QueryMemParsers {
     }
   }
 
-  def bindVariables(ex: String): List[String] = {
+  def bindVariables(ex: String): List[Variable] = {
     var bindIdx = 0
-    val vars = scala.collection.mutable.ListBuffer[String]()
+    val vars = scala.collection.mutable.ListBuffer[Variable]()
     def bindVars(parsedExpr: Any): Any =
       parsedExpr match {
         case _: Ident | _: Id | _: IdRef | _: Res | _: All | _: IdentAll | Null | null =>
         case l: List[_] => l foreach bindVars
-        case Variable("?", _) =>
-          bindIdx += 1; vars += bindIdx.toString
-        case Variable(n, _) => vars += n
+        case v @ Variable("?", _, _) =>
+          bindIdx += 1; vars += v copy bindIdx.toString
+        case v @ Variable(_, _, _) => vars += v
         case Fun(_, pars, _) => bindVars(pars)
         case UnOp(_, operand) => bindVars(operand)
         case BinOp(_, lop, rop) =>

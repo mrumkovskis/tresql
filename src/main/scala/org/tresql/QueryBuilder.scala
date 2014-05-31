@@ -71,7 +71,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def defaultSQL = name.mkString(".") + ".*"
   }
 
-  case class VarExpr(name: String, opt: Boolean) extends BaseExpr {
+  case class VarExpr(name: String, typ: String, opt: Boolean) extends BaseExpr {
     override def apply() = env.get(name) getOrElse (error("Bind variable with name " + name + " not found."))
     var binded = false
     def defaultSQL = {
@@ -498,7 +498,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     def where = filter match {
       case (c @ ConstExpr(x)) :: Nil => Option(alias).getOrElse(table.sql) + "." +
         env.table(table.sql).key.cols(0) + " = " + c.sql
-      case (v @ VarExpr(x, _)) :: Nil => Option(alias).getOrElse(table.sql) + "." +
+      case (v @ VarExpr(x, _, _)) :: Nil => Option(alias).getOrElse(table.sql) + "." +
         env.table(table.sql).key.cols(0) + " = " + v.sql
       case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
       case l => Option(alias).getOrElse(table.sql) + "." + env.table(table.sql).key.cols(0) + " in(" +
@@ -623,7 +623,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   private def patchVals(table: Ident, cols: List[Col], vals: List[Expr]) = {
     val diff = Option(cols).getOrElse(this.table(table).cols).size - vals.size
     val allExprIdx = vals.indexWhere(_.isInstanceOf[AllExpr])
-    def v(i: Int) = buildInternal(Variable("?", false), VALUES_CTX)
+    def v(i: Int) = buildInternal(Variable("?", null, false), VALUES_CTX)
     if (diff > 0 || allExprIdx != -1) allExprIdx match {
       case -1 if vals.size == 0 => 1 to diff map v toList //empty value clause
       case -1 => vals //perhaps hierarchical update
@@ -826,7 +826,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case x: Boolean => ConstExpr(x)
         case Null => ConstExpr(null)
         //variable assignment
-        case BinOp("=", Variable(n, o), v) if (parseCtx == ROOT_CTX) =>
+        case BinOp("=", Variable(n, _, o), v) if (parseCtx == ROOT_CTX) =>
           AssignExpr(n, buildInternal(v, parseCtx))
         //insert
         case Insert(t, a, c, v) =>
@@ -894,9 +894,10 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case Arr(l: List[_]) => l map { buildInternal(_, parseCtx) } filter (_ != null) match {
           case al if al.size > 0 => ArrExpr(al) case _ => null 
         }
-        case Variable("?", o) =>
-          this.bindIdx += 1; VarExpr(this.bindIdx.toString, o)
-        case Variable(n, o) => if (!env.reusableExpr && o && !(env contains n)) null else VarExpr(n, o)
+        case Variable("?", t, o) =>
+          this.bindIdx += 1; VarExpr(this.bindIdx.toString, t, o)
+        case Variable(n, t, o) =>
+          if (!env.reusableExpr && o && !(env contains n)) null else VarExpr(n, t, o)
         case Id(seq) => IdExpr(seq)
         case IdRef(seq) => IdRefExpr(seq)
         case Res(r, c) => ResExpr(r, c)
