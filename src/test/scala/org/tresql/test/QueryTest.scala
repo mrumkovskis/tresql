@@ -271,6 +271,14 @@ class QueryTest extends Suite {
     expectResult(List("CLARK, KING, MILLER"))(Query("dept[10] {dname, |emp {ename}#(1) emps}")
         .toListOfRows.map(r => r.listOfRows("emps").map(_.ename).mkString(", ")))
         
+    //tresql string interpolation tests
+    val name = "S%"
+    expectResult(List(Vector("SCOTT"), Vector("SMITH"), Vector("SMITH"))) {
+      tresql"emp [ename ~ $name] {ename}#(1)".toListOfVectors
+    }
+    val salary = 1000
+    expectResult(List(Vector("SCOTT")))(tresql"emp [ename ~ $name & sal > $salary] {ename}#(1)".toListOfVectors)
+        
     println("\n----------- ORT tests ------------\n")
     
     println("\n--- INSERT ---\n")

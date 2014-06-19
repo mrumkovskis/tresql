@@ -2,6 +2,10 @@ package org
 
 package object tresql {
 
+  implicit class Tresql(val sc: StringContext) extends AnyVal {
+    def tresql(params: Any*) = Query(sc.parts mkString "?", params: _*)
+  }
+  
   implicit def jdbcResultToTresqlResult(jdbcResult: java.sql.ResultSet) = {
     val md = jdbcResult.getMetaData
     new SelectResult(jdbcResult, Vector((1 to md.getColumnCount map {
