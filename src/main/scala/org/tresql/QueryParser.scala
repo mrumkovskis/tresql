@@ -16,53 +16,59 @@ object QueryParser extends parsing.QueryMemParsers {
     }
   }
 
-  def bindVariables(ex: String): List[Variable] = {
+  def extract[T](exp: String, extractor: PartialFunction[Any, T]): List[T] = {
+    var result = List[T]()
+    var extract_collect_traverse: PartialFunction[Any, Any] = null
+    extract_collect_traverse = extractor andThen { case v: T => result ::= v } orElse {
+      case _: Ident | _: Id | _: IdRef | _: Res | _: All | _: IdentAll | _: Variable | Null | null =>
+      case l: List[_] => l foreach extract_collect_traverse
+      case Fun(_, pars, _) => extract_collect_traverse(pars)
+      case UnOp(_, operand) => extract_collect_traverse(operand)
+      case BinOp(_, lop, rop) =>
+        extract_collect_traverse(lop); extract_collect_traverse(rop)
+      case In(lop, rop, _) =>
+        extract_collect_traverse(lop); extract_collect_traverse(rop)
+      case Obj(t, _, j, _, _) =>
+        extract_collect_traverse(j); extract_collect_traverse(t)
+      case Join(_, j, _) => extract_collect_traverse(j)
+      case Col(c, _, _) => extract_collect_traverse(c)
+      case Cols(_, cols) => extract_collect_traverse(cols)
+      case Grp(cols, hv) =>
+        extract_collect_traverse(cols); extract_collect_traverse(hv)
+      case Ord(cols) => cols.foreach(c => extract_collect_traverse(c._2))
+      case Query(objs, filters, cols, _, gr, ord, off, lim) =>
+        extract_collect_traverse(objs)
+        extract_collect_traverse(filters)
+        extract_collect_traverse(cols)
+        extract_collect_traverse(gr)
+        extract_collect_traverse(ord)
+        extract_collect_traverse(off)
+        extract_collect_traverse(lim)
+      case Insert(_, _, cols, vals) =>
+        extract_collect_traverse(cols)
+        extract_collect_traverse(vals)
+      case Update(_, _, filter, cols, vals) =>
+        extract_collect_traverse(filter)
+        extract_collect_traverse(cols)
+        extract_collect_traverse(vals)
+      case Delete(_, _, filter) => extract_collect_traverse(filter)
+      case Arr(els) => extract_collect_traverse(els)
+      case Filters(f) => extract_collect_traverse(f)
+      case Braces(expr) => extract_collect_traverse(expr)
+      //for the security
+      case x => sys.error("Unknown expression: " + x)
+    }
+    extract_collect_traverse(parseExp(exp))
+    result reverse
+  }
+
+  def variableExtractor: PartialFunction[Any, Variable] = {
     var bindIdx = 0
-    val vars = scala.collection.mutable.ListBuffer[Variable]()
-    def bindVars(parsedExpr: Any): Any =
-      parsedExpr match {
-        case _: Ident | _: Id | _: IdRef | _: Res | _: All | _: IdentAll | Null | null =>
-        case l: List[_] => l foreach bindVars
-        case v @ Variable("?", _, _) =>
-          bindIdx += 1; vars += v copy bindIdx.toString
-        case v @ Variable(_, _, _) => vars += v
-        case Fun(_, pars, _) => bindVars(pars)
-        case UnOp(_, operand) => bindVars(operand)
-        case BinOp(_, lop, rop) =>
-          bindVars(lop); bindVars(rop)
-        case In(lop, rop, _) =>
-          bindVars(lop); bindVars(rop)
-        case Obj(t, _, j, _, _) =>
-          bindVars(j); bindVars(t)
-        case Join(_, j, _) => bindVars(j)
-        case Col(c, _, _) => bindVars(c)
-        case Cols(_, cols) => bindVars(cols)
-        case Grp(cols, hv) =>
-          bindVars(cols); bindVars(hv)
-        case Ord(cols) => cols.foreach(c => bindVars(c._2))
-        case Query(objs, filters, cols, _, gr, ord, off, lim) =>
-          bindVars(objs)
-          bindVars(filters)
-          bindVars(cols)
-          bindVars(gr)
-          bindVars(ord)
-          bindVars(off)
-          bindVars(lim)
-        case Insert(_, _, cols, vals) =>
-          bindVars(cols)
-          bindVars(vals)
-        case Update(_, _, filter, cols, vals) =>
-          bindVars(filter)
-          bindVars(cols)
-          bindVars(vals)
-        case Delete(_, _, filter) => bindVars(filter)
-        case Arr(els) => bindVars(els)
-        case Filters(f) => bindVars(f)
-        case Braces(expr) => bindVars(expr)
-        //for the security
-        case x => sys.error("Unknown expression: " + x)
-      }
-    bindVars(parseExp(ex))
-    vars.toList
+    val f: PartialFunction[Any, Variable] = {
+      case v @ Variable("?", _, _) =>
+        bindIdx += 1; v copy bindIdx.toString
+      case v: Variable => v
+    }
+    f
   }
 }
