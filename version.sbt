@@ -1,1 +1,1 @@
-version := "6.0-M5-SNAPSHOT"
+version := "6.0-M6-SNAPSHOT"
