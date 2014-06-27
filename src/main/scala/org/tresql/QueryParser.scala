@@ -19,7 +19,7 @@ object QueryParser extends parsing.QueryMemParsers {
   def extract[T](exp: String, extractor: PartialFunction[Any, T]): List[T] = {
     var result = List[T]()
     var extract_collect_traverse: PartialFunction[Any, Any] = null
-    extract_collect_traverse = extractor andThen { case v: T => result ::= v } orElse {
+    val traverse: PartialFunction[Any, Any] = {
       case _: Ident | _: Id | _: IdRef | _: Res | _: All | _: IdentAll | _: Variable | Null | null =>
       case l: List[_] => l foreach extract_collect_traverse
       case Fun(_, pars, _) => extract_collect_traverse(pars)
@@ -55,9 +55,15 @@ object QueryParser extends parsing.QueryMemParsers {
       case Arr(els) => extract_collect_traverse(els)
       case Filters(f) => extract_collect_traverse(f)
       case Braces(expr) => extract_collect_traverse(expr)
-      //for the security
-      case x => sys.error("Unknown expression: " + x)
+      case x => //don't throw an error since extractor can change expression. sys.error("Unknown expression: " + x)
     }
+    val collect: PartialFunction[T, Any] = {
+      case v: T =>
+        result ::= v
+        traverse(v)
+    }
+    
+    extract_collect_traverse = extractor andThen collect orElse traverse
     extract_collect_traverse(parseExp(exp))
     result reverse
   }
