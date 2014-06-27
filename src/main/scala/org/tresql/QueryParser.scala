@@ -62,10 +62,10 @@ object QueryParser extends parsing.QueryMemParsers {
     val collect: PartialFunction[T, Any] = {
       case v: T =>
         result ::= v
-        traverse(v)
+        v
     }
     
-    extract_collect_traverse = extractor andThen collect orElse traverse
+    extract_collect_traverse = extractor andThen collect andThen traverse orElse traverse
     extract_collect_traverse(parseExp(exp))
     result reverse
   }
