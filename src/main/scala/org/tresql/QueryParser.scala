@@ -55,7 +55,9 @@ object QueryParser extends parsing.QueryMemParsers {
       case Arr(els) => extract_collect_traverse(els)
       case Filters(f) => extract_collect_traverse(f)
       case Braces(expr) => extract_collect_traverse(expr)
-      case x => //don't throw an error since extractor can change expression. sys.error("Unknown expression: " + x)
+      //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
+      case x: Exp => sys.error("Unknown expression: " + x)
+      case _ => //don't throw an error since extractor can change expression.
     }
     val collect: PartialFunction[T, Any] = {
       case v: T =>
