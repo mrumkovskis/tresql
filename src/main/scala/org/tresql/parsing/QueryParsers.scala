@@ -10,7 +10,7 @@ trait QueryParsers extends StandardTokenParsers {
   lexical.delimiters ++= (lexical.reserved ++ 
       Set("(", ")", "[", "]", "{", "}", "#", "@", "^", ",", ".", ":", ":#", ";"))
 
-  trait Exp {
+  sealed trait Exp {
     def tresql: String
   }
 

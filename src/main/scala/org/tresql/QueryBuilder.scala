@@ -939,7 +939,7 @@ object QueryBuilder {
   }
 }
 
-abstract class Expr extends (() => Any) with Ordered[Expr] {
+sealed abstract class Expr extends (() => Any) with Ordered[Expr] {
 
   type Number = BigDecimal
 
