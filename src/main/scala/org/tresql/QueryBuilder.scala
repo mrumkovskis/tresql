@@ -3,8 +3,8 @@ package org.tresql
 import sys._
 import QueryParser._
 
-class QueryBuilder private (val env: Env, private val queryDepth: Int,
-  private var bindIdx: Int) extends EnvProvider with Transformer with Typer {
+class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: Int)
+  extends EnvProvider with Transformer with Typer {
 
   val ROOT_CTX = "ROOT"
   val QUERY_CTX = "QUERY"
@@ -23,6 +23,9 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
 
   private def this(env: Env) = this(env, 0, 0)
 
+  //parsed expression from which executable expr is built
+  private var exp: Any = null
+  
   //used for non flat updates, i.e. hierarhical object.
   private val childUpdates = scala.collection.mutable.ListBuffer[(Expr, String)]()
 
@@ -300,6 +303,15 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
     }
     def defaultSQL = error("Method not implemented for external function")
     override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
+  }
+  
+  case class RecursiveExpr(exp: Any) extends BaseExpr {
+    val qBuilder = new QueryBuilder(new Env(QueryBuilder.this, QueryBuilder.this.env.reusableExpr),
+        queryDepth, -1)
+    qBuilder.exp = exp
+    lazy val expr: Expr = qBuilder.buildInternal(exp, QUERY_CTX)
+    override def apply() = expr()
+    def defaultSQL = expr sql
   }
   
   case class ArrExpr(elements: List[Expr]) extends BaseExpr {
@@ -848,6 +860,15 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
           val ex = b.buildDelete(t, a, f)
           this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
+        //recursive child query
+        case UnOp("|", join: Arr) =>
+          this.separateQueryFlag = true
+          RecursiveExpr(exp match {
+            case q: QueryParser.Query => q.copy(filter = q.filter.copy(filters = q.filter.filters match {
+              case Nil => join :: Nil
+              case _ :: t => join :: t
+            }))
+          })
         //child query
         case UnOp("|", oper) =>
           val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth + 1, bindIdx)
@@ -868,6 +889,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
         case q: QueryParser.Query => parseCtx match {
           case ROOT_CTX =>
             val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
+            b.exp = exp
             val ex = b.buildInternal(q, QUERY_CTX); this.bindIdx = b.bindIdx; ex
           case _ => buildSelect(q)
         }
@@ -924,10 +946,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
   }
 
   private def build(ex: String): Expr = {
-    buildInternal(parseExp(ex))
+    exp = parseExp(ex)
+    buildInternal(exp)
   }
 
   private def build(ex: Exp): Expr = {
+    exp = ex
     buildInternal(ex)
   }
       
