@@ -817,6 +817,12 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
       }
       filterExpr(filterList)
     }
+    def maybeCallMacro(fun: FunExpr) = {
+      if (Env isMacroDefined fun.name) {
+        Env.macros.map(m => m.getClass.getMethods.filter(_.getName == fun.name).head
+            .invoke(m, (this :: fun.params): _*)).get.asInstanceOf[Expr]
+      } else fun
+    }
     ctxStack ::= parseCtx
     try {
       parsedExpr match {
@@ -887,7 +893,7 @@ class QueryBuilder private (val env: Env, private val queryDepth: Int,
           }
         case Fun(n, pl: List[_], d) =>
           val pars = pl map { buildInternal(_, FUN_CTX) }
-          if (pars.exists(_ == null)) null else FunExpr(n, pars, d)
+          if (pars.exists(_ == null)) null else maybeCallMacro(FunExpr(n, pars, d))
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => IdentAllExpr(i.ident)
         case Arr(l: List[_]) => l map { buildInternal(_, parseCtx) } filter (_ != null) match {

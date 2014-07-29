@@ -113,6 +113,9 @@ object Env extends Resources {
   private var _functions: Option[Any] = None
   private var _functionNames: Option[Set[String]] = None
   functions = new Functions //invoke setter to set function names
+  //macros
+  private var _macros: Option[Any] = None
+  private var _macrosNames: Option[Set[String]] = None
   //cache
   private var _cache: Option[Cache] = None
   private var logger: (=> String, Int) => Unit = null
@@ -124,6 +127,8 @@ object Env extends Resources {
   override def idExpr = _idExpr.getOrElse(super.idExpr)
   def functions = _functions
   def isDefined(functionName: String) = _functionNames.map(_.contains(functionName)).getOrElse(false)
+  def macros = _macros
+  def isMacroDefined(macroName: String) = _macrosNames.map(_.contains(macroName)).getOrElse(false)
   def cache = _cache
   
   def conn_=(conn: java.sql.Connection) = this.threadConn set conn
@@ -135,6 +140,11 @@ object Env extends Resources {
     this._functions = Option(funcs)
     this._functionNames = functions.flatMap(f => Option(f.getClass.getMethods.map(_.getName).toSet))
   }
+  def macros_=(macr: Any) = {
+    this._macros = Option(macr)
+    this._macrosNames = macros.flatMap(f => Option(f.getClass.getMethods.map(_.getName).toSet))
+  }
+  
   def cache_=(cache: Cache) = this._cache = Option(cache)
   
   def log(msg: => String, level: Int = 0): Unit = if (logger != null) logger(msg, level)
