@@ -258,6 +258,7 @@ work[work.empno_mgr m]emp {hours, ename}#(1,2) --> [[3, null], [4, null], [5, "J
 //hierarchical recursive query
 emp[mgr = null]{empno, ename, |[:1(empno) = mgr]}#(1) --> [[7839, "KING", [[7566, "JONES", [[7788, "SCOTT", [[7876, "ADAMS", []]]], [7902, "FORD", [[7369, "SMITH", []]]]]], [7698, "BLAKE", [[7499, "ALLEN", []], [7521, "WARD", []], [7654, "MARTIN", []], [7844, "TURNER", []], [7900, "JAMES", []]]], [7782, "CLARK", [[7934, "MILLER", []]]]]]]
 emp[7369]{empno, ename, mgr, |[:1(mgr) = empno]}#(1) --> [[7369, "SMITH", 7902, [[7902, "FORD", 7566, [[7566, "JONES", 7839, [[7839, "KING", null, []]]]]]]]]
+emp[mgr = null][sal > 2000]{empno, ename, |[:1(empno) = mgr]}#(1) --> [[7839, "KING", [[7566, "JONES", [[7788, "SCOTT", []], [7902, "FORD", []]]], [7698, "BLAKE", []], [7782, "CLARK", []]]]]
 
 //optional binding
 dept[deptno = :id:long?] {deptno} #(deptno) --> [[10], [20], [30], [40]]
