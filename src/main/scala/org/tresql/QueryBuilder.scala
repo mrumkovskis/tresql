@@ -310,13 +310,8 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
       error(s"Recursive execution stack depth $queryDepth exceeded, check for loops in data.") 
     val qBuilder = new QueryBuilder(new Env(QueryBuilder.this, QueryBuilder.this.env.reusableExpr),
         queryDepth + 1, -1)
-    qBuilder.exp = exp
-    lazy val expr: Expr = qBuilder.buildInternal(exp, QUERY_CTX) match {
-      case q: qBuilder.SelectExpr =>
-        //switch off join with ancestor generation
-        q.copy(parentJoin = None)
-      case e => e
-    }
+    qBuilder.exp = QueryBuilder.this.exp
+    lazy val expr: Expr = qBuilder.buildInternal(exp, QUERY_CTX)
     override def apply() = expr()
     def defaultSQL = expr sql
   }
@@ -884,10 +879,12 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
         case UnOp("|", join: Arr) =>
           this.separateQueryFlag = true
           RecursiveExpr(exp match {
-            case q: QueryParser.Query => q.copy(filter = q.filter.copy(filters = q.filter.filters match {
-              case Nil => join :: Nil
-              case _ :: t => join :: t
-            }))
+            case q: QueryParser.Query =>
+              val t = q.tables
+              //copy join condition in the right place for parent child join calculation 
+              q.copy(tables = t.head.copy(join = QueryParser.Join(false, join, false)) :: t.tail,
+                  //drop first filter for recursive query, since first filter is used to obtain initial set
+                  filter = q.filter.copy(filters = q.filter.filters drop 1))
           })
         //child query
         case UnOp("|", oper) =>
