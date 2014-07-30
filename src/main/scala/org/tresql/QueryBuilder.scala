@@ -307,9 +307,14 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   
   case class RecursiveExpr(exp: Any) extends BaseExpr {
     val qBuilder = new QueryBuilder(new Env(QueryBuilder.this, QueryBuilder.this.env.reusableExpr),
-        queryDepth, -1)
+        queryDepth + 1, -1)
     qBuilder.exp = exp
-    lazy val expr: Expr = qBuilder.buildInternal(exp, QUERY_CTX)
+    lazy val expr: Expr = qBuilder.buildInternal(exp, QUERY_CTX) match {
+      case q: qBuilder.SelectExpr =>
+        //switch off join with ancestor generation
+        q.copy(parentJoin = None)
+      case e => e
+    }
     override def apply() = expr()
     def defaultSQL = expr sql
   }
@@ -956,6 +961,15 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   }
       
   override def toString = "QueryBuilder: " + queryDepth
+  
+  //for debugging purposes
+  def printBuilderChain: Unit = {
+    println(s"$this; ${this.exp}")
+    env.provider.map {
+      case b: QueryBuilder => b.printBuilderChain
+      case _ => 
+    }
+  }
 
 }
 
