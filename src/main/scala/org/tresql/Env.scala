@@ -120,6 +120,9 @@ object Env extends Resources {
   private var _cache: Option[Cache] = None
   private var logger: (=> String, Int) => Unit = null
   
+  //recursive execution depth
+  private var _recursive_stack_depth = 50
+  
   def apply(params: Map[String, Any], reusableExpr: Boolean) = new Env(params, this, reusableExpr)
   def conn = { val c = threadConn.get; if (c == null) sharedConn else c }
   override def metaData = _metaData.get
@@ -144,6 +147,9 @@ object Env extends Resources {
     this._macros = Option(macr)
     this._macrosNames = macros.flatMap(f => Option(f.getClass.getMethods.map(_.getName).toSet))
   }
+  
+  def recursive_stack_dept = _recursive_stack_depth
+  def recursive_stack_dept_=(depth: Int) = _recursive_stack_depth = depth
   
   def cache_=(cache: Cache) = this._cache = Option(cache)
   

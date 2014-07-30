@@ -306,6 +306,8 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   }
   
   case class RecursiveExpr(exp: Any) extends BaseExpr {
+    if (queryDepth >= Env.recursive_stack_dept)
+      error(s"Recursive execution stack depth $queryDepth exceeded, check for loops in data.") 
     val qBuilder = new QueryBuilder(new Env(QueryBuilder.this, QueryBuilder.this.env.reusableExpr),
         queryDepth + 1, -1)
     qBuilder.exp = exp
