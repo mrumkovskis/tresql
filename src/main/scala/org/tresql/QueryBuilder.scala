@@ -539,7 +539,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     }
   }
   case class SQLConcatExpr(delimiter: String = " ", expr1: Expr, expr2: Expr) extends PrimitiveExpr {
-    def defaultSQL = expr1.sql + delimiter + expr2
+    def defaultSQL = expr1.sql + delimiter + expr2.sql
   }
   
 
