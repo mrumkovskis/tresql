@@ -529,6 +529,19 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     def defaultSQL = "(" + expr.sql + ")"
     override def exprType = expr.exprType
   }
+  
+  //sql helper expressions to enable advanced syntax. these expression are expected to be
+  //create with the help of macros
+  case class SQLExpr(sqlSnippet: String, bindVars: List[VarExpr]) extends PrimitiveExpr {
+    def defaultSQL = {
+      bindVars foreach(_.sql)
+      sqlSnippet
+    }
+  }
+  case class SQLConcatExpr(delimiter: String = " ", expr1: Expr, expr2: Expr) extends PrimitiveExpr {
+    def defaultSQL = expr1.sql + delimiter + expr2
+  }
+  
 
   abstract class BaseExpr extends PrimitiveExpr {
     override def apply(params: Map[String, Any]): Any = {
