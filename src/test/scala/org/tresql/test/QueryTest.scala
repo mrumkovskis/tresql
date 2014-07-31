@@ -36,7 +36,7 @@ class QueryTest extends Suite {
         .map(_ substring 2)
         .map(v => b.VarExpr(v.replace("?", ""), null, v endsWith "?"))
       val sqlSnippet = varRegex.replaceAllIn(value, " ?")
-      if (vars.exists(v => !v.opt && !(b.env contains v.name)))
+      if (vars.exists(v => v.opt && !(b.env contains v.name)))
         b.SQLExpr("null", Nil)
       else b.SQLExpr(sqlSnippet, vars)
     }
