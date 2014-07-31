@@ -1,6 +1,7 @@
 package org.tresql
 
 import sys._
+import scala.util.Try
 import QueryParser._
 
 class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: Int)
@@ -143,7 +144,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       "?"
     }
-    override def toString = s"$nr($col) = ${scala.util.Try(this()).getOrElse("value not available")}"
+    override def toString = s"$nr($col) = ${Try(this()).getOrElse("value not available")}"
   }
 
   case class AssignExpr(variable: String, value: Expr) extends BaseExpr {
@@ -533,7 +534,17 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
       sqlSnippet
     }
   }
-  case class SQLConcatExpr(delimiter: String = " ", expr1: Expr, expr2: Expr) extends PrimitiveExpr {
+  case class SQLConcatExpr(delimiter: String = " ", expr1: Expr, expr2: Expr) extends BaseExpr {
+    private def findSQL(expr: Expr): Option[QueryBuilder#SelectExpr] = expr match {
+      case e: QueryBuilder#SQLConcatExpr => findSQL(e.expr2) orElse findSQL(e.expr1)
+      case e: QueryBuilder#SelectExpr => Some(e)
+      case _ => None
+    }
+    val sqlExpr = findSQL(this) getOrElse
+      error(s"Unable to execute SQLConcatExpr $this because it does not contain SelectExpr")
+    override def apply() =
+      org.tresql.Query.sel(sql, sqlExpr.cols, QueryBuilder.this.bindVariables, env,
+        QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
     def defaultSQL = expr1.sql + delimiter + expr2.sql
   }
   

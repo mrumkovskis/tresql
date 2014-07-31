@@ -23,7 +23,30 @@ class QueryTest extends Suite {
     def dept_desc(d: String, ec: String) = d + " (" + ec + ")"
     def nopars() = "ok"
   }
+  object Macros {
+    /**
+     * Dumb regexp to find bind variables (tresql syntax) in sql string.
+     * Expects whitespace, colon, identifier, optional question mark.
+     * Whitespace before colon is a workaround to ignore postgresql typecasts.
+     */
+    private val varRegex = "\\s:[_a-zA-Z]\\w*\\??"r
+    def sql(b: QueryBuilder, const: QueryBuilder#ConstExpr) = {
+      val value = String.valueOf(const.value)
+      val vars = varRegex.findAllIn(value).toList
+        .map(_ substring 2)
+        .map(v => b.VarExpr(v.replace("?", ""), null, v endsWith "?"))
+      val sqlSnippet = varRegex.replaceAllIn(value, " ?")
+      if (vars.exists(v => !v.opt && !(b.env contains v.name)))
+        b.SQLExpr("null", Nil)
+      else b.SQLExpr(sqlSnippet, vars)
+    }
+
+    def concat_sql(b: QueryBuilder, delimiter: QueryBuilder#ConstExpr, e1: Expr, e2: Expr) =
+      b.SQLConcatExpr(String.valueOf(delimiter.value), e1, e2)
+
+  }  
   Env.functions = new TestFunctions
+  Env.macros = Macros
   Env.cache = new SimpleCache
   Env update ((msg, level) => println (msg))
   Env update ( /*object to table name map*/ Map(

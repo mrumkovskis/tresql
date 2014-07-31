@@ -393,3 +393,6 @@ dept/emp[deptno = 10][mgr = null]{dname, ename}#(1, 2) --> [["ACCOUNTING", "KING
 
 //hierarchical query in from clause select //FIXME: does not return child query result!
 (dept{deptno, |emp{ename}})[deptno = 10] --> [[10]]
+
+//macro test
+concat_sql(' ', sql('/*begin comment */'), concat_sql('', emp[ename ~~ 'sco%']{ename}, sql('/*end comment */'))) --> [["SCOTT"]]
