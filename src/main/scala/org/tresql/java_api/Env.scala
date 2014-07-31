@@ -10,7 +10,6 @@ trait IdExprFunc { def getIdExpr(table: String): String }
 trait LogMessage { def get: String }
 trait Logger { def log(msg: LogMessage, level: Int): Unit }
 object Dialects {
-  def SqlEscape = dialects.SqlEscapeDialect
   def ANSISQL = dialects.ANSISQLDialect
   def HSQL = dialects.HSQLDialect
   def Oracle = dialects.OracleDialect

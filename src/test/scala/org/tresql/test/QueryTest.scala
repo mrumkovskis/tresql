@@ -23,14 +23,14 @@ class QueryTest extends Suite {
     def dept_desc(d: String, ec: String) = d + " (" + ec + ")"
     def nopars() = "ok"
   }
-  object Macros {
+  object Macros extends org.tresql.Macros {
     /**
      * Dumb regexp to find bind variables (tresql syntax) in sql string.
      * Expects whitespace, colon, identifier, optional question mark.
      * Whitespace before colon is a workaround to ignore postgresql typecasts.
      */
     private val varRegex = "\\s:[_a-zA-Z]\\w*\\??"r
-    def sql(b: QueryBuilder, const: QueryBuilder#ConstExpr) = {
+    override def sql(b: QueryBuilder, const: QueryBuilder#ConstExpr) = {
       val value = String.valueOf(const.value)
       val vars = varRegex.findAllIn(value).toList
         .map(_ substring 2)
