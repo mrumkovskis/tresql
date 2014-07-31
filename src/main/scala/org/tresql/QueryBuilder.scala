@@ -143,7 +143,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       "?"
     }
-    override def toString = nr + "(" + col + ")"
+    override def toString = s"$nr($col) = ${scala.util.Try(this()).getOrElse("value not available")}"
   }
 
   case class AssignExpr(variable: String, value: Expr) extends BaseExpr {
