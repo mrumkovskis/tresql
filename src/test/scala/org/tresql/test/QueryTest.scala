@@ -305,6 +305,7 @@ class QueryTest extends Suite {
     expectResult(List(Vector("JAMES"), Vector("SMITH"))) {
       tresql"emp [ename ~ $name? & sal < $salary?] {ename}#(1)".toListOfVectors
     }
+    expectResult(List(Vector(0)))(tresql"dummy" toListOfVectors)
      
     
     println("\n----------- ORT tests ------------\n")
