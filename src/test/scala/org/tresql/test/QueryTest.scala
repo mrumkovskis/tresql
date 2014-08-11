@@ -30,7 +30,7 @@ class QueryTest extends Suite {
      * Whitespace before colon is a workaround to ignore postgresql typecasts.
      */
     private val varRegex = "\\s:[_a-zA-Z]\\w*\\??"r
-    override def sql(b: QueryBuilder, const: QueryBuilder#ConstExpr) = {
+    override def sql(b: QueryBuilder, const: QueryBuilder#ConstExpr): b.SQLExpr = {
       val value = String.valueOf(const.value)
       val vars = varRegex.findAllIn(value).toList
         .map(_ substring 2)
