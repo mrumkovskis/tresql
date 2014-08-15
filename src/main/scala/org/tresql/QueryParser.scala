@@ -58,8 +58,11 @@ object QueryParser extends parsing.QueryMemParsers {
     }
     transform_traverse(exp)
   }
+  
+  def extract[T](exp: String, extractor: PartialFunction[Any, T]): List[T] =
+    extract(parseExp(exp).asInstanceOf[Exp], extractor)
 
-  def extract[T](exp: String, extractor: PartialFunction[Any, T]): List[T] = {
+  def extract[T](exp: Exp, extractor: PartialFunction[Any, T]): List[T] = {
     var result = List[T]()
     var extract_collect_traverse: PartialFunction[Any, Any] = null
     val traverse: PartialFunction[Any, Any] = {
@@ -109,7 +112,7 @@ object QueryParser extends parsing.QueryMemParsers {
     }
     
     extract_collect_traverse = extractor andThen collect andThen traverse orElse traverse
-    extract_collect_traverse(parseExp(exp))
+    extract_collect_traverse(exp)
     result reverse
   }
 
