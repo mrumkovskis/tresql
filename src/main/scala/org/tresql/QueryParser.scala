@@ -59,7 +59,7 @@ object QueryParser extends parsing.QueryMemParsers {
     transform_traverse(exp)
   }
   
-  def extract[T](exp: String, extractor: PartialFunction[Any, T]): List[T] =
+  def extractFrom[T](exp: String, extractor: PartialFunction[Any, T]): List[T] =
     extract(parseExp(exp).asInstanceOf[Exp], extractor)
 
   def extract[T](exp: Exp, extractor: PartialFunction[Any, T]): List[T] = {
