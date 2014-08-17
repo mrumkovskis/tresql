@@ -228,22 +228,28 @@ trait QueryParsers extends StandardTokenParsers {
   def column: Parser[Col] = (qualifiedIdentAll |
     (expr ~ opt(":" ~> ident) ~ opt(stringLit | qualifiedIdent))) ^^ {
       case i: IdentAll => Col(i, null, null)
-      case (o @ Obj(_, a, _, _, _)) ~ (typ: Option[String]) ~ None => Col(o, a, typ orNull)
+      //move object alias to column alias
+      case (o @ Obj(_, a, _, _, _)) ~ (typ: Option[String]) ~ None => Col(o.copy(alias = null), a, typ orNull)
       case e ~ (typ: Option[String]) ~ (a: Option[_]) => Col(e, a map {
         case Ident(i) => i.mkString; case s => "\"" + s + "\""
       } orNull, typ orNull)
     } ^^ { pr =>
-      def extractAlias(expr: Any): String = expr match {
-        case BinOp(_, lop, rop) => extractAlias(rop)
-        case UnOp(_, op) => extractAlias(op)
-        case Obj(_, alias, _, null, _) => alias
-        case _ => null
+      def extractAlias(expr: Any): (String, Any) = expr match {
+        case o@BinOp(_, lop, rop) => 
+          val x = extractAlias(rop)
+          (x._1, o.copy(rop = x._2))
+        case o@UnOp(_, op) =>
+          val x = extractAlias(op)
+          (x._1, o.copy(operand = x._2))
+        case o@Obj(_, alias, _, null, _) if alias != null => (alias, o.copy(alias = null))
+        case o => (null, o)
       }
       pr match {
         case c @ Col(_: IdentAll | _: Obj, _, _) => c
         case c @ Col(e, null, _) => extractAlias(e) match {
-          case null => c
-          case x => c.copy(alias = x)
+          case (null, _) => c
+          case (a, e) =>
+            c.copy(col = e, alias = a)
         }
         case r => r
       }
