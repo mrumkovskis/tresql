@@ -18,10 +18,12 @@ trait QueryParsers extends StandardTokenParsers {
     def tresql = ident.mkString(".")
   }
   case class Variable(variable: String, typ: String, opt: Boolean) extends Exp {
-    def tresql = (if (variable == "?") "?" else ":") +
-      (if (variable contains "'") "\"" + variable + "\"" else "'" + variable + "'") +
-      (if (typ == null) "" else ": " + typ) +
-      (if (opt) "?" else "")
+    def tresql = if (variable == "?") "?" else {
+      ":" +
+        (if (variable contains "'") "\"" + variable + "\"" else "'" + variable + "'") +
+        (if (typ == null) "" else ": " + typ) +
+        (if (opt) "?" else "")
+    }
   }
   case class Id(name: String) extends Exp {
     def tresql = "#" + name
@@ -40,8 +42,8 @@ trait QueryParsers extends StandardTokenParsers {
       ((parameters map any2tresql) mkString ", ") + ")"
   }
   case class In(lop: Any, rop: List[Any], not: Boolean) extends Exp {
-    def tresql = any2tresql(lop) + (if (not) " not" else "") + rop.map(any2tresql).mkString(
-      " in(", ", ", ")")
+    def tresql = any2tresql(lop) + (if (not) " !" else " ") + rop.map(any2tresql).mkString(
+      "in(", ", ", ")")
   }
   case class BinOp(op: String, lop: Any, rop: Any) extends Exp {
     def tresql = any2tresql(lop) + " " + op + " " + any2tresql(rop)
@@ -77,7 +79,7 @@ trait QueryParsers extends StandardTokenParsers {
   //cols expression is tuple in the form - ([<nulls first>], <order col list>, [<nulls last>])
   case class Ord(cols: List[(Exp, Any, Exp)]) extends Exp {
     def tresql = "#(" + cols.map(c => (if (c._1 == Null) "null " else "") +
-      any2tresql(c._2) + (if (c._1 == Null) "null " else "")).mkString(",") + ")"
+      any2tresql(c._2) + (if (c._3 == Null) " null" else "")).mkString(",") + ")"
   }
   case class Query(tables: List[Obj], filter: Filters, cols: List[Col], distinct: Boolean,
     group: Grp, order: Ord, offset: Any, limit: Any) extends Exp {
@@ -91,16 +93,16 @@ trait QueryParsers extends StandardTokenParsers {
       else "")
   }
   case class Insert(table: Ident, alias: String, cols: List[Col], vals: Any) extends Exp {
-    def tresql = "+" + table.tresql + Option(alias).getOrElse("") +
-      cols.map(_.tresql).mkString("{", ",", "}") + any2tresql(vals)
+    def tresql = "+" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
+      (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") + any2tresql(vals)
   }
   case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Any) extends Exp {
-    def tresql = "=" + table.tresql + Option(alias).getOrElse("") +
+    def tresql = "=" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
       (if (filter != null) filter.tresql else "") +
-      cols.map(_.tresql).mkString("{", ",", "}") + any2tresql(vals)
+      (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") + any2tresql(vals)
   }
   case class Delete(table: Ident, alias: String, filter: Arr) extends Exp {
-    def tresql = "-" + table.tresql + Option(alias).getOrElse("") + filter.tresql
+    def tresql = "-" + table.tresql + Option(alias).map(" " + _).getOrElse("") + filter.tresql
   }
   case class Arr(elements: List[Any]) extends Exp {
     def tresql = "[" + any2tresql(elements) + "]"

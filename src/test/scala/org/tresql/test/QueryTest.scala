@@ -465,7 +465,24 @@ class QueryTest extends Suite {
     }
     expectResult((1,8888))(ORT.insertObj(Car(8888, "OPEL")))
     expectResult(1)(ORT.updateObj(Car(8888, "SAAB")))
+    
+    println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
 
+    nr = 0
+    new scala.io.BufferedSource(getClass.getResourceAsStream("/test.txt"))("UTF-8").getLines.foreach {
+      case l if (l.trim.startsWith("//")) =>
+      case l if (l.trim.length > 0) =>
+        val (st, params, patternRes) = l.split("-->") match {
+          case scala.Array(s, r) => (s, null, r)
+          case scala.Array(s, p, r) => (s, p, r)
+        }
+        nr += 1
+        println(s"$nr. Testing tresql method of: \n$st")
+        QueryParser.parseExp(st) match {
+          case e: QueryParser.Exp => assert(e === QueryParser.parseExp(e.tresql))
+        }
+      case _ =>
+    }
     
     println("\n-------------- CACHE -----------------\n")
     Env.cache map println
