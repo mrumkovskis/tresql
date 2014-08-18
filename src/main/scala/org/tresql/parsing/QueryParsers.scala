@@ -48,6 +48,10 @@ trait QueryParsers extends StandardTokenParsers {
   case class BinOp(op: String, lop: Any, rop: Any) extends Exp {
     def tresql = any2tresql(lop) + " " + op + " " + any2tresql(rop)
   }
+  case class TerOp(lop: Any, op1: String, mop: Any, op2: String, rop: Any) extends Exp {
+    def content = BinOp("&", BinOp(op1, lop, mop), BinOp(op2, mop, rop))
+    def tresql = s"${any2tresql(lop)} $op1 ${any2tresql(mop)} $op2 ${any2tresql(rop)}"
+  }
 
   case class Join(default: Boolean, expr: Any, noJoin: Boolean) extends Exp {
     def tresql = this match {
@@ -88,18 +92,21 @@ trait QueryParsers extends StandardTokenParsers {
       (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") +
       (if (group != null) any2tresql(group) else "") +
       (if (order != null) order.tresql else "") +
-      (if (limit != null) "@(" + (if (offset != null) any2tresql(offset) + " " else "") +
-        any2tresql(limit) + ")"
+      (if (limit != null)
+        s"@(${(if (offset != null) any2tresql(offset) + " " else "")}${any2tresql(limit)})"
+      else if (offset != null) s"@(${any2tresql(offset)}, )"
       else "")
   }
   case class Insert(table: Ident, alias: String, cols: List[Col], vals: Any) extends Exp {
     def tresql = "+" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
-      (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") + any2tresql(vals)
+      (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") +
+      (if (vals != null) any2tresql(vals) else "")
   }
   case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Any) extends Exp {
     def tresql = "=" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
       (if (filter != null) filter.tresql else "") +
-      (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") + any2tresql(vals)
+      (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") +
+      (if (vals != null) any2tresql(vals) else "")
   }
   case class Delete(table: Ident, alias: String, filter: Arr) extends Exp {
     def tresql = "-" + table.tresql + Option(alias).map(" " + _).getOrElse("") + filter.tresql
@@ -158,7 +165,7 @@ trait QueryParsers extends StandardTokenParsers {
       case r ~ c => Res(r.toInt,
         c match {
           case s: String => try { s.toInt } catch { case _: NumberFormatException => s }
-          case Ident(i) => i
+          case i: Ident => i
         })
     } named "result"
   def braces: Parser[Braces] = "(" ~> expr <~ ")" ^^ Braces named "braces"
@@ -237,6 +244,7 @@ trait QueryParsers extends StandardTokenParsers {
       } orNull, typ orNull)
     } ^^ { pr =>
       def extractAlias(expr: Any): (String, Any) = expr match {
+        case t: TerOp => extractAlias(t.content)
         case o@BinOp(_, lop, rop) => 
           val x = extractAlias(rop)
           (x._1, o.copy(rop = x._2))
@@ -336,7 +344,7 @@ trait QueryParsers extends StandardTokenParsers {
       {
         case lop ~ Nil => lop
         case lop ~ ((o ~ rop) :: Nil) => BinOp(o, lop, rop)
-        case lop ~ List((o1 ~ mop), (o2 ~ rop)) => BinOp("&", BinOp(o1, lop, mop), BinOp(o2, mop, rop))
+        case lop ~ List((o1 ~ mop), (o2 ~ rop)) => TerOp(lop, o1, mop, o2, rop)
       },
       {
         case lop ~ x => "Ternary comparison operation is allowed, however, here " + (x.size + 1) +

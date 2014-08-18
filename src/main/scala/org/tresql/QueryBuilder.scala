@@ -133,7 +133,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     override def apply() = env(nr) match {
       case null => error("Ancestor result with number " + nr + " not found for expression " + this)
       case r => col match {
-        case c: List[_] => r(c.mkString("."))
+        case c: Ident => r(c.ident.mkString("."))
         case c: String => r(c)
         case c: Int if (c > 0) => r(c - 1)
         case c: Int => error("column index in result expression must be greater than 0. Is: " + c)
@@ -935,6 +935,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
               if (l != null) l else if (r != null) r else null
             else null
         }
+        case t: TerOp => buildInternal(t.content, parseCtx)
         case In(lop, rop, not) =>
           val l = buildInternal(lop, parseCtx)
           if (l == null) null else {
