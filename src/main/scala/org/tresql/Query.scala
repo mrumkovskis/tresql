@@ -76,58 +76,65 @@ trait Query extends TypedQuery {
   private[tresql] def update(sql: String, bindVariables: List[Expr], env: Env) = {
     Env log sql
     val st = statement(sql, env)
-    bindVars(st, bindVariables)
-    val r = st.executeUpdate
-    if (!env.reusableExpr) {
+    try {
+      bindVars(st, bindVariables)
+      st.executeUpdate
+    } finally if (!env.reusableExpr) {
       st.close
       env.statement = null
     }
-    r
   }
-  
+
   private[tresql] def call(sql: String, bindVariables: List[Expr], env: Env) = {
     Env log sql
     val st = statement(sql, env, true).asInstanceOf[CallableStatement]
-    bindVars(st, bindVariables)
-    val result = if(st.execute) {
-      val rs = st.getResultSet
-      val md = rs.getMetaData
-      val res = new SelectResult(rs, Vector(1 to md.getColumnCount map 
-          {i=> Column(i, md.getColumnLabel(i), null)}:_*), env)
-      env.result = res
-      res
-    }
-    val outs = bindVariables map (_()) filter (_.isInstanceOf[OutPar]) map {x=>
-      val p = x.asInstanceOf[OutPar]
-      p.value = p.value match {
-        case null => st.getObject(p.idx)
-        case i: Int => val x = st.getInt(p.idx); if(st.wasNull) null else x
-        case l: Long => val x = st.getLong(p.idx); if(st.wasNull) null else x
-        case d: Double => val x = st.getDouble(p.idx); if(st.wasNull) null else x
-        case f: Float => val x = st.getFloat(p.idx); if(st.wasNull) null else x
-        // Allow the user to specify how they want the Date handled based on the input type
-        case t: java.sql.Timestamp => st.getTimestamp(p.idx)
-        case d: java.sql.Date => st.getDate(p.idx)
-        case t: java.sql.Time => st.getTime(p.idx)
-        /* java.util.Date has to go last, since the java.sql date/time classes subclass it. By default we
-* assume a Timestamp value */
-        case d: java.util.Date => st.getTimestamp(p.idx)
-        case b: Boolean => st.getBoolean(p.idx)
-        case s: String => st.getString(p.idx)
-        case bn: java.math.BigDecimal => st.getBigDecimal(p.idx)
-        case bd: BigDecimal => val x = st.getBigDecimal(p.idx); if (st.wasNull) null else BigDecimal(x)
+    var result: Any = null
+    var outs: List[Any] = null
+    try {
+      bindVars(st, bindVariables)
+      result = if (st.execute) {
+        val rs = st.getResultSet
+        val md = rs.getMetaData
+        val res = new SelectResult(rs, Vector(1 to md.getColumnCount map
+          { i => Column(i, md.getColumnLabel(i), null) }: _*), env)
+        env.result = res
+        res
       }
-      p.value
-    }    
-    if (result == () && !env.reusableExpr) {
+      outs = bindVariables map (_()) filter (_.isInstanceOf[OutPar]) map { x =>
+        val p = x.asInstanceOf[OutPar]
+        p.value = p.value match {
+          case null => st.getObject(p.idx)
+          case i: Int =>
+            val x = st.getInt(p.idx); if (st.wasNull) null else x
+          case l: Long =>
+            val x = st.getLong(p.idx); if (st.wasNull) null else x
+          case d: Double =>
+            val x = st.getDouble(p.idx); if (st.wasNull) null else x
+          case f: Float =>
+            val x = st.getFloat(p.idx); if (st.wasNull) null else x
+          // Allow the user to specify how they want the Date handled based on the input type
+          case t: java.sql.Timestamp => st.getTimestamp(p.idx)
+          case d: java.sql.Date => st.getDate(p.idx)
+          case t: java.sql.Time => st.getTime(p.idx)
+          /* java.util.Date has to go last, since the java.sql date/time classes subclass it. By default we
+* assume a Timestamp value */
+          case d: java.util.Date => st.getTimestamp(p.idx)
+          case b: Boolean => st.getBoolean(p.idx)
+          case s: String => st.getString(p.idx)
+          case bn: java.math.BigDecimal => st.getBigDecimal(p.idx)
+          case bd: BigDecimal => val x = st.getBigDecimal(p.idx); if (st.wasNull) null else BigDecimal(x)
+        }
+        p.value
+      }
+    } finally if (result == () && !env.reusableExpr) {
       st.close
       env.statement = null
     }
     result :: outs match {
-      case ()::Nil => ()
-      case List(r:Result) => r
-      case l@List(r:Result, x, _*) => l
-      case ()::l => l
+      case () :: Nil => ()
+      case List(r: Result) => r
+      case l @ List(r: Result, x, _*) => l
+      case () :: l => l
       case x => error("Knipis: " + x)
     }
   }
