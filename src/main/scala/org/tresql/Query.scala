@@ -92,13 +92,13 @@ trait Query extends TypedQuery {
     var outs: List[Any] = null
     try {
       bindVars(st, bindVariables)
-      result = if (st.execute) {
+      if (st.execute) {
         val rs = st.getResultSet
         val md = rs.getMetaData
         val res = new SelectResult(rs, Vector(1 to md.getColumnCount map
           { i => Column(i, md.getColumnLabel(i), null) }: _*), env)
         env.result = res
-        res
+        result = res
       }
       outs = bindVariables map (_()) filter (_.isInstanceOf[OutPar]) map { x =>
         val p = x.asInstanceOf[OutPar]
@@ -126,15 +126,15 @@ trait Query extends TypedQuery {
         }
         p.value
       }
-    } finally if (result == () && !env.reusableExpr) {
+    } finally if (result == null && !env.reusableExpr) {
       st.close
       env.statement = null
     }
     result :: outs match {
-      case () :: Nil => ()
+      case null :: Nil => ()
       case List(r: Result) => r
       case l @ List(r: Result, x, _*) => l
-      case () :: l => l
+      case null :: l => l
       case x => error("Knipis: " + x)
     }
   }

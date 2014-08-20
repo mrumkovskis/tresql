@@ -39,14 +39,12 @@ trait Typed { this: RowLike =>
 }
 
 trait TypedResult { this: Result =>
-  def head[T](implicit converter: Converter[T], m: Manifest[T]): T = hasNext match {
+  def head[T](implicit converter: Converter[T], m: Manifest[T]): T = try hasNext match {
     case true =>
       next
-      val v = this.asInstanceOf[RowLike].typed[T]
-      close
-      v
+      this.asInstanceOf[RowLike].typed[T]
     case false => throw new NoSuchElementException("No rows in result")
-  }
+  } finally close
 
   def headOption[T](implicit converter: Converter[T],
       m: Manifest[T]): Option[T] = try Some(head[T]) catch {
@@ -54,26 +52,22 @@ trait TypedResult { this: Result =>
   }
 
   def unique[T](implicit converter: Converter[T],
-      m: Manifest[T]): T = hasNext match {
+    m: Manifest[T]): T = try hasNext match {
     case true =>
       next
       val v = this.asInstanceOf[RowLike].typed[T]
-      if (hasNext) {
-        close; error("More than one row for unique result")
-      } else v
+      if (hasNext) error("More than one row for unique result") else v
     case false => error("No rows in result")
-  }
+  } finally close
 
   def uniqueOption[T](implicit converter: Converter[T],
-      m: Manifest[T]): Option[T] = hasNext match {
+    m: Manifest[T]): Option[T] = try hasNext match {
     case true =>
       next
       val v = this.asInstanceOf[RowLike].typed[T]
-      if (hasNext) {
-        close; error("More than one row for unique result")
-      } else Some(v)
+      if (hasNext) error("More than one row for unique result") else Some(v)
     case false => None
-  }
+  } finally close
 
   def toListOfMaps[M[String, Any] <: scala.collection.Map[String, Any]](
     implicit transformer: PartialFunction[(String, Any), Any] = null,
@@ -96,15 +90,13 @@ trait TypedResult { this: Result =>
 
   def headAsMap[M[String, Any] <: scala.collection.Map[String, Any]](
     implicit transformer: PartialFunction[(String, Any), Any] = null,
-    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
+    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] = try
     hasNext match {
       case true =>
         next
-        val r = rowAsMap[M]
-        close
-        r
+        rowAsMap[M]
       case false => throw new NoSuchElementException("No rows in result")
-    }
+    } finally close
 
   def headOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](
     implicit transformer: PartialFunction[(String, Any), Any] = null,
@@ -113,29 +105,25 @@ trait TypedResult { this: Result =>
 
   def uniqueAsMap[M[String, Any] <: scala.collection.Map[String, Any]](
     implicit transformer: PartialFunction[(String, Any), Any] = null,
-    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
+    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] = try
     hasNext match {
-    case true =>
-      next
-      val v = rowAsMap[M]
-      if (hasNext) {
-        close; error("More than one row for unique result")
-      } else v
-    case false => error("No rows in result")
-  }
+      case true =>
+        next
+        val v = rowAsMap[M]
+        if (hasNext) error("More than one row for unique result") else v
+      case false => error("No rows in result")
+    } finally close
 
   def uniqueOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](
     implicit transformer: PartialFunction[(String, Any), Any] = null,
-    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
+    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] = try
     hasNext match {
-    case true =>
-      next
-      val v = rowAsMap[M]
-      if (hasNext) {
-        close; error("More than one row for unique result")
-      } else Some(v)
-    case false => None
-  }
+      case true =>
+        next
+        val v = rowAsMap[M]
+        if (hasNext) error("More than one row for unique result") else Some(v)
+      case false => None
+    } finally close
   
   def list[T](implicit converter: Converter[T],
       m: Manifest[T]) = this.map(r => this.asInstanceOf[RowLike].typed[T]).toList
