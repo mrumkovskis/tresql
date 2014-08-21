@@ -12,8 +12,10 @@ trait ORT {
   type ObjToMapConverter[T] = (T) => (String, Map[String, _])
   
   def insert(name: String, obj: Map[String, _])(implicit resources: Resources = Env): Any = {
-    val insert = insert_tresql(name, obj, null, resources)
+    val struct = tresql_structure(obj)
+    val insert = insert_tresql(name, struct, null, resources)
     if(insert == null) error("Cannot insert data. Table not found for object: " + name)
+    Env log (s"Structure: $struct")
     Env log insert
     Query.build(insert, resources, obj, false)()
   }
@@ -23,9 +25,11 @@ trait ORT {
   }
   //TODO update where unique key (not only pk specified)
   def update(name: String, obj: Map[String, _])(implicit resources: Resources = Env): Any = {
-    val update = update_tresql(name, obj, resources)
+    val struct = tresql_structure(obj)
+    val update = update_tresql(name, struct, resources)
     if(update == null) error("Cannot update data. Table not found or primary key not found " +
     		"for the object: " + name)
+    Env log (s"Structure: $struct")
     Env log update
     Query.build(update, resources, obj, false)()    
   }
@@ -56,6 +60,25 @@ trait ORT {
     Query.build(delete, resources, Map("1"->id), false)()
   }
   
+  def tresql_structure(obj: Map[String, _]): Map[String, Any] = {
+    def merge(lm: Seq[Map[String, _]]): Map[String, Any] =
+      lm.tail.foldLeft(tresql_structure(lm.head))((l, m) =>
+      l zip tresql_structure(m) map {
+        case ((k1, v1: Map[String, _]), (_, v2: Map[String, _])) =>
+          (k1, merge(List(v1, v2)))
+        case ((k1, v1: Map[String, _]), (_, _)) => (k1, v1)
+        case ((k1, _), (_, v2: Map[String, _])) => (k1, v2)
+        case ((k1, v1), _) => (k1, v1)
+      })
+    obj map {
+      case (k, Seq() | Array()) => (k, null)
+      case (k, l: Seq[Map[String, _]]) => (k, merge(l))
+      case (k, l: Array[Map[String, _]]) => (k, merge(l))
+      case (k, m: Map[String, _]) => (k, tresql_structure(m))
+      case x => x
+    }
+  }
+  
   def insert_tresql(name: String, obj: Map[String, _], parent: String, resources: Resources): String = {    
     //insert statement column, value map from obj
     val Array(objName, refPropName) = name.split(":").padTo(2, null)
@@ -76,21 +99,18 @@ trait ORT {
         val cn = resources.colName(objName, n)
         t._2 match {
           //children
-          case Seq() | Array() => (null, null)
-          case Seq(v: Map[String, _], _*) => (insert_tresql(n, v, objName, resources), null)
-          case Array(v: Map[String, _], _*) => (insert_tresql(n, v, objName, resources), null)
           case v: Map[String, _] => (insert_tresql(n, v, objName, resources), null)
           //fill pk (only if it does not match fk prop to parent, in this case fk prop, see below,
           //takes precedence)
-          case v if table.key.cols == List(cn) && table.key.cols != List(refColName) =>
+          case _ if table.key.cols == List(cn) && table.key.cols != List(refColName) =>
             hasPk = true
             cn -> ("#" + table.name)
           //fill fk
-          case v if ((refPropName != null && refPropName == n) ||
+          case _ if ((refPropName != null && refPropName == n) ||
               (refPropName == null && refColName == cn)) =>
                 hasRef = true
                 cn -> (":#" + ptn)
-          case v => (table.colOption(cn).map(_.name).orNull, resources.valueExpr(objName, n))
+          case _ => (table.colOption(cn).map(_.name).orNull, resources.valueExpr(objName, n))
         }
       }).filter(_._1 != null && (parent == null || refColName != null)) ++
       (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn))) ++
@@ -133,13 +153,10 @@ trait ORT {
         if (table.key == metadata.Key(List(cn))) pkProp = Some(n)
         t._2 match {
           //children
-          case Seq() | Array() => (childUpdates(n, null), null)
-          case Seq(v: Map[String, _], _*) => (childUpdates(n, v), null)
-          case Array(v: Map[String, _], _*) => (childUpdates(n, v), null)
           case v: Map[String, _] => (childUpdates(n, v), null)
           //do not update pkProp
-          case v if (Some(n) == pkProp) => (null, null)
-          case v => (table.colOption(cn).map(_.name).orNull, resources.valueExpr(name, n))
+          case _ if (Some(n) == pkProp) => (null, null)
+          case _ => (table.colOption(cn).map(_.name).orNull, resources.valueExpr(name, n))
         }
       }).filter(_._1 != null).unzip match {
         case (cols: List[_], vals: List[_]) => pkProp.flatMap(pk =>
