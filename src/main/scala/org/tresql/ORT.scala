@@ -59,16 +59,17 @@ trait ORT {
     Env log delete
     Query.build(delete, resources, Map("1"->id), false)()
   }
-  
+
   def tresql_structure(obj: Map[String, _]): Map[String, Any] = {
     def merge(lm: Seq[Map[String, _]]): Map[String, Any] =
-      lm.tail.foldLeft(tresql_structure(lm.head))((l, m) =>
-      l zip tresql_structure(m) map {
-        case ((k1, v1: Map[String, _]), (_, v2: Map[String, _])) =>
-          (k1, merge(List(v1, v2)))
-        case ((k1, v1: Map[String, _]), (_, _)) => (k1, v1)
-        case ((k1, _), (_, v2: Map[String, _])) => (k1, v2)
-        case ((k1, v1), _) => (k1, v1)
+      lm.tail.foldLeft(tresql_structure(lm.head))((l, m) => {
+        val x = tresql_structure(m)
+        l map (t => (t._1, (t._2, x.getOrElse(t._1, null)))) map {
+          case (k, (v1: Map[String, _], v2: Map[String, _])) => (k, merge(List(v1, v2)))
+          case (k, (v1: Map[String, _], _)) => (k, v1)
+          case (k, (_, v2: Map[String, _])) => (k, v2)
+          case (k, (v1, _)) => (k, v1)
+        }
       })
     obj map {
       case (k, Seq() | Array()) => (k, null)
