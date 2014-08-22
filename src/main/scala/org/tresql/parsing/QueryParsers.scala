@@ -22,7 +22,7 @@ trait QueryParsers extends JavaTokenParsers {
       
   def decimalNr = decimalNumber ^^ (BigDecimal(_)) named "decimal-nr"
   
-  /** Copied from RegexParsers */
+  /** Copied from RegexParsers to support comment handling as whitespace */
   override protected def handleWhiteSpace(source: java.lang.CharSequence, offset: Int): Int = {
     if (skipWhitespace)
       (whiteSpace findPrefixMatchOf (new SubSequence(source, offset))) match {
