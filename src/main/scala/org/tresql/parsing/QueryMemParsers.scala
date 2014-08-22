@@ -1,6 +1,9 @@
 package org.tresql.parsing
 
 trait QueryMemParsers extends QueryParsers with MemParsers {
+  override def stringLiteral = parser2MemParser(super.stringLiteral)
+  override def ident = parser2MemParser(super.ident)
+  override def wholeNumber = parser2MemParser(super.wholeNumber)
   override def decimalNr = parser2MemParser(super.decimalNr)
   override def TRUE = parser2MemParser(super.TRUE)
   override def FALSE = parser2MemParser(super.FALSE)

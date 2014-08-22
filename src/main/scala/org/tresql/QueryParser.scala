@@ -6,7 +6,7 @@ object QueryParser extends parsing.QueryMemParsers {
     Env.cache.flatMap(_.get(expr)).getOrElse {
       try {
         intermediateResults.get.clear
-        val e = phrase(exprList)(new lexical.Scanner(expr)) match {
+        val e = phrase(exprList)(new scala.util.parsing.input.CharSequenceReader(expr)) match {
           case Success(r, _) => r
           case x => sys.error(x.toString)
         }

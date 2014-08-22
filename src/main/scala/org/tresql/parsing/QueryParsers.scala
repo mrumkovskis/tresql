@@ -1,18 +1,41 @@
 package org.tresql.parsing
 
-import scala.util.parsing.combinator.syntactical.StandardTokenParsers
+import scala.util.parsing.combinator.JavaTokenParsers
 
-trait QueryParsers extends StandardTokenParsers {
+trait QueryParsers extends JavaTokenParsers {
 
-  lexical.reserved ++= Set("in", "null", "true", "false", "<=", ">=", "<", ">", "!=", "=", "~~",
-    "!~~", "~", "!~", "in", "!in", "++", "+", "-", "&&", "||", "&", "|", "*", "/", "!", "?", ".*")
-  //for lexical scanner to pass all reserved words must also be in delimiter set
-  lexical.delimiters ++= (lexical.reserved ++ 
-      Set("(", ")", "[", "]", "{", "}", "#", "@", "^", ",", ".", ":", ":#", ";"))
+  val reserved = Set("in")
+  
+  val comparison_operand = "([\\W&&[^|&]]|[\\W]{2,})"r
+  
+  //JavaTokenParsers overrides
+  override val whiteSpace = """(\s*+/\*(.|\s)*?\*/\s*+)?(\s*+//(.)*+(\n|$))?(\s*+)"""r
+  
+  override def stringLiteral: Parser[String] = ("""("[^"]*+")|('[^']*+')"""r) ^^ {
+    case s => s.substring(1, s.length - 1)
+  } named "string-literal"
 
+  override def ident = super.ident ^? ({ case x if !(reserved contains x) => x }, 
+      { x => s"'$x' is one of the reserved words: $reserved" }) named "ident"
+  
+  override def wholeNumber: Parser[String] = ("""\d+"""r) named "number"
+      
+  def decimalNr = decimalNumber ^^ (BigDecimal(_)) named "decimal-nr"
+  
+  /** Copied from RegexParsers */
+  override protected def handleWhiteSpace(source: java.lang.CharSequence, offset: Int): Int = {
+    if (skipWhitespace)
+      (whiteSpace findPrefixMatchOf (new SubSequence(source, offset))) match {
+        case Some(matched) => offset + matched.end
+        case None => offset
+      }
+    else
+      offset  
+  //
+  }
   sealed trait Exp {
     def tresql: String
-  }
+  }    
 
   case class Ident(ident: List[String]) extends Exp {
     def tresql = ident.mkString(".")
@@ -140,12 +163,6 @@ trait QueryParsers extends StandardTokenParsers {
   }
   
   //literals
-  def decimalNr: Parser[BigDecimal] =
-    ((numericLit ~ opt("." ~ numericLit)) | (opt(numericLit) ~ "." ~ numericLit)) ^^ {
-    case (n: String) ~ None => BigDecimal(n)
-    case n ~ Some("." ~ d) => BigDecimal(n + "." + d)
-    case None ~ "." ~ d => BigDecimal("." + d)
-  } named "decimal-nr"
   def TRUE: Parser[Boolean] = "true" ^^^ true named "true"
   def FALSE: Parser[Boolean] = "false" ^^^ false named "false"
   def NULL: Parser[Null.type] = "null" ^^^ Null named "null"
@@ -153,14 +170,14 @@ trait QueryParsers extends StandardTokenParsers {
 
   def qualifiedIdent: Parser[Ident] = rep1sep(ident, ".") ^^ Ident named "qualified-ident"
   def qualifiedIdentAll: Parser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
-  def variable: Parser[Variable] = ((":" ~> ((ident | stringLit) ~ opt(":" ~> ident) ~ opt("?")))
+  def variable: Parser[Variable] = ((":" ~> ((ident | stringLiteral) ~ opt(":" ~> ident) ~ opt("?")))
       | "?") ^^ {
     case "?" => Variable("?", null, false)
     case (i: String) ~ (t: Option[String]) ~ o => Variable(i, t orNull, o != None)
   } named "variable"
   def id: Parser[Id] = "#" ~> ident ^^ Id named "id"
   def idref: Parser[IdRef] = ":#" ~> ident ^^ IdRef named "id-ref"
-  def result: Parser[Res] = (":" ~> numericLit <~ "(") ~ (numericLit | stringLit |
+  def result: Parser[Res] = (":" ~> wholeNumber <~ "(") ~ (wholeNumber | stringLiteral |
     qualifiedIdent) <~ ")" ^^ {
       case r ~ c => Res(r.toInt,
         c match {
@@ -176,7 +193,7 @@ trait QueryParsers extends StandardTokenParsers {
      * Also important is that variable parser is after query parser since ? mark matches variable
      * Also important that insert, delete, update parsers are before query parser */
   def operand: Parser[Any] = (TRUE | FALSE | NULL | ALL | function | insert | update | query |
-    decimalNr | stringLit | variable | id | idref | result | array) named "operand"
+    decimalNr | stringLiteral | variable | id | idref | result | array) named "operand"
   def function: Parser[Fun] = (qualifiedIdent <~ "(") ~ opt("#") ~ repsep(expr, ",") <~ ")" ^^ {
     case Ident(a) ~ d ~ b => Fun(a.mkString("."), b, d.map(x=> true).getOrElse(false))
   } named "function"
@@ -235,7 +252,7 @@ trait QueryParsers extends StandardTokenParsers {
     }
   } named "objs"
   def column: Parser[Col] = (qualifiedIdentAll |
-    (expr ~ opt(":" ~> ident) ~ opt(stringLit | qualifiedIdent))) ^^ {
+    (expr ~ opt(":" ~> ident) ~ opt(stringLiteral | qualifiedIdent))) ^^ {
       case i: IdentAll => Col(i, null, null)
       //move object alias to column alias
       case (o @ Obj(_, a, _, _, _)) ~ (typ: Option[String]) ~ None => Col(o.copy(alias = null), a, typ orNull)
@@ -274,8 +291,8 @@ trait QueryParsers extends StandardTokenParsers {
     case nf ~ e ~ nl => (if (nf == None) null else nf.get, e, if (nl == None) null else nl.get)
   } named "order-member"
   def order: Parser[Ord] = ("#" ~ "(") ~> rep1sep(orderMember, ",") <~ ")" ^^ Ord named "order"
-  def offsetLimit: Parser[(Any, Any)] = ("@" ~ "(") ~> (numericLit | variable) ~ opt(",") ~
-    opt(numericLit | variable) <~ ")" ^^ { pr =>
+  def offsetLimit: Parser[(Any, Any)] = ("@" ~ "(") ~> (wholeNumber | variable) ~ opt(",") ~
+    opt(wholeNumber | variable) <~ ")" ^^ { pr =>
       {
         def c(x: Any) = x match { case v: Variable => v case s: String => BigDecimal(s) }
         pr match {
@@ -365,5 +382,28 @@ trait QueryParsers extends StandardTokenParsers {
   private def binOp(p: ~[Any, List[~[String, Any]]]): Any = p match {
     case lop ~ Nil => lop
     case lop ~ ((o ~ rop) :: l) => BinOp(o, lop, binOp(this.~(rop, l)))
-  }  
+  }
+
+  /** Copied from scala.util.parsing.combinator.SubSequence since it cannot be instantiated. */
+  // A shallow wrapper over another CharSequence (usually a String)
+  //
+  // See SI-7710: in jdk7u6 String.subSequence stopped sharing the char array of the original
+  // string and began copying it.
+  // RegexParsers calls subSequence twice per input character: that's a lot of array copying!
+  private class SubSequence(s: CharSequence, start: Int, val length: Int) extends CharSequence {
+    def this(s: CharSequence, start: Int) = this(s, start, s.length - start)
+
+    def charAt(i: Int) =
+      if (i >= 0 && i < length) s.charAt(start + i) else throw new IndexOutOfBoundsException(s"index: $i, length: $length")
+
+    def subSequence(_start: Int, _end: Int) = {
+      if (_start < 0 || _end < 0 || _end > length || _start > _end)
+        throw new IndexOutOfBoundsException(s"start: ${_start}, end: ${_end}, length: $length")
+
+      new SubSequence(s, start + _start, _end - _start)
+    }
+
+    override def toString = s.subSequence(start, start + length).toString
+  }
 }
+
