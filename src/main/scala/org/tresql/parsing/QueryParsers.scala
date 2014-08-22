@@ -9,7 +9,7 @@ trait QueryParsers extends JavaTokenParsers {
   val comparison_operand = "([\\W&&[^|&]]|[\\W]{2,})"r
   
   //JavaTokenParsers overrides
-  override val whiteSpace = """(\s*+/\*(.|\s)*?\*/\s*+)?(\s*+//(.)*+(\n|$))?(\s*+)"""r
+  override val whiteSpace = """\s*+(/\*(.|\s)*?\*/\s*+)?(//(.)*+(\n|$))?"""r
   
   override def stringLiteral: Parser[String] = ("""("[^"]*+")|('[^']*+')"""r) ^^ {
     case s => s.substring(1, s.length - 1)
