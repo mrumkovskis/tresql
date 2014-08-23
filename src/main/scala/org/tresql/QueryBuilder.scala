@@ -76,7 +76,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   }
 
   case class VarExpr(name: String, typ: String, opt: Boolean) extends BaseExpr {
-    override def apply() = env.get(name) getOrElse (error("Bind variable with name " + name + " not found."))
+    override def apply() = env.get(name) getOrElse (error(s"Missing bind variable: $name"))
     var binded = false
     def defaultSQL = {
       if (!binded) QueryBuilder.this._bindVariables += this
