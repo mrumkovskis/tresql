@@ -6,7 +6,7 @@ trait QueryParsers extends JavaTokenParsers {
 
   val reserved = Set("in")
   
-  val comparison_operand = "([\\W&&[^|&]]|[\\W]{2,})"r
+  val comparison_operand = """[<>=!~%$]+"""r
   
   //JavaTokenParsers overrides
   override val whiteSpace = """\s*+(/\*(.|\s)*?\*/\s*+)?(//(.)*+(\n|$))?"""r
@@ -357,7 +357,8 @@ trait QueryParsers extends JavaTokenParsers {
   def mulDiv: Parser[Any] = unaryExpr ~ rep("*" ~ unaryExpr | "/" ~ unaryExpr) ^^ binOp named "mul-div"
   def plusMinus: Parser[Any] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ binOp named "plus-minus"
   def comp: Parser[Any] = plusMinus ~
-    rep(("<=" | ">=" | "<" | ">" | "!=" | "=" | "~~" | "!~~" | "~" | "!~" | "in" | "!in") ~ plusMinus) ^? (
+    rep(("<=" | ">=" | "<" | ">" | "!=" | "=" | "~~" | "!~~" | "~" | "!~" | "in" | "!in" | comparison_operand) ~
+      plusMinus) ^? (
       {
         case lop ~ Nil => lop
         case lop ~ ((o ~ rop) :: Nil) => BinOp(o, lop, rop)
