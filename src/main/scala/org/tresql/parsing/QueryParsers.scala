@@ -6,7 +6,7 @@ trait QueryParsers extends JavaTokenParsers {
 
   val reserved = Set("in")
 
-  //comparison operand regular expression
+  //comparison operator regular expression
   val comp_op = """!?in|[<>=!~%$]+"""r  
   
   //JavaTokenParsers overrides
