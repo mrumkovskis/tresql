@@ -111,11 +111,11 @@ object Env extends Resources {
   private var _idExpr: Option[String => String] = None
   //available functions
   private var _functions: Option[Any] = None
-  private var _functionNames: Option[Set[String]] = None
+  private var _functionMethods: Option[Map[String, java.lang.reflect.Method]] = None
   functions = new Functions //invoke setter to set function names
   //macros
   private var _macros: Option[Any] = None
-  private var _macrosNames: Option[Set[String]] = None
+  private var _macrosMethods: Option[Map[String, java.lang.reflect.Method]] = None
   //cache
   private var _cache: Option[Cache] = None
   private var logger: (=> String, Int) => Unit = null
@@ -129,9 +129,11 @@ object Env extends Resources {
   override def dialect = _dialect.getOrElse(super.dialect)
   override def idExpr = _idExpr.getOrElse(super.idExpr)
   def functions = _functions
-  def isDefined(functionName: String) = _functionNames.map(_.contains(functionName)).getOrElse(false)
+  def isDefined(functionName: String) = _functionMethods.map(_.contains(functionName)).getOrElse(false)
+  def function(name: String) = _functionMethods.map(_(name)).get
   def macros = _macros
-  def isMacroDefined(macroName: String) = _macrosNames.map(_.contains(macroName)).getOrElse(false)
+  def isMacroDefined(macroName: String) = _macrosMethods.map(_.contains(macroName)).getOrElse(false)
+  def macroMethod(name: String) = _macrosMethods.map(_(name)).get
   def cache = _cache
   
   def conn_=(conn: java.sql.Connection) = this.threadConn set conn
@@ -141,11 +143,11 @@ object Env extends Resources {
   def idExpr_=(idExpr: String => String) = this._idExpr = Option(idExpr)
   def functions_=(funcs: Any) = {
     this._functions = Option(funcs)
-    this._functionNames = functions.flatMap(f => Option(f.getClass.getMethods.map(_.getName).toSet))
+    this._functionMethods = functions.flatMap(f => Option(f.getClass.getMethods.map(m => m.getName -> m).toMap))
   }
   def macros_=(macr: Any) = {
     this._macros = Option(macr)
-    this._macrosNames = macros.flatMap(f => Option(f.getClass.getMethods.map(_.getName).toSet))
+    this._macrosMethods = macros.flatMap(f => Option(f.getClass.getMethods.map(m => m.getName -> m).toMap))
   }
   
   def recursive_stack_dept = _recursive_stack_depth

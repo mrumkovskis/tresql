@@ -5,10 +5,12 @@ import scala.util.parsing.combinator.JavaTokenParsers
 trait QueryParsers extends JavaTokenParsers {
 
   val reserved = Set("in")
-  
-  val comparison_operand = """[<>=!~%$]+"""r
+
+  //comparison operand regular expression
+  val comp_op = """!?in|[<>=!~%$]+"""r  
   
   //JavaTokenParsers overrides
+  //besides standart whitespace symbols consider as a whitespace also comments in form /* comment */ and //comment 
   override val whiteSpace = """\s*+(/\*(.|\s)*?\*/\s*+)?(//(.)*+(\n|$))?"""r
   
   override def stringLiteral: Parser[String] = ("""("[^"]*+")|('[^']*+')"""r) ^^ {
@@ -23,7 +25,7 @@ trait QueryParsers extends JavaTokenParsers {
   def decimalNr = decimalNumber ^^ (BigDecimal(_)) named "decimal-nr"
   
   /** Copied from RegexParsers to support comment handling as whitespace */
-  override protected def handleWhiteSpace(source: java.lang.CharSequence, offset: Int): Int = {
+  override protected def handleWhiteSpace(source: java.lang.CharSequence, offset: Int): Int =
     if (skipWhitespace)
       (whiteSpace findPrefixMatchOf (new SubSequence(source, offset))) match {
         case Some(matched) => offset + matched.end
@@ -32,7 +34,7 @@ trait QueryParsers extends JavaTokenParsers {
     else
       offset  
   //
-  }
+      
   sealed trait Exp {
     def tresql: String
   }    
@@ -356,9 +358,7 @@ trait QueryParsers extends JavaTokenParsers {
     } named "unary-exp"
   def mulDiv: Parser[Any] = unaryExpr ~ rep("*" ~ unaryExpr | "/" ~ unaryExpr) ^^ binOp named "mul-div"
   def plusMinus: Parser[Any] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ binOp named "plus-minus"
-  def comp: Parser[Any] = plusMinus ~
-    rep(("<=" | ">=" | "<" | ">" | "!=" | "=" | "~~" | "!~~" | "~" | "!~" | "in" | "!in" | comparison_operand) ~
-      plusMinus) ^? (
+  def comp: Parser[Any] = plusMinus ~ rep(comp_op ~ plusMinus) ^? (
       {
         case lop ~ Nil => lop
         case lop ~ ((o ~ rop) :: Nil) => BinOp(o, lop, rop)

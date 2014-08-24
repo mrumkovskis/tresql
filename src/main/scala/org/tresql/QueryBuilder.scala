@@ -21,6 +21,9 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   val LIMIT_CTX = "LIMIT"
   val FUN_CTX = "FUNCTION"
   val EXTERNAL_FUN_CTX = "EXTERNAL_FUN_CTX"
+    
+  val STANDART_BIN_OPS = Set("<=", ">=", "<", ">", "!=", "=", "~", "!~", "in", "!in",
+      "++", "+",  "-", "&&", "||", "*", "/", "&", "|")
 
   private def this(env: Env) = this(env, 0, 0)
 
@@ -246,8 +249,6 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
         rop.sql
       case "|" => (if (lop.exprType == classOf[SelectExpr]) "exists " else "") + lop.sql +
         " or " + (if (rop.exprType == classOf[SelectExpr]) "exists " else "") + rop.sql
-      case "~~" => "upper(" + lop.sql + ") like upper(" + rop.sql + ")"
-      case "!~~" => "upper(" + lop.sql + ") not like upper(" + rop.sql + ")"
       case "~" => lop.sql + " like " + rop.sql
       case "!~" => lop.sql + " not like " + rop.sql
       case s @ ("in" | "!in") => lop.sql + (if (s.startsWith("!")) " not" else "") + " in " +
@@ -262,7 +263,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     } else classOf[ConstExpr]
   }
 
-  case class FunExpr(name: String, params: List[Expr], distinct: Boolean) extends BaseExpr {
+  case class FunExpr(name: String, params: List[Expr], distinct: Boolean = false) extends BaseExpr {
     override def apply() = {
       val p = params map (_())
       val ts = p map {
@@ -855,12 +856,20 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
       }
       filterExpr(filterList)
     }
-    def maybeCallMacro(fun: FunExpr) = {
-      if (Env isMacroDefined fun.name) {
-        Env.macros.map(m => m.getClass.getMethods.filter(_.getName == fun.name).head
-            .invoke(m, (this :: fun.params): _*)).get.asInstanceOf[Expr]
-      } else fun
+    def maybeCallMacro(exp: Expr) = exp match {
+      case fun: FunExpr =>
+        if (Env isMacroDefined fun.name)
+          Env.macroMethod(fun.name).invoke(Env.macros.get, (this :: fun.params): _*).asInstanceOf[Expr]
+        else fun
+      case binExpr: BinExpr =>
+        if (!(STANDART_BIN_OPS contains binExpr.op)) {
+          val macroName = scala.reflect.NameTransformer.encode(binExpr.op)
+          if (Env isMacroDefined macroName)
+            Env.macroMethod(macroName).invoke(Env.macros.get, this, binExpr.lop, binExpr.rop).asInstanceOf[Expr]
+          else binExpr
+        } else binExpr
     }
+        
     ctxStack ::= parseCtx
     try {
       parsedExpr match {
@@ -931,7 +940,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
           case ctx =>
             val l = buildInternal(lop, ctx)
             val r = buildInternal(rop, ctx)
-            if (l != null && r != null) BinExpr(op, l, r) else if (op == "&" || op == "|")
+            if (l != null && r != null) maybeCallMacro(BinExpr(op, l, r)) else if (op == "&" || op == "|")
               if (l != null) l else if (r != null) r else null
             else null
         }
