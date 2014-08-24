@@ -11,7 +11,7 @@ trait QueryParsers extends JavaTokenParsers {
   
   //JavaTokenParsers overrides
   //besides standart whitespace symbols consider as a whitespace also comments in form /* comment */ and //comment 
-  override val whiteSpace = """(\s*+(/\*(.|\s)*?\*/\s*+)?(//.*+(\n|$))?)*+"""r
+  override val whiteSpace = """(\s*+(/\*(.|\s)*?\*/)?(//.*+(\n|$))?)*+"""r
   
   override def stringLiteral: Parser[String] = ("""("[^"]*+")|('[^']*+')"""r) ^^ {
     case s => s.substring(1, s.length - 1)
