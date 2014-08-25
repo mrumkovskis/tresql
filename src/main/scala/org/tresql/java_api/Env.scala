@@ -13,8 +13,6 @@ object Dialects {
   def ANSISQL = dialects.ANSISQLDialect
   def HSQL = dialects.HSQLDialect
   def Oracle = dialects.OracleDialect
-  def InsensitiveCmp(accents: String, normalized: String) =
-    dialects.InsensitiveCmp(accents, normalized)
 }
 object Metadata {
   def JDBC(defaultSchema: String) = JDBCMetaData(defaultSchema)

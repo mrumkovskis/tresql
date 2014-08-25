@@ -13,8 +13,7 @@ class QueryTest extends Suite {
   Class.forName("org.hsqldb.jdbc.JDBCDriver")
   val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
   Env.conn = conn
-  Env.dialect = dialects.InsensitiveCmp("ĒŪĪĀŠĢĶĻŽČŅēūīāšģķļžčņ", "EUIASGKLZCNeuiasgklzcn") orElse
-    dialects.HSQLDialect
+  Env.dialect = dialects.HSQLDialect
   Env.idExpr = s => "nextval('seq')"
   class TestFunctions extends Functions {
     def echo(x: String) = x

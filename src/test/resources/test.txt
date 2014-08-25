@@ -347,17 +347,7 @@ dept {dname, mkString(|emp{ename}#(1), ",", ",")}#(1) --> [["ACCOUNTING", "CLARK
 //sequence test
 nextval("seq") --> [[10000]]
 
-//----insensitive comparison function test using dialect----
 EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [9999, "MĀRTIŅŠ ŽVŪKŠĶIS",  "CLERK", 7788, "1983-01-12", 1100, null, 20] --> [[1]]
-emp[cmp_i(ename, ?)]{ename} --> 'zvuksk --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
-emp[cmp_i_any(ename, ?)]{ename} --> 'zvuksk --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
-emp[cmp_i_start(ename, ?)]{ename} --> 'mar --> [["MARTIN"], ["MĀRTIŅŠ ŽVŪKŠĶIS"]]
-emp[cmp_i_end(ename, ?)]{ename} --> 'kskis --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
-emp[cmp_i(ename, ?)]{ename} --> 'ZVUKSK --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
-emp[cmp_i_start(ename, ?)]{ename} --> 'MĀR --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
-emp[cmp_i_start(ename, ?)]{ename} --> 'mār --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
-emp[cmp_i_exact(ename, ?)]{ename} --> 'martins zvukskis --> [["MĀRTIŅŠ ŽVŪKŠĶIS"]]
-emp[cmp_i(ename, ?)]{ename} --> null --> []
 
 //external function test
 emp{ename, job, |concat(:1(1), ' ', :1(2))}#(1,2) --> [["ADAMS", "CLERK", "ADAMS CLERK"], ["ALLEN", "SALESMAN", "ALLEN SALESMAN"], ["BLAKE", "MANAGER", "BLAKE MANAGER"], ["CLARK", "MANAGER", "CLARK MANAGER"], ["FORD", "ANALYST", "FORD ANALYST"], ["JAMES", "CLERK", "JAMES CLERK"], ["JONES", "MANAGER", "JONES MANAGER"], ["KING", "PRESIDENT", "KING PRESIDENT"], ["MARTIN", "SALESMAN", "MARTIN SALESMAN"], ["MILLER", "CLERK", "MILLER CLERK"], ["MĀRTIŅŠ ŽVŪKŠĶIS", "CLERK", "MĀRTIŅŠ ŽVŪKŠĶIS CLERK"], ["SCOTT", "ANALYST", "SCOTT ANALYST"], ["SMITH", "CLERK", "SMITH CLERK"], ["TURNER", "SALESMAN", "TURNER SALESMAN"], ["WARD", "SALESMAN", "WARD SALESMAN"]]
