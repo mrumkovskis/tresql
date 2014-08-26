@@ -142,7 +142,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   case class Filters(filters: List[Arr]) extends Exp {
     def tresql = filters map any2tresql mkString
   }
-  case class All() extends Exp {
+  object All extends Exp {
     def tresql = "*"
   }
   case class IdentAll(ident: Ident) extends Exp {
@@ -168,7 +168,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def TRUE: MemParser[Boolean] = "true" ^^^ true named "true"
   def FALSE: MemParser[Boolean] = "false" ^^^ false named "false"
   def NULL: MemParser[Null.type] = "null" ^^^ Null named "null"
-  def ALL: MemParser[All] = "*" ^^^ All() named "all"
+  def ALL: MemParser[All.type] = "*" ^^^ All named "all"
 
   def qualifiedIdent: MemParser[Ident] = rep1sep(ident, ".") ^^ Ident named "qualified-ident"
   def qualifiedIdentAll: MemParser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"

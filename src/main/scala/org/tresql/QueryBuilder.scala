@@ -973,7 +973,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
           buildInternal(having, HAVING_CTX))
         case Ord(cols) => Order(cols map (c=> (buildInternal(c._1, parseCtx),
             buildInternal(c._2, parseCtx), buildInternal(c._3, parseCtx))))
-        case All() => AllExpr()
+        case All => AllExpr()
         case null => null
         case Braces(expr) =>
           val e = buildInternal(expr, parseCtx)

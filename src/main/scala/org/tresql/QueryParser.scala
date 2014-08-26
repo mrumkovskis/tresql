@@ -27,7 +27,7 @@ object QueryParser extends parsing.QueryParsers {
       case e: Id => e
       case e: IdRef => e
       case e: Res => e
-      case e: All => e
+      case All => All
       case e: IdentAll => e
       case e: Variable => e
       case Null => Null
@@ -66,7 +66,7 @@ object QueryParser extends parsing.QueryParsers {
     var result = List[T]()
     var extract_collect_traverse: PartialFunction[Any, Any] = null
     val traverse: PartialFunction[Any, Any] = {
-      case _: Ident | _: Id | _: IdRef | _: Res | _: All | _: IdentAll | _: Variable | Null | null =>
+      case _: Ident | _: Id | _: IdRef | _: Res | All | _: IdentAll | _: Variable | Null | null =>
       case l: List[_] => l foreach extract_collect_traverse
       case Fun(_, pars, _) => extract_collect_traverse(pars)
       case UnOp(_, operand) => extract_collect_traverse(operand)
