@@ -2,7 +2,7 @@ package org.tresql.parsing
 
 import scala.util.parsing.combinator.JavaTokenParsers
 
-trait QueryParsers extends JavaTokenParsers {
+trait QueryParsers extends JavaTokenParsers with MemParsers {
 
   val reserved = Set("in", "null", "false", "true")
 
@@ -13,16 +13,16 @@ trait QueryParsers extends JavaTokenParsers {
   //besides standart whitespace symbols consider as a whitespace also comments in form /* comment */ and //comment 
   override val whiteSpace = """(\s*+(/\*(.|\s)*?\*/)?(//.*+(\n|$))?)+"""r
   
-  override def stringLiteral: Parser[String] = ("""("[^"]*+")|('[^']*+')"""r) ^^ {
+  override def stringLiteral: MemParser[String] = ("""("[^"]*+")|('[^']*+')"""r) ^^ {
     case s => s.substring(1, s.length - 1)
   } named "string-literal"
 
-  override def ident = super.ident ^? ({ case x if !(reserved contains x) => x }, 
+  override def ident: MemParser[String] = super.ident ^? ({ case x if !(reserved contains x) => x }, 
       { x => s"'$x' is one of the reserved words: $reserved" }) named "ident"
   
-  override def wholeNumber: Parser[String] = ("""\d+"""r) named "number"
+  override def wholeNumber: MemParser[String] = ("""\d+"""r) named "number"
       
-  def decimalNr = decimalNumber ^^ (BigDecimal(_)) named "decimal-nr"
+  def decimalNr: MemParser[BigDecimal] = decimalNumber ^^ (BigDecimal(_)) named "decimal-nr"
   
   /** Copied from RegexParsers to support comment handling as whitespace */
   override protected def handleWhiteSpace(source: java.lang.CharSequence, offset: Int): Int =
@@ -165,21 +165,21 @@ trait QueryParsers extends JavaTokenParsers {
   }
   
   //literals
-  def TRUE: Parser[Boolean] = "true" ^^^ true named "true"
-  def FALSE: Parser[Boolean] = "false" ^^^ false named "false"
-  def NULL: Parser[Null.type] = "null" ^^^ Null named "null"
-  def ALL: Parser[All] = "*" ^^^ All() named "all"
+  def TRUE: MemParser[Boolean] = "true" ^^^ true named "true"
+  def FALSE: MemParser[Boolean] = "false" ^^^ false named "false"
+  def NULL: MemParser[Null.type] = "null" ^^^ Null named "null"
+  def ALL: MemParser[All] = "*" ^^^ All() named "all"
 
-  def qualifiedIdent: Parser[Ident] = rep1sep(ident, ".") ^^ Ident named "qualified-ident"
-  def qualifiedIdentAll: Parser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
-  def variable: Parser[Variable] = ((":" ~> ((ident | stringLiteral) ~ opt(":" ~> ident) ~ opt("?")))
+  def qualifiedIdent: MemParser[Ident] = rep1sep(ident, ".") ^^ Ident named "qualified-ident"
+  def qualifiedIdentAll: MemParser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
+  def variable: MemParser[Variable] = ((":" ~> ((ident | stringLiteral) ~ opt(":" ~> ident) ~ opt("?")))
       | "?") ^^ {
     case "?" => Variable("?", null, false)
     case (i: String) ~ (t: Option[String]) ~ o => Variable(i, t orNull, o != None)
   } named "variable"
-  def id: Parser[Id] = "#" ~> ident ^^ Id named "id"
-  def idref: Parser[IdRef] = ":#" ~> ident ^^ IdRef named "id-ref"
-  def result: Parser[Res] = (":" ~> wholeNumber <~ "(") ~ (wholeNumber | stringLiteral |
+  def id: MemParser[Id] = "#" ~> ident ^^ Id named "id"
+  def idref: MemParser[IdRef] = ":#" ~> ident ^^ IdRef named "id-ref"
+  def result: MemParser[Res] = (":" ~> wholeNumber <~ "(") ~ (wholeNumber | stringLiteral |
     qualifiedIdent) <~ ")" ^^ {
       case r ~ c => Res(r.toInt,
         c match {
@@ -187,22 +187,22 @@ trait QueryParsers extends JavaTokenParsers {
           case i: Ident => i
         })
     } named "result"
-  def braces: Parser[Braces] = "(" ~> expr <~ ")" ^^ Braces named "braces"
+  def braces: MemParser[Braces] = "(" ~> expr <~ ")" ^^ Braces named "braces"
   /* Important is that function parser is applied before query because of the longest token
      * matching, otherwise qualifiedIdent of query will match earlier.
      * Also important is that array parser is applied after query parser because it matches join parser
      * of the query.
      * Also important is that variable parser is after query parser since ? mark matches variable
      * Also important that insert, delete, update parsers are before query parser */
-  def operand: Parser[Any] = (TRUE | FALSE | NULL | ALL | function | insert | update | query |
+  def operand: MemParser[Any] = (TRUE | FALSE | NULL | ALL | function | insert | update | query |
     decimalNr | stringLiteral | variable | id | idref | result | array) named "operand"
-  def function: Parser[Fun] = (qualifiedIdent <~ "(") ~ opt("#") ~ repsep(expr, ",") <~ ")" ^^ {
+  def function: MemParser[Fun] = (qualifiedIdent <~ "(") ~ opt("#") ~ repsep(expr, ",") <~ ")" ^^ {
     case Ident(a) ~ d ~ b => Fun(a.mkString("."), b, d.map(x=> true).getOrElse(false))
   } named "function"
-  def array: Parser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ Arr named "array"
+  def array: MemParser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ Arr named "array"
 
   //query parsers
-  def join: Parser[Join] = (("/" ~ opt("[" ~> expr <~ "]")) | (opt("[" ~> expr <~ "]") ~ "/") |
+  def join: MemParser[Join] = (("/" ~ opt("[" ~> expr <~ "]")) | (opt("[" ~> expr <~ "]") ~ "/") |
     ";" | array) ^^ {
       case ";" => NoJoin
       case "/" ~ Some(e) => Join(true, e, false)
@@ -211,9 +211,9 @@ trait QueryParsers extends JavaTokenParsers {
       case None ~ "/" => DefaultJoin
       case a => Join(false, a, false)
     } named "join"
-  def filter: Parser[Arr] = array named "filter"
-  def filters: Parser[Filters] = rep(filter) ^^ Filters named "filters"
-  def obj: Parser[Obj] = opt(join) ~ opt("?") ~ (qualifiedIdent | braces) ~
+  def filter: MemParser[Arr] = array named "filter"
+  def filters: MemParser[Filters] = rep(filter) ^^ Filters named "filters"
+  def obj: MemParser[Obj] = opt(join) ~ opt("?") ~ (qualifiedIdent | braces) ~
     opt("?") ~ opt(ident) ~ opt("?") ^^ {
       case a ~ Some(b) ~ c ~ Some(d) ~ e ~ f => sys.error("Cannot be right and left join at the same time")
       case a ~ Some(b) ~ c ~ d ~ e ~ Some(f) => sys.error("Cannot be right and left join at the same time")
@@ -222,7 +222,7 @@ trait QueryParsers extends JavaTokenParsers {
         //set nullable flag if left outer join
         d orElse f map (x => true) getOrElse (false))
     } named "obj"
-  def objs: Parser[List[Obj]] = rep1(obj) ^^ { l =>
+  def objs: MemParser[List[Obj]] = rep1(obj) ^^ { l =>
     var prev: Obj = null
     val res = l.flatMap { thisObj =>
       val (prevObj, prevAlias) = (prev, if (prev == null) null else prev.alias)
@@ -253,7 +253,7 @@ trait QueryParsers extends JavaTokenParsers {
       case x => res.zipWithIndex.map(t => if (t._2 < x && !t._1.nullable) t._1.copy(nullable = true) else t._1)
     }
   } named "objs"
-  def column: Parser[Col] = (qualifiedIdentAll |
+  def column: MemParser[Col] = (qualifiedIdentAll |
     (expr ~ opt(":" ~> ident) ~ opt(stringLiteral | qualifiedIdent))) ^^ {
       case i: IdentAll => Col(i, null, null)
       //move object alias to column alias
@@ -283,17 +283,17 @@ trait QueryParsers extends JavaTokenParsers {
         case r => r
       }
     } named "column"
-  def columns: Parser[Cols] = (opt("#") <~ "{") ~ rep1sep(column, ",") <~ "}" ^^ {
+  def columns: MemParser[Cols] = (opt("#") <~ "{") ~ rep1sep(column, ",") <~ "}" ^^ {
     case d ~ c => Cols(d != None, c)
   } named "columns"
-  def group: Parser[Grp] = ("(" ~> rep1sep(expr, ",") <~ ")") ~
+  def group: MemParser[Grp] = ("(" ~> rep1sep(expr, ",") <~ ")") ~
     opt(("^" ~ "(") ~> expr <~ ")") ^^ { case g ~ h => Grp(g, if (h == None) null else h.get) }  named "group"
-  def orderMember: Parser[(Exp, Any, Exp)] = opt(NULL) ~ expr ~ opt(NULL) ^^ {
+  def orderMember: MemParser[(Exp, Any, Exp)] = opt(NULL) ~ expr ~ opt(NULL) ^^ {
     case Some(nf) ~ e ~ Some(nl) => sys.error("Cannot be nulls first and nulls last at the same time")
     case nf ~ e ~ nl => (if (nf == None) null else nf.get, e, if (nl == None) null else nl.get)
   } named "order-member"
-  def order: Parser[Ord] = ("#" ~ "(") ~> rep1sep(orderMember, ",") <~ ")" ^^ Ord named "order"
-  def offsetLimit: Parser[(Any, Any)] = ("@" ~ "(") ~> (wholeNumber | variable) ~ opt(",") ~
+  def order: MemParser[Ord] = ("#" ~ "(") ~> rep1sep(orderMember, ",") <~ ")" ^^ Ord named "order"
+  def offsetLimit: MemParser[(Any, Any)] = ("@" ~ "(") ~> (wholeNumber | variable) ~ opt(",") ~
     opt(wholeNumber | variable) <~ ")" ^^ { pr =>
       {
         def c(x: Any) = x match { case v: Variable => v case s: String => BigDecimal(s) }
@@ -304,7 +304,7 @@ trait QueryParsers extends JavaTokenParsers {
         }
       }
     } named "offset-limit"
-  def query: Parser[Any] = objs ~ filters ~ opt(columns) ~ opt(group) ~ opt(order) ~
+  def query: MemParser[Any] = objs ~ filters ~ opt(columns) ~ opt(group) ~ opt(order) ~
     opt(offsetLimit) ^^ {
       case (t :: Nil) ~ Filters(Nil) ~ None ~ None ~ None ~ None => t
       case t ~ f ~ c ~ g ~ o ~ l => Query(t, f, c.map(_.cols) orNull,
@@ -323,17 +323,17 @@ trait QueryParsers extends JavaTokenParsers {
       }
     }  named "query"
       
-  def queryWithCols: Parser[Any] = query ^? ({
+  def queryWithCols: MemParser[Any] = query ^? ({
       case q @ Query(objs, _, cols, _, _, _, _, _) if cols != null => q
     }, {case x => "Query must contain column clause: " + x}) named "query-with-cols"
 
-  def insert: Parser[Insert] = (("+" ~> qualifiedIdent ~ opt(ident) ~ opt(columns) ~
+  def insert: MemParser[Insert] = (("+" ~> qualifiedIdent ~ opt(ident) ~ opt(columns) ~
     opt(queryWithCols | repsep(array, ","))) |
     ((qualifiedIdent ~ opt(ident) ~ opt(columns) <~ "+") ~ rep1sep(array, ","))) ^^ {
       case t ~ a ~ c ~ (v: Option[_]) => Insert(t, a.orNull, c.map(_.cols).orNull, v.orNull)
       case t ~ a ~ c ~ v => Insert(t, a.orNull, c.map(_.cols).orNull, v)
     } named "insert"
-  def update: Parser[Update] = (("=" ~> qualifiedIdent ~ opt(ident) ~
+  def update: MemParser[Update] = (("=" ~> qualifiedIdent ~ opt(ident) ~
     opt(filter) ~ opt(columns) ~ opt(queryWithCols | array)) |
     ((qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) <~ "=") ~ array)) ^^ {
       case t ~ a ~ f ~ c ~ v => Update(t, a orNull, f orNull, c match {
@@ -345,20 +345,20 @@ trait QueryParsers extends JavaTokenParsers {
         case None => null
       })
     } named "update"
-  def delete: Parser[Delete] = (("-" ~> qualifiedIdent ~ opt(ident) ~ filter) |
+  def delete: MemParser[Delete] = (("-" ~> qualifiedIdent ~ opt(ident) ~ filter) |
     (((qualifiedIdent ~ opt(ident)) <~ "-") ~ filter)) ^^ {
       case t ~ a ~ f => Delete(t, a orNull, f)
     } named "delete"
   //operation parsers
   //delete must be before alternative since it can start with - sign and
   //so it is not translated into minus expression!
-  def unaryExpr: Parser[Any] = delete | (opt("-" | "!" | "|" | "~") ~ operand) ^^ {
+  def unaryExpr: MemParser[Any] = delete | (opt("-" | "!" | "|" | "~") ~ operand) ^^ {
       case a ~ b => a.map(UnOp(_, b)).getOrElse(b)
       case x => x
     } named "unary-exp"
-  def mulDiv: Parser[Any] = unaryExpr ~ rep("*" ~ unaryExpr | "/" ~ unaryExpr) ^^ binOp named "mul-div"
-  def plusMinus: Parser[Any] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ binOp named "plus-minus"
-  def comp: Parser[Any] = plusMinus ~ rep(comp_op ~ plusMinus) ^? (
+  def mulDiv: MemParser[Any] = unaryExpr ~ rep("*" ~ unaryExpr | "/" ~ unaryExpr) ^^ binOp named "mul-div"
+  def plusMinus: MemParser[Any] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ binOp named "plus-minus"
+  def comp: MemParser[Any] = plusMinus ~ rep(comp_op ~ plusMinus) ^? (
       {
         case lop ~ Nil => lop
         case lop ~ ((o ~ rop) :: Nil) => BinOp(o, lop, rop)
@@ -368,14 +368,14 @@ trait QueryParsers extends JavaTokenParsers {
         case lop ~ x => "Ternary comparison operation is allowed, however, here " + (x.size + 1) +
           " operands encountered."
       }) named "comp"
-  def in: Parser[In] = plusMinus ~ ("in" | "!in") ~ "(" ~ rep1sep(plusMinus, ",") <~ ")" ^^ {
+  def in: MemParser[In] = plusMinus ~ ("in" | "!in") ~ "(" ~ rep1sep(plusMinus, ",") <~ ")" ^^ {
     case lop ~ "in" ~ "(" ~ rop => In(lop, rop, false)
     case lop ~ "!in" ~ "(" ~ rop => In(lop, rop, true)
   } named "in"
   //in parser should come before comp so that it is not taken for in function which is illegal
-  def logicalOp: Parser[Any] = in | comp named "logical-op"
-  def expr: Parser[Any] = logicalOp ~ rep("&" ~ logicalOp | "|" ~ logicalOp) ^^ binOp named "expr"
-  def exprList: Parser[Any] = repsep(expr, ",") ^^ {
+  def logicalOp: MemParser[Any] = in | comp named "logical-op"
+  def expr: MemParser[Any] = logicalOp ~ rep("&" ~ logicalOp | "|" ~ logicalOp) ^^ binOp named "expr"
+  def exprList: MemParser[Any] = repsep(expr, ",") ^^ {
     case e :: Nil => e
     case l => Arr(l)
   } named "expr-list"

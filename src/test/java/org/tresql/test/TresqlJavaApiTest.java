@@ -33,8 +33,7 @@ public class TresqlJavaApiTest implements Runnable {
         Connection c = Env.getConnection();
         Env.setConnection(c);
         Env.getDialect();
-        Env.setDialect(Dialects.InsensitiveCmp("ĀŠāš", "ASas").orElse(
-                Dialects.HSQL()));
+        Env.setDialect(Dialects.HSQL());
         Env.getFunctions();
         Env.setFunctions(new TresqlJavaApiTestFunctions());
         println("id expr: " + Env.getIdExprFunc().getIdExpr("my_table"));

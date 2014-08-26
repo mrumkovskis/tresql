@@ -1,6 +1,6 @@
 package org.tresql
 
-object QueryParser extends parsing.QueryMemParsers {
+object QueryParser extends parsing.QueryParsers {
 
   def parseExp(expr: String): Any = {
     Env.cache.flatMap(_.get(expr)).getOrElse {
