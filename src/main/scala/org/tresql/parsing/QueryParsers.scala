@@ -4,7 +4,7 @@ import scala.util.parsing.combinator.JavaTokenParsers
 
 trait QueryParsers extends JavaTokenParsers {
 
-  val reserved = Set("in")
+  val reserved = Set("in", "null", "false", "true")
 
   //comparison operator regular expression
   val comp_op = """!?in|[<>=!~%$]+"""r  

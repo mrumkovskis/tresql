@@ -216,6 +216,16 @@ dept{deptno} - dept/emp?[ename != null]{deptno} --> [[40]]
 dept[]salgrade{dname, grade}#(1, loc, ~2) --> [["ACCOUNTING", 5], ["ACCOUNTING", 4], ["ACCOUNTING", 3], ["ACCOUNTING", 2], ["ACCOUNTING", 1], ["OPERATIONS", 5], ["OPERATIONS", 4], ["OPERATIONS", 3], ["OPERATIONS", 2], ["OPERATIONS", 1], ["RESEARCH", 5], ["RESEARCH", 4], ["RESEARCH", 3], ["RESEARCH", 2], ["RESEARCH", 1], ["SALES", 5], ["SALES", 4], ["SALES", 3], ["SALES", 2], ["SALES", 1]]
 dept[]salgrade[]dummy{dname, grade, dummy}#(1, loc, ~2) --> [["ACCOUNTING", 5, 0], ["ACCOUNTING", 4, 0], ["ACCOUNTING", 3, 0], ["ACCOUNTING", 2, 0], ["ACCOUNTING", 1, 0], ["OPERATIONS", 5, 0], ["OPERATIONS", 4, 0], ["OPERATIONS", 3, 0], ["OPERATIONS", 2, 0], ["OPERATIONS", 1, 0], ["RESEARCH", 5, 0], ["RESEARCH", 4, 0], ["RESEARCH", 3, 0], ["RESEARCH", 2, 0], ["RESEARCH", 1, 0], ["SALES", 5, 0], ["SALES", 4, 0], ["SALES", 3, 0], ["SALES", 2, 0], ["SALES", 1, 0]]
 
+//sorting nulls first, nulls last
+(dummy{1 a} + dummy{null a})#(null a) --> [[null], [1]]
+(dummy{1 a} + dummy{null a})#(a null) --> [[1], [null]]
+(dummy{1 a} + dummy{null a})#(null 1) --> [[null], [1]]
+(dummy{1 a} + dummy{null a})#(1 null) --> [[1], [null]]
+(dummy{1 a} + dummy{null a} + dummy {2 a})#(null ~a) --> [[null], [2], [1]]
+(dummy{1 a} + dummy{null a} + dummy {2 a})#(~a null) --> [[2], [1], [null]]
+(dummy{1 a} + dummy{null a} + dummy {2 a})#(null ~1) --> [[null], [2], [1]]
+(dummy{1 a} + dummy{null a} + dummy {2 a})#(~1 null) --> [[2], [1], [null]]
+
 //all cols: *
 dept[10]{*} --> [[10, "ACCOUNTING", "NEW YORK"]]
 dept[10]{*, |[deptno = :1(1)]emp{ename}} --> [[10, "ACCOUNTING", "NEW YORK", [["KING"], ["CLARK"], ["MILLER"]]]]
