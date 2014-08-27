@@ -416,6 +416,11 @@ class QueryTest extends Suite {
     obj = Map("nr" -> 4444, "dname" -> "<NONE>")
     intercept[java.sql.SQLIntegrityConstraintViolationException](ORT.update("car", obj))
     
+    //update only children (no first level table column updates)
+    obj = Map("nr" -> 4444, "tyres" -> List(Map("brand" -> "GOOD YEAR", "season" -> "S"),
+        Map("brand" -> "PIRELLI", "season" -> "W")))
+    expectResult(List(0, List((1,10017), (1,10018))))(ORT.update("car", obj))
+    
     println("\n--- DELETE ---\n")
     
     expectResult(1)(ORT.delete("emp", 7934))
@@ -433,7 +438,7 @@ class QueryTest extends Suite {
         Map("empno" -> 7698, "ename" -> "BLAKE", "job" -> "SALESMAN", "mgr" -> 7839,
             "mgr_name" -> null, "deptno" -> 30)),         
       "calculated_children" -> List(Map("x" -> 5)), "deptno" -> 30)
-      expectResult(List(1, List(3, List(1, 1, 1), List((1,10017)))))(ORT.save("dept", obj))
+      expectResult(List(1, List(3, List(1, 1, 1), List((1,10019)))))(ORT.save("dept", obj))
 
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->7788, "hours"->10, "empno_mgr"->7839),
@@ -450,8 +455,8 @@ class QueryTest extends Suite {
                 "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->null, "hours"->5, "empno_mgr"->7839),
               Map("wdate"->"2012-7-13", "empno"->null, "hours"->2, "empno_mgr"->7839)))),
         "calculated_children"->List(Map("x"->5)), "deptno"->40)
-    expectResult(List(1, List(2, List((List(1, List(0, List(1, 1))),10018),
-        (List(1, List(0, List(1, 1))),10019)))))(ORT.save("dept", obj))
+    expectResult(List(1, List(2, List((List(1, List(0, List(1, 1))),10020),
+        (List(1, List(0, List(1, 1))),10021)))))(ORT.save("dept", obj))
     
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(), "calculated_children"->List(Map("x"->5)), "deptno"->20)

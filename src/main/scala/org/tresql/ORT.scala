@@ -119,8 +119,8 @@ trait ORT {
           table.key.cols == List(refColName)))) Map()
        else Map(table.key.cols(0) -> ("#" + table.name)))).unzip match {
         case (Nil, Nil) => null
-        case (cols: List[_], vals: List[_]) => cols.mkString("+" + table.name +
-          "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") +
+        case (cols: List[String], vals: List[String]) => 
+          cols.mkString(s"+${table.name}{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") +
           (if (parent != null) " '" + name + "'" else "")
       }
     }).orNull
@@ -160,11 +160,11 @@ trait ORT {
           case _ => (table.colOption(cn).map(_.name).orNull, resources.valueExpr(name, n))
         }
       }).filter(_._1 != null).unzip match {
-        case (cols: List[_], vals: List[_]) => pkProp.flatMap(pk =>
+        case (cols: List[String], vals: List[String]) => pkProp.flatMap(pk =>
           //primary key in update condition is taken from sequence so that currId is updated for
           //child records
-          Some(cols.mkString("=" + table.name + "[" + table.key.cols(0) + " = #" + table.name + "]"
-              + "{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]")))
+          Some(cols.mkString(s"=${table.name}[${table.key.cols(0)} = #${table.name}]{", ", ", "}") +
+              vals.filter(_ != null).mkString(" [", ", ", "]")))
       }
     }).orNull
   }
