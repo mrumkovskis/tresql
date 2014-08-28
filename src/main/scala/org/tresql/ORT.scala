@@ -161,11 +161,12 @@ trait ORT {
           case _ => (table.colOption(cn).map(_.name).orNull, resources.valueExpr(name, n))
         }
       }).filter(_._1 != null).unzip match {
-        case (cols: List[String], vals: List[String]) => pkProp.flatMap(pk =>
+        case (cols: List[String], vals: List[String]) => pkProp.flatMap(pk =>{
           //primary key in update condition is taken from sequence so that currId is updated for
           //child records
-          Some(cols.mkString(s"=${table.name}[${table.key.cols(0)} = #${table.name}]{", ", ", "}") +
-              vals.filter(_ != null).mkString(" [", ", ", "]")))
+          val tresql = cols.mkString(s"=${table.name}[${table.key.cols(0)} = #${table.name}]{", ", ", "}") +
+              vals.filter(_ != null).mkString(" [", ", ", "]")
+          if (cols.size > 0) Some(tresql) else error(s"Column clause empty: $tresql")})
       }
     }).orNull
   }

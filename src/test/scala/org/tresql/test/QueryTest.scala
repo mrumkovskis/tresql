@@ -443,6 +443,11 @@ class QueryTest extends Suite {
             "work:empno" -> List())))
     expectResult(List(2, List((List(1, List(List())), 10021), (List(1, List(List())), 10022))))(
       ORT.update("dept", obj))
+      
+    //empty column list
+    assert(intercept[RuntimeException](
+        ORT.update("dept", Map("deptno" -> 10013, "bla" -> 1, "bla1" -> "x")))
+        .getMessage.substring(0, 20) === "Column clause empty:")
     
     println("\n--- DELETE ---\n")
     
