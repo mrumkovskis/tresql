@@ -409,9 +409,10 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
             //normal join expression
             case e => (if (e.exprType == classOf[SelectExpr]) "exists " else "") + e.sql
           })
+        case null => error(s"Cannot build sql query, join not specified between tables '$joinTable' and '$this'.")
       }
     }
-    override def defaultSQL = table.sql + Option(alias).mkString
+    override def defaultSQL = table.sql + Option(alias).map(" " + _).mkString
   }
   case class TableJoin(default: Boolean, expr: Expr, noJoin: Boolean,
     defaultJoinCols: (List[String], List[String])) extends PrimitiveExpr {
