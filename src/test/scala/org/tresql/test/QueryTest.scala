@@ -421,6 +421,29 @@ class QueryTest extends Suite {
         Map("brand" -> "PIRELLI", "season" -> "W")))
     expectResult(List(0, List((1,10017), (1,10018))))(ORT.update("car", obj))
     
+    //delete children
+    obj = Map("nr" -> 4444, "name" -> "LAMBORGHINI", "tyres" -> List())
+    expectResult(List(1, List(2, List())))(ORT.update("car", obj))
+    
+    //update three level, for the first second level object it's third level is empty
+    obj = Map("deptno" -> 10013, "emp" -> List(
+        Map("ename" -> "ELKHADY",
+            "work:empno" -> List()),
+        Map("ename" -> "GUNTER",
+            "work:empno" -> List(
+            Map("wdate" -> "2014-08-27", "hours" -> 8),
+            Map("wdate" -> "2014-08-28", "hours" -> 8)))))
+    expectResult(List(0, List((List(1, List(List())), 10019), (List(1, List(List(1, 1))), 10020))))(
+      ORT.update("dept", obj))
+    //delete third level children
+    obj = Map("deptno" -> 10013, "emp" -> List(
+        Map("ename" -> "ELKHADY",
+            "work:empno" -> List()),
+        Map("ename" -> "GUNTER",
+            "work:empno" -> List())))
+    expectResult(List(2, List((List(1, List(List())), 10021), (List(1, List(List())), 10022))))(
+      ORT.update("dept", obj))
+    
     println("\n--- DELETE ---\n")
     
     expectResult(1)(ORT.delete("emp", 7934))
@@ -438,7 +461,7 @@ class QueryTest extends Suite {
         Map("empno" -> 7698, "ename" -> "BLAKE", "job" -> "SALESMAN", "mgr" -> 7839,
             "mgr_name" -> null, "deptno" -> 30)),         
       "calculated_children" -> List(Map("x" -> 5)), "deptno" -> 30)
-      expectResult(List(1, List(3, List(1, 1, 1), List((1,10019)))))(ORT.save("dept", obj))
+      expectResult(List(1, List(3, List(1, 1, 1), List((1,10023)))))(ORT.save("dept", obj))
 
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->7788, "hours"->10, "empno_mgr"->7839),
@@ -455,8 +478,8 @@ class QueryTest extends Suite {
                 "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->null, "hours"->5, "empno_mgr"->7839),
               Map("wdate"->"2012-7-13", "empno"->null, "hours"->2, "empno_mgr"->7839)))),
         "calculated_children"->List(Map("x"->5)), "deptno"->40)
-    expectResult(List(1, List(2, List((List(1, List(0, List(1, 1))),10020),
-        (List(1, List(0, List(1, 1))),10021)))))(ORT.save("dept", obj))
+    expectResult(List(1, List(2, List((List(1, List(0, List(1, 1))),10024),
+        (List(1, List(0, List(1, 1))),10025)))))(ORT.save("dept", obj))
     
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(), "calculated_children"->List(Map("x"->5)), "deptno"->20)
