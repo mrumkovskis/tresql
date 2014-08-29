@@ -7,7 +7,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   val reserved = Set("in", "null", "false", "true")
 
   //comparison operator regular expression
-  val comp_op = """!?in|[<>=!~%$]+"""r  
+  val comp_op = """!?in\b|[<>=!~%$]+"""r  
   
   //JavaTokenParsers overrides
   //besides standart whitespace symbols consider as a whitespace also comments in form /* comment */ and //comment 
