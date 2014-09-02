@@ -15,10 +15,13 @@ object QueryParser extends parsing.QueryParsers {
       } finally intermediateResults.get.clear
     }
   }
-  
+
   def transformTresql(tresql: String, transformer: PartialFunction[Exp, Exp]): String =
-    transform(parseExp(tresql).asInstanceOf[Exp], transformer) tresql
-  
+    parseExp(tresql) match {
+      case exp: Exp => transform(exp, transformer) tresql
+      case _ => tresql
+    }
+
   def transform(exp: Exp, transformer: PartialFunction[Exp, Exp]): Exp = {
     var transform_traverse: PartialFunction[Exp, Exp] = null
     def tr(x: Any): Any = x match {case e: Exp => transform_traverse(e) case l: List[_] => l map tr case _ => x} 
