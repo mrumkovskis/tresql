@@ -18,7 +18,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   } named "string-literal"
 
   override def ident: MemParser[String] = super.ident ^? ({ case x if !(reserved contains x) => x }, 
-      { x => s"'$x' is one of the reserved words: $reserved" }) named "ident"
+      { x => s"'$x' is one of the reserved words: ${reserved.mkString(", ")}" }) named "ident"
   
   override def wholeNumber: MemParser[String] = ("""\d+"""r) named "number"
       
