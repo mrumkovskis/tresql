@@ -311,7 +311,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     if (queryDepth >= Env.recursive_stack_dept)
       error(s"Recursive execution stack depth $queryDepth exceeded, check for loops in data or increase Env.recursive_stack_dept setting.") 
     val qBuilder = new QueryBuilder(new Env(QueryBuilder.this, QueryBuilder.this.env.reusableExpr),
-        queryDepth + 1, -1)
+        queryDepth + 1, 0)
     qBuilder.exp = QueryBuilder.this.exp
     lazy val expr: Expr = qBuilder.buildInternal(exp, QUERY_CTX)
     override def apply() = expr()
