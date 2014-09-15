@@ -37,6 +37,7 @@ object QueryParser extends parsing.QueryParsers {
       case Fun(n, pars, d) => Fun(n, pars map tr, d)
       case UnOp(o, op) => UnOp(o, tr(op))
       case BinOp(o, lop, rop) => BinOp(o, tr(lop), tr(rop))
+      case TerOp(lop, op1, mop, op2, rop) => TerOp(tr(lop), op1, tr(mop), op2, tr(rop))
       case In(lop, rop, not) => In(tr(lop), rop map tr, not)
       case Obj(t, a, j, o, n) => Obj(tr(t), a, tr(j).asInstanceOf[Join], o, n)
       case Join(d, j, n) => Join(d, tr(j), n)
