@@ -27,6 +27,8 @@ unmanagedSources in Test <<= (scalaVersion, unmanagedSources in Test) map {
   (v, d) => (if (v.startsWith("2.10")) d else d filterNot (_.getPath endsWith ".java")).get
 }
 
+initialCommands in console := "import org.tresql._"
+
 publishTo <<= version { v: String =>
   val nexus = "https://oss.sonatype.org/"
   if (v.trim.endsWith("SNAPSHOT"))
