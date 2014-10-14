@@ -11,7 +11,8 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
     def length = row.length
     def columnCount = length
     def apply(name: String) = row(columns indexWhere (_.name == name))
-    def typed[T](name: String)(implicit m: scala.reflect.Manifest[T]) = this(name).asInstanceOf[T]
+    override def typed[T](idx: Int)(implicit m: scala.reflect.Manifest[T]) = this(idx).asInstanceOf[T] 
+    override def typed[T](name: String)(implicit m: scala.reflect.Manifest[T]) = this(name).asInstanceOf[T]
     def column(idx: Int) = Result.this.column(idx)
     def columns = (0 to (columnCount - 1)) map column
     def values = this
