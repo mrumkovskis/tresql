@@ -544,20 +544,25 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
       sqlSnippet
     }
   }
-  case class SQLConcatExpr(delimiter: String = " ", expr1: Expr, expr2: Expr) extends BaseExpr {
+  case class SQLConcatExpr(expr: Expr*) extends BaseExpr {
     private def findSQL(expr: Expr): Option[List[QueryBuilder#ColExpr]] = expr match {
-      case e: QueryBuilder#SQLConcatExpr => findSQL(e.expr2) orElse findSQL(e.expr1) 
+      case e: QueryBuilder#SQLConcatExpr => findSQLInSeq(e.expr) 
       case e: QueryBuilder#BracesExpr => findSQL(e.expr)
       case e: QueryBuilder#SelectExpr => Some(e.cols)
       case e: QueryBuilder#BinExpr if e.exprType == classOf[SelectExpr] => Some(e.cols)
       case _ => None
     }
-    val cols = findSQL(this) getOrElse
-      error(s"Unable to execute SQLConcatExpr $this because it does not contain SelectExpr")
+    private def findSQLInSeq(exprs: Seq[Expr]): Option[List[QueryBuilder#ColExpr]] =
+      exprs.toList match {
+        case Nil => None
+        case expr :: tail => findSQL(expr).orElse(findSQLInSeq(tail))
+      }
+    val (cols, allColsFlag) = findSQL(this).map(_ -> QueryBuilder.this.allCols)
+      .getOrElse (List(ColExpr(AllExpr(), null, null)) -> true)
     override def apply() =
       org.tresql.Query.sel(sql, cols, QueryBuilder.this.bindVariables, env,
-        QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
-    def defaultSQL = expr1.sql + delimiter + expr2.sql
+        allColsFlag, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
+    def defaultSQL = expr.map(_.sql) mkString ""
   }
   
 
@@ -869,9 +874,14 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     }
     def maybeCallMacro(exp: Expr) = exp match {
       case fun: FunExpr =>
-        if (Env isMacroDefined fun.name)
-          Env.macroMethod(fun.name).invoke(Env.macros.get, (this :: fun.params): _*).asInstanceOf[Expr]
-        else fun
+        if (Env isMacroDefined fun.name) {
+          val m = Env.macroMethod(fun.name)
+          val p = m.getParameterTypes()
+          if (p.length > 1 && p(1).isAssignableFrom(classOf[Seq[_]]))
+            //second parameter is list of expressions
+            m.invoke(Env.macros.get, this, fun.params).asInstanceOf[Expr]
+          else m.invoke(Env.macros.get, (this :: fun.params): _*).asInstanceOf[Expr]
+        } else fun
       case binExpr: BinExpr =>
         if (!(STANDART_BIN_OPS contains binExpr.op)) {
           val macroName = scala.reflect.NameTransformer.encode(binExpr.op)

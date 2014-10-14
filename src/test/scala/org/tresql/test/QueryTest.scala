@@ -40,8 +40,8 @@ class QueryTest extends Suite {
       else b.SQLExpr(sqlSnippet, vars)
     }
 
-    def concat_sql(b: QueryBuilder, delimiter: QueryBuilder#ConstExpr, e1: Expr, e2: Expr) =
-      b.SQLConcatExpr(String.valueOf(delimiter.value), e1, e2)
+    def sql_concat(b: QueryBuilder, exprs: Expr*) =
+      b.SQLConcatExpr(exprs: _*)
 
   }  
   Env.functions = new TestFunctions
