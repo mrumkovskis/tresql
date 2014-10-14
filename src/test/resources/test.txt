@@ -399,6 +399,8 @@ dept/emp[deptno = 10][mgr = null]{dname, ename}#(1, 2) --> [["ACCOUNTING", "KING
 
 //macro test
 concat_sql(' ', sql('/*begin comment */'), concat_sql('', emp[ename ~~ 'sco%']{ename}, sql('/*end comment */'))) --> [["SCOTT"]]
+concat_sql(' ', sql('/*begin comment */'), concat_sql('', dummy{1} ++ dummy{2}, sql('/*end comment */'))) --> [[1], [2]]
+concat_sql(' ', sql('/*begin comment */'), concat_sql('', (dummy{1}), sql('/*end comment */'))) --> [[1]]
 
 //whitespace test
 emp /*comment*/[/**/ename /****/ ~~ /***/ /*another comment*/'sc%'/* comment */] //comment --> [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 4000.35, null, 20]]

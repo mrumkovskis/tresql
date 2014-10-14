@@ -185,30 +185,31 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   }
 
   case class BinExpr(op: String, lop: Expr, rop: Expr) extends BaseExpr {
-    override def apply() = {
-      def selCols(ex: Expr): List[QueryBuilder#ColExpr] = {
-        ex match {
-          case e: SelectExpr => e.cols
-          case e: BinExpr => selCols(e.lop)
-          case e: BracesExpr => selCols(e.expr)
-        }
+    def cols = {
+      def c(e: Expr): List[QueryBuilder#ColExpr] = e match {
+        case e: SelectExpr => e.cols
+        case e: BinExpr => c(e.lop)
+        case e: BracesExpr => c(e.expr)
       }
+      c(lop)
+    }
+    override def apply() = 
       op match {
         case "*" => lop * rop
         case "/" => lop / rop
         case "||" => lop + rop
-        case "&&" => org.tresql.Query.sel(sql, selCols(lop),
+        case "&&" => org.tresql.Query.sel(sql, cols,
           QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols,
           QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
-        case "++" => org.tresql.Query.sel(sql, selCols(lop),
+        case "++" => org.tresql.Query.sel(sql, cols,
           QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols,
           QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
         case "+" => if (exprType == classOf[SelectExpr])
-          org.tresql.Query.sel(sql, selCols(lop), QueryBuilder.this.bindVariables, env,
+          org.tresql.Query.sel(sql, cols, QueryBuilder.this.bindVariables, env,
             QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
         else lop + rop
         case "-" => if (exprType == classOf[SelectExpr])
-          org.tresql.Query.sel(sql, selCols(lop), QueryBuilder.this.bindVariables, env,
+          org.tresql.Query.sel(sql, cols, QueryBuilder.this.bindVariables, env,
             QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
         else lop - rop
         case "=" => lop == rop
@@ -221,7 +222,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
         case "|" => lop | rop
         case _ => error("unknown operation " + op)
       }
-    }
+    
     def defaultSQL = op match {
       case "*" => lop.sql + " * " + rop.sql
       case "/" => lop.sql + " / " + rop.sql
@@ -544,15 +545,17 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     }
   }
   case class SQLConcatExpr(delimiter: String = " ", expr1: Expr, expr2: Expr) extends BaseExpr {
-    private def findSQL(expr: Expr): Option[QueryBuilder#SelectExpr] = expr match {
-      case e: QueryBuilder#SQLConcatExpr => findSQL(e.expr2) orElse findSQL(e.expr1)
-      case e: QueryBuilder#SelectExpr => Some(e)
+    private def findSQL(expr: Expr): Option[List[QueryBuilder#ColExpr]] = expr match {
+      case e: QueryBuilder#SQLConcatExpr => findSQL(e.expr2) orElse findSQL(e.expr1) 
+      case e: QueryBuilder#BracesExpr => findSQL(e.expr)
+      case e: QueryBuilder#SelectExpr => Some(e.cols)
+      case e: QueryBuilder#BinExpr if e.exprType == classOf[SelectExpr] => Some(e.cols)
       case _ => None
     }
-    val sqlExpr = findSQL(this) getOrElse
+    val cols = findSQL(this) getOrElse
       error(s"Unable to execute SQLConcatExpr $this because it does not contain SelectExpr")
     override def apply() =
-      org.tresql.Query.sel(sql, sqlExpr.cols, QueryBuilder.this.bindVariables, env,
+      org.tresql.Query.sel(sql, cols, QueryBuilder.this.bindVariables, env,
         QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
     def defaultSQL = expr1.sql + delimiter + expr2.sql
   }
