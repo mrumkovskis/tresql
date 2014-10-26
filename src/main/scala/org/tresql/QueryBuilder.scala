@@ -1013,6 +1013,10 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     exp = ex
     buildInternal(ex)
   }
+  
+  //designed for use in macros
+  def buildExpr(ex: String): Expr = buildExpr(parseExp(ex).asInstanceOf[Exp])
+  def buildExpr(ex: Exp): Expr = buildInternal(ex, ctxStack.head)
       
   override def toString = "QueryBuilder: " + queryDepth
   
