@@ -86,20 +86,20 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
       val s = (if (!env.reusableExpr && (env contains name)) {
         env(name) match {
           case l: scala.collection.Traversable[_] =>
-            if (l.size > 0) "?," * (l size) dropRight 1 else {
+            if (l.size > 0) ("?," * (l size) dropRight 1) + s"/*$name*/" else {
               if (!binded) QueryBuilder.this._bindVariables.trimEnd(1)
               //return null for empty collection (not to fail in 'in' operator)
-              "null"
+              s"null/*$name*/"
             }
-          case _: Array[Byte] => "?"
+          case _: Array[Byte] => s"?/*$name*/"
           case a: Array[_] => if (a.length > 0) "?," * (a length) dropRight 1 else {
             if (!binded) QueryBuilder.this._bindVariables.trimEnd(1)
             //return null for empty array (not to fail in 'in' operator)
             "null"
           }
-          case _ => "?"
+          case _ => s"?/*$name*/"
         }
-      } else "?")
+      } else s"?/*$name*/")
       binded = true
       s
     }
