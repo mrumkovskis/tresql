@@ -1004,19 +1004,19 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     } finally ctxStack = ctxStack.tail
   }
 
-  private def build(ex: String): Expr = {
+  private def build_(ex: String): Expr = {
     exp = parseExp(ex)
     buildInternal(exp)
   }
 
-  private def build(ex: Exp): Expr = {
+  private def build_(ex: Exp): Expr = {
     exp = ex
     buildInternal(ex)
   }
   
   //designed for use in macros
-  def buildExpr(ex: String): Expr = buildExpr(parseExp(ex).asInstanceOf[Exp])
-  def buildExpr(ex: Exp): Expr = buildInternal(ex, ctxStack.head)
+  def build(ex: String): Expr = build(parseExp(ex).asInstanceOf[Exp])
+  def build(ex: Exp): Expr = buildInternal(ex, ctxStack.head)
       
   override def toString = "QueryBuilder: " + queryDepth
   
@@ -1033,10 +1033,10 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
 
 object QueryBuilder {
   def apply(ex: String, env: Env = Env(Map(), true)): Expr = {
-    new QueryBuilder(env).build(ex)
+    new QueryBuilder(env).build_(ex)
   }
   def apply(ex: Exp, env: Env): Expr = {
-    new QueryBuilder(env).build(ex)
+    new QueryBuilder(env).build_(ex)
   }
 }
 
