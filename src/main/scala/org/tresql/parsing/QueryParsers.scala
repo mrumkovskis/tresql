@@ -165,9 +165,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   }
   
   //literals
-  def TRUE: MemParser[Boolean] = "true" ^^^ true named "true"
-  def FALSE: MemParser[Boolean] = "false" ^^^ false named "false"
-  def NULL: MemParser[Null.type] = "null" ^^^ Null named "null"
+  def TRUE: MemParser[Boolean] = ("\\btrue\\b"r) ^^^ true named "true"
+  def FALSE: MemParser[Boolean] = ("\\bfalse\\b"r) ^^^ false named "false"
+  def NULL: MemParser[Null.type] = ("\\bnull\\b"r) ^^^ Null named "null"
   def ALL: MemParser[All.type] = "*" ^^^ All named "all"
 
   def qualifiedIdent: MemParser[Ident] = rep1sep(ident, ".") ^^ Ident named "qualified-ident"
