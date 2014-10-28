@@ -103,6 +103,9 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
 
 object Env extends Resources {
   private val threadConn = new ThreadLocal[java.sql.Connection]
+  private val threadLogLevel = new ThreadLocal[Option[Int]] {
+    override def initialValue = None
+  }
   //this is for single thread usage
   var sharedConn: java.sql.Connection = null
   //meta data object must be thread safe!
@@ -155,7 +158,15 @@ object Env extends Resources {
   
   def cache_=(cache: Cache) = this._cache = Option(cache)
   
-  def log(msg: => String, level: Int = 0): Unit = if (logger != null) logger(msg, level)
+  def logLevel = threadLogLevel.get
+  def logLevel_=(level: Any) = level match {
+    case l: Int => threadLogLevel.set(Some(l))
+    case None | null => threadLogLevel.set(None)
+    case l: Option[Int] => threadLogLevel.set(l)
+  }
+  
+  def log(msg: => String, level: Int = 0): Unit = if (logger != null) logger(msg,
+      level + logLevel.getOrElse(0))
   def update(logger: (=> String, Int) => Unit) = this.logger = logger
 }
 
