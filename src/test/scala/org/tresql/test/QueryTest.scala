@@ -107,7 +107,7 @@ class QueryTest extends Suite {
           case scala.Array(s, r) => (s, null, r)
           case scala.Array(s, p, r) => (s, p, r)
         }
-        println("Executing test #" + nr + ":\n" + st)
+        println(s"Executing test #$nr:")
         val testRes = jsonize(if (params == null) Query(st) else Query(st, parsePars(params)), Arrays)
         println("Result: " + testRes)
         assert(JSON.parseFull(testRes).get === JSON.parseFull(patternRes).get)
@@ -509,7 +509,7 @@ class QueryTest extends Suite {
           case scala.Array(s, p, r) => (s, p, r)
         }
         nr += 1
-        println(s"$nr. Testing tresql method of: \n$st")
+        println(s"$nr. Testing tresql method of:")
         QueryParser.parseExp(st) match {
           case e: QueryParser.Exp => assert(e === QueryParser.parseExp(e.tresql))
         }

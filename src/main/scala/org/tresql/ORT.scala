@@ -16,7 +16,6 @@ trait ORT {
     val insert = insert_tresql(name, struct, null, resources)
     if(insert == null) error("Cannot insert data. Table not found for object: " + name)
     Env log (s"Structure: $struct")
-    Env log insert
     Query.build(insert, resources, obj, false)()
   }
   def insertObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
@@ -30,7 +29,6 @@ trait ORT {
     if(update == null) error("Cannot update data. Table not found or primary key not found " +
     		"for the object: " + name)
     Env log (s"Structure: $struct")
-    Env log update
     Query.build(update, resources, obj, false)()    
   }
   def updateObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
@@ -46,7 +44,6 @@ trait ORT {
    */
   def save(name: String, obj: Map[String, _])(implicit resources: Resources = Env): Any = {
     val (save, saveable) = save_tresql(name, obj, resources)
-    Env log save
     Env log saveable.toString
     Query.build(save, resources, saveable, false)()
   }
@@ -56,7 +53,6 @@ trait ORT {
   } 
   def delete(name: String, id: Any)(implicit resources: Resources = Env): Any = {
     val delete = "-" + resources.tableName(name) + "[?]"
-    Env log delete
     Query.build(delete, resources, Map("1"->id), false)()
   }
 
