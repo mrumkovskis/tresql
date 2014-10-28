@@ -562,7 +562,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     override def apply() =
       org.tresql.Query.sel(sql, cols, QueryBuilder.this.bindVariables, env,
         allColsFlag, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
-    def defaultSQL = expr.map(_.sql) mkString ""
+    def defaultSQL = expr.filter(_ != null).map(_.sql) mkString ""
   }
   
 
