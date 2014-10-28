@@ -39,6 +39,8 @@ class QueryTest extends Suite {
         b.SQLExpr("null", Nil)
       else b.SQLExpr(sqlSnippet, vars)
     }
+    
+    def null_macros(b: QueryBuilder) = null
 
     def sql_concat(b: QueryBuilder, exprs: Expr*) =
       b.SQLConcatExpr(exprs: _*)

@@ -881,7 +881,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
             //second parameter is list of expressions
             m.invoke(Env.macros.get, this, fun.params).asInstanceOf[Expr]
           else m.invoke(Env.macros.get, (this :: fun.params): _*).asInstanceOf[Expr]
-        } else fun
+        } else if (fun.params.exists(_ == null)) null else fun
       case binExpr: BinExpr =>
         if (!(STANDART_BIN_OPS contains binExpr.op)) {
           val macroName = scala.reflect.NameTransformer.encode(binExpr.op)
@@ -974,7 +974,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
           }
         case Fun(n, pl: List[_], d) =>
           val pars = pl map { buildInternal(_, FUN_CTX) }
-          if (pars.exists(_ == null)) null else maybeCallMacro(FunExpr(n, pars, d))
+          maybeCallMacro(FunExpr(n, pars, d))
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => IdentAllExpr(i.ident)
         case Arr(l: List[_]) => l map { buildInternal(_, parseCtx) } filter (_ != null) match {

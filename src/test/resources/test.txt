@@ -404,6 +404,7 @@ sql_concat(sql('/*begin comment */'), sql(' '), sql_concat((dummy{1}), sql('/*en
 sql_concat(sql('/*begin comment */'), sql(' '), emp[ename ~~ 'sco%']{ename}, sql('/*end comment */')) --> [["SCOTT"]]
 sql_concat(sql('/*begin comment */'), sql(' '), dummy{1} ++ dummy{2}, sql('/*end comment */')) --> [[1], [2]]
 sql_concat(sql('/*begin comment */'), sql(' '), (dummy{1}), sql('/*end comment */')) --> [[1]]
+sql_concat(null_macros(), dummy{1}, null_macros()) --> [[1]]
 
 //whitespace test
 emp /*comment*/[/**/ename /****/ ~~ /***/ /*another comment*/'sc%'/* comment */] //comment --> [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 4000.35, null, 20]]
