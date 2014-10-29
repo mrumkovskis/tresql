@@ -10,19 +10,21 @@ trait Query extends TypedQuery {
 
   def apply(expr: String, params: Any*): Result = apply(expr, normalizePars(params: _*))
 
-  def apply(expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection =
-    null): Result = build(expr, params, false)(tresqlConn)() match {
+  def apply(expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection = null): Result =
+    build(expr, params, false)(tresqlConn)() match {
     case r: Result => r
     case x => SingleValueResult(x)
   }
-  
-  def build(expr: String, params: Map[String, Any] = null, reusableExpr: Boolean = true)
-    (implicit tresqlConn: java.sql.Connection = null): Expr = 
-        build(expr, if (tresqlConn == null) Env else resources(tresqlConn), params, reusableExpr)
-    
-  def build(expr: String, resources: Resources, params: Map[String, Any], reusableExpr: Boolean): Expr = 
+
+  def build(expr: String, params: Map[String, Any] = null, reusableExpr: Boolean = true)(
+      implicit tresqlConn: java.sql.Connection = null): Expr =
+    build(expr, if (tresqlConn == null) Env else resources(tresqlConn), params, reusableExpr)
+
+  def build(expr: String, resources: Resources, params: Map[String, Any], reusableExpr: Boolean): Expr = {
+    Env log expr
     QueryBuilder(expr, new Env(params, resources, reusableExpr))
-       
+  }
+  
   def parse(expr: String) = QueryParser.parseExp(expr)
 
   private def resources(connection: java.sql.Connection) = new Resources {

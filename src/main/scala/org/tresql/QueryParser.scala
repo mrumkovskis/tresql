@@ -3,7 +3,6 @@ package org.tresql
 object QueryParser extends parsing.QueryParsers {
 
   def parseExp(expr: String): Any = {
-    Env.log(expr, 1)
     Env.cache.flatMap(_.get(expr)).getOrElse {
       try {
         intermediateResults.get.clear

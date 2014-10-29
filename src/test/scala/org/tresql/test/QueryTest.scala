@@ -511,7 +511,7 @@ class QueryTest extends Suite {
           case scala.Array(s, p, r) => (s, p, r)
         }
         nr += 1
-        println(s"$nr. Testing tresql method of:")
+        println(s"$nr. Testing tresql method of:\n$st")
         QueryParser.parseExp(st) match {
           case e: QueryParser.Exp => assert(e === QueryParser.parseExp(e.tresql))
         }
