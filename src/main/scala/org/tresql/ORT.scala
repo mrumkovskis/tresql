@@ -18,10 +18,6 @@ trait ORT {
     Env log (s"Structure: $struct")
     Query.build(insert, resources, obj, false)()
   }
-  def insertObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
-    val v = conv(obj)
-    insert(v._1, v._2) 
-  }
   //TODO update where unique key (not only pk specified)
   def update(name: String, obj: Map[String, _])(implicit resources: Resources = Env): Any = {
     val struct = tresql_structure(obj)
@@ -30,10 +26,6 @@ trait ORT {
     		"for the object: " + name)
     Env log (s"Structure: $struct")
     Query.build(update, resources, obj, false)()    
-  }
-  def updateObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
-    val v = conv(obj)
-    update(v._1, v._2) 
   }
   /**
    * Saves object obj specified by parameter name. If object primary key is set object
@@ -47,15 +39,40 @@ trait ORT {
     Env log saveable.toString
     Query.build(save, resources, saveable, false)()
   }
-  def saveObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
-    val v = conv(obj)
-    save(v._1, v._2) 
-  } 
   def delete(name: String, id: Any)(implicit resources: Resources = Env): Any = {
     val delete = "-" + resources.tableName(name) + "[?]"
     Query.build(delete, resources, Map("1"->id), false)()
   }
+  
+  /** insert methods to multiple tables
+   *  Tables must be ordered in parent -> child direction. */
+  def insertMultiple(obj: Map[String, Any], names: String*)(implicit resources: Resources = Env): Any = {
+    val o = names.tail.foldLeft(obj)((o, n) => o + (n -> obj))
+    insert(names.head, o)
+  }
+  
+  /** update to multiple tables
+   *  Tables must be ordered in parent -> child direction. */
+  def updateMultiple(obj: Map[String, Any], names: String*)(implicit resources: Resources = Env): Any = {
+    val o = names.tail.foldLeft(obj)((o, n) => o + (n -> obj))
+    update(names.head, o)
+  }
 
+  //object methods
+  def insertObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
+    val v = conv(obj)
+    insert(v._1, v._2) 
+  }
+  def updateObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
+    val v = conv(obj)
+    update(v._1, v._2) 
+  }
+  def saveObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
+    val v = conv(obj)
+    save(v._1, v._2) 
+  } 
+  
+  
   def tresql_structure(obj: Map[String, _]): Map[String, Any] = {
     def merge(lm: Seq[Map[String, _]]): Map[String, Any] =
       lm.tail.foldLeft(tresql_structure(lm.head))((l, m) => {

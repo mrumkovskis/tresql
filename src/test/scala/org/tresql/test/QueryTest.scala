@@ -492,13 +492,21 @@ class QueryTest extends Suite {
         "work:empno"->List(), "calculated_children"->List(Map("x"->5)), "deptno"->20)
     expectResult(List(1, List(2)))(ORT.save("emp", obj))
 
+    println("\n---- Multiple table INSERT, UPDATE ------\n")
+    
+    obj = Map("dname" -> "SPORTS", "addr" -> "Brisben", "zip_code" -> "4000")
+    expectResult((List(1, List(1)),10026))(ORT.insertMultiple(obj, "dept", "dept_addr"))
+
+    obj = Map("deptno" -> 10026, "loc" -> "Brisbane", "addr" -> "Roma st. 150")
+    expectResult(List(1, List(1, 1)))(ORT.updateMultiple(obj, "dept", "dept_addr"))
+    
     println("\n---- Object INSERT, UPDATE ------\n")
     
     implicit def pohatoMap[T <: Poha](o: T): (String, Map[String, _]) = o match {
       case Car(nr, name) => "car" -> Map("nr" -> nr, "name" -> name)
     }
     expectResult((1,8888))(ORT.insertObj(Car(8888, "OPEL")))
-    expectResult(1)(ORT.updateObj(Car(8888, "SAAB")))
+    expectResult(1)(ORT.updateObj(Car(8888, "SAAB")))    
     
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
 
