@@ -29,19 +29,21 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   private var _result: Result = null
   private var _statement: java.sql.PreparedStatement = null
 
-  def apply(name: String): Any = vars.map(_(name)) getOrElse provider.get.env(name) match {
-    case e: Expr => e()
-    case x => x
-  }
-  
-  def get(name: String): Option[Any] = vars.flatMap(_.get(name)) orElse provider.flatMap(
-      _.env.get(name)).map {
+  def apply(name: String): Any = vars.flatMap(_.get(name)) orElse provider.map(
+      _.env(name)).map {
     case e: Expr => e()
     case x => x    
-  }
+  } getOrElse (error(s"Missing bind variable: $name"))
 
-  def contains(name: String): Boolean = vars.map(_.contains(name)) getOrElse
-    provider.map(_.env.contains(name)).getOrElse(false)
+  /* if not found into this variable map look into provider's if such exists */
+  def contains(name: String): Boolean =
+    vars.map(_.contains(name))
+     .filter(_ == true)
+     .getOrElse(provider.map(_.env.contains(name)).getOrElse(false))
+  
+  /* finds closest env with vars map set (Some(vars)) and looks there if variable exists */
+  def containsNearest(name: String): Boolean =
+    vars.map(_.contains(name)).getOrElse(provider.map(_.env.containsNearest(name)).getOrElse(false))
 
   private[tresql] def update(name: String, value: Any) {
     vars.get(name) = value

@@ -27,7 +27,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
 
   private def this(env: Env) = this(env, 0, 0)
 
-  //parsed expression from which executable expr is built
+  //parsed expression from which top level expr is built
   private var exp: Any = null
   
   //used for non flat updates, i.e. hierarhical object.
@@ -79,7 +79,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   }
 
   case class VarExpr(name: String, typ: String, opt: Boolean) extends BaseExpr {
-    override def apply() = env.get(name) getOrElse (error(s"Missing bind variable: $name"))
+    override def apply() = env(name)
     var binded = false
     def defaultSQL = {
       if (!binded) QueryBuilder.this._bindVariables += this
@@ -109,7 +109,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   case class IdExpr(seqName: String) extends BaseExpr {
     override def apply() = idFromEnv getOrElse env.nextId(seqName)
     private def idFromEnv = env.tableOption(seqName).map(_.key.cols).filter(_.size == 1).map(_(0))
-        .filter(env contains).flatMap(key => Option(env(key))).map { id =>
+        .filter(env containsNearest).flatMap(key => Option(env(key))).map { id =>
           //if primary key is set as an environment variable use it instead of sequence
           env.currId(seqName, id)
           id
@@ -890,6 +890,15 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
           else binExpr
         } else binExpr
     }
+    
+    def buildWithNew(buildFunc: QueryBuilder => Expr) = {
+      val b = new QueryBuilder(new Env(QueryBuilder.this, QueryBuilder.this.env.reusableExpr),
+          queryDepth + 1, bindIdx)
+      b.exp = exp
+      val ex = buildFunc(b)
+      this.separateQueryFlag = true; this.bindIdx = b.bindIdx
+      ex
+    }
         
     ctxStack ::= parseCtx
     try {
@@ -902,20 +911,11 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
         case BinOp("=", Variable(n, _, o), v) if (parseCtx == ROOT_CTX) =>
           AssignExpr(n, buildInternal(v, parseCtx))
         //insert
-        case Insert(t, a, c, v) =>
-          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-          val ex = b.buildInsert(t, a, c, v)
-          this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
+        case Insert(t, a, c, v) => buildWithNew(_.buildInsert(t, a, c, v))
         //update
-        case Update(t, a, f, c, v) =>
-          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-          val ex = b.buildUpdate(t, a, f, c, v)
-          this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
+        case Update(t, a, f, c, v) => buildWithNew(_.buildUpdate(t, a, f, c, v))
         //delete
-        case Delete(t, a, f) =>
-          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-          val ex = b.buildDelete(t, a, f)
-          this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
+        case Delete(t, a, f) => buildWithNew(_.buildDelete(t, a, f))
         //recursive child query
         case UnOp("|", join: Arr) =>
           this.separateQueryFlag = true
@@ -928,14 +928,10 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
                   filter = q.filter.copy(filters = q.filter.filters drop 1))
           })
         //child query
-        case UnOp("|", oper) =>
-          val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth + 1, bindIdx)
-          val ex = b.buildInternal(oper, QUERY_CTX)
-          this.separateQueryFlag = true; this.bindIdx = b.bindIdx; ex
+        case UnOp("|", oper) => buildWithNew(_.buildInternal(oper, QUERY_CTX))
         case t: Obj => parseCtx match {
           case ROOT_CTX => //top level query (might be part of expression list) 
-            val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-            val ex = b.buildInternal(t, QUERY_CTX); this.bindIdx = b.bindIdx; ex
+            buildWithNew(_.buildInternal(t, QUERY_CTX))
           case QUERY_CTX => t match { //top level query
             case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx) //unwrap braces expression
             case _ => buildSelectFromObj(t)
@@ -945,19 +941,14 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
           case _ => buildIdentOrBracesExpr(t)
         }
         case q: QueryParser.Query => parseCtx match {
-          case ROOT_CTX =>
-            val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-            b.exp = exp
-            val ex = b.buildInternal(q, QUERY_CTX); this.bindIdx = b.bindIdx; ex
+          case ROOT_CTX => buildWithNew(_.buildInternal(q, QUERY_CTX))
           case _ => buildSelect(q)
         }
         case UnOp(op, oper) =>
           val o = buildInternal(oper, parseCtx)
           if (o == null) null else UnExpr(op, o)
         case e @ BinOp(op, lop, rop) => parseCtx match {
-          case ROOT_CTX =>
-            val b = new QueryBuilder(new Env(this, this.env.reusableExpr), queryDepth, bindIdx)
-            val ex = b.buildInternal(e, QUERY_CTX); this.bindIdx = b.bindIdx; ex
+          case ROOT_CTX => buildWithNew(_.buildInternal(e, QUERY_CTX))
           case ctx =>
             val l = buildInternal(lop, ctx)
             val r = buildInternal(rop, ctx)
