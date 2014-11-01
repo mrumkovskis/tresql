@@ -410,7 +410,7 @@ class QueryTest extends Suite {
     //child foreign key is also its primary key
     obj = Map("deptno" -> 60, "dname" -> "POLAR BEAR", "loc" -> "ALASKA",
               "dept_addr" -> List(Map("addr" -> "Halibut", "zip_code" -> "1010")))
-    expectResult(List(1, List(1, List(1))))(ORT.update("dept", obj))
+    expectResult(List(1, List(List(1))))(ORT.update("dept", obj))
     
     //value clause test
     obj = Map("nr" -> 4444, "dname" -> "ACCOUNTING")
@@ -498,7 +498,13 @@ class QueryTest extends Suite {
     expectResult((List(1, List(1)),10026))(ORT.insertMultiple(obj, "dept", "dept_addr"))
 
     obj = Map("deptno" -> 10026, "loc" -> "Brisbane", "addr" -> "Roma st. 150")
-    expectResult(List(1, List(1, 1)))(ORT.updateMultiple(obj, "dept", "dept_addr"))
+    expectResult(List(1, List(1)))(ORT.updateMultiple(obj, "dept", "dept_addr"))
+    
+    expectResult(List(Map(
+        "dname" -> "SPORTS", "loc" -> "Brisbane",
+        "addr" -> List(Map("addr" -> "Roma st. 150", "zip_code" -> "4000"))))) {
+      tresql"dept[dname = 'SPORTS'] {dname, loc, |dept_addr {addr, zip_code} addr}".toListOfMaps
+    }
     
     println("\n---- Object INSERT, UPDATE ------\n")
     

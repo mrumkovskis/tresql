@@ -21,7 +21,7 @@ trait ORT {
   //TODO update where unique key (not only pk specified)
   def update(name: String, obj: Map[String, _])(implicit resources: Resources = Env): Any = {
     val struct = tresql_structure(obj)
-    val update = update_tresql(name, struct, resources)
+    val update = update_tresql(name, struct, null, null, resources)
     if(update == null) error("Cannot update data. Table not found or primary key not found " +
     		"for the object: " + name)
     Env log (s"Structure: $struct")
@@ -142,8 +142,10 @@ trait ORT {
 
   //TODO support child merge update i.e. instead of deleting and inserting all children,
   //separately delete removed children, insert new children and update existing children.
-  def update_tresql(name: String, obj: Map[String, _], resources: Resources): String = {
-    resources.metaData.tableOption(resources.tableName(name)).flatMap(table => {
+  def update_tresql(name: String, obj: Map[String, _], parent: String, firstPkProp: String,
+      resources: Resources): String = {
+    val md = resources.metaData
+    md.tableOption(resources.tableName(name)).flatMap(table => {
       var pkProp: Option[String] = None
       //stupid thing - map find methods conflicting from different traits 
       def findPkProp = pkProp.orElse {
@@ -153,7 +155,7 @@ trait ORT {
       }
       def childUpdates(n:String, o:Map[String, _]) = {
         val Array(childObjName, refPropName) = n.split(":").padTo(2, null)
-        resources.metaData.tableOption(resources.tableName(childObjName)).flatMap(childTable => 
+        md.tableOption(resources.tableName(childObjName)).flatMap(childTable => 
           findPkProp.map (pk => {
             Option(refPropName).map(resources.colName(childObjName, _)).orElse(
                 importedKeyOption(table.name, childTable)).map {
@@ -162,24 +164,30 @@ trait ORT {
             } orNull
         })).orNull
       }
+      def isOneToOne(childName: String) = md.tableOption(resources.tableName(childName)).flatMap {
+        t => importedKeyOption(table.name, t).map { _ == t.key.cols.head } } getOrElse false
       obj.map((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(name, n)
         if (table.key == metadata.Key(List(cn))) pkProp = Some(n)
         t._2 match {
           //children
-          case v: Map[String, _] => (childUpdates(n, v), null)
+          case v: Map[String, _] =>
+            (if (isOneToOne(n))
+              update_tresql(n, v, name, if (parent == null) findPkProp.orNull else firstPkProp, resources)
+            else childUpdates(n, v)) -> null
           //do not update pkProp
           case _ if (Some(n) == pkProp) => (null, null)
           case _ => (table.colOption(cn).map(_.name).orNull, resources.valueExpr(name, n))
         }
       }).filter(_._1 != null).unzip match {
-        case (cols: List[String], vals: List[String]) => pkProp.flatMap(pk =>{
+        case (cols: List[String], vals: List[String]) => Option(firstPkProp).orElse(pkProp).map(pk => {
           //primary key in update condition is taken from sequence so that currId is updated for
           //child records
-          val tresql = cols.mkString(s"=${table.name}[${table.key.cols(0)} = #${table.name}]{", ", ", "}") +
-              vals.filter(_ != null).mkString(" [", ", ", "]")
-          if (cols.size > 0) Some(tresql) else error(s"Column clause empty: $tresql")})
+          val tresql = cols.mkString(s"=${table.name}[${table.key.cols(0)} = ${
+            if (firstPkProp == pk) ":" + firstPkProp else "#" + table.name}]{", ", ", "}") +
+              vals.filter(_ != null).mkString(" [", ", ", "]") + (if (parent != null) " '" + name + "'" else "")
+          if (cols.size > 0) tresql else error(s"Column clause empty: $tresql")})
       }
     }).orNull
   }
