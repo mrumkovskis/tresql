@@ -56,6 +56,11 @@ CREATE TABLE SALGRADE
   LOSAL INTEGER,
   HISAL INTEGER)
 //
+CREATE TABLE TYRES_USAGE
+  (NR INTEGER NOT NULL,
+   CARNR VARCHAR(10) NOT NULL,
+   DATE_FROM DATE)
+//
 CREATE TABLE DUMMY (DUMMY INTEGER)
 //
 alter table dept add primary key (deptno)
@@ -92,6 +97,15 @@ alter table tyres add foreign key (carnr) references car(nr)
 //
 alter table car add foreign key (tyres_nr) references tyres(nr)
 //
+alter table tyres add unique (nr, carnr)
+//
+alter table tyres_usage add foreign key (nr) references tyres(nr)
+//
+alter table tyres_usage add foreign key (nr, carnr) references tyres(nr, carnr)
+//
+alter table tyres_usage add foreign key (carnr) references car(nr)
+//
+
 CREATE FUNCTION inc_val_5 (x INTEGER)
   RETURNS INTEGER
   RETURN x + 5

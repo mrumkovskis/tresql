@@ -10,10 +10,14 @@ trait MetaData {
     val t1 = table(table1); val t2 = table(table2)
     (t1.refs(t2.name), t2.refs(t1.name)) match {
       case (k1, k2) if (k1.length + k2.length > 1) =>
-        if (k1.length > 1 || k2.length > 1)
+        val r1 = reduceRefs(k1, t2.key)
+        val r2 = reduceRefs(k2, t1.key)
+        if (r1.length + r2.length == 1)
+          if (r1.length == 1) (r1.head.cols, t2.key.cols) else (t1.key.cols, r2.head.cols)
+        else if (r1.length > 1 || r2.length > 1)
           error("Ambiguous relation. Too many found between tables " + table1 + ", " + table2)
         else //take foreign key from the left table and primary key from the right table
-          (k1.head.cols, t2.key.cols)
+          (r1.head.cols, t2.key.cols)
       case (k1, k2) if (k1.length + k2.length == 0) => { //try to find two imported keys of the same primary key
         t1.rfs.filter(_._2.size == 1).foldLeft(List[(List[String], List[String])]()) {
           (res, t1refs) =>
@@ -27,6 +31,18 @@ trait MetaData {
         }
       }
       case (k1, k2) => if (k1.length == 1) (k1.head.cols, t2.key.cols) else (t1.key.cols, k2.head.cols)
+    }
+  }
+
+  private def reduceRefs(refs: List[Ref], key: Key) = {
+    def importedKeyCols(ref: Ref, key: Key) = key.cols.foldLeft(Option(List[String]())) {
+      (importedKeyCols, keyCol) =>
+        importedKeyCols.flatMap(l => if (ref.cols contains keyCol) Some(keyCol :: l) else None)
+    } map (_.reverse)
+    
+    refs.groupBy(importedKeyCols(_, key)) match {
+      case m if m.size == 1 && m.head._1.isDefined => List(refs.minBy(_.cols.size))
+      case _ => refs
     }
   }
 
@@ -72,7 +88,7 @@ package metadata {
   }
   case class Col(name: String, nullable: Boolean)
   case class Key(cols: List[String])
-  case class Ref(cols: List[String])
+  case class Ref(cols: List[String], refCols: List[String] = Nil)
   case class Procedure(name: String, comments: String, procType: Int,
     pars: List[Par], returnSqlType: Int, returnTypeName: String)
   case class Par(name: String, comments: String, parType: Int, sqlType: Int, typeName: String)

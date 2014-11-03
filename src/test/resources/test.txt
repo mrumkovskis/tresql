@@ -34,6 +34,9 @@ TYRES + [1, 3333, "MICHELIN", "S"], [2, 3333, "NOKIAN", "W"] --> [[2]]
 //CAR TYRES
 CAR[3333] {TYRES_NR} = [2] --> [[1]]
 
+//TYRES USAGE
+TYRES_USAGE + [1, 3333, "2014-03-03"], [2, 3333, "2014-11-03"] --> [[2]]
+
 //DUMMY
 DUMMY {DUMMY} + [0] --> [[1]]
 
@@ -67,6 +70,9 @@ car[2222]/dept[dname != null]#(nr) --> [["2222", "BMW", true, 20, null, 20, "RES
 tyres/car {name, brand}#(1,2) --> [["MERCEDES", "MICHELIN"], ["MERCEDES", "NOKIAN"]]
 car c/tyres t{c.name, t.brand, t.season}#(1) --> [["BMW", null, null], ["MERCEDES", "NOKIAN", "W"], ["PORCHE", null, null], ["VOLKSWAGEN", null, null]]
 emp e/emp m {e.empno, e.ename, m.empno, m.ename}#(1) --> [[7369, "SMITH", 7902, "FORD"], [7499, "ALLEN", 7698, "BLAKE"], [7521, "WARD", 7698, "BLAKE"], [7566, "JONES", 7839, "KING"], [7654, "MARTIN", 7698, "BLAKE"], [7698, "BLAKE", 7839, "KING"], [7782, "CLARK", 7839, "KING"], [7788, "SCOTT", 7566, "JONES"], [7839, "KING", null, null], [7844, "TURNER", 7698, "BLAKE"], [7876, "ADAMS", 7788, "SCOTT"], [7900, "JAMES", 7698, "BLAKE"], [7902, "FORD", 7566, "JONES"], [7934, "MILLER", 7782, "CLARK"]]
+
+//default join with multiple refs containing imported key
+tyres t/tyres_usage u {t.nr, u.carnr, date_from}#(1,2,3) --> [[1, "3333", "2014-03-03"], [2, "3333", "2014-11-03"]]
 
 //foreign key default join
 emp/car[2222]{ename, name}#(1,2) --> [["ADAMS", "BMW"], ["FORD", "BMW"], ["JONES", "BMW"], ["SCOTT", "BMW"], ["SMITH", "BMW"]]
