@@ -14,7 +14,7 @@ trait MetaData {
         val r2 = reduceRefs(k2, t1.key)
         if (r1.length + r2.length == 1)
           if (r1.length == 1) (r1.head.cols, t2.key.cols) else (t1.key.cols, r2.head.cols)
-        else if (r1.length > 1 || r2.length > 1)
+        else if (r1.length > 1)
           error("Ambiguous relation. Too many found between tables " + table1 + ", " + table2)
         else //take foreign key from the left table and primary key from the right table
           (r1.head.cols, t2.key.cols)
