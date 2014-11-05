@@ -259,8 +259,10 @@ trait ORT {
             case x if (table.key == metadata.Key(List(col))) => (col, "#" + table.name)
             //fk null, if unambiguous link to parent found get it from parent sequence reference
             case null if ((refPropName != null && refPropName == n) || (refPropName == null &&
-              parentTable != null && table.refs(parentTable.name) ==
-              List(metadata.Ref(List(col))))) => (col, ":#" + parentTable.name)
+              parentTable != null && (table.refs(parentTable.name) match {
+                case List(metadata.Ref(List(c), _)) => c == col
+                case _ => false
+              }))) => (col, ":#" + parentTable.name)
             //value
             case _ => (col, res.valueExpr(objName, n))
           }

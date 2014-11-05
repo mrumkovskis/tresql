@@ -51,15 +51,15 @@ CREATE TABLE TYRES
    BRAND VARCHAR(20) NOT NULL,
    SEASON VARCHAR(1) NOT NULL)
 //
+CREATE TABLE TYRES_USAGE
+  (TUNR INTEGER NOT NULL,
+   CARNR VARCHAR(10) NOT NULL,
+   DATE_FROM DATE)
+//
 CREATE TABLE SALGRADE
  (GRADE INTEGER,
   LOSAL INTEGER,
   HISAL INTEGER)
-//
-CREATE TABLE TYRES_USAGE
-  (NR INTEGER NOT NULL,
-   CARNR VARCHAR(10) NOT NULL,
-   DATE_FROM DATE)
 //
 CREATE TABLE DUMMY (DUMMY INTEGER)
 //
@@ -99,9 +99,9 @@ alter table car add foreign key (tyres_nr) references tyres(nr)
 //
 alter table tyres add unique (nr, carnr)
 //
-alter table tyres_usage add foreign key (nr) references tyres(nr)
+alter table tyres_usage add foreign key (tunr) references tyres(nr)
 //
-alter table tyres_usage add foreign key (nr, carnr) references tyres(nr, carnr)
+alter table tyres_usage add foreign key (tunr, carnr) references tyres(nr, carnr)
 //
 alter table tyres_usage add foreign key (carnr) references car(nr)
 //

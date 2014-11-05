@@ -14,10 +14,8 @@ trait MetaData {
         val r2 = reduceRefs(k2, t1.key)
         if (r1.length + r2.length == 1)
           if (r1.length == 1) (r1.head.cols, t2.key.cols) else (t1.key.cols, r2.head.cols)
-        else if (r1.length > 1)
-          error("Ambiguous relation. Too many found between tables " + table1 + ", " + table2)
-        else //take foreign key from the left table and primary key from the right table
-          (r1.head.cols, t2.key.cols)
+        else if (r1.length == 1) (r1.head.cols, t2.key.cols)
+        else error("Ambiguous relation. Too many found between tables " + table1 + ", " + table2)
       case (k1, k2) if (k1.length + k2.length == 0) => { //try to find two imported keys of the same primary key
         t1.rfs.filter(_._2.size == 1).foldLeft(List[(List[String], List[String])]()) {
           (res, t1refs) =>
@@ -35,12 +33,15 @@ trait MetaData {
   }
 
   private def reduceRefs(refs: List[Ref], key: Key) = {
-    def importedKeyCols(ref: Ref, key: Key) = key.cols.foldLeft(Option(List[String]())) {
-      (importedKeyCols, keyCol) =>
-        importedKeyCols.flatMap(l => if (ref.cols contains keyCol) Some(keyCol :: l) else None)
-    } map (_.reverse)
+    def importedPkKeyCols(ref: Ref, key: Key) = {
+      val refsPk = ref.cols zip ref.refCols
+      key.cols.foldLeft(Option(List[String]())) {
+        (importedKeyCols, keyCol) =>
+          importedKeyCols.flatMap(l => refsPk.find(_._2 == keyCol).map(_._1 :: l))
+      } map (_.reverse)
+    }
     
-    refs.groupBy(importedKeyCols(_, key)) match {
+    refs.groupBy(importedPkKeyCols(_, key)) match {
       case m if m.size == 1 && m.head._1.isDefined => List(refs.minBy(_.cols.size))
       case _ => refs
     }
@@ -64,7 +65,7 @@ package metadata {
   case class Table(name: String, cols: List[Col], key: Key,
       rfs: Map[String, List[Ref]]) {
     private val colMap = cols map (c => c.name -> c) toMap
-    val refTable: Map[Ref, String] = rfs.flatMap(t => t._2.map(_ -> t._1))
+    val refTable: Map[List[String], String] = rfs.flatMap(t => t._2.map(_.cols -> t._1))
     def col(name: String) = colMap(name)
     def colOption(name: String) = colMap.get(name)
     def refs(table: String) = rfs.get(table).getOrElse(Nil)
@@ -80,7 +81,10 @@ package metadata {
         case l: List[Map[String, Any]] => (l map { r =>
           (r("table").asInstanceOf[String].toLowerCase,
             r("refs") match {
-              case l: List[List[String]] => l map (rc => Ref(rc map (_.toLowerCase)))
+              case l: List[List[(String, String)]] => l map (rc => {
+                  val t = rc.unzip
+                  Ref(t._1 map (_.toLowerCase), t._2 map (_.toLowerCase))
+              })
             })
         }).toMap
       })
@@ -88,7 +92,7 @@ package metadata {
   }
   case class Col(name: String, nullable: Boolean)
   case class Key(cols: List[String])
-  case class Ref(cols: List[String], refCols: List[String] = Nil)
+  case class Ref(cols: List[String], refCols: List[String])
   case class Procedure(name: String, comments: String, procType: Int,
     pars: List[Par], returnSqlType: Int, returnTypeName: String)
   case class Par(name: String, comments: String, parType: Int, sqlType: Int, typeName: String)

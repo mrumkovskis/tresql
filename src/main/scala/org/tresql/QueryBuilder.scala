@@ -599,7 +599,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   private def joinWithChild(childTable: String,
     refCol: Option[String]): Option[(List[String], List[String])] =
     (refCol map { ref =>
-      val refTable = env.table(childTable).refTable.getOrElse(metadata.Ref(List(ref)),
+      val refTable = env.table(childTable).refTable.getOrElse(List(ref),
         error("No referenced table found for table: " + childTable + ". Reference: " + ref))
       List(ref) -> env.table(refTable).key.cols -> findAliasByName(refTable)
         .getOrElse(error("Unable to find relationship between table " + childTable +

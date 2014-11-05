@@ -166,8 +166,8 @@ class JDBCMetaData(private val defaultSchema: String = null,
     val l: scala.collection.mutable.Map[String, scala.collection.mutable.Map[String, Any]] =
       scala.collection.mutable.Map()
     var trfsm: scala.collection.mutable.Map[String, Any] = null
-    var trfs: ListBuffer[ListBuffer[String]] = null
-    var crfs: ListBuffer[String] = null
+    var trfs: ListBuffer[ListBuffer[(String, String)]] = null
+    var crfs: ListBuffer[(String, String)] = null
     while (rs.next) {
       val pkTable = rs.getString("PKTABLE_NAME");
       val fkColName = rs.getString("FKCOLUMN_NAME");
@@ -176,7 +176,7 @@ class JDBCMetaData(private val defaultSchema: String = null,
       val fkName = rs.getString("FK_NAME");
       if (pkTable != prevTable) {
         try {
-          trfs = l(pkTable)("refs").asInstanceOf[ListBuffer[ListBuffer[String]]]
+          trfs = l(pkTable)("refs").asInstanceOf[ListBuffer[ListBuffer[(String, String)]]]
         } catch {
           case _: NoSuchElementException => {
             trfs = ListBuffer()
@@ -189,7 +189,7 @@ class JDBCMetaData(private val defaultSchema: String = null,
         crfs = ListBuffer()
         trfs += crfs
       }
-      crfs += fkColName
+      crfs += (fkColName -> pkColName)
     }
     rs.close
     (l.values.map { t =>
