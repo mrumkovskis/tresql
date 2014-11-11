@@ -165,7 +165,7 @@ trait ORT {
         })).orNull
       }
       def isOneToOne(childName: String) = md.tableOption(resources.tableName(childName)).flatMap {
-        t => importedKeyOption(table.name, t).map { _ == t.key.cols.head } } getOrElse false
+        t => importedKeyOption(table.name, t).map(t.key.cols.size == 1 && _ == t.key.cols.head) } getOrElse false
       obj.map((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(name, n)
