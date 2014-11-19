@@ -852,6 +852,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     }
     def buildFilter(pkTable: Table, filterList: List[Arr]): Expr = {
       def transformExpr(e: Expr) = e match {
+        case ArrExpr(List(b @ ConstExpr(true | false))) => b
         case a @ ArrExpr(List(_: ConstExpr | _: VarExpr | _: ResExpr)) => BinExpr("=",
           IdentExpr(List(pkTable.aliasOrName, env.tableOption(pkTable.name)
             .getOrElse(error("Table not found in primary key search: " + pkTable.name))

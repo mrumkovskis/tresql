@@ -60,6 +60,10 @@ car [is_active = ?] {nr, name} #(1) --> false --> [["1111", "PORCHE"], ["3333", 
 dept[:id] {deptno} #(deptno) --> id=10 --> [[10]]
 dept[:'id'] {deptno} #(deptno) --> id=10 --> [[10]]
 dept[:"id"] {deptno} #(deptno) --> id=10 --> [[10]]
+//test that true, false filter still works
+dummy[true]{1} --> [[1]]
+dummy[false]{1} --> []
+
 
 //default join
 emp e/dept[sal >= losal & sal <= hisal]salgrade {ename, dname, grade} #(empno) --> [["SMITH", "RESEARCH", 1], ["ALLEN", "SALES", 3], ["WARD", "SALES", 2], ["JONES", "RESEARCH", 4], ["MARTIN", "SALES", 2], ["BLAKE", "SALES", 4], ["CLARK", "ACCOUNTING", 4], ["SCOTT", "RESEARCH", 4], ["KING", "ACCOUNTING", 5], ["TURNER", "SALES", 3], ["ADAMS", "RESEARCH", 1], ["JAMES", "SALES", 1], ["FORD", "RESEARCH", 4], ["MILLER", "ACCOUNTING", 2]]
