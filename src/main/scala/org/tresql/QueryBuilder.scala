@@ -123,7 +123,12 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   }
 
   case class IdRefExpr(seqName: String) extends BaseExpr {
-    override def apply() = env.currId(seqName)
+    override def apply() = getId(seqName)
+    private def getId(name: String): Any = env.currIdOption(name).getOrElse {
+      val t = env.table(seqName)
+      t.refTable.get(t.key.cols).map(getId).getOrElse(
+          error(s"Id not found for: $seqName in environment"))
+    }
     var binded = false
     def defaultSQL = {
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }

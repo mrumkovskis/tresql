@@ -407,7 +407,7 @@ class QueryTest extends Suite {
         "car"-> List(Map("nr" -> "AAA", "name"-> "GAZ", "deptno" -> 15)))
     expectResult(1)(ORT.update("emp", obj))
 
-    //child foreign key is also its primary key
+    //child foreign key is also its primary key (one to one relation)
     obj = Map("deptno" -> 60, "dname" -> "POLAR BEAR", "loc" -> "ALASKA",
               "dept_addr" -> List(Map("addr" -> "Halibut", "zip_code" -> "1010")))
     expectResult(List(1, List(List(1))))(ORT.update("dept", obj))
@@ -494,7 +494,7 @@ class QueryTest extends Suite {
 
     println("\n---- Multiple table INSERT, UPDATE ------\n")
     
-    obj = Map("dname" -> "SPORTS", "addr" -> "Brisben", "zip_code" -> "4000")
+    obj = Map("dname" -> "SPORTS", "addr" -> "Brisbane", "zip_code" -> "4000")
     expectResult((List(1, List(1)),10026))(ORT.insertMultiple(obj, "dept", "dept_addr"))
 
     obj = Map("deptno" -> 10026, "loc" -> "Brisbane", "addr" -> "Roma st. 150")
@@ -506,6 +506,21 @@ class QueryTest extends Suite {
       tresql"dept[dname = 'SPORTS'] {dname, loc, |dept_addr {addr, zip_code} addr}".toListOfMaps
     }
     
+    println("\n-------- Extended cases --------\n")
+    
+    //insert, update one to one relationship (pk of the extended table is fk for the base table) with children for the extended table
+    obj = Map("dname" -> "PANDA BREEDING",
+        "dept_addr" -> List(Map("addr" -> "Chengdu", "zip_code" -> "2000",
+            "dept_sub_addr" -> List(Map("addr" -> "Jinli str. 10", "zip_code" -> "CN-1234"),
+                Map("addr" -> "Jinjiang District", "zip_code" -> "CN-1234")))))
+    expectResult((List(1, List(List(List(1, List(List(1, 1)))))),10027)) {ORT.insert("dept", obj)}
+
+    obj = Map("deptno" -> 10027, "dname" -> "PANDA BREEDING",
+      "dept_addr" -> List(Map("addr" -> "Chengdu", "zip_code" -> "CN-1234",
+        "dept_sub_addr" -> List(Map("addr" -> "Jinli str. 10", "zip_code" -> "CN-1234"),
+          Map("addr" -> "Jinjiang District", "zip_code" -> "CN-1234")))))
+    expectResult(List(1, List(List(List(1, List(2, List(1, 1))))))) {ORT.update("dept", obj)}
+          
     println("\n---- Object INSERT, UPDATE ------\n")
     
     implicit def pohatoMap[T <: Poha](o: T): (String, Map[String, _]) = o match {

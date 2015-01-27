@@ -140,8 +140,6 @@ trait ORT {
     }).orNull
   }
 
-  //TODO support child merge update i.e. instead of deleting and inserting all children,
-  //separately delete removed children, insert new children and update existing children.
   def update_tresql(name: String, obj: Map[String, _], parent: String, firstPkProp: String,
       resources: Resources): String = {
     val md = resources.metaData
@@ -156,7 +154,7 @@ trait ORT {
       def childUpdates(n:String, o:Map[String, _]) = {
         val Array(childObjName, refPropName) = n.split(":").padTo(2, null)
         md.tableOption(resources.tableName(childObjName)).flatMap(childTable => 
-          findPkProp.map (pk => {
+          (findPkProp orElse Option(firstPkProp)).map (pk => {
             Option(refPropName).map(resources.colName(childObjName, _)).orElse(
                 importedKeyOption(table.name, childTable)).map {
               "-" + childTable.name + "[" + _ + " = :" + pk + "]" + (if (o == null) "" else ", " +

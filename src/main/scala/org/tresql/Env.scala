@@ -86,6 +86,8 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
     id
   }
   private[tresql] def currId(seqName: String): Any = provider.map(_.env.currId(seqName)).getOrElse(ids(seqName))
+  private[tresql] def currIdOption(seqName: String): Option[Any] =
+    provider.map(_.env.currIdOption(seqName)).getOrElse(ids.get(seqName))
   //update current id. This is called from QueryBuilder.IdExpr
   private[tresql] def currId(seqName: String, id: Any): Unit =
     provider.map(_.env.currId(seqName, id)).getOrElse(ids(seqName) = id)

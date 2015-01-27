@@ -29,6 +29,10 @@ CREATE TABLE DEPT_ADDR
   ADDR VARCHAR(50) NOT NULL,
   ZIP_CODE VARCHAR(10))
 //
+CREATE TABLE DEPT_SUB_ADDR
+  (DEPTNO INTEGER NOT NULL,
+   ADDR VARCHAR(50) NOT NULL)
+//
 CREATE TABLE CAR
  (NR VARCHAR(10) NOT NULL,
   NAME VARCHAR(20) NOT NULL,
@@ -84,6 +88,8 @@ alter table car add foreign key (deptnr) references dept(deptno)
 alter table dept_addr add primary key (deptnr)
 //
 alter table dept_addr add foreign key (deptnr) references dept(deptno)
+//
+alter table dept_sub_addr add foreign key (deptno) references dept_addr(deptnr) 
 //
 alter table car_usage add primary key (car_nr, empno)
 //
