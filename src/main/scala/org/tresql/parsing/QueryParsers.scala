@@ -42,10 +42,11 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   case class Ident(ident: List[String]) extends Exp {
     def tresql = ident.mkString(".")
   }
-  case class Variable(variable: String, typ: String, opt: Boolean) extends Exp {
+  case class Variable(variable: String, members: List[Any], typ: String, opt: Boolean) extends Exp {
     def tresql = if (variable == "?") "?" else {
       ":" +
         (if (variable contains "'") "\"" + variable + "\"" else "'" + variable + "'") +
+        (if (members == null | members == Nil) "" else "." + (members map any2tresql mkString ".")) +
         (if (typ == null) "" else ": " + typ) +
         (if (opt) "?" else "")
     }
@@ -172,10 +173,10 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
 
   def qualifiedIdent: MemParser[Ident] = rep1sep(ident, ".") ^^ Ident named "qualified-ident"
   def qualifiedIdentAll: MemParser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
-  def variable: MemParser[Variable] = ((":" ~> ((ident | stringLiteral) ~ opt(":" ~> ident) ~ opt("?")))
-      | "?") ^^ {
-    case "?" => Variable("?", null, false)
-    case (i: String) ~ (t: Option[String]) ~ o => Variable(i, t orNull, o != None)
+  def variable: MemParser[Variable] = ((":" ~> ((ident | stringLiteral) ~ 
+      rep("." ~> (ident | stringLiteral | wholeNumber)) ~ opt(":" ~> ident) ~ opt("?"))) | "?") ^^ {
+    case "?" => Variable("?", null, null,  false)
+    case (i: String) ~ (m: List[Any]) ~ (t: Option[String]) ~ o => Variable(i, m, t orNull, o != None)
   } named "variable"
   def id: MemParser[Id] = "#" ~> ident ^^ Id named "id"
   def idref: MemParser[IdRef] = ":#" ~> ident ^^ IdRef named "id-ref"

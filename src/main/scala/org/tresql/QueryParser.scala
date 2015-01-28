@@ -123,7 +123,7 @@ object QueryParser extends parsing.QueryParsers {
   def variableExtractor: PartialFunction[Any, Variable] = {
     var bindIdx = 0
     val f: PartialFunction[Any, Variable] = {
-      case v @ Variable("?", _, _) =>
+      case v @ Variable("?", _, _, _) =>
         bindIdx += 1; v copy bindIdx.toString
       case v: Variable => v
     }

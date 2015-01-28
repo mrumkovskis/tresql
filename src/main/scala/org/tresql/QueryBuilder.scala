@@ -682,7 +682,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   private def patchVals(table: Ident, cols: List[Col], vals: List[Expr]) = {
     val diff = Option(cols).getOrElse(this.table(table).cols).size - vals.size
     val allExprIdx = vals.indexWhere(_.isInstanceOf[AllExpr])
-    def v(i: Int) = buildInternal(Variable("?", null, false), VALUES_CTX)
+    def v(i: Int) = buildInternal(Variable("?", null, null, false), VALUES_CTX)
     if (diff > 0 || allExprIdx != -1) allExprIdx match {
       case -1 if vals.size == 0 => 1 to diff map v toList //empty value clause
       case -1 => vals //perhaps hierarchical update
@@ -914,7 +914,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
         case x: Boolean => ConstExpr(x)
         case Null => ConstExpr(null)
         //variable assignment
-        case BinOp("=", Variable(n, _, o), v) if (parseCtx == ROOT_CTX) =>
+        case BinOp("=", Variable(n, m, _, o), v) if (parseCtx == ROOT_CTX) =>
           AssignExpr(n, buildInternal(v, parseCtx))
         //insert
         case Insert(t, a, c, v) => buildWithNew(_.buildInsert(t, a, c, v))
@@ -977,9 +977,9 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
         case Arr(l: List[_]) => l map { buildInternal(_, parseCtx) } filter (_ != null) match {
           case al if al.size > 0 => ArrExpr(al) case _ => null 
         }
-        case Variable("?", t, o) =>
+        case Variable("?", _, t, o) =>
           this.bindIdx += 1; VarExpr(this.bindIdx.toString, t, o)
-        case Variable(n, t, o) =>
+        case Variable(n, m, t, o) =>
           if (!env.reusableExpr && o && !(env contains n)) null else VarExpr(n, t, o)
         case Id(seq) => IdExpr(seq)
         case IdRef(seq) => IdRefExpr(seq)
