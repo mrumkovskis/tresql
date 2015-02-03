@@ -577,7 +577,8 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     def defaultSQL = expr.filter(_ != null).map(_.sql) mkString ""
   }
   
-  /* Expr specified as a second parameter is executed with variable map returned by env(key) */
+  /* Expr specified as a second parameter is executed with variable map returned by env(key).
+   * Expression is built only from macros. */
   case class ChangeEnvExpr(key: String, expr: Expr) extends BaseExpr {
     override def apply() = env(key) match {
       case m: Map[String, Any] => expr(m)
