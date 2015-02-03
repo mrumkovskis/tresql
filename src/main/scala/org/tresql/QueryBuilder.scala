@@ -78,12 +78,20 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     def defaultSQL = name.mkString(".") + ".*"
   }
 
-  case class VarExpr(name: String, typ: String, opt: Boolean) extends BaseExpr {
-    override def apply() = env(name)
+  case class VarExpr(name: String, members: List[String], typ: String, opt: Boolean) extends BaseExpr {
+    override def apply() = {
+      def accessProduct(p: Product, idx: String) = Try(idx.toInt).toOption.map(i => 
+          p.productElement(i - 1)).getOrElse(error(s"Variable member '$idx' should be number to access product $p")) 
+      members.foldLeft (env(name))((v, mem) => v match {
+        case m: Map[String, _] => m.getOrElse(mem, error(s"Variable not found: $fullName"))
+        case p: Product => accessProduct(p, mem)
+        case x => error(s"At the moment cannot evaluate variable member '$mem' from structure $x")
+      })
+    }
     var binded = false
     def defaultSQL = {
       if (!binded) QueryBuilder.this._bindVariables += this
-      val s = (if (!env.reusableExpr && (env contains name)) {
+      val s = (if (!env.reusableExpr && (env contains name) && (members == null | members == Nil)) {
         env(name) match {
           case l: scala.collection.Traversable[_] =>
             if (l.size > 0) ("?," * (l size) dropRight 1) + s"/*$name*/" else {
@@ -103,7 +111,8 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
       binded = true
       s
     }
-    override def toString = if (env contains name) name + " = " + env(name) else name
+    def fullName = name + (members map ("." + _)).mkString
+    override def toString = if (env contains name) fullName + " = " + this() else fullName
   }
 
   case class IdExpr(seqName: String) extends BaseExpr {
@@ -156,8 +165,6 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   }
 
   case class AssignExpr(variable: String, value: Expr) extends BaseExpr {
-    //add variable to environment so that variable is found when referenced in further expressions
-    env(variable) = null
     override def apply() = {
       env(variable) = value()
       env(variable)
@@ -527,7 +534,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     def where = filter match {
       case (c @ ConstExpr(x)) :: Nil => Option(alias).getOrElse(table.sql) + "." +
         env.table(table.sql).key.cols(0) + " = " + c.sql
-      case (v @ VarExpr(x, _, _)) :: Nil => Option(alias).getOrElse(table.sql) + "." +
+      case (v: VarExpr) :: Nil => Option(alias).getOrElse(table.sql) + "." +
         env.table(table.sql).key.cols(0) + " = " + v.sql
       case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
       case l => Option(alias).getOrElse(table.sql) + "." + env.table(table.sql).key.cols(0) + " in(" +
@@ -570,6 +577,14 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     def defaultSQL = expr.filter(_ != null).map(_.sql) mkString ""
   }
   
+  /* Expr specified as a second parameter is executed with variable map returned by env(key) */
+  case class ChangeEnvExpr(key: String, expr: Expr) extends BaseExpr {
+    override def apply() = env(key) match {
+      case m: Map[String, Any] => expr(m)
+      case x => error(s"Cannot set environment variables for the expression. $x is not a map.")
+    }
+    def defaultSQL = s"ChangeEnvExpr($key, $expr)"
+  }  
 
   abstract class BaseExpr extends PrimitiveExpr {
     override def apply(params: Map[String, Any]): Any = {
@@ -978,9 +993,9 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
           case al if al.size > 0 => ArrExpr(al) case _ => null 
         }
         case Variable("?", _, t, o) =>
-          this.bindIdx += 1; VarExpr(this.bindIdx.toString, t, o)
+          this.bindIdx += 1; VarExpr(this.bindIdx.toString, Nil, t, o)
         case Variable(n, m, t, o) =>
-          if (!env.reusableExpr && o && !(env contains n)) null else VarExpr(n, t, o)
+          if (!env.reusableExpr && o && !(env contains n)) null else VarExpr(n, m, t, o)
         case Id(seq) => IdExpr(seq)
         case IdRef(seq) => IdRefExpr(seq)
         case Res(r, c) => ResExpr(r, c)

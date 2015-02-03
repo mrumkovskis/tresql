@@ -8,5 +8,8 @@ class Macros {
 
   def !~~ (b: QueryBuilder, lop: Expr, rop: Expr) =
     b.BinExpr("!~", b.FunExpr("lower", List(lop)), b.FunExpr("lower", List(rop)))
+    
+  def _changeEnv(b: QueryBuilder, key: QueryBuilder#ConstExpr, expr: Expr) = 
+    b.ChangeEnvExpr(String valueOf key.value, expr)
  
 }

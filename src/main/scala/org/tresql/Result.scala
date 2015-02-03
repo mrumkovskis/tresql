@@ -96,6 +96,7 @@ case class SingleValueResult(res: Any) extends Result {
   def apply(idx: Int) = row(idx)
   def typed[T](name: String)(implicit m: Manifest[T]) = this(name).asInstanceOf[T]
   def apply(name: String) = if (name == "value") res else sys.error("column not found: " + name)
+  override def toString = s"SingleValueResult = $res"
 }
 
 class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _columnCount: Int = -1)

@@ -42,7 +42,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   case class Ident(ident: List[String]) extends Exp {
     def tresql = ident.mkString(".")
   }
-  case class Variable(variable: String, members: List[Any], typ: String, opt: Boolean) extends Exp {
+  case class Variable(variable: String, members: List[String], typ: String, opt: Boolean) extends Exp {
     def tresql = if (variable == "?") "?" else {
       ":" +
         (if (variable contains "'") "\"" + variable + "\"" else "'" + variable + "'") +
@@ -176,7 +176,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def variable: MemParser[Variable] = ((":" ~> ((ident | stringLiteral) ~ 
       rep("." ~> (ident | stringLiteral | wholeNumber)) ~ opt(":" ~> ident) ~ opt("?"))) | "?") ^^ {
     case "?" => Variable("?", null, null,  false)
-    case (i: String) ~ (m: List[Any]) ~ (t: Option[String]) ~ o => Variable(i, m, t orNull, o != None)
+    case (i: String) ~ (m: List[String]) ~ (t: Option[String]) ~ o => Variable(i, m, t orNull, o != None)
   } named "variable"
   def id: MemParser[Id] = "#" ~> ident ^^ Id named "id"
   def idref: MemParser[IdRef] = ":#" ~> ident ^^ IdRef named "id-ref"
