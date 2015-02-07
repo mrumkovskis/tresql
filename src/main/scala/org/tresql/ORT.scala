@@ -127,11 +127,12 @@ trait ORT {
                 cn -> (":#" + ptn)
           case _ => (table.colOption(cn).map(_.name).orNull, resources.valueExpr(objName, n))
         }
-      }).filter(_._1 != null && (parent == null || refColName != null)) ++
-      (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn))) ++
-      (if (hasPk || table.key.cols.length != 1 || (parent != null && (refColName == null ||
-          table.key.cols == List(refColName)))) Map()
-       else Map(table.key.cols(0) -> ("#" + table.name)))).unzip match {
+      }).filter(_._1 != null/*check if prop->col mapping found*/ &&
+          (parent == null/*first level obj*/ || refColName != null/*child obj (must have reference to parent)*/)) ++
+      (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn)/*add fk col to parent*/)) ++
+      (if (hasPk || table.key.cols.length != 1/*multiple col pk not supported*/ ||
+          (parent != null && (refColName == null || table.key.cols == List(refColName) /*fk to parent matches pk*/))) Map()
+       else Map(table.key.cols(0) -> ("#" + table.name)/*add primary key col*/))).unzip match {
         case (Nil, Nil) => null
         case (cols: List[String], vals: List[String]) => 
           cols.mkString(s"+${table.name}{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") +
@@ -139,6 +140,13 @@ trait ORT {
       }
     }).orNull
   }
+
+  def lookup_tresql(rePropName: String, objName: String, obj: Map[String, _], resources: Resources) =
+    resources.metaData.tableOption(resources.tableName(objName)).filter(_.key.cols.size == 1).map(table => {
+      val pk = table.key.cols.head
+      val pkProp = obj.find(t => resources.colName(objName, t._1) == pk).map(_._1).orNull
+      ""
+    }).orNull
 
   def update_tresql(name: String, obj: Map[String, _], parent: String, firstPkProp: String,
       resources: Resources): String = {
