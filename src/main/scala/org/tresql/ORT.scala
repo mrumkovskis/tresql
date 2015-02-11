@@ -113,7 +113,7 @@ trait ORT {
         val n = t._1
         val cn = resources.colName(objName, n)
         t._2 match {
-          //children
+          //children or lookup
           case v: Map[String, _] => (insert_tresql(n, v, objName, resources), null)
           //fill pk (only if it does not match fk prop to parent, in this case fk prop, see below,
           //takes precedence)
@@ -140,13 +140,6 @@ trait ORT {
       }
     }).orNull
   }
-
-  def lookup_tresql(refPropName: String, objName: String, obj: Map[String, _], resources: Resources) =
-    resources.metaData.tableOption(resources.tableName(objName)).filter(_.key.cols.size == 1).map(table => {
-      val pk = table.key.cols.head
-      val pkProp = obj.find(t => resources.colName(objName, t._1) == pk).map(_._1).orNull
-      ""
-    }).orNull
 
   def update_tresql(name: String, obj: Map[String, _], parent: String, firstPkProp: String,
       resources: Resources): String = {
@@ -197,6 +190,24 @@ trait ORT {
       }
     }).orNull
   }
+  
+  def lookup_tresql(refPropName: String, refColName: String, objName: String, obj: Map[String, _], resources: Resources) =
+    resources.metaData.tableOption(resources.tableName(objName)).filter(_.key.cols.size == 1).map(table => {
+      val pk = table.key.cols.head
+      obj.find(t => resources.colName(objName, t._1) == pk).map(_._1).map(pkProp => { //update
+        List( /*lookup object update*/
+          s"|_changeEnv('$refPropName', ${update_tresql(objName, obj, null, null, resources)})",
+          /*reference to lookup object primary key*/
+          refColName -> resources.valueExpr(objName, s"$refPropName.$pkProp"))
+      }).getOrElse { /*insert*/
+        List(/*lookup object insert, set reference property variable to inserted object primary key*/
+            s":$refPropName = |_changeEnv('$refPropName', ${insert_tresql(objName, obj, null, resources)}), :$refPropName = :$refPropName.2",
+          /*reference column set to reference property variable value*/
+          refColName -> resources.valueExpr(objName, refPropName))
+      }
+    }).orNull  
+  
+  def lookupObject(refColName: String, table: metadata.Table) = table.refTable.get(List(refColName))
   
   def save_tresql(name:String, obj:Map[String, _], resources:Resources) = {
     val x = del_upd_ins_obj(name, obj, resources)
