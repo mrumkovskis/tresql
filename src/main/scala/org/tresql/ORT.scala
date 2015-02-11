@@ -141,7 +141,7 @@ trait ORT {
     }).orNull
   }
 
-  def lookup_tresql(rePropName: String, objName: String, obj: Map[String, _], resources: Resources) =
+  def lookup_tresql(refPropName: String, objName: String, obj: Map[String, _], resources: Resources) =
     resources.metaData.tableOption(resources.tableName(objName)).filter(_.key.cols.size == 1).map(table => {
       val pk = table.key.cols.head
       val pkProp = obj.find(t => resources.colName(objName, t._1) == pk).map(_._1).orNull
