@@ -520,6 +520,16 @@ class QueryTest extends Suite {
         "dept_sub_addr" -> List(Map("addr" -> "Jinli str. 10", "zip_code" -> "CN-1234"),
           Map("addr" -> "Jinjiang District", "zip_code" -> "CN-1234")))))
     expectResult(List(1, List(List(List(1, List(2, List(1, 1))))))) {ORT.update("dept", obj)}
+
+    //edit lookup object
+    obj = Map("brand" -> "DUNLOP", "season" -> "W", "carnr" -> Map("name" -> "VW"))
+    assertResult(List((1,10028), 10028, (1,10029))) { ORT.insert("tyres", obj) }
+    obj = Map("brand" -> "CONTINENTAL", "season" -> "W", "carnr" -> Map("nr" -> "UUU", "name" -> "VW"))
+    assertResult(List(1, (1,10030))) { ORT.insert("tyres", obj) }
+    obj = Map("nr" -> 10029, "season" -> "S", "carnr" -> Map("name" -> "SKODA"))
+    assertResult(List((1,10031), 10031, 1)) { ORT.update("tyres", obj) }
+    obj = Map("nr" -> 10029, "brand" -> "DUNLOP", "carnr" -> Map("nr" -> "UUU", "name" -> "VOLKSWAGEN"))
+    assertResult(List(1, 1)) { ORT.update("tyres", obj) }
           
     println("\n---- Object INSERT, UPDATE ------\n")
     

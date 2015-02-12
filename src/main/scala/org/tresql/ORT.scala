@@ -21,7 +21,7 @@ trait ORT {
   //TODO update where unique key (not only pk specified)
   def update(name: String, obj: Map[String, _])(implicit resources: Resources = Env): Any = {
     val struct = tresql_structure(obj)
-    val update = update_tresql(name, struct, null, null, resources)
+    val update = update_tresql(name, struct, null, null, false, resources)
     if(update == null) error("Cannot update data. Table not found or primary key not found " +
     		"for the object: " + name)
     Env log (s"Structure: $struct")
@@ -109,40 +109,51 @@ trait ORT {
       } else resources.colName(objName, refPropName)
       var hasRef: Boolean = parent == null
       var hasPk: Boolean = false
-      (obj.map((t: (String, _)) => {
+      obj.flatMap((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(objName, n)
         t._2 match {
           //children or lookup
-          case v: Map[String, _] => (insert_tresql(n, v, objName, resources), null)
+          case v: Map[String, _] => lookupObject(cn, table).map(lookupTable =>
+            if (parent != null) error(s"Cannot edit lookup object for child table: $table")
+            else lookup_tresql(n, cn, lookupTable, v, resources)).getOrElse {
+            List(insert_tresql(n, v, objName, resources) -> null)
+          }
           //fill pk (only if it does not match fk prop to parent, in this case fk prop, see below,
           //takes precedence)
           case _ if table.key.cols == List(cn) && table.key.cols != List(refColName) =>
             hasPk = true
-            cn -> ("#" + table.name)
+            List(cn -> ("#" + table.name))
           //fill fk
           case _ if ((refPropName != null && refPropName == n) ||
               (refPropName == null && refColName == cn)) =>
                 hasRef = true
-                cn -> (":#" + ptn)
-          case _ => (table.colOption(cn).map(_.name).orNull, resources.valueExpr(objName, n))
+                List(cn -> (":#" + ptn))
+          case _ => List(table.colOption(cn).map(_.name).orNull -> resources.valueExpr(objName, n))
         }
-      }).filter(_._1 != null/*check if prop->col mapping found*/ &&
-          (parent == null/*first level obj*/ || refColName != null/*child obj (must have reference to parent)*/)) ++
-      (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn)/*add fk col to parent*/)) ++
-      (if (hasPk || table.key.cols.length != 1/*multiple col pk not supported*/ ||
-          (parent != null && (refColName == null || table.key.cols == List(refColName) /*fk to parent matches pk*/))) Map()
-       else Map(table.key.cols(0) -> ("#" + table.name)/*add primary key col*/))).unzip match {
-        case (Nil, Nil) => null
-        case (cols: List[String], vals: List[String]) => 
-          cols.mkString(s"+${table.name}{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") +
-          (if (parent != null) " '" + name + "'" else "")
+      }).groupBy { case _: String => "l" case _ => "b" } match {
+        case m: Map[String, List[_]] =>
+          //lookup edit tresql
+          val lookupTresql = m.get("l").map(_.map((x: Any) => String.valueOf(x) + ", ").mkString).getOrElse("")
+          //base table tresql
+          val tresql = (m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]].filter(_._1 != null /*check if prop->col mapping found*/ &&
+            (parent == null /*first level obj*/ || refColName != null /*child obj (must have reference to parent)*/ )) ++
+            (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn) /*add fk col to parent*/ )) ++
+            (if (hasPk || table.key.cols.length != 1 /*multiple col pk not supported*/ ||
+              (parent != null && (refColName == null || table.key.cols == List(refColName) /*fk to parent matches pk*/ ))) Map()
+            else Map(table.key.cols(0) -> ("#" + table.name) /*add primary key col*/ ))).unzip match {
+              case (Nil, Nil) => null
+              case (cols: List[String], vals: List[String]) =>
+                cols.mkString(s"+${table.name}{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") +
+                (if (parent != null) " '" + name + "'" else "")
+            }
+          Option(tresql).map(lookupTresql + _).orNull
       }
     }).orNull
   }
 
   def update_tresql(name: String, obj: Map[String, _], parent: String, firstPkProp: String,
-      resources: Resources): String = {
+      oneToOneMode: Boolean, resources: Resources): String = {
     val md = resources.metaData
     md.tableOption(resources.tableName(name)).flatMap(table => {
       var pkProp: Option[String] = None
@@ -171,22 +182,31 @@ trait ORT {
         if (table.key == metadata.Key(List(cn))) pkProp = Some(n)
         t._2 match {
           //children
-          case v: Map[String, _] =>
+          case v: Map[String, _] => lookupObject(cn, table).map(lookupTable =>
+            if (parent != null && !oneToOneMode) error(s"Cannot edit lookup object for child table: $table")
+            else lookup_tresql(n, cn, lookupTable, v, resources)).getOrElse {
             List((if (isOneToOne(n))
-              update_tresql(n, v, name, if (parent == null) findPkProp.orNull else firstPkProp, resources)
+              update_tresql(n, v, name, if (parent == null) findPkProp.orNull else firstPkProp, true, resources)
             else childUpdates(n, v)) -> null)
+          }
           //do not update pkProp
           case _ if (Some(n) == pkProp) => List((null, null))
           case _ => List(table.colOption(cn).map(_.name).orNull -> resources.valueExpr(name, n))
         }
-      }).filter(_._1 != null).unzip match {
-        case (cols: List[String], vals: List[String]) => Option(firstPkProp).orElse(pkProp).map(pk => {
-          //primary key in update condition is taken from sequence so that currId is updated for
-          //child records
-          val tresql = cols.mkString(s"=${table.name}[${table.key.cols(0)} = ${
-            if (firstPkProp == pk) ":" + firstPkProp else "#" + table.name}]{", ", ", "}") +
-              vals.filter(_ != null).mkString(" [", ", ", "]") + (if (parent != null) " '" + name + "'" else "")
-          if (cols.size > 0) tresql else error(s"Column clause empty: $tresql")})
+      }).groupBy { case _: String => "l" case _ => "b" } match {
+        case m: Map[String, List[_]] =>
+          (m("b").asInstanceOf[List[(String, String)]].filter(_._1 != null).unzip match {
+            case (cols: List[String], vals: List[String]) => Option(firstPkProp).orElse(pkProp).map(pk => {
+              val lookupTresql = m.get("l").map(_.map((x: Any)=> String.valueOf(x) + ", ").mkString).getOrElse("")
+              //primary key in update condition is taken from sequence so that currId is updated for
+              //child records
+              val tresql = cols.mkString(s"=${table.name}[${table.key.cols(0)} = ${
+                if (firstPkProp == pk) ":" + firstPkProp else "#" + table.name
+              }]{", ", ", "}") +
+                vals.filter(_ != null).mkString(" [", ", ", "]") + (if (parent != null) " '" + name + "'" else "")
+              if (cols.size > 0) lookupTresql + tresql else error(s"Column clause empty: $tresql")
+            })
+          })
       }
     }).orNull
   }
@@ -196,7 +216,7 @@ trait ORT {
       val pk = table.key.cols.head
       obj.find(t => resources.colName(objName, t._1) == pk).map(_._1).map(pkProp => { //update
         List( /*lookup object update*/
-          s"|_changeEnv('$refPropName', ${update_tresql(objName, obj, null, null, resources)})",
+          s"|_changeEnv('$refPropName', ${update_tresql(objName, obj, null, null, false, resources)})",
           /*reference to lookup object primary key*/
           refColName -> resources.valueExpr(objName, s"$refPropName.$pkProp"))
       }).getOrElse { /*insert*/
@@ -207,6 +227,8 @@ trait ORT {
       }
     }).orNull  
   
+  //TODO returns lookup table name not object name. lookup_tresql requires object name, so the
+  //two must be equal.
   def lookupObject(refColName: String, table: metadata.Table) = table.refTable.get(List(refColName))
   
   def save_tresql(name:String, obj:Map[String, _], resources:Resources) = {
