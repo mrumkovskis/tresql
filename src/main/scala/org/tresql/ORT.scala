@@ -165,19 +165,19 @@ trait ORT {
       }
       def isOneToOne(childName: String) = md.tableOption(resources.tableName(childName)).flatMap {
         t => importedKeyOption(table.name, t).map(t.key.cols.size == 1 && _ == t.key.cols.head) } getOrElse false
-      obj.map((t: (String, _)) => {
+      obj.flatMap((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(name, n)
         if (table.key == metadata.Key(List(cn))) pkProp = Some(n)
         t._2 match {
           //children
           case v: Map[String, _] =>
-            (if (isOneToOne(n))
+            List((if (isOneToOne(n))
               update_tresql(n, v, name, if (parent == null) findPkProp.orNull else firstPkProp, resources)
-            else childUpdates(n, v)) -> null
+            else childUpdates(n, v)) -> null)
           //do not update pkProp
-          case _ if (Some(n) == pkProp) => (null, null)
-          case _ => (table.colOption(cn).map(_.name).orNull, resources.valueExpr(name, n))
+          case _ if (Some(n) == pkProp) => List((null, null))
+          case _ => List(table.colOption(cn).map(_.name).orNull -> resources.valueExpr(name, n))
         }
       }).filter(_._1 != null).unzip match {
         case (cols: List[String], vals: List[String]) => Option(firstPkProp).orElse(pkProp).map(pk => {
