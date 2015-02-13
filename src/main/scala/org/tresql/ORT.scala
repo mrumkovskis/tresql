@@ -21,7 +21,7 @@ trait ORT {
   //TODO update where unique key (not only pk specified)
   def update(name: String, obj: Map[String, _])(implicit resources: Resources = Env): Any = {
     val struct = tresql_structure(obj)
-    val update = update_tresql(name, struct, null, null, false, resources)
+    val update = update_tresql(name, struct, null, null, resources)
     if(update == null) error("Cannot update data. Table not found or primary key not found " +
     		"for the object: " + name)
     Env log (s"Structure: $struct")
@@ -152,7 +152,7 @@ trait ORT {
   }
 
   def update_tresql(name: String, obj: Map[String, _], parent: String, firstPkProp: String,
-      oneToOneMode: Boolean, resources: Resources): String = {
+      resources: Resources): String = {
     val md = resources.metaData
     md.tableOption(resources.tableName(name)).flatMap(table => {
       var pkProp: Option[String] = None
@@ -184,7 +184,7 @@ trait ORT {
           case v: Map[String, _] => lookupObject(cn, table).map(lookupTable =>
             lookup_tresql(n, cn, lookupTable, v, resources)).getOrElse {
             List((if (isOneToOne(n))
-              update_tresql(n, v, name, if (parent == null) findPkProp.orNull else firstPkProp, true, resources)
+              update_tresql(n, v, name, if (parent == null) findPkProp.orNull else firstPkProp, resources)
             else childUpdates(n, v)) -> null)
           }
           //do not update pkProp
@@ -217,7 +217,7 @@ trait ORT {
       val pk = table.key.cols.head
       obj.find(t => resources.colName(objName, t._1) == pk).map(_._1).map(pkProp => { //update
         List( /*lookup object update*/
-          s"|_changeEnv('$refPropName', ${update_tresql(objName, obj, null, null, false, resources)})",
+          s"|_changeEnv('$refPropName', ${update_tresql(objName, obj, null, null, resources)})",
           /*reference to lookup object primary key*/
           refColName -> resources.valueExpr(objName, s"$refPropName.$pkProp"))
       }).getOrElse { /*insert*/
