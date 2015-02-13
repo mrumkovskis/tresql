@@ -133,7 +133,7 @@ trait ORT {
       }).groupBy { case _: String => "l" case _ => "b" } match {
         case m: Map[String, List[_]] =>
           //lookup edit tresql
-          val lookupTresql = m.get("l").map(_.map((x: Any) => String.valueOf(x) + ", ").mkString).orNull
+          val lookupTresql = m.get("l").map(_.asInstanceOf[List[String]].map(_ + ", ").mkString).orNull
           //base table tresql
           val tresql = (m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]].filter(_._1 != null /*check if prop->col mapping found*/ &&
             (parent == null /*first level obj*/ || refColName != null /*child obj (must have reference to parent)*/ )) ++
@@ -195,7 +195,7 @@ trait ORT {
         case m: Map[String, List[_]] =>
           (m("b").asInstanceOf[List[(String, String)]].filter(_._1 != null).unzip match {
             case (cols: List[String], vals: List[String]) => Option(firstPkProp).orElse(pkProp).map(pk => {
-              val lookupTresql = m.get("l").map(_.map((x: Any)=> String.valueOf(x) + ", ").mkString).orNull
+              val lookupTresql = m.get("l").map(_.asInstanceOf[List[String]].map(_ + ", ").mkString).orNull
               //primary key in update condition is taken from sequence so that currId is updated for
               //child records
               val tresql = cols.mkString(s"=${table.name}[${table.key.cols(0)} = ${
