@@ -260,7 +260,7 @@ class QueryTest extends Suite {
     }
     assertResult(List(Vector(1))) {
       Query("+dept_addr", 10, new java.io.StringReader("Strelnieku str."),
-          new java.io.StringReader("LV-1010")).toListOfVectors
+          new java.io.StringReader("LV-1010"), null).toListOfVectors
     }
     assertResult(List(Vector(1)))(Query("car_image[carnr = ?]{image} = [?]", 2222,
         new java.io.ByteArrayInputStream(scala.Array[Byte](1, 2, 3, 4, 5, 6, 7))).toListOfVectors)
@@ -530,7 +530,17 @@ class QueryTest extends Suite {
     assertResult(List((1,10031), 10031, 1)) { ORT.update("tyres", obj) }
     obj = Map("nr" -> 10029, "brand" -> "DUNLOP", "carnr" -> Map("nr" -> "UUU", "name" -> "VOLKSWAGEN"))
     assertResult(List(1, 1)) { ORT.update("tyres", obj) }
-          
+    //one to one relationship with lookup for extended table
+    obj = Map("dname" -> "MARKETING", "addr" -> "Valkas str. 1",
+        "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Riga"))
+    assertResult((List(1, List(List((1, 10033), 10033, 1))), 10032)) { ORT.insertMultiple(obj, "dept", "dept_addr") }
+    obj = Map("deptno" -> 10032, "dname" -> "MARKET", "addr" -> "Valkas str. 1a",
+      "zip_code" -> "LV-1010", "addr_nr" -> Map("nr" -> 10033, "addr" -> "Riga, LV"))
+    assertResult(List(1, List(List(1, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr") }
+    obj = Map("deptno" -> 10032, "dname" -> "MARKETING", "addr" -> "Liela str.",
+      "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Saldus"))
+    assertResult(List(1, List(List((1,10034), 10034, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr") }    
+    
     println("\n---- Object INSERT, UPDATE ------\n")
     
     implicit def pohatoMap[T <: Poha](o: T): (String, Map[String, _]) = o match {

@@ -9,7 +9,6 @@ trait Transformer { self: QueryBuilder =>
       case e if e.builder != self => e.builder.transform(e, f)
     }.orElse[Expr, Expr] {
       case ArrExpr(e) => ArrExpr(e map cf)
-      case AssignExpr(v, e) => AssignExpr(v, cf(e))
       case BinExpr(o, lop, rop) => BinExpr(o, cf(lop), cf(rop))
       case BracesExpr(b) => BracesExpr(cf(b))
       case ColExpr(col, alias, typ, sepQuery, hidden) => ColExpr(cf(col), alias, typ, sepQuery, hidden)

@@ -164,15 +164,6 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     override def toString = s"$nr($col) = ${Try(this()).getOrElse("value not available")}"
   }
 
-  case class AssignExpr(variable: String, value: Expr) extends BaseExpr {
-    override def apply() = {
-      env(variable) = value()
-      env(variable)
-    }
-    def defaultSQL = error("Cannot construct sql statement from assignment expression")
-    override def toString = variable + " = " + value
-  }
-
   case class UnExpr(op: String, operand: Expr) extends BaseExpr {
     override def apply() = op match {
       case "-" => -operand().asInstanceOf[Number]
@@ -224,7 +215,13 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
           org.tresql.Query.sel(sql, cols, QueryBuilder.this.bindVariables, env,
             QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
         else lop - rop
-        case "=" => lop == rop
+        case "=" => lop match {
+          //assign expression
+          case VarExpr(variable, _, _, _) =>
+            env(variable) = rop()
+            env(variable)
+          case x => x == rop
+        } 
         case "!=" => lop != rop
         case "<" => lop < rop
         case ">" => lop > rop
@@ -929,9 +926,6 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
         case x: String => ConstExpr(x)
         case x: Boolean => ConstExpr(x)
         case Null => ConstExpr(null)
-        //variable assignment
-        case BinOp("=", Variable(n, m, _, o), v) if (parseCtx == ROOT_CTX) =>
-          AssignExpr(n, buildInternal(v, parseCtx))
         //insert
         case Insert(t, a, c, v) => buildWithNew(_.buildInsert(t, a, c, v))
         //update
@@ -970,7 +964,8 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
           val o = buildInternal(oper, parseCtx)
           if (o == null) null else UnExpr(op, o)
         case e @ BinOp(op, lop, rop) => parseCtx match {
-          case ROOT_CTX => buildWithNew(_.buildInternal(e, QUERY_CTX))
+          case ROOT_CTX if op != "=" /*do not create new query builder for assignment or equals operation*/=>
+            buildWithNew(_.buildInternal(e, QUERY_CTX))
           case ctx =>
             val l = buildInternal(lop, ctx)
             val r = buildInternal(rop, ctx)

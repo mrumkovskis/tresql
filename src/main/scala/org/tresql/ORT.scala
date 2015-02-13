@@ -115,8 +115,7 @@ trait ORT {
         t._2 match {
           //children or lookup
           case v: Map[String, _] => lookupObject(cn, table).map(lookupTable =>
-            if (parent != null) error(s"Cannot edit lookup object for child table: $table")
-            else lookup_tresql(n, cn, lookupTable, v, resources)).getOrElse {
+            lookup_tresql(n, cn, lookupTable, v, resources)).getOrElse {
             List(insert_tresql(n, v, objName, resources) -> null)
           }
           //fill pk (only if it does not match fk prop to parent, in this case fk prop, see below,
@@ -134,7 +133,7 @@ trait ORT {
       }).groupBy { case _: String => "l" case _ => "b" } match {
         case m: Map[String, List[_]] =>
           //lookup edit tresql
-          val lookupTresql = m.get("l").map(_.map((x: Any) => String.valueOf(x) + ", ").mkString).getOrElse("")
+          val lookupTresql = m.get("l").map(_.map((x: Any) => String.valueOf(x) + ", ").mkString).orNull
           //base table tresql
           val tresql = (m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]].filter(_._1 != null /*check if prop->col mapping found*/ &&
             (parent == null /*first level obj*/ || refColName != null /*child obj (must have reference to parent)*/ )) ++
@@ -144,10 +143,10 @@ trait ORT {
             else Map(table.key.cols(0) -> ("#" + table.name) /*add primary key col*/ ))).unzip match {
               case (Nil, Nil) => null
               case (cols: List[String], vals: List[String]) =>
-                cols.mkString(s"+${table.name}{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]") +
-                (if (parent != null) " '" + name + "'" else "")
+                cols.mkString(s"+${table.name}{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]")             
             }
-          Option(tresql).map(lookupTresql + _).orNull
+          val alias = (if (parent != null) " '" + name + "'" else "")
+          Option(tresql).map(t => Option(lookupTresql).map(lt => s"[$lt$t]$alias").getOrElse(t + alias)).orNull
       }
     }).orNull
   }
@@ -183,8 +182,7 @@ trait ORT {
         t._2 match {
           //children
           case v: Map[String, _] => lookupObject(cn, table).map(lookupTable =>
-            if (parent != null && !oneToOneMode) error(s"Cannot edit lookup object for child table: $table")
-            else lookup_tresql(n, cn, lookupTable, v, resources)).getOrElse {
+            lookup_tresql(n, cn, lookupTable, v, resources)).getOrElse {
             List((if (isOneToOne(n))
               update_tresql(n, v, name, if (parent == null) findPkProp.orNull else firstPkProp, true, resources)
             else childUpdates(n, v)) -> null)
@@ -197,14 +195,17 @@ trait ORT {
         case m: Map[String, List[_]] =>
           (m("b").asInstanceOf[List[(String, String)]].filter(_._1 != null).unzip match {
             case (cols: List[String], vals: List[String]) => Option(firstPkProp).orElse(pkProp).map(pk => {
-              val lookupTresql = m.get("l").map(_.map((x: Any)=> String.valueOf(x) + ", ").mkString).getOrElse("")
+              val lookupTresql = m.get("l").map(_.map((x: Any)=> String.valueOf(x) + ", ").mkString).orNull
               //primary key in update condition is taken from sequence so that currId is updated for
               //child records
               val tresql = cols.mkString(s"=${table.name}[${table.key.cols(0)} = ${
                 if (firstPkProp == pk) ":" + firstPkProp else "#" + table.name
               }]{", ", ", "}") +
-                vals.filter(_ != null).mkString(" [", ", ", "]") + (if (parent != null) " '" + name + "'" else "")
-              if (cols.size > 0) lookupTresql + tresql else error(s"Column clause empty: $tresql")
+                vals.filter(_ != null).mkString(" [", ", ", "]")
+              val alias = if (parent != null) " '" + name + "'" else ""
+              if (cols.size > 0)
+                Option(lookupTresql).map(lt => s"[$lt$tresql]$alias").getOrElse(tresql + alias)
+              else error(s"Column clause empty: $tresql")
             })
           })
       }
