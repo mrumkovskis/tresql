@@ -242,52 +242,49 @@ trait TypedQuery {this: Query =>
 
   def head[T](expr: String, params: Any*)(implicit converter: Converter[T],
       m: scala.reflect.Manifest[T]): T = {
-    apply(expr, normalizePars(params: _*)).head[T]
+    apply(expr, params: _*).head[T]
   }
   def headOption[T](expr: String, params: Any*)(implicit converter: Converter[T],
       m: scala.reflect.Manifest[T]): Option[T] = {
-    apply(expr, normalizePars(params: _*)).headOption[T]
+    apply(expr, params: _*).headOption[T]
   }
   def unique[T](expr: String, params: Any*)(implicit converter: Converter[T],
       m: scala.reflect.Manifest[T]): T = {
-    apply(expr, normalizePars(params: _*)).unique[T]
+    apply(expr, params: _*).unique[T]
   }
   def uniqueOption[T](expr: String, params: Any*)(implicit converter: Converter[T],
       m: scala.reflect.Manifest[T]): Option[T] = {
-    apply(expr, normalizePars(params: _*)).uniqueOption[T]
+    apply(expr, params: _*).uniqueOption[T]
   }
   
   def toListOfMaps[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
     implicit transformer: PartialFunction[(String, Any), Any] = null,
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): List[M[String, Any]] =
-    apply(expr, normalizePars(params: _*)).toListOfMaps[M]
+    apply(expr, params: _*).toListOfMaps[M]
 
   def headAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
     implicit transformer: PartialFunction[(String, Any), Any] = null,
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
-    apply(expr, normalizePars(params: _*)).headAsMap[M]
+    apply(expr, params: _*).headAsMap[M]
 
   def headOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
     implicit transformer: PartialFunction[(String, Any), Any] = null,
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
-    apply(expr, normalizePars(params: _*)).headOptionAsMap[M]
+    apply(expr, params: _*).headOptionAsMap[M]
 
   def uniqueAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
     implicit transformer: PartialFunction[(String, Any), Any] = null,
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
-    apply(expr, normalizePars(params: _*)).uniqueAsMap[M]
+    apply(expr, params: _*).uniqueAsMap[M]
 
   def uniqueOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
     implicit transformer: PartialFunction[(String, Any), Any] = null,
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
-    apply(expr, normalizePars(params: _*)).uniqueOptionAsMap[M]
+    apply(expr, params: _*).uniqueOptionAsMap[M]
 
   def list[T](expr: String, params: Any*)(implicit converter: Converter[T],
-      m: scala.reflect.Manifest[T]) = apply(expr, normalizePars(params: _*)).list[T](converter, m)
+      m: scala.reflect.Manifest[T]) = apply(expr, params: _*).list[T](converter, m)
 
-  def list[T](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection = null,
-       converter: Converter[T], m: scala.reflect.Manifest[T]) =
-        apply(expr, params)(tresqlConn).list[T]
 
   //--------------- GENERATED CODE------------------//
   def head[T1, T2](expr: String, params: Any*)(implicit m1: Manifest[T1], m2: Manifest[T2]) = head[(T1, T2)](expr, params: _*)
@@ -395,26 +392,5 @@ trait TypedQuery {this: Query =>
   def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20](expr: String, params: Any*)(implicit m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10], m11: Manifest[T11], m12: Manifest[T12], m13: Manifest[T13], m14: Manifest[T14], m15: Manifest[T15], m16: Manifest[T16], m17: Manifest[T17], m18: Manifest[T18], m19: Manifest[T19], m20: Manifest[T20]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20)](expr, params: _*)
   def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21](expr: String, params: Any*)(implicit m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10], m11: Manifest[T11], m12: Manifest[T12], m13: Manifest[T13], m14: Manifest[T14], m15: Manifest[T15], m16: Manifest[T16], m17: Manifest[T17], m18: Manifest[T18], m19: Manifest[T19], m20: Manifest[T20], m21: Manifest[T21]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21)](expr, params: _*)
   def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22](expr: String, params: Any*)(implicit m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10], m11: Manifest[T11], m12: Manifest[T12], m13: Manifest[T13], m14: Manifest[T14], m15: Manifest[T15], m16: Manifest[T16], m17: Manifest[T17], m18: Manifest[T18], m19: Manifest[T19], m20: Manifest[T20], m21: Manifest[T21], m22: Manifest[T22]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22)](expr, params: _*)
-  def list[T1, T2](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2]) = list[(T1, T2)](expr, params)
-  def list[T1, T2, T3](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3]) = list[(T1, T2, T3)](expr, params)
-  def list[T1, T2, T3, T4](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4]) = list[(T1, T2, T3, T4)](expr, params)
-  def list[T1, T2, T3, T4, T5](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5]) = list[(T1, T2, T3, T4, T5)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6]) = list[(T1, T2, T3, T4, T5, T6)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6, T7](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7]) = list[(T1, T2, T3, T4, T5, T6, T7)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6, T7, T8](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8]) = list[(T1, T2, T3, T4, T5, T6, T7, T8)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6, T7, T8, T9](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10], m11: Manifest[T11]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10], m11: Manifest[T11], m12: Manifest[T12]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10], m11: Manifest[T11], m12: Manifest[T12], m13: Manifest[T13]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10], m11: Manifest[T11], m12: Manifest[T12], m13: Manifest[T13], m14: Manifest[T14]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10], m11: Manifest[T11], m12: Manifest[T12], m13: Manifest[T13], m14: Manifest[T14], m15: Manifest[T15]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10], m11: Manifest[T11], m12: Manifest[T12], m13: Manifest[T13], m14: Manifest[T14], m15: Manifest[T15], m16: Manifest[T16]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10], m11: Manifest[T11], m12: Manifest[T12], m13: Manifest[T13], m14: Manifest[T14], m15: Manifest[T15], m16: Manifest[T16], m17: Manifest[T17]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10], m11: Manifest[T11], m12: Manifest[T12], m13: Manifest[T13], m14: Manifest[T14], m15: Manifest[T15], m16: Manifest[T16], m17: Manifest[T17], m18: Manifest[T18]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10], m11: Manifest[T11], m12: Manifest[T12], m13: Manifest[T13], m14: Manifest[T14], m15: Manifest[T15], m16: Manifest[T16], m17: Manifest[T17], m18: Manifest[T18], m19: Manifest[T19]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10], m11: Manifest[T11], m12: Manifest[T12], m13: Manifest[T13], m14: Manifest[T14], m15: Manifest[T15], m16: Manifest[T16], m17: Manifest[T17], m18: Manifest[T18], m19: Manifest[T19], m20: Manifest[T20]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10], m11: Manifest[T11], m12: Manifest[T12], m13: Manifest[T13], m14: Manifest[T14], m15: Manifest[T15], m16: Manifest[T16], m17: Manifest[T17], m18: Manifest[T18], m19: Manifest[T19], m20: Manifest[T20], m21: Manifest[T21]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21)](expr, params)
-  def list[T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22](expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection, m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3], m4: Manifest[T4], m5: Manifest[T5], m6: Manifest[T6], m7: Manifest[T7], m8: Manifest[T8], m9: Manifest[T9], m10: Manifest[T10], m11: Manifest[T11], m12: Manifest[T12], m13: Manifest[T13], m14: Manifest[T14], m15: Manifest[T15], m16: Manifest[T16], m17: Manifest[T17], m18: Manifest[T18], m19: Manifest[T19], m20: Manifest[T20], m21: Manifest[T21], m22: Manifest[T22]) = list[(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18, T19, T20, T21, T22)](expr, params)
   //--------------- END OF GENERATED CODE------------------//
 }

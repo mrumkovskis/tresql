@@ -8,6 +8,7 @@ package object tresql {
    *  i.e. variable is optional and it's value is null, it is filtered out of parameters to be
    *  passed to Query.
    */
+  
   implicit class Tresql(val sc: StringContext) extends AnyVal {
     def tresql(params: Any*) = {
       val p = sc.parts

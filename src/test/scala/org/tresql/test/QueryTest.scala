@@ -142,9 +142,9 @@ class QueryTest extends Suite {
     //expression closing
     intercept[SQLException] {
       val ex = Query.build("emp")
-      ex.select().toList
+      ex().asInstanceOf[Result].toList
       ex.close
-      ex.select().toList
+      ex().asInstanceOf[Result].toList
     }
     //bind variables absence error message
     assert(intercept[RuntimeException](Query("emp[?]")).getMessage() === "Missing bind variable: 1")
@@ -225,7 +225,7 @@ class QueryTest extends Suite {
     //bind variables test
     assertResult(List(10, 20, 30, 40)){
       val ex = Query.build("dept[?]{deptno}")
-      val res = List(10, 20, 30, 40) flatMap {ex.select(_).map(_.deptno)}
+      val res = List(10, 20, 30, 40) flatMap {p=> ex(List(p)).asInstanceOf[Result].map(_.deptno)}
       ex.close
       res
     }

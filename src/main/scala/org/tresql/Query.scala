@@ -8,29 +8,22 @@ import java.sql.Connection
 
 trait Query extends TypedQuery {
 
-  def apply(expr: String, params: Any*): Result = apply(expr, normalizePars(params: _*))
+  def apply(expr: String, params: Any*)(implicit resources: Resources = Env): Result =
+    exec(expr, normalizePars(params: _*), resources)
 
-  def apply(expr: String, params: Map[String, Any])(implicit tresqlConn: java.sql.Connection = null): Result =
-    build(expr, params, false)(tresqlConn)() match {
-    case r: Result => r
-    case x => SingleValueResult(x)
-  }
-
+  private def exec(expr: String, params: Map[String, Any], resources: Resources): Result =
+    build(expr, params, false)(resources)() match {
+      case r: Result => r
+      case x => SingleValueResult(x)
+    }
+    
   def build(expr: String, params: Map[String, Any] = null, reusableExpr: Boolean = true)(
-      implicit tresqlConn: java.sql.Connection = null): Expr =
-    build(expr, if (tresqlConn == null) Env else resources(tresqlConn), params, reusableExpr)
-
-  def build(expr: String, resources: Resources, params: Map[String, Any], reusableExpr: Boolean): Expr = {
+    implicit resources: Resources = Env): Expr = {
     Env log expr
     QueryBuilder(expr, new Env(params, resources, reusableExpr))
   }
   
   def parse(expr: String) = QueryParser.parseExp(expr)
-
-  private def resources(connection: java.sql.Connection) = new Resources {
-    def conn = connection
-    override def metaData = metadata.JDBCMetaData("", resources = this)
-  }
 
   private[tresql] def normalizePars(pars: Any*): Map[String, Any] = pars match {
     case Seq(m: Map[String, Any]) => m

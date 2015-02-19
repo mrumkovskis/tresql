@@ -1099,16 +1099,7 @@ sealed abstract class Expr extends (() => Any) with Ordered[Expr] {
   def apply(): Any = this
   def apply(params: Seq[Any]): Any = apply(org.tresql.Query.normalizePars(params))
   def apply(params: Map[String, Any]): Any = this
-  def select(params: Any*): Result = select(org.tresql.Query.normalizePars(params))
-  def select(params: Map[String, Any]): Result = apply(params).asInstanceOf[Result]
-  def foreach(params: Any*)(f: (RowLike) => Unit = (row) => ()) {
-    (if (params.size == 1) params(0) match {
-      case l: List[_] => select(l)
-      case m: Map[String, _] => select(m)
-      case x => select(x)
-    }
-    else select(params)) foreach f
-  }
+
   def close: Unit = error("Close method not implemented in subclass of Expr: " + getClass)
   def exprType: Class[_] = this.getClass
   //overrides function toString method since it is of no use
