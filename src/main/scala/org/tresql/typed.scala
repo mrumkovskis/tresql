@@ -241,49 +241,49 @@ trait TypedResult { this: Result =>
 trait TypedQuery {this: Query =>
 
   def head[T](expr: String, params: Any*)(implicit converter: Converter[T],
-      m: scala.reflect.Manifest[T]): T = {
+      m: scala.reflect.Manifest[T], r: Resources = Env): T = {
     apply(expr, params: _*).head[T]
   }
   def headOption[T](expr: String, params: Any*)(implicit converter: Converter[T],
-      m: scala.reflect.Manifest[T]): Option[T] = {
+      m: scala.reflect.Manifest[T], r: Resources = Env): Option[T] = {
     apply(expr, params: _*).headOption[T]
   }
   def unique[T](expr: String, params: Any*)(implicit converter: Converter[T],
-      m: scala.reflect.Manifest[T]): T = {
+      m: scala.reflect.Manifest[T], r: Resources = Env): T = {
     apply(expr, params: _*).unique[T]
   }
   def uniqueOption[T](expr: String, params: Any*)(implicit converter: Converter[T],
-      m: scala.reflect.Manifest[T]): Option[T] = {
+      m: scala.reflect.Manifest[T], r: Resources = Env): Option[T] = {
     apply(expr, params: _*).uniqueOption[T]
   }
   
   def toListOfMaps[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
-    implicit transformer: PartialFunction[(String, Any), Any] = null,
+    implicit transformer: PartialFunction[(String, Any), Any] = null, r: Resources = Env,
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): List[M[String, Any]] =
     apply(expr, params: _*).toListOfMaps[M]
 
   def headAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
-    implicit transformer: PartialFunction[(String, Any), Any] = null,
+    implicit transformer: PartialFunction[(String, Any), Any] = null, r: Resources = Env,
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
     apply(expr, params: _*).headAsMap[M]
 
   def headOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
-    implicit transformer: PartialFunction[(String, Any), Any] = null,
+    implicit transformer: PartialFunction[(String, Any), Any] = null, r: Resources = Env,
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
     apply(expr, params: _*).headOptionAsMap[M]
 
   def uniqueAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
-    implicit transformer: PartialFunction[(String, Any), Any] = null,
+    implicit transformer: PartialFunction[(String, Any), Any] = null, r: Resources = Env,
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
     apply(expr, params: _*).uniqueAsMap[M]
 
   def uniqueOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
-    implicit transformer: PartialFunction[(String, Any), Any] = null,
+    implicit transformer: PartialFunction[(String, Any), Any] = null, r: Resources = Env,
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
     apply(expr, params: _*).uniqueOptionAsMap[M]
 
   def list[T](expr: String, params: Any*)(implicit converter: Converter[T],
-      m: scala.reflect.Manifest[T]) = apply(expr, params: _*).list[T](converter, m)
+      m: scala.reflect.Manifest[T], r: Resources = Env) = apply(expr, params: _*).list[T](converter, m)
 
 
   //--------------- GENERATED CODE------------------//
