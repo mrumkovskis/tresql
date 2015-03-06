@@ -541,6 +541,10 @@ class QueryTest extends Suite {
       "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Saldus"))
     assertResult(List(1, List(List((1,10034), 10034, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }    
     
+    //insert, update with additional filter
+    assertResult(0){ORT.insert("dummy", Map("dummy" -> 2), "dummy = -1")}
+    assertResult(0){ORT.update("address", Map("nr" -> 10033, "addr" -> "gugu"), "addr ~ 'Ri'")}
+    
     println("\n---- Object INSERT, UPDATE ------\n")
     
     implicit def pohatoMap[T <: Poha](o: T): (String, Map[String, _]) = o match {

@@ -148,7 +148,12 @@ trait ORT {
             else Map(table.key.cols(0) -> ("#" + table.name) /*add primary key col*/ ))).unzip match {
               case (Nil, Nil) => null
               case (cols: List[String], vals: List[String]) =>
-                cols.mkString(s"+${table.name}{", ", ", "}") + vals.filter(_ != null).mkString(" [", ", ", "]")             
+                cols.mkString(s"+${table.name}{", ", ", "}") +
+                //values
+                Option(filter)
+                  //filter is not null so values is select statement
+                  .map(f => vals.filter(_ != null).mkString(s" ${table.name} [$f] {", ", ", "}"))
+                  .getOrElse(vals.filter(_ != null).mkString(" [", ", ", "]"))             
             }
           val alias = (if (parent != null) " '" + name + "'" else "")
           Option(tresql).map(t => Option(lookupTresql).map(lt => s"[$lt$t]$alias").getOrElse(t + alias)).orNull
@@ -205,7 +210,7 @@ trait ORT {
               //child records
               val tresql = cols.mkString(s"=${table.name}[${table.key.cols(0)} = ${
                 if (firstPkProp == pk) ":" + firstPkProp else "#" + table.name
-              }]{", ", ", "}") +
+              }${Option(filter).map(f => s" & ($f)").getOrElse("")}]{", ", ", "}") +
                 vals.filter(_ != null).mkString(" [", ", ", "]")
               val alias = if (parent != null) " '" + name + "'" else ""
               if (cols.size > 0)
