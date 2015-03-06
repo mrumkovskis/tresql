@@ -11,17 +11,17 @@ trait ORT {
   
   type ObjToMapConverter[T] = (T) => (String, Map[String, _])
   
-  def insert(name: String, obj: Map[String, _])(implicit resources: Resources = Env): Any = {
+  def insert(name: String, obj: Map[String, _], filter: String = null)(implicit resources: Resources = Env): Any = {
     val struct = tresql_structure(obj)
-    val insert = insert_tresql(name, struct, null, resources)
+    val insert = insert_tresql(name, struct, null, filter, resources)
     if(insert == null) error("Cannot insert data. Table not found for object: " + name)
     Env log (s"Structure: $struct")
     Query.build(insert, obj, false)(resources)()
   }
   //TODO update where unique key (not only pk specified)
-  def update(name: String, obj: Map[String, _])(implicit resources: Resources = Env): Any = {
+  def update(name: String, obj: Map[String, _], filter: String = null)(implicit resources: Resources = Env): Any = {
     val struct = tresql_structure(obj)
-    val update = update_tresql(name, struct, null, null, resources)
+    val update = update_tresql(name, struct, null, null, filter, resources)
     if(update == null) error("Cannot update data. Table not found or primary key not found " +
     		"for the object: " + name)
     Env log (s"Structure: $struct")
@@ -34,42 +34,47 @@ trait ORT {
    * Children structure i.e. property set must be identical, since one tresql statement is used
    * for all of the children
    */
-  def save(name: String, obj: Map[String, _])(implicit resources: Resources = Env): Any = {
+  def save(name: String, obj: Map[String, _], filter: String = null)(implicit resources: Resources = Env): Any = {
     val (save, saveable) = save_tresql(name, obj, resources)
     Env log saveable.toString
     Query.build(save, saveable, false)(resources)()
   }
-  def delete(name: String, id: Any)(implicit resources: Resources = Env): Any = {
-    val delete = "-" + resources.tableName(name) + "[?]"
+  def delete(name: String, id: Any, filter: String = null)(implicit resources: Resources = Env): Any = {
+    val delete = "-" + resources.tableName(name) + s"[?${Option(filter).map(f => s" & (f)").getOrElse("")}]"
     Query.build(delete, Map("1"->id), false)(resources)()
   }
   
   /** insert methods to multiple tables
    *  Tables must be ordered in parent -> child direction. */
-  def insertMultiple(obj: Map[String, Any], names: String*)(implicit resources: Resources = Env): Any = {
+  def insertMultiple(obj: Map[String, Any], names: String*)(filter: String = null)(
+      implicit resources: Resources = Env): Any = {
     val o = names.tail.foldLeft(obj)((o, n) => o + (n -> obj))
-    insert(names.head, o)
+    insert(names.head, o, filter)
   }
   
   /** update to multiple tables
    *  Tables must be ordered in parent -> child direction. */
-  def updateMultiple(obj: Map[String, Any], names: String*)(implicit resources: Resources = Env): Any = {
+  def updateMultiple(obj: Map[String, Any], names: String*)(filter: String = null)(
+      implicit resources: Resources = Env): Any = {
     val o = names.tail.foldLeft(obj)((o, n) => o + (n -> obj))
-    update(names.head, o)
+    update(names.head, o, filter)
   }
 
   //object methods
-  def insertObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
+  def insertObj[T](obj: T, filter: String = null)(
+      implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
     val v = conv(obj)
-    insert(v._1, v._2) 
+    insert(v._1, v._2, filter) 
   }
-  def updateObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
+  def updateObj[T](obj: T, filter: String = null)(
+      implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
     val v = conv(obj)
-    update(v._1, v._2) 
+    update(v._1, v._2, filter) 
   }
-  def saveObj[T](obj: T)(implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
+  def saveObj[T](obj: T, filter: String = null)(
+      implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
     val v = conv(obj)
-    save(v._1, v._2) 
+    save(v._1, v._2, filter) 
   } 
   
   
@@ -94,7 +99,7 @@ trait ORT {
     }
   }
   
-  def insert_tresql(name: String, obj: Map[String, _], parent: String, resources: Resources): String = {    
+  def insert_tresql(name: String, obj: Map[String, _], parent: String, filter: String, resources: Resources): String = {    
     //insert statement column, value map from obj
     val Array(objName, refPropName) = name.split(":").padTo(2, null)
     resources.metaData.tableOption(resources.tableName(objName)).map(table => {
@@ -116,7 +121,7 @@ trait ORT {
           //children or lookup
           case v: Map[String, _] => lookupObject(cn, table).map(lookupTable =>
             lookup_tresql(n, cn, lookupTable, v, resources)).getOrElse {
-            List(insert_tresql(n, v, objName, resources) -> null)
+            List(insert_tresql(n, v, objName, filter, resources) -> null)
           }
           //fill pk (only if it does not match fk prop to parent, in this case fk prop, see below,
           //takes precedence)
@@ -151,7 +156,7 @@ trait ORT {
     }).orNull
   }
 
-  def update_tresql(name: String, obj: Map[String, _], parent: String, firstPkProp: String,
+  def update_tresql(name: String, obj: Map[String, _], parent: String, firstPkProp: String, filter: String,
       resources: Resources): String = {
     val md = resources.metaData
     md.tableOption(resources.tableName(name)).flatMap(table => {
@@ -169,7 +174,7 @@ trait ORT {
             Option(refPropName).map(resources.colName(childObjName, _)).orElse(
                 importedKeyOption(table.name, childTable)).map {
               "-" + childTable.name + "[" + _ + " = :" + pk + "]" + (if (o == null) "" else ", " +
-                insert_tresql(n, o, name, resources))
+                insert_tresql(n, o, name, filter, resources))
             } orNull
         })).orNull
       }
@@ -184,7 +189,7 @@ trait ORT {
           case v: Map[String, _] => lookupObject(cn, table).map(lookupTable =>
             lookup_tresql(n, cn, lookupTable, v, resources)).getOrElse {
             List((if (isOneToOne(n))
-              update_tresql(n, v, name, if (parent == null) findPkProp.orNull else firstPkProp, resources)
+              update_tresql(n, v, name, if (parent == null) findPkProp.orNull else firstPkProp, filter, resources)
             else childUpdates(n, v)) -> null)
           }
           //do not update pkProp
@@ -217,12 +222,12 @@ trait ORT {
       val pk = table.key.cols.head
       obj.find(t => resources.colName(objName, t._1) == pk).map(_._1).map(pkProp => { //update
         List( /*lookup object update*/
-          s"|_changeEnv('$refPropName', ${update_tresql(objName, obj, null, null, resources)})",
+          s"|_changeEnv('$refPropName', ${update_tresql(objName, obj, null, null, null, resources)})",
           /*reference to lookup object primary key*/
           refColName -> resources.valueExpr(objName, s"$refPropName.$pkProp"))
       }).getOrElse { /*insert*/
         List(/*lookup object insert, set reference property variable to inserted object primary key*/
-            s":$refPropName = |_changeEnv('$refPropName', ${insert_tresql(objName, obj, null, resources)}), :$refPropName = :$refPropName.2",
+            s":$refPropName = |_changeEnv('$refPropName', ${insert_tresql(objName, obj, null, null, resources)}), :$refPropName = :$refPropName.2",
           /*reference column set to reference property variable value*/
           refColName -> resources.valueExpr(objName, refPropName))
       }

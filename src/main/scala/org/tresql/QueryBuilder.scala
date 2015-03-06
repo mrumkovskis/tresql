@@ -520,10 +520,12 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   case class DeleteExpr(table: IdentExpr, alias: String, filter: List[Expr]) extends BaseExpr {
     override def apply() = {
       val r = org.tresql.Query.update(sql, QueryBuilder.this.bindVariables, env)
-      executeChildren match {
+      //execute children only if this expression has affected some rows
+      if (r > 0) executeChildren match {
         case Nil => r
         case x => List(r, x)
       }
+      else r
     }
     protected def _sql = "delete from " + table.sql + (if (alias == null) "" else " " + alias) +
       (if (filter == null || filter.size == 0) "" else " where " + where)
