@@ -152,7 +152,7 @@ trait ORT {
                 //values
                 Option(filter)
                   //filter is not null so values is select statement
-                  .map(f => vals.filter(_ != null).mkString(s" ${table.name} [$f] {", ", ", "}"))
+                  .map(f => vals.filter(_ != null).mkString(s" ${table.name} [$f] {", ", ", "} @(1)"))
                   .getOrElse(vals.filter(_ != null).mkString(" [", ", ", "]"))             
             }
           val alias = (if (parent != null) " '" + name + "'" else "")
