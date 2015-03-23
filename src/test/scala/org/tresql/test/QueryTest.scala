@@ -313,7 +313,7 @@ class QueryTest extends Suite {
     
     println("\n--- INSERT ---\n")
     
-    var obj:Map[String, Any] = Map("deptno" -> null, "dname" -> "LAW", "loc" -> "DALLAS",
+    var obj:Map[String, Any] = Map("deptno" -> null, "dname" -> "LAW2", "loc" -> "DALLAS",
       "calculated_field"->333, "another_calculated_field"->"A",
       "emp" -> scala.Array(Map("empno" -> null, "ename" -> "SMITH", "deptno" -> null,
           "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")),
@@ -328,7 +328,7 @@ class QueryTest extends Suite {
         
     //insert with set parent id and do not insert existing tables with no link to parent
     //(work under dept)
-    obj = Map("deptno" -> 50, "dname" -> "LAW", "loc" -> "FLORIDA",
+    obj = Map("deptno" -> 50, "dname" -> "LAW3", "loc" -> "FLORIDA",
         "emp" -> List(Map("empno" -> null, "ename" -> "BROWN", "deptno" -> null),
           Map("empno" -> null, "ename" -> "CHRIS", "deptno" -> null)),
         "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))

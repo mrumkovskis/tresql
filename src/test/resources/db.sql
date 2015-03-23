@@ -38,6 +38,10 @@ CREATE TABLE ADDRESS
  (NR INTEGER NOT NULL,
   ADDR VARCHAR(50) NOT NULL)
 //
+CREATE TABLE DEPT_EQUIPMENT
+  (DEPT_NAME VARCHAR(14) NOT NULL,
+   EQUIPMENT VARCHAR(50) NOT NULL)
+//
 CREATE TABLE CAR
  (NR VARCHAR(10) NOT NULL,
   NAME VARCHAR(20) NOT NULL,
@@ -74,6 +78,8 @@ CREATE TABLE DUMMY (DUMMY INTEGER)
 //
 alter table dept add primary key (deptno)
 //
+alter table dept add unique (dname)
+//
 alter table emp add primary key (empno)
 //
 alter table emp add foreign key (deptno) references dept(deptno)
@@ -99,6 +105,8 @@ alter table dept_sub_addr add foreign key (deptno) references dept_addr(deptnr)
 alter table address add primary key (nr)
 //
 alter table dept_addr add foreign key (addr_nr) references address(nr)
+//
+alter table dept_equipment add foreign key (dept_name) references dept(dname)
 //
 alter table car_usage add primary key (car_nr, empno)
 //
