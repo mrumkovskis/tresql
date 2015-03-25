@@ -506,7 +506,7 @@ class QueryTest extends Suite {
       tresql"dept[dname = 'SPORTS'] {dname, loc, |dept_addr {addr, zip_code} addr}".toListOfMaps
     }
     
-    println("\n-------- Extended cases --------\n")
+    println("\n-------- EXTENDED CASES --------\n")
     
     //insert, update one to one relationship (pk of the extended table is fk for the base table) with children for the extended table
     obj = Map("dname" -> "PANDA BREEDING",
@@ -521,6 +521,7 @@ class QueryTest extends Suite {
           Map("addr" -> "Jinjiang District", "zip_code" -> "CN-1234")))))
     assertResult(List(1, List(List(List(1, List(2, List(1, 1))))))) {ORT.update("dept", obj)}
 
+    println("\n-------- Lookup object editing --------\n")
     //edit lookup object
     obj = Map("brand" -> "DUNLOP", "season" -> "W", "carnr" -> Map("name" -> "VW"))
     assertResult(List((1,10028), 10028, (1,10029))) { ORT.insert("tyres", obj) }
@@ -539,8 +540,12 @@ class QueryTest extends Suite {
     assertResult(List(1, List(List(1, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
     obj = Map("deptno" -> 10032, "dname" -> "MARKETING", "addr" -> "Liela str.",
       "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Saldus"))
-    assertResult(List(1, List(List((1,10034), 10034, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }    
+    assertResult(List(1, List(List((1,10034), 10034, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
+    //insert of lookup object where it's pk is present but null
+    obj = Map("nr" -> 10029, "brand" -> "DUNLOP", "carnr" -> Map("nr" -> null, "name" -> "AUDI"))
+    assertResult(List((1,10035), 10035, 1)) { ORT.update("tyres", obj) }
     
+    println("\n-------- insert, update with additional filter --------\n")
     //insert, update with additional filter
     assertResult(0){ORT.insert("dummy", Map("dummy" -> 2), "dummy = -1")}
     assertResult(0){ORT.update("address", Map("nr" -> 10033, "addr" -> "gugu"), "addr ~ 'Ri'")}

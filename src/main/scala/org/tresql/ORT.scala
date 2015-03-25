@@ -225,7 +225,9 @@ trait ORT {
   def lookup_tresql(refPropName: String, refColName: String, objName: String, obj: Map[String, _], resources: Resources) =
     resources.metaData.tableOption(resources.tableName(objName)).filter(_.key.cols.size == 1).map(table => {
       val pk = table.key.cols.head
-      obj.find(t => resources.colName(objName, t._1) == pk).map(_._1).map(pkProp => { //update
+      obj.find(t => resources.colName(objName, t._1) == pk).map(_._1)
+         .filter(obj(_) != null)
+         .map(pkProp => { //update
         List( /*lookup object update*/
           s"|_changeEnv('$refPropName', ${update_tresql(objName, obj, null, null, null, resources)})",
           /*reference to lookup object primary key*/

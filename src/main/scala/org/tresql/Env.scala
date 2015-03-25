@@ -29,11 +29,12 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   private var _result: Result = null
   private var _statement: java.sql.PreparedStatement = null
 
-  def apply(name: String): Any = vars.flatMap(_.get(name)) orElse provider.map(
-      _.env(name)).map {
+  def apply(name: String): Any = get(name).map {
     case e: Expr => e()
     case x => x    
   } getOrElse (error(s"Missing bind variable: $name"))
+  
+  def get(name: String) = vars.flatMap(_.get(name)) orElse provider.map(_.env(name))
 
   /* if not found into this variable map look into provider's if such exists */
   def contains(name: String): Boolean =
