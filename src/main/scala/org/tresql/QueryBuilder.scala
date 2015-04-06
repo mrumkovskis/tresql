@@ -440,7 +440,8 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
       case IdentExpr(n) => n(n.length - 1)
       case _ => null
     }
-    override def toString = col.toString + (if (alias != null) " " + alias else "") + ", hidden = " + hidden
+    override def toString =
+      s"""${col.toString}${if (alias != null) " " + alias else ""}, hidden = $hidden, separateQuery = $separateQuery, type = $typ"""
   }
   case class HiddenColRefExpr(expr: Expr, resType: Class[_]) extends PrimitiveExpr {
     override def apply() = {
@@ -999,7 +1000,9 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
         case Res(r, c) => ResExpr(r, c)
         case Col(c, a, t) => 
           separateQueryFlag = false
-          ColExpr(buildInternal(c, parseCtx), a, t)
+          val ce = ColExpr(buildInternal(c, parseCtx), a, t)
+          separateQueryFlag = false
+          ce
         case Grp(cols, having) => Group(cols map { buildInternal(_, GROUP_CTX) },
           buildInternal(having, HAVING_CTX))
         case Ord(cols) => Order(cols map (c=> (buildInternal(c._1, parseCtx),
