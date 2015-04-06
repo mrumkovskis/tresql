@@ -69,6 +69,9 @@ package metadata {
     def col(name: String) = colMap(name)
     def colOption(name: String) = colMap.get(name)
     def refs(table: String) = rfs.get(table).getOrElse(Nil)
+    def ref(table: String, ref: List[String]) = rfs(table)
+    .find(_.cols == ref)
+    .getOrElse(error(s"""Column(s) "$ref" is not reference from table "$name" to table "$table" """))
   }
   object Table {
     def apply(t: Map[String, Any]): Table = {

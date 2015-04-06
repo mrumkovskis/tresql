@@ -103,6 +103,7 @@ work w[w.empno e, w.empno_mgr m]emp[m.ename != null] {e.ename, m.ename, hours} #
 work w[w.empno e, w.empno_mgr m?]emp {e.ename, m.ename, hours} #(1,2,3) --> [["KING", null, 3], ["KING", null, 4], ["SCOTT", "CLARK", 8], ["SCOTT", "JONES", 5]]
 work w[empno]emp{ename, hours} #(1,2) --> [["KING", 3], ["KING", 4], ["SCOTT", 5], ["SCOTT", 8]]
 work w[empno e, empno_mgr m?]emp {e.ename, m.ename, hours} #(1,2,3) --> [["KING", null, 3], ["KING", null, 4], ["SCOTT", "CLARK", 8], ["SCOTT", "JONES", 5]]
+dept_equipment eq[eq.dept_name]dept{deptno, dname, equipment}#(1) --> [[10, "ACCOUNTING", "TABLE"], [20, "RESEARCH", "PRINTER"], [20, "RESEARCH", "FAX"]]
 
 //alias join shortcut syntax
 emp e[e.empno = w.empno]work w;e/dept [ename = 'SCOTT']{hours, ename, dname} #(hours) --> [[5, "SCOTT", "RESEARCH"], [8, "SCOTT", "RESEARCH"]]
