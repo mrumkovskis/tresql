@@ -446,10 +446,6 @@ class QueryTest extends Suite {
     assertResult(List(2, List((List(1, List(List())), 10021), (List(1, List(List())), 10022))))(
       ORT.update("dept", obj))
       
-    //empty column list
-    assert(intercept[RuntimeException](
-        ORT.update("dept", Map("deptno" -> 10013, "bla" -> 1, "bla1" -> "x")))
-        .getMessage.substring(0, 20) === "Column clause empty:")
     
     println("\n--- DELETE ---\n")
     
@@ -505,6 +501,10 @@ class QueryTest extends Suite {
         "addr" -> List(Map("addr" -> "Roma st. 150", "zip_code" -> "4000"))))) {
       tresql"dept[dname = 'SPORTS'] {dname, loc, |dept_addr {addr, zip_code} addr}".toListOfMaps
     }
+    
+    //update only first table in one to one relationship
+    obj = Map("deptno" -> 60, "dname" -> "POLAR BEAR", "loc" -> "ALASKA")
+    assertResult(1)(ORT.updateMultiple(obj, "dept", "dept_addr")())
     
     println("\n-------- EXTENDED CASES --------\n")
     

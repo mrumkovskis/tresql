@@ -22,8 +22,7 @@ trait ORT {
   def update(name: String, obj: Map[String, _], filter: String = null)(implicit resources: Resources = Env): Any = {
     val struct = tresql_structure(obj)
     val update = update_tresql(name, struct, null, null, filter, resources)
-    if(update == null) error("Cannot update data. Table not found or primary key not found " +
-    		"for the object: " + name)
+    if(update == null) error(s"Cannot update data. Table not found or no primary key or no updateable columns found for the object: $name")
     Env log (s"Structure: $struct")
     Query.build(update, obj, false)(resources)()    
   }
@@ -215,7 +214,7 @@ trait ORT {
               val alias = if (parent != null) " '" + name + "'" else ""
               if (cols.size > 0)
                 Option(lookupTresql).map(lt => s"[$lt$tresql]$alias").getOrElse(tresql + alias)
-              else error(s"Column clause empty: $tresql")
+              else null
             })
           })
       }
