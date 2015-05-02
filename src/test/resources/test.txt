@@ -318,6 +318,8 @@ dept[10 & dname ~upper(lower(:n?))] {dname} --> [["ACCOUNTING"]]
 dept{deptno}#(deptno)@(:o? :l?) --> [[10], [20], [30], [40]]
 dept{deptno}#(deptno)@(:o? :l?) --> o=3 --> [[40]]
 dept{deptno}#(deptno)@(:o? :l?) --> l=1 --> [[10]]
+dummy[dummy in (dummy[dummy = :dummy?]{dummy} ++ dummy[dummy = 1]{dummy})] --> []
+
 
 //distinct
 (dept{deptno} ++ dept{deptno})#{deptno}#(1) --> [[10], [20], [30], [40]]

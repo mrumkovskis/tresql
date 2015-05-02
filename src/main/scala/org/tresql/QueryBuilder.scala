@@ -24,6 +24,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     
   val STANDART_BIN_OPS = Set("<=", ">=", "<", ">", "!=", "=", "~", "!~", "in", "!in",
       "++", "+",  "-", "&&", "||", "*", "/", "&", "|")
+  val OPTIONAL_OPERAND_BIN_OPS = Set("++", "+",  "-", "&&", "||", "*", "/", "&", "|")
 
   private def this(env: Env) = this(env, 0, 0)
 
@@ -972,7 +973,8 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
           case ctx =>
             val l = buildInternal(lop, ctx)
             val r = buildInternal(rop, ctx)
-            if (l != null && r != null) maybeCallMacro(BinExpr(op, l, r)) else if (op == "&" || op == "|")
+            if (l != null && r != null) maybeCallMacro(BinExpr(op, l, r))
+            else if (OPTIONAL_OPERAND_BIN_OPS contains op) 
               if (l != null) l else if (r != null) r else null
             else null
         }
