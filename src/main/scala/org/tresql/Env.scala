@@ -98,6 +98,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   override def metaData = provider.map(_.env.metaData).getOrElse(resources.metaData)
   override def dialect: PartialFunction[Expr, String] = provider.map(_.env.dialect).getOrElse(resources.dialect)
   override def idExpr = provider.map(_.env.idExpr).getOrElse(resources.idExpr)
+  override def queryTimeout = provider.map(_.env.queryTimeout).getOrElse(resources.queryTimeout)
   
   //meta data methods
   def table(name: String) = metaData.table(name)
@@ -126,8 +127,10 @@ object Env extends Resources {
   private var _macrosMethods: Option[Map[String, java.lang.reflect.Method]] = None
   //cache
   private var _cache: Option[Cache] = None
+  //logger
   private var logger: (=> String, Int) => Unit = null
-  
+  //query timeout
+  private var query_timeout = 0
   //recursive execution depth
   private var _recursive_stack_depth = 50
   
@@ -143,6 +146,7 @@ object Env extends Resources {
   def isMacroDefined(macroName: String) = _macrosMethods.map(_.contains(macroName)).getOrElse(false)
   def macroMethod(name: String) = _macrosMethods.map(_(name)).get
   def cache = _cache
+  override def queryTimeout = query_timeout
   
   def conn_=(conn: java.sql.Connection) = this.threadConn set conn
   def metaData_=(metaData: MetaData) = this._metaData = Option(metaData)
@@ -162,6 +166,7 @@ object Env extends Resources {
   def recursive_stack_dept_=(depth: Int) = _recursive_stack_depth = depth
   
   def cache_=(cache: Cache) = this._cache = Option(cache)
+  def queryTimeout_=(timeout: Int) = this.query_timeout = timeout
   
   def logLevel = threadLogLevel.get
   def logLevel_=(level: Any) = level match {
@@ -183,6 +188,7 @@ trait Resources extends NameMap {
   def metaData: MetaData
   def dialect: PartialFunction[Expr, String] = null
   def idExpr: String => String = s => "nextval('" + s + "')"
+  def queryTimeout = 0
   //name map methods
   override def tableName(objectName: String): String = _delegateNameMap.map(_.tableName(
       objectName)).getOrElse(_nameMap.flatMap(_._1.get(objectName)).getOrElse(objectName))

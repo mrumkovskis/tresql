@@ -138,7 +138,7 @@ trait Query extends TypedQuery {
     val conn = env.conn
     if (conn == null) throw new NullPointerException(
       """Connection not found in environment. Check if "Env.conn = conn" (in this case statement execution must be done in the same thread) or "Env.sharedConn = conn" is called.""")
-    if (env.reusableExpr)
+    val st = if (env.reusableExpr)
       if (env.statement == null) {
         val s = if (call) conn.prepareCall(sql) else {
           conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)
@@ -148,6 +148,10 @@ trait Query extends TypedQuery {
       } else env.statement
     else if (call) conn.prepareCall(sql)
     else conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)
+    if (env.queryTimeout == 0) st else {
+      st.setQueryTimeout(env.queryTimeout)
+      st
+    }
   }
 
   private def bindVars(st: PreparedStatement, bindVariables: List[Expr]) {
