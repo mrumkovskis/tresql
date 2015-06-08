@@ -3,6 +3,7 @@ package org.tresql
 import sys._
 import scala.util.Try
 import QueryParser._
+import metadata.key_
 
 class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: Int)
   extends EnvProvider with Transformer with Typer {
@@ -390,10 +391,10 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
       def fkAliasJoin(i: IdentExpr) = sqlName + " on " + (if (i.name.size < 2 && joinTable.alias != null)
         i.copy(name = joinTable.alias :: i.name) else i).sql +
         " = " + aliasOrName + "." + env.table(joinTable.name).ref(name, List(i.name.last)).refCols.mkString
-      def defaultJoin(jcols: (List[String], List[String])) = {
+      def defaultJoin(jcols: (key_, key_)) = {
         //may be default join columns had been calculated during table build implicit left outer join calculation 
         val j = if (jcols != null) jcols else env.join(joinTable.name, name)
-        (j._1 zip j._2 map { t =>
+        (j._1.cols zip j._2.cols map { t =>
           joinTable.aliasOrName + "." + t._1 + " = " + aliasOrName + "." + t._2
         }) mkString " and "
       }
@@ -426,7 +427,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     override def defaultSQL = table.sql + Option(alias).map(" " + _).mkString
   }
   case class TableJoin(default: Boolean, expr: Expr, noJoin: Boolean,
-    defaultJoinCols: (List[String], List[String])) extends PrimitiveExpr {
+    defaultJoinCols: (key_, key_)) extends PrimitiveExpr {
     def defaultSQL = error("Not implemented")
     override def toString = "TableJoin(\ndefault: " + default + "\nexpr: " + expr +
       "\nno join flag: " + noJoin + ")\n"
@@ -626,11 +627,11 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
       List(ref) -> env.table(refTable).key.cols -> findAliasByName(refTable)
         .getOrElse(error("Unable to find relationship between table " + childTable +
           ", reference column: " + ref + " and tables: " + this.tableDefs))
-    } orElse this.findJoin(childTable)) match {
+    } orElse (this.findJoin(childTable)).map(t=> ((t._1._1.cols, t._1._2.cols) -> t._2))) match {
       case None => None
-      case o @ Some(x) =>
-        this.joinsWithChildren += (x._2 -> x._1._2)
-        o.map(j => j._1._1 -> j._1._2.map(j._2 + "_" + _ + "_"))
+      case Some(((k1: List[String], k2: List[String]), t)) =>
+        this.joinsWithChildren += (t -> k2)
+        Some(k1 -> k2.map(t + "_" + _ + "_"))
     }
   //default or fk shortcut join with parent
   private def joinWithParent(childTable: String, refCol: Option[String] = None) = env.provider.flatMap {
@@ -789,7 +790,9 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
               //default join
               case TableJoin(true, _, _, _) =>
                 val dj = env.join(prevTable.name, t.name)
-                if (prevTable.nullable || dj._1.exists(env.col(prevTable.name, _).nullable))
+                if (prevTable.nullable
+                    || dj._2.isInstanceOf[metadata.fk] // (uk, fk) or (fk, fk) then nullable
+                    || dj._1.cols.exists(env.col(prevTable.name, _).nullable))
                   t.copy(join = t.join.copy(defaultJoinCols = dj), nullable = true)
                 else t.copy(join = t.join.copy(defaultJoinCols = dj))
               case _ => t

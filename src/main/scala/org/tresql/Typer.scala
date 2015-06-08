@@ -2,6 +2,7 @@ package org.tresql
 
 //import scala.util.Try
 import sys._
+import metadata.key_
 
 trait Typer { this: QueryBuilder =>
 
@@ -19,7 +20,7 @@ trait Typer { this: QueryBuilder =>
   }
 
   def findJoin(table: String) = {
-    def findNested(nestedDefs: List[Def]): Option[(List[String], List[String])] = nestedDefs match {
+    def findNested(nestedDefs: List[Def]): Option[(key_, key_)] = nestedDefs match {
       case Nil => None
       case d :: l => findDef(d) orElse findNested(l)
     }
@@ -27,7 +28,7 @@ trait Typer { this: QueryBuilder =>
       case TableDef(t, _) => try Some(env.join(table, t)) catch { case _: Exception => None }//Try(env.join(table, t)).toOption
       case SelectDef(ts, _) => findNested(ts)
     }
-    def find(defs: List[Def]): Option[((List[String], List[String]), String)] = defs match {
+    def find(defs: List[Def]): Option[((key_, key_), String)] = defs match {
       case Nil => error("Unable to find relationship between table " + table +
         " and parent query (tables, aliases) - " + tableDefs)
       case d :: l => findDef(d).map(_ -> d.alias).orElse(find(l))

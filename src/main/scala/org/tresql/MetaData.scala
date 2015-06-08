@@ -6,15 +6,15 @@ import sys._
 /** Implementation of meta data must be thread safe */
 trait MetaData {
   import metadata._
-  def join(table1: String, table2: String) = {
+  def join(table1: String, table2: String): (key_, key_) = {
     val t1 = table(table1); val t2 = table(table2)
     (t1.refs(t2.name), t2.refs(t1.name)) match {
       case (k1, k2) if (k1.length + k2.length > 1) =>
         val r1 = reduceRefs(k1, t2.key)
         val r2 = reduceRefs(k2, t1.key)
         if (r1.length + r2.length == 1)
-          if (r1.length == 1) (r1.head.cols, r1.head.refCols) else (r2.head.refCols, r2.head.cols)
-        else if (r1.length == 1) (r1.head.cols, r1.head.refCols)
+          if (r1.length == 1) (fk(r1.head.cols), uk(r1.head.refCols)) else (uk(r2.head.refCols), fk(r2.head.cols))
+        else if (r1.length == 1) (fk(r1.head.cols), uk(r1.head.refCols))
         else error("Ambiguous relation. Too many found between tables " + table1 + ", " + table2)
       case (k1, k2) if (k1.length + k2.length == 0) => { //try to find two imported keys of the same primary key
         t1.rfs.filter(_._2.size == 1).foldLeft(List[(List[String], List[String])]()) {
@@ -23,12 +23,13 @@ trait MetaData {
                 (t1refs._2.head.cols -> t2refs._2.head.cols) :: r else r)
         } match {
           case Nil => error("Relation not found between tables " + table1 + ", " + table2)
-          case List(r) => r
+          case List((a, b)) => (fk(a), fk(b))
           case b => error("Ambiguous relation. Too many found between tables " + table1 + ", " +
             table2 + ". Relation columns: " + b)
         }
       }
-      case (k1, k2) => if (k1.length == 1) (k1.head.cols, k1.head.refCols) else (k2.head.refCols, k2.head.cols)
+      case (k1, k2) =>
+        if (k1.length == 1) (fk(k1.head.cols), uk(k1.head.refCols)) else (uk(k2.head.refCols), fk(k2.head.cols))
     }
   }
 
@@ -99,4 +100,7 @@ package metadata {
   case class Procedure(name: String, comments: String, procType: Int,
     pars: List[Par], returnSqlType: Int, returnTypeName: String)
   case class Par(name: String, comments: String, parType: Int, sqlType: Int, typeName: String)
+  trait key_ { def cols: List[String] }
+  case class uk(cols: List[String]) extends key_
+  case class fk(cols: List[String]) extends key_
 }
