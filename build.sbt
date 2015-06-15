@@ -6,10 +6,7 @@ scalaVersion := "2.11.6"
 
 crossScalaVersions := Seq("2.10.4", "2.11.6")
 
-scalacOptions ++= Seq("-deprecation", "-Xexperimental")
-
-scalacOptions <<= (scalaVersion, scalacOptions) map 
-  {(v, o)=> if(!v.startsWith("2.9")) o ++ Seq("-language:dynamics") else o}
+scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics")
 
 libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "2.1.5" % "test", 
                             "org.hsqldb" % "hsqldb" % "2.2.8" % "test")
