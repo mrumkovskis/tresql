@@ -98,7 +98,12 @@ trait ORT {
     }
   }
   
-  def insert_tresql(name: String, obj: Map[String, _], parent: String, filter: String, resources: Resources): String = {    
+  def insert_tresql(
+      name: String,
+      obj: Map[String, _],
+      parent: String,
+      filter: String,
+      resources: Resources): String = {    
     //insert statement column, value map from obj
     val Array(objName, refPropName) = name.split(":").padTo(2, null)
     resources.metaData.tableOption(resources.tableName(objName)).map(table => {
@@ -160,7 +165,12 @@ trait ORT {
     }).orNull
   }
 
-  def update_tresql(name: String, obj: Map[String, _], parent: String, firstPkProp: String, filter: String,
+  def update_tresql(
+      name: String,
+      obj: Map[String, _],
+      parent: String,
+      firstPkProp: String,
+      filter: String,
       resources: Resources): String = {
     val md = resources.metaData
     md.tableOption(resources.tableName(name)).flatMap(table => {
