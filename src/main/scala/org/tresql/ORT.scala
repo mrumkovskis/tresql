@@ -74,9 +74,12 @@ trait ORT {
    * to all of previous names */
   def multipleOneToOneTransformation(obj: Map[String, Any], names: String*)(
     implicit resources: Resources = Env): (Map[String, Any], Map[String, Any]) =
-    names.tail.foldLeft((obj, obj, List(names.head))) { (x, n) =>
+    names.tail.foldLeft((
+        obj,
+        scala.collection.immutable.ListMap(obj.toSeq: _*), //use list map so that names are ordered as specified in parameters
+        List(names.head))) { (x, n) =>
       val name = n.split(":").head
-      (x._1 + (name -> x._1),
+      (x._1 + (name -> obj),
        x._2 + (name -> OneToOneBag(OneToOne(names.head, importedKeys(n, x._3, resources)), obj)),
        name :: x._3)
     } match {
@@ -156,8 +159,8 @@ trait ORT {
           //oneToOne
           case b: OneToOneBag => List(insert_tresql(n, b.obj, objName, b.relations, filter, resources) -> null)
           case _ if oneToOne != null && (table.key.cols == List(cn) || oneToOne.keys.contains(cn)) =>
-            hasPk = table.key.cols == List(cn)
-            List(cn -> ":#" + oneToOne.rootTable)
+            //defer one to one relationship setting
+            List((null, null))
           //fill pk (only if it does not match fk prop to parent, in this case fk prop, see below,
           //takes precedence)
           case _ if table.key.cols == List(cn) && table.key.cols != List(refColName) =>
@@ -176,12 +179,15 @@ trait ORT {
           val lookupTresql = m.get("l").map(_.asInstanceOf[List[String]].map(_ + ", ").mkString).orNull
           //base table tresql
           val tresql =
-            (m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]].filter(_._1 != null /*check if prop->col mapping found*/ &&
-              (parent == null /*first level obj*/ || refColName != null /*child obj (must have reference to parent)*/ )) ++
+            (m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]]
+             .toMap //convert to map so that duplicate columns are eliminated due to one to one relationship setting
+             .filter(_._1 != null /*check if prop->col mapping found*/ &&
+              (parent == null /*first level obj*/ || refColName != null || oneToOne != null /*child obj (must have reference to parent)*/ )) ++
               (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn) /*add fk col to parent*/ )) ++
+              (if (oneToOne != null) oneToOne.keys.map(_ -> s":#${oneToOne.rootTable}").toMap else Map() /* set one to one relationships */) ++
               (if (hasPk || table.key.cols.length != 1 /*multiple col pk not supported*/ ||
                 (parent != null && (refColName == null || table.key.cols == List(refColName) /*fk to parent matches pk*/ ))) Map()
-              else Map(table.key.cols(0) -> (if (oneToOne == null) "#" + table.name else ":#" + oneToOne.rootTable) /*add primary key col*/ )))
+              else Map(table.key.cols.head -> (if (oneToOne == null) "#" + table.name else ":#" + oneToOne.rootTable) /*add primary key col*/ )))
               .unzip match {
                 case (Nil, Nil) => null
                 case (cols: List[String], vals: List[String]) =>
@@ -234,8 +240,8 @@ trait ORT {
         if (table.key == metadata.Key(List(cn))) pkProp = Some(n)
         t._2 match {
           //children
-          case v: Map[String, _] => lookupObject(cn, table).map(lookupTable =>
-            lookup_tresql(n, cn, lookupTable, v, resources)).getOrElse {
+          case v: Map[String, _] => lookupObject(cn, table).map{lookupTable =>
+            lookup_tresql(n, cn, lookupTable, v, resources)}.getOrElse {
             List((if (isOneToOne(n))
               update_tresql(n, v, name, if (parent == null) findPkProp.orNull else
                 firstPkProp, oneToOne, filter, resources)
@@ -244,7 +250,7 @@ trait ORT {
           case b: OneToOneBag =>
             List(update_tresql(n, b.obj, name, b.relations.rootTable /*TODO get rid of firstPkProp*/,
                 b.relations, filter, resources) -> null)
-          case _ if oneToOne != null && oneToOne.keys.contains(cn) => List(cn -> ":#" + oneToOne.rootTable)
+          case _ if oneToOne != null && oneToOne.keys.contains(cn) => List(cn -> s":#${oneToOne.rootTable}")
           //do not update pkProp
           case _ if (Some(n) == pkProp) => List((null, null))
           case _ => List(table.colOption(cn).map(_.name).orNull -> resources.valueExpr(name, n))
@@ -257,7 +263,7 @@ trait ORT {
               val lookupTresql = m.get("l").map(_.asInstanceOf[List[String]].map(_ + ", ").mkString).orNull
               //primary key in update condition is taken from sequence so that currId is updated for
               //child records
-              val tresql = cols.mkString(s"=${table.name}[${table.key.cols(0)} = ${
+              val tresql = cols.mkString(s"=${table.name}[${table.key.cols.head} = ${
                 if (oneToOne != null) ":#" + oneToOne.rootTable
                 else if (firstPkProp == pk) ":" + firstPkProp else "#" + table.name
               }${Option(filter).map(f => s" & ($f)").getOrElse("")}]{", ", ", "}") +

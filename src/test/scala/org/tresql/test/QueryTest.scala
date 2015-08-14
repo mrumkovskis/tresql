@@ -545,6 +545,14 @@ class QueryTest extends Suite {
     obj = Map("nr" -> 10029, "brand" -> "DUNLOP", "carnr" -> Map("nr" -> null, "name" -> "AUDI"))
     assertResult(List((1,10035), 10035, 1)) { ORT.update("tyres", obj) }
     
+    println("\n----------------- Multiple table INSERT UPDATE extended cases ----------------------\n")
+
+    obj = Map("dname" -> "AD", "ename" -> "Lee", "wdate" -> "2000-01-01", "hours" -> 3)
+    assertResult((List(1, List(1, 1)),10036)) { ORT.insertMultiple(obj, "dept", "emp", "work:empno")() }
+
+    obj = Map("deptno" -> 10036, "dname" -> "ADVERTISING", "ename" -> "Andy")
+    assertResult(List(1, List(1))) { ORT.updateMultiple(obj, "dept", "emp")() }
+    
     println("\n-------- insert, update with additional filter --------\n")
     //insert, update with additional filter
     assertResult(0){ORT.insert("dummy", Map("dummy" -> 2), "dummy = -1")}
