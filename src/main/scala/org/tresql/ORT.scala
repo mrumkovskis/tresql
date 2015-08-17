@@ -19,7 +19,7 @@ trait ORT {
       insertInternal(name, obj, tresql_structure(obj), filter)
   private def insertInternal(name: String, obj: Map[String, Any], struct: Map[String, Any], filter: String)
     (implicit resources: Resources = Env): Any = {
-    val insert = insert_tresql(name, struct, null, null, filter, resources)
+    val insert = insert_tresql(name, struct, null, null, null, filter, resources)
     if(insert == null) error("Cannot insert data. Table not found for object: " + name)
     Env log (s"\nStructure: $struct")
     Query.build(insert, obj, false)(resources)()
@@ -73,10 +73,10 @@ trait ORT {
   /* For each name started with second is generated OneToOne object which contains name's references
    * to all of previous names */
   def multipleOneToOneTransformation(obj: Map[String, Any], names: String*)(
-    implicit resources: Resources = Env): (Map[String, Any], scala.collection.immutable.ListMap[String, Any]) =
+    implicit resources: Resources = Env): (Map[String, Any], ListMap[String, Any]) =
     names.tail.foldLeft((
         obj,
-        scala.collection.immutable.ListMap(obj.toSeq: _*), //use list map so that names are ordered as specified in parameters
+        ListMap(obj.toSeq: _*), //use list map so that names are ordered as specified in parameters
         List(names.head))) { (x, n) =>
       val name = n.split(":").head
       (x._1 + (name -> obj),
@@ -132,6 +132,7 @@ trait ORT {
       name: String,
       obj: Map[String, Any],
       parent: String,
+      oneToOneRoot: String,
       oneToOne: OneToOne,
       filter: String,
       resources: Resources): String = {    
@@ -147,8 +148,6 @@ trait ORT {
               s"""Ambiguous references from table '${table.name}' to table '$ptn'.
               Reference must be one and must consist of one column. Found: $x""")
       } else resources.colName(objName, refPropName)
-      var hasRef: Boolean = parent == null
-      var hasPk: Boolean = false
       obj.flatMap((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(objName, n)
@@ -156,23 +155,21 @@ trait ORT {
           //children or lookup
           case v: Map[String, _] => lookupObject(cn, table).map(lookupTable =>
             lookup_tresql(n, cn, lookupTable, v, resources)).getOrElse {
-            List(insert_tresql(n, v, objName, null, filter, resources) -> null)
+            List(insert_tresql(n, v, objName, Option(oneToOne).map(_.rootTable).orNull,
+                null, filter, resources) -> null)
           }
-          //oneToOne
-          case b: OneToOneBag => List(insert_tresql(n, b.obj, objName, b.relations, filter, resources) -> null)
+          //oneToOne child
+          case b: OneToOneBag => List(insert_tresql(n, b.obj, objName, b.relations.rootTable,
+              b.relations, filter, resources) -> null)
+          //pk or fk in the case of one to one relationship
           case _ if oneToOne != null && (table.key.cols == List(cn) || oneToOne.keys.contains(cn)) =>
             //defer one to one relationship setting
-            List((null, null))
-          //fill pk (only if it does not match fk prop to parent, in this case fk prop, see below,
-          //takes precedence)
-          case _ if table.key.cols == List(cn) && table.key.cols != List(refColName) =>
-            hasPk = true
-            List(cn -> ("#" + table.name))
-          //fill fk
-          case _ if ((refPropName != null && refPropName == n) ||
-              (refPropName == null && refColName == cn)) =>
-                hasRef = true
-                List(cn -> (":#" + ptn))
+            Nil
+          //pk or fk
+          case _ if table.key.cols == List(cn) /*pk*/ || refPropName == n || refColName == cn /*fk*/ =>
+            //defer pk and fk to parent setting
+            Nil
+          //ordinary field
           case _ => List(table.colOption(cn).map(_.name).orNull -> resources.valueExpr(objName, n))
         }
       }).groupBy { case _: String => "l" case _ => "b" } match {
@@ -184,9 +181,10 @@ trait ORT {
             (m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]]
              .filter(_._1 != null /*check if prop->col mapping found*/ &&
               (parent == null /*first level obj*/ || refColName != null || oneToOne != null /*child obj (must have reference to parent)*/ )) ++
-              (if (hasRef || refColName == null || oneToOne != null) Map() else Map(refColName -> (":#" + ptn) /*add fk col to parent*/ )) ++
+              (if (refColName == null || oneToOne != null) Map()
+                  else Map(refColName -> (s":#${if (oneToOneRoot != null) oneToOneRoot else ptn}") /*add fk col to parent*/ )) ++
               (if (oneToOne != null) oneToOne.keys.map(_ -> s":#${oneToOne.rootTable}").toMap else Map() /* set one to one relationships */) ++
-              (if (hasPk || table.key.cols.length != 1 /*multiple col pk not supported*/ ||
+              (if (table.key.cols.length != 1 /*multiple col pk not supported*/ ||
                 (parent != null && ((refColName == null && oneToOne == null) /*no relation to parent found*/ ||
                   table.key.cols == List(refColName) /*fk to parent matches pk*/ ) ||
                   (oneToOne != null && oneToOne.keys.contains(table.key.cols.head)/* fk of one to one relations matches pk */))) Map()
@@ -231,7 +229,7 @@ trait ORT {
             Option(refPropName).map(resources.colName(childObjName, _)).orElse(
                 importedKeyOption(table.name, childTable)).map {
               "-" + childTable.name + "[" + _ + " = :" + pk + "]" + (if (o == null) "" else ", " +
-                insert_tresql(n, o, name, null, filter, resources))
+                insert_tresql(n, o, name, Option(oneToOne).map(_.rootTable).orNull, null, filter, resources))
             } orNull
         })).orNull
       }
@@ -251,11 +249,12 @@ trait ORT {
             else childUpdates(n, v)) -> null)
           }
           case b: OneToOneBag =>
-            List(update_tresql(n, b.obj, name, b.relations.rootTable /*TODO get rid of firstPkProp*/,
+            List(update_tresql(n, b.obj, name,
+                md.table(b.relations.rootTable).key.cols.head /*TODO may be get rid of firstPkProp*/,
                 b.relations, filter, resources) -> null)
           case _ if oneToOne != null && oneToOne.keys.contains(cn) => List(cn -> s":#${oneToOne.rootTable}")
           //do not update pkProp
-          case _ if (Some(n) == pkProp) => List((null, null))
+          case _ if (Some(n) == pkProp) => Nil
           case _ => List(table.colOption(cn).map(_.name).orNull -> resources.valueExpr(name, n))
         }
       }).groupBy { case _: String => "l" case _ => "b" } match {
@@ -293,7 +292,7 @@ trait ORT {
           refColName -> resources.valueExpr(objName, s"$refPropName.$pkProp"))
       }).getOrElse { /*insert*/
         List(/*lookup object insert, set reference property variable to inserted object primary key*/
-            s":$refPropName = |_changeEnv('$refPropName', ${insert_tresql(objName, obj, null, null, null, resources)}), :$refPropName = :$refPropName.2",
+            s":$refPropName = |_changeEnv('$refPropName', ${insert_tresql(objName, obj, null, null, null, null, resources)}), :$refPropName = :$refPropName.2",
           /*reference column set to reference property variable value*/
           refColName -> resources.valueExpr(objName, refPropName))
       }
