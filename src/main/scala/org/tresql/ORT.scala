@@ -161,13 +161,10 @@ trait ORT {
           //oneToOne child
           case b: OneToOneBag => List(insert_tresql(n, b.obj, objName, b.relations.rootTable,
               b.relations, filter, resources) -> null)
-          //pk or fk in the case of one to one relationship
-          case _ if oneToOne != null && (table.key.cols == List(cn) || oneToOne.keys.contains(cn)) =>
-            //defer one to one relationship setting
-            Nil
-          //pk or fk
-          case _ if table.key.cols == List(cn) /*pk*/ || refPropName == n || refColName == cn /*fk*/ =>
-            //defer pk and fk to parent setting
+          //pk or fk, one to one relationship
+          case _ if table.key.cols == List(cn) /*pk*/ || refPropName == n || refColName == cn /*fk*/
+            || oneToOne != null && oneToOne.keys.contains(cn) =>
+            //defer one to one relationship setting, pk and fk to parent setting
             Nil
           //ordinary field
           case _ => List(table.colOption(cn).map(_.name).orNull -> resources.valueExpr(objName, n))
@@ -252,9 +249,9 @@ trait ORT {
             List(update_tresql(n, b.obj, name,
                 md.table(b.relations.rootTable).key.cols.head /*TODO may be get rid of firstPkProp*/,
                 b.relations, filter, resources) -> null)
-          case _ if oneToOne != null && oneToOne.keys.contains(cn) => List(cn -> s":#${oneToOne.rootTable}")
           //do not update pkProp
           case _ if (Some(n) == pkProp) => Nil
+          case _ if oneToOne != null && oneToOne.keys.contains(cn) => List(cn -> s":#${oneToOne.rootTable}")
           case _ => List(table.colOption(cn).map(_.name).orNull -> resources.valueExpr(name, n))
         }
       }).groupBy { case _: String => "l" case _ => "b" } match {
