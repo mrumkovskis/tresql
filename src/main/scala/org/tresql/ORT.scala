@@ -14,10 +14,10 @@ trait ORT {
   
   type ObjToMapConverter[T] = (T) => (String, Map[String, _])
   
-  def insert(name: String, obj: Map[String, _], filter: String = null)
+  def insert(name: String, obj: Map[String, Any], filter: String = null)
     (implicit resources: Resources = Env): Any =
       insertInternal(name, obj, tresql_structure(obj), filter)
-  private def insertInternal(name: String, obj: Map[String, _], struct: Map[String, _], filter: String)
+  private def insertInternal(name: String, obj: Map[String, Any], struct: Map[String, Any], filter: String)
     (implicit resources: Resources = Env): Any = {
     val insert = insert_tresql(name, struct, null, null, filter, resources)
     if(insert == null) error("Cannot insert data. Table not found for object: " + name)
@@ -25,12 +25,12 @@ trait ORT {
     Query.build(insert, obj, false)(resources)()
   }
   
-  def update(name: String, obj: Map[String, _], filter: String = null)
+  def update(name: String, obj: Map[String, Any], filter: String = null)
     (implicit resources: Resources = Env): Any = 
     updateInternal(name, obj, tresql_structure(obj), filter)
   
   //TODO update where unique key (not only pk specified)
-  private def updateInternal(name: String, obj: Map[String, _], struct: Map[String, _], filter: String = null)
+  private def updateInternal(name: String, obj: Map[String, Any], struct: Map[String, Any], filter: String = null)
     (implicit resources: Resources = Env): Any = {
     val update = update_tresql(name, struct, null, null, null, filter, resources)
     if(update == null) error(s"Cannot update data. Table not found or no primary key or no updateable columns found for the object: $name")
@@ -59,7 +59,7 @@ trait ORT {
   def insertMultiple(obj: Map[String, Any], names: String*)(filter: String = null)(
       implicit resources: Resources = Env): Any = {
     val (nobj, struct) = multipleOneToOneTransformation(obj, names: _*) 
-    insertInternal(names.head, nobj, struct, filter)
+    insertInternal(names.head, nobj, tresql_structure(struct), filter)
   }
   
   /** update to multiple tables
@@ -67,13 +67,13 @@ trait ORT {
   def updateMultiple(obj: Map[String, Any], names: String*)(filter: String = null)(
       implicit resources: Resources = Env): Any = {
     val (nobj, struct) = multipleOneToOneTransformation(obj, names: _*) 
-    updateInternal(names.head, nobj, struct, filter)
+    updateInternal(names.head, nobj, tresql_structure(struct), filter)
   }
 
   /* For each name started with second is generated OneToOne object which contains name's references
    * to all of previous names */
   def multipleOneToOneTransformation(obj: Map[String, Any], names: String*)(
-    implicit resources: Resources = Env): (Map[String, Any], Map[String, Any]) =
+    implicit resources: Resources = Env): (Map[String, Any], scala.collection.immutable.ListMap[String, Any]) =
     names.tail.foldLeft((
         obj,
         scala.collection.immutable.ListMap(obj.toSeq: _*), //use list map so that names are ordered as specified in parameters
@@ -101,11 +101,13 @@ trait ORT {
       implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
     val v = conv(obj)
     save(v._1, v._2, filter) 
-  } 
-  
-  
-  def tresql_structure(obj: Map[String, _]): Map[String, Any] = {
-    def merge(lm: Seq[Map[String, _]]): Map[String, Any] =
+  }
+
+  def tresql_structure[M <: Map[String, Any]](obj: M)(
+    /* ensure that returned map is of the same type as passed.
+     * For example in the case of ListMap when key ordering is important. */
+    implicit bf: scala.collection.generic.CanBuildFrom[M, (String, Any), M]): M = {
+    def merge(lm: Seq[Map[String, Any]]): Map[String, Any] =
       lm.tail.foldLeft(tresql_structure(lm.head))((l, m) => {
         val x = tresql_structure(m)
         l map (t => (t._1, (t._2, x.getOrElse(t._1, null)))) map {
@@ -116,19 +118,19 @@ trait ORT {
           case (k, (v1, _)) => (k, v1)
         }
       })
-    obj map {
+    obj.map {
       case (k, Seq() | Array()) => (k, Map())
       case (k, l: Seq[Map[String, _]]) => (k, merge(l))
       case (k, l: Array[Map[String, _]]) => (k, merge(l))
-      case (k, m: Map[String, _]) => (k, tresql_structure(m))
+      case (k, m: Map[String, Any]) => (k, tresql_structure(m))
       case (k, b: OneToOneBag) => (k, b.copy(obj = tresql_structure(b.obj)))
       case x => x
-    }
+    }(bf.asInstanceOf[scala.collection.generic.CanBuildFrom[Map[String, Any], (String, Any), M]]) //somehow cast is needed
   }
   
   def insert_tresql(
       name: String,
-      obj: Map[String, _],
+      obj: Map[String, Any],
       parent: String,
       oneToOne: OneToOne,
       filter: String,
@@ -142,8 +144,8 @@ trait ORT {
           case Nil => null
           case List(ref) if ref.cols.length == 1 => ref.cols(0)
           case x => error(
-              "Ambiguous references to table (reference must be one and must consist of one column): "
-              + ptn + ". Refs: " + x)
+              s"""Ambiguous references from table '${table.name}' to table '$ptn'.
+              Reference must be one and must consist of one column. Found: $x""")
       } else resources.colName(objName, refPropName)
       var hasRef: Boolean = parent == null
       var hasPk: Boolean = false
@@ -154,7 +156,7 @@ trait ORT {
           //children or lookup
           case v: Map[String, _] => lookupObject(cn, table).map(lookupTable =>
             lookup_tresql(n, cn, lookupTable, v, resources)).getOrElse {
-            List(insert_tresql(n, v, objName, oneToOne, filter, resources) -> null)
+            List(insert_tresql(n, v, objName, null, filter, resources) -> null)
           }
           //oneToOne
           case b: OneToOneBag => List(insert_tresql(n, b.obj, objName, b.relations, filter, resources) -> null)
@@ -180,13 +182,14 @@ trait ORT {
           //base table tresql
           val tresql =
             (m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]]
-             .toMap //convert to map so that duplicate columns are eliminated due to one to one relationship setting
              .filter(_._1 != null /*check if prop->col mapping found*/ &&
               (parent == null /*first level obj*/ || refColName != null || oneToOne != null /*child obj (must have reference to parent)*/ )) ++
-              (if (hasRef || refColName == null) Map() else Map(refColName -> (":#" + ptn) /*add fk col to parent*/ )) ++
+              (if (hasRef || refColName == null || oneToOne != null) Map() else Map(refColName -> (":#" + ptn) /*add fk col to parent*/ )) ++
               (if (oneToOne != null) oneToOne.keys.map(_ -> s":#${oneToOne.rootTable}").toMap else Map() /* set one to one relationships */) ++
               (if (hasPk || table.key.cols.length != 1 /*multiple col pk not supported*/ ||
-                (parent != null && (refColName == null || table.key.cols == List(refColName) /*fk to parent matches pk*/ ))) Map()
+                (parent != null && ((refColName == null && oneToOne == null) /*no relation to parent found*/ ||
+                  table.key.cols == List(refColName) /*fk to parent matches pk*/ ) ||
+                  (oneToOne != null && oneToOne.keys.contains(table.key.cols.head)/* fk of one to one relations matches pk */))) Map()
               else Map(table.key.cols.head -> (if (oneToOne == null) "#" + table.name else ":#" + oneToOne.rootTable) /*add primary key col*/ )))
               .unzip match {
                 case (Nil, Nil) => null
@@ -206,7 +209,7 @@ trait ORT {
 
   def update_tresql(
       name: String,
-      obj: Map[String, _],
+      obj: Map[String, Any],
       parent: String,
       firstPkProp: String,
       oneToOne: OneToOne,
@@ -244,7 +247,7 @@ trait ORT {
             lookup_tresql(n, cn, lookupTable, v, resources)}.getOrElse {
             List((if (isOneToOne(n))
               update_tresql(n, v, name, if (parent == null) findPkProp.orNull else
-                firstPkProp, oneToOne, filter, resources)
+                firstPkProp, null, filter, resources)
             else childUpdates(n, v)) -> null)
           }
           case b: OneToOneBag =>
