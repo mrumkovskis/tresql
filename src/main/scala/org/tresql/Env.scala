@@ -32,7 +32,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   def apply(name: String): Any = get(name).map {
     case e: Expr => e()
     case x => x    
-  } getOrElse (error(s"Missing bind variable: $name"))
+  } getOrElse (throw new MissingBindVariableException(name))
   
   def get(name: String) = vars.flatMap(_.get(name)) orElse provider.map(_.env(name))
 
@@ -220,3 +220,6 @@ trait NameMap {
 trait EnvProvider {
   def env: Env
 }
+
+class MissingBindVariableException(val name: String)
+  extends RuntimeException(s"Missing bind variable: $name")

@@ -147,8 +147,8 @@ class QueryTest extends Suite {
       ex().asInstanceOf[Result].toList
     }
     //bind variables absence error message
-    assert(intercept[RuntimeException](Query("emp[?]")).getMessage() === "Missing bind variable: 1")
-    assert(intercept[RuntimeException](Query("emp[:nr]")).getMessage() === "Missing bind variable: nr")
+    assert(intercept[MissingBindVariableException](Query("emp[?]")).name === "1")
+    assert(intercept[MissingBindVariableException](Query("emp[:nr]")).name === "nr")
     
     var op = OutPar()
     assertResult(List(Vector(List(10, "x"))))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x")
