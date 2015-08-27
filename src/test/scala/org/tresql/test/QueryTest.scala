@@ -48,7 +48,7 @@ class QueryTest extends Suite {
   }  
   Env.functions = new TestFunctions
   Env.macros = Macros
-  Env.cache = new SimpleCache
+  Env.cache = new SimpleCache(-1)
   Env update ((msg, level) => println (msg))
   Env update ( /*object to table name map*/ Map(
     "emp_dept_view" -> "emp"),
