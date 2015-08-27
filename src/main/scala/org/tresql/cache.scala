@@ -17,9 +17,9 @@ class SimpleCache(maxSize: Int) extends Cache {
 
   def get(tresql: String) = Option(cache.get(tresql))
   def put(tresql: String, expr: Any) = {
-    if (maxSize != -1 && cache.size > maxSize) {
+    if (maxSize != -1 && cache.size >= maxSize) {
       cache.clear
-      println(s"[WARN] Tresql cache size cleared, exceeded $maxSize")
+      println(s"[WARN] Tresql cache cleared, size exceeded $maxSize")
     }
     cache.putIfAbsent(tresql, expr)
   }
