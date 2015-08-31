@@ -289,7 +289,7 @@ trait ORT {
           refColName -> resources.valueExpr(objName, s"$refPropName.$pkProp"))
       }).getOrElse { /*insert*/
         List(/*lookup object insert, set reference property variable to inserted object primary key*/
-            s":$refPropName = |_changeEnv('$refPropName', ${insert_tresql(objName, obj, null, null, null, null, resources)}), :$refPropName = :$refPropName.2",
+            s":$refPropName = |_lookupInsert('$refPropName', ${insert_tresql(objName, obj, null, null, null, null, resources)})",
           /*reference column set to reference property variable value*/
           refColName -> resources.valueExpr(objName, refPropName))
       }

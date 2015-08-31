@@ -11,5 +11,7 @@ class Macros {
     
   def _changeEnv(b: QueryBuilder, key: QueryBuilder#ConstExpr, expr: Expr) = 
     b.ChangeEnvExpr(String valueOf key.value, expr)
- 
+
+  def _lookupInsert(b: QueryBuilder, key: QueryBuilder#ConstExpr, expr: Expr) =
+    b.LookupInsertExpr(String valueOf key.value, expr)
 }

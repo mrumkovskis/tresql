@@ -29,7 +29,7 @@ public class TresqlJavaApiTest implements Runnable {
             }
         });
         Env.getCache();
-        Env.setCache(new SimpleCache());
+        Env.setCache(new SimpleCache(-1));
         Connection c = Env.getConnection();
         Env.setConnection(c);
         Env.getDialect();

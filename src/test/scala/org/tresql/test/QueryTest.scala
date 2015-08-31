@@ -49,7 +49,7 @@ class QueryTest extends Suite {
   Env.functions = new TestFunctions
   Env.macros = Macros
   Env.cache = new SimpleCache(-1)
-  Env update ((msg, level) => println (msg))
+  Env.logger = ((msg, level) => println (msg))
   Env update ( /*object to table name map*/ Map(
     "emp_dept_view" -> "emp"),
     /*property to column name map*/
@@ -524,26 +524,26 @@ class QueryTest extends Suite {
     println("\n-------- Lookup object editing --------\n")
     //edit lookup object
     obj = Map("brand" -> "DUNLOP", "season" -> "W", "carnr" -> Map("name" -> "VW"))
-    assertResult(List((1,10028), 10028, (1,10029))) { ORT.insert("tyres", obj) }
+    assertResult(List(10028, (1,10029))) { ORT.insert("tyres", obj) }
     obj = Map("brand" -> "CONTINENTAL", "season" -> "W", "carnr" -> Map("nr" -> "UUU", "name" -> "VW"))
     assertResult(List(1, (1,10030))) { ORT.insert("tyres", obj) }
     obj = Map("nr" -> 10029, "season" -> "S", "carnr" -> Map("name" -> "SKODA"))
-    assertResult(List((1,10031), 10031, 1)) { ORT.update("tyres", obj) }
+    assertResult(List(10031, 1)) { ORT.update("tyres", obj) }
     obj = Map("nr" -> 10029, "brand" -> "DUNLOP", "carnr" -> Map("nr" -> "UUU", "name" -> "VOLKSWAGEN"))
     assertResult(List(1, 1)) { ORT.update("tyres", obj) }
     //one to one relationship with lookup for extended table
     obj = Map("dname" -> "MARKETING", "addr" -> "Valkas str. 1",
         "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Riga"))
-    assertResult((List(1, List(List((1, 10033), 10033, 1))), 10032)) { ORT.insertMultiple(obj, "dept", "dept_addr")() }
+    assertResult((List(1, List(List(10033, 1))),10032)) { ORT.insertMultiple(obj, "dept", "dept_addr")() }
     obj = Map("deptno" -> 10032, "dname" -> "MARKET", "addr" -> "Valkas str. 1a",
       "zip_code" -> "LV-1010", "addr_nr" -> Map("nr" -> 10033, "addr" -> "Riga, LV"))
     assertResult(List(1, List(List(1, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
     obj = Map("deptno" -> 10032, "dname" -> "MARKETING", "addr" -> "Liela str.",
       "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Saldus"))
-    assertResult(List(1, List(List((1,10034), 10034, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
+    assertResult(List(1, List(List(10034, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
     //insert of lookup object where it's pk is present but null
     obj = Map("nr" -> 10029, "brand" -> "DUNLOP", "carnr" -> Map("nr" -> null, "name" -> "AUDI"))
-    assertResult(List((1,10035), 10035, 1)) { ORT.update("tyres", obj) }
+    assertResult(List(10035, 1)) { ORT.update("tyres", obj) }
     
     println("\n----------------- Multiple table INSERT UPDATE extended cases ----------------------\n")
 
@@ -572,6 +572,15 @@ class QueryTest extends Suite {
         "tyres" -> List(Map("brand" -> "NOKIAN", "season" -> "S")))
     assertResult((List(1, List(List(1, List(List((1,10042)))))),10041)) { ORT.insertMultiple (obj, "dept", "car")() }
     
+    println("\n-------- Lookup extended cases - chaining --------\n")
+
+    obj = Map("brand" -> "Nokian", "season" -> "W", "carnr" ->
+      Map("name" -> "Mercedes", "deptnr" -> Map("dname" -> "Logistics")))
+    assertResult(List(10044, (1,10045))) { ORT.insert("tyres", obj) }
+
+    obj = Map("nr" -> 10045, "brand" -> "Nokian", "season" -> "S", "carnr" ->
+      Map("nr" -> 10044, "name" -> "Mercedes Benz", "deptnr" -> Map("deptno" -> 10043, "dname" -> "Logistics dept")))
+    assertResult(List(List(1, 1), 1)) { ORT.update("tyres", obj) }
     
     println("\n-------- insert, update with additional filter --------\n")
     //insert, update with additional filter
