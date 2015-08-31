@@ -41,9 +41,9 @@ object Env {
   //var sharedConn: Connection 
   //def tableName(objectName: String): String 
   def setLogger(logger: Logger) {
-    env.update((msg, level) => logger.log(new LogMessage {
+    env.logger = (msg, level) => logger.log(new LogMessage {
       override def get = msg
-    }, level))
+    }, level)
   }
   //def update(map: (Map[String, String], Map[String, Map[String, (String, String)]])): Unit
   //def valueExpr(objectName: String, propertyName: String): String

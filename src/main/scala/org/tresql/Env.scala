@@ -128,7 +128,7 @@ object Env extends Resources {
   //cache
   private var _cache: Option[Cache] = None
   //logger
-  private var logger: (=> String, Int) => Unit = null
+  private var _logger: (=> String, Int) => Unit = null
   //query timeout
   private var query_timeout = 0
   //recursive execution depth
@@ -175,9 +175,10 @@ object Env extends Resources {
     case l: Option[Int] => threadLogLevel.set(l)
   }
   
-  def log(msg: => String, level: Int = 0): Unit = if (logger != null) logger(msg,
+  def log(msg: => String, level: Int = 0): Unit = if (_logger != null) _logger(msg,
       level + logLevel.getOrElse(0))
-  def update(logger: (=> String, Int) => Unit) = this.logger = logger
+  def logger = _logger
+  def logger_=(logger: (=> String, Int) => Unit) = this._logger = logger
 }
 
 trait Resources extends NameMap {
