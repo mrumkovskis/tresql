@@ -584,6 +584,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   case class ChangeEnvExpr(key: String, expr: Expr) extends BaseExpr {
     override def apply() = env(key) match {
       case m: Map[String, Any] => expr(m)
+      case null => null
       case x => error(s"Cannot set environment variables for the expression. $x is not a map.")
     }
     def defaultSQL = s"ChangeEnvExpr($key, $expr)"
@@ -594,6 +595,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     override def apply() = cee() match {
       case (_, id) => id //insert expression
       case s: Seq[_] => s.last match { case (_, id) => id } //array expression (chained lookup perhaps)
+      case null => null
     }
     def defaultSQL = s"LookupInsertExpr($key, $expr)"
   }

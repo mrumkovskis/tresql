@@ -572,7 +572,7 @@ class QueryTest extends Suite {
         "tyres" -> List(Map("brand" -> "NOKIAN", "season" -> "S")))
     assertResult((List(1, List(List(1, List(List((1,10042)))))),10041)) { ORT.insertMultiple (obj, "dept", "car")() }
     
-    println("\n-------- Lookup extended cases - chaining --------\n")
+    println("\n-------- Lookup extended cases - chaining, children --------\n")
 
     obj = Map("brand" -> "Nokian", "season" -> "W", "carnr" ->
       Map("name" -> "Mercedes", "deptnr" -> Map("dname" -> "Logistics")))
@@ -581,6 +581,18 @@ class QueryTest extends Suite {
     obj = Map("nr" -> 10045, "brand" -> "Nokian", "season" -> "S", "carnr" ->
       Map("nr" -> 10044, "name" -> "Mercedes Benz", "deptnr" -> Map("deptno" -> 10043, "dname" -> "Logistics dept")))
     assertResult(List(List(1, 1), 1)) { ORT.update("tyres", obj) }
+
+    obj = Map("dname" -> "MILITARY", "loc" -> "Alabama", "emp" -> List(
+      Map("ename" -> "Selina", "mgr" -> null),
+      Map("ename" -> "Vano", "mgr" -> Map("ename" -> "Carlo", "deptno" -> Map("dname" -> "Head")))))
+    //FIXME Vano is put into Head (10048) department instead of MILITARY 10046, last returned id must be 10046
+    assertResult((List(1, List(List(List(null, (1,10047)), List(10049, (1,10050))))),10048)) { ORT.insert("dept", obj) }
+
+    obj = Map("deptno" -> 10046, "dname" -> "METEO", "loc" -> "Texas", "emp" -> List(
+      Map("ename" -> "Selina", "mgr" -> null),
+      Map("ename" -> "Vano", "mgr" -> Map("ename" -> "Pedro", "deptno" -> Map("deptno" -> 10048, "dname" -> "Head")))))
+    //FIXME Vano is put into Head (10048) department instead of METEO 10046, due to wrong #deptno expression behaviour
+    assertResult(List(1, List(1, List(List(null, (1,10051)), List(10052, (1,10053)))))) { ORT.update("dept", obj) }
     
     println("\n-------- insert, update with additional filter --------\n")
     //insert, update with additional filter
