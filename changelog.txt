@@ -1,5 +1,88 @@
+--- 2015.09.04 tresql 6.0 ---
+1. Syntax changes and improvements
+
+  1) type added for named variables
+
+     Example: +dept[dname ~~ :name:string]
+
+  2) recursive query support
+
+     Example:
+     
+       emp[mgr = null]{empno, ename, |[:1(empno) = mgr]}#(1) //all emps starting from ones with mgr = null with all their subordinates down the tree are returned
+       emp[7369]{empno, ename, mgr, |[:1(mgr) = empno]}#(1) //subordination path from lower to higher starting with emp #7369 returned
+
+  3) sql embedding and fragment concatenation macros
+
+     Example:
+
+       sql_concat(sql('/*begin comment */'), sql(' '), sql_concat(emp[ename ~~ 'sco%']{ename}, sql('/*end comment */'))) --> /*begin comment */ select ename from emp where lcase(ename) like lcase('sco%')/*end comment */
+
+
+2. API changes and improvements
+
+  1) blob, reader, clob support
+
+  2) tresql string interpolation
+
+     Example:
+
+       val name = "S%"
+       tresql"emp [ename ~ $name] {ename}#(1)"
+
+  3) tresql method to parsed expressions
+
+    Example:
+
+      QueryParser.parseExp("emp {ename}").asInstanceOf[QueryParser.Exp].tresql --> emp{ename}
+
+  4) query timeout in seconds (see JDBC java.sql.Statement#setQueryTimeout)
+
+    Example:
+
+      Env.queryTimeout = 10
+
+  5) SimpleCache size control
+
+    Example:
+
+      Env.cache = new SimpleCache(4096)
+
+
+3. ORT changes and improvements
+
+  1) One to one relationship inserts/updates to multiple tables
+
+     Example:
+
+      var obj = Map("dname" -> "SPORTS", "addr" -> "Brisben", "zip_code" -> "4000")
+      ORT.insertMultiple(obj, "dept", "dept_addr")
+      obj = Map("deptno" -> 10026, "loc" -> "Brisbane", "addr" -> "Roma st. 150")
+      ORT.updateMultiple(obj, "dept", "dept_addr")
+
+  2) Lookup object editing (insert/update)
+
+     Example:
+
+       var obj = Map("brand" -> "DUNLOP", "season" -> "W", "carnr" -> Map("name" -> "VW"))
+       ORT.insert("tyres", obj)
+       obj = Map("nr" -> 10029, "season" -> "S", "carnr" -> Map("name" -> "SKODA"))
+       ORT.update("tyres", obj)
+
+  3) insert/update filters
+
+     Example:
+
+       ORT.insert("dummy", Map("dummy" -> 2), "dummy = -1")}
+       ORT.update("address", Map("nr" -> 10033, "addr" -> "gugu"), "addr ~ 'Ri'")
+
+
+4. Bugfixes
+
+5. scala 2.11 support added, scala 2.9.x support abandoned
+
 --- 2014.04.04 tresql 5.3 ---
-1. API changes and improvemnts
+1. API changes and improvements
    Result.toListOfMaps (through TypedResult trait) method is parametrizied to return specific type of map.
    
    Typed methods support conversion to arbitrary types via converter (used in object relational transformations)
