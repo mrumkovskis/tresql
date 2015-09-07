@@ -141,9 +141,9 @@ trait ORT {
     resources.metaData.tableOption(resources.tableName(objName)).map(table => {
       val ptn = if (parent != null) resources.tableName(parent) else null
       val refColName = if (parent == null) null else if (refPropName == null)
-        table.refs(ptn) match {
+        table.refs(ptn).filter(_.cols.size == 1) match { //process refs consisting of only one column
           case Nil => null
-          case List(ref) if ref.cols.length == 1 => ref.cols(0)
+          case List(ref) => ref.cols.head
           case x => error(
               s"""Ambiguous references from table '${table.name}' to table '$ptn'.
               Reference must be one and must consist of one column. Found: $x""")
