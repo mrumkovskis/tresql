@@ -49,9 +49,16 @@ trait ORT {
     Env log saveable.toString
     Query.build(save, saveable, false)(resources)()
   }
-  def delete(name: String, id: Any, filter: String = null)(implicit resources: Resources = Env): Any = {
-    val delete = "-" + resources.tableName(name) + s"[?${Option(filter).map(f => s" & (f)").getOrElse("")}]"
-    Query.build(delete, Map("1"->id), false)(resources)()
+  def delete(name: String, id: Any, filter: String = null, filterParams: Map[String, Any] = null)
+  (implicit resources: Resources = Env): Any = (for {
+    table <- resources.metaData.tableOption(resources.tableName(name))
+    pk <- table.key.cols.headOption
+    if table.key.cols.size == 1
+  } yield {
+    val delete = s"-${table.name}[$pk = ?${Option(filter).map(f => s" & ($f)").getOrElse("")}]"
+    Query.build(delete, Map("1" -> id) ++ Option(filterParams).getOrElse(Map()), false)(resources)()
+  }) getOrElse {
+    error(s"Table $name not found or table primary key not found or table primary key consists of more than one column")
   }
   
   /** insert methods to multiple tables
@@ -186,15 +193,21 @@ trait ORT {
                   table.key.cols == List(refColName) /*fk to parent matches pk*/ ) ||
                   (oneToOne != null && oneToOne.keys.contains(table.key.cols.head)/* fk of one to one relations matches pk */))) Map()
               else Map(table.key.cols.head -> (if (oneToOne == null) "#" + table.name else ":#" + oneToOne.rootTable) /*add primary key col*/ )))
-              .unzip match {
-                case (Nil, Nil) => null
-                case (cols: List[String], vals: List[String]) =>
+              match {
+                case x if x.size == 0 => null
+                case x if filter == null =>
+                  val (cols, vals) = x.unzip
                   cols.mkString(s"+${table.name}{", ", ", "}") +
-                  //values
-                  Option(filter)
-                  //filter is not null so values is select statement
-                  .map(f => vals.filter(_ != null).mkString(s" ${table.name} [$f] {", ", ", "} @(1)"))
-                  .getOrElse(vals.filter(_ != null).mkString(" [", ", ", "]"))
+                  vals.filter(_ != null).mkString(" [", ", ", "]")
+                case x => /*x map { //insert values as select
+                  case (c, v) if v != null => (c, v + " " + c)
+                  case t => t
+                } unzip match {
+                  case (cols: List[String], vals: List[String]) =>*/
+                  val (cols, vals) = x.unzip
+                  cols.mkString(s"+${table.name}{", ", ", "}") +
+                  vals.filter(_ != null).mkString(s" ${table.name} [$filter] {", ", ", "} @(1)")
+                //}
               }
           val alias = (if (parent != null) " '" + name + "'" else "")
           Option(tresql).map(t => Option(lookupTresql).map(lt => s"[$lt$t]$alias").getOrElse(t + alias)).orNull

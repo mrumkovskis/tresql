@@ -537,7 +537,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
       case (c @ ConstExpr(x)) :: Nil => Option(alias).getOrElse(table.sql) + "." +
         env.table(table.sql).key.cols(0) + " = " + c.sql
       case (v: VarExpr) :: Nil => Option(alias).getOrElse(table.sql) + "." +
-        env.table(table.sql).key.cols(0) + " = " + v.sql
+        env.table(table.sql).key.cols.head + " = " + v.sql
       case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
       case l => Option(alias).getOrElse(table.sql) + "." + env.table(table.sql).key.cols(0) + " in(" +
         (l map { _.sql }).mkString(",") + ")"
