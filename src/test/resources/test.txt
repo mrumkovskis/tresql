@@ -293,6 +293,7 @@ dept/emp[empno = null]{dname}#(1) --> [["OPERATIONS"]]
 dept/emp![empno = null] --> []
 dept/emp e![empno = null] --> []
 dept/emp! e[empno = null] --> []
+work[empno e!, empno_mgr! m]emp;e/dept d;m/dept md{hours, e.ename, d.dname, m.ename, md.dname}#(1,2,3) --> [[5, "SCOTT", "RESEARCH", "JONES", "RESEARCH"], [8, "SCOTT", "RESEARCH", "CLARK", "ACCOUNTING"]]
 
 //hierarchical recursive query
 emp[mgr = null]{empno, ename, |[:1(empno) = mgr]}#(1) --> [[7839, "KING", [[7566, "JONES", [[7788, "SCOTT", [[7876, "ADAMS", []]]], [7902, "FORD", [[7369, "SMITH", []]]]]], [7698, "BLAKE", [[7499, "ALLEN", []], [7521, "WARD", []], [7654, "MARTIN", []], [7844, "TURNER", []], [7900, "JAMES", []]]], [7782, "CLARK", [[7934, "MILLER", []]]]]]]
