@@ -385,7 +385,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
       def joinPrefix(implicitLeftJoinPossible: Boolean) = (outerJoin match {
         case "l" => "left "
         case "r" => "right "
-        case _ if (implicitLeftJoinPossible && nullable) => "left "
+        case j if (j != "i"/*forced inner join*/ && implicitLeftJoinPossible && nullable) => "left "
         case _ => ""
       }) + "join "
       def fkAliasJoin(i: IdentExpr) = sqlName + " on " + (if (i.name.size < 2 && joinTable.alias != null)

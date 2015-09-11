@@ -91,9 +91,11 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   val NoJoin = Join(false, null, true)
   val DefaultJoin = Join(true, null, false)
 
-  case class Obj(obj: Any, alias: String, join: Join, outerJoin: String, nullable: Boolean) extends Exp {
+  case class Obj(obj: Any, alias: String, join: Join, outerJoin: String, nullable: Boolean = false)
+      extends Exp {
     def tresql = (if (join != null) join.tresql else "") + (if (outerJoin == "r") "?" else "") +
-      any2tresql(obj) + (if (outerJoin == "l") "?" else "") + (if (alias != null) " " + alias else "")
+      any2tresql(obj) + (if (outerJoin == "l") "?" else if (outerJoin == "i") "!" else "") +
+      (if (alias != null) " " + alias else "")
   }
   case class Col(col: Any, alias: String, typ: String) extends Exp {
     def tresql = any2tresql(col) + (if (typ != null) " :" + typ else "") +
@@ -215,44 +217,50 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def filter: MemParser[Arr] = array named "filter"
   def filters: MemParser[Filters] = rep(filter) ^^ Filters named "filters"
   def obj: MemParser[Obj] = opt(join) ~ opt("?") ~ (qualifiedIdent | braces) ~
-    opt("?") ~ opt(ident) ~ opt("?") ^^ {
-      case a ~ Some(b) ~ c ~ Some(d) ~ e ~ f => sys.error("Cannot be right and left join at the same time")
-      case a ~ Some(b) ~ c ~ d ~ e ~ Some(f) => sys.error("Cannot be right and left join at the same time")
-      case a ~ b ~ c ~ d ~ e ~ f => Obj(c, e.orNull, a.orNull,
-        b.map(x => "r") orElse d.orElse(f).map(x => "l") orNull,
-        //set nullable flag if left outer join
-        d orElse f map (x => true) getOrElse (false))
-    } named "obj"
-  def objs: MemParser[List[Obj]] = rep1(obj) ^^ { l =>
-    var prev: Obj = null
-    val res = l.flatMap { thisObj =>
-      val (prevObj, prevAlias) = (prev, if (prev == null) null else prev.alias)
-      prev = thisObj
-      //process foreign key shortcut join
-      thisObj match {
-        case o @ Obj(_, a, j @ Join(false, Arr(l @ List(o1 @ Obj(_, a1, _, oj1, n1), _*)), false), oj, n) =>
-          //o1.alias prevail over o.alias, o.{outerJoin, nullable} prevail over o1.{outerJoin, nullable}
-          List(o.copy(alias = (Option(a1).getOrElse(a)), join =
-            j.copy(expr = o1.copy(alias = null, outerJoin = null, nullable = false)),
-            outerJoin = (if (oj == null) oj1 else oj), nullable = n || n1)) ++
-            (if (prevObj == null) List() else l.tail.flatMap {
-              //flattenize array of foreign key shortcut joins
-              case o2 @ Obj(_, a2, _, oj2, n2) => List((if (prevAlias != null) Obj(Ident(List(prevAlias)),
-                null, NoJoin, null, false)
-              else Obj(prevObj.obj, null, NoJoin, null, false)),
-                o.copy(alias = (if (a2 != null) a2 else o.alias), join =
-                  j.copy(expr = o2.copy(alias = null, outerJoin = null, nullable = false)),
-                  outerJoin = (if (oj == null) oj2 else oj), nullable = n || n2))
-              case x => List(o.copy(join = Join(false, x, false)))
-            })
-        case o => List(o)
+    opt(opt("?" | "!") ~ ident ~ opt("?" | "!")) ^^ {
+    case _ ~ Some(_) ~ _ ~ Some(Some(_) ~ _ ~ _ | _ ~ _ ~ Some(_)) =>
+      sys.error("Cannot be right and left join at the same time")
+    case join ~ rightoj ~ o ~ Some(leftoj ~ alias ~ leftoj1) =>
+      Obj(o, alias, join.orNull,
+        rightoj.map(x => "r") orElse (leftoj orElse leftoj1).map(j => if(j == "?") "l" else "i") orNull,
+        (leftoj orElse leftoj1).map(_ == "?").getOrElse(false))
+    case join ~ rightoj ~ o ~ None => Obj(o, null, join orNull, rightoj.map(x => "r") orNull)
+  } named "obj"
+  def objs: MemParser[List[Obj]] = obj ~ rep(obj ~ opt("?" | "!")) ^^ {
+    case o ~ l =>
+      var prev: Obj = null
+      val res = (o :: l.map {
+        case o ~ Some(oj) if "r" == o.outerJoin => sys.error("Cannot be right and left join at the same time")
+        case o ~ Some(oj) => o.copy(outerJoin = if (oj == "?") "l" else "i", nullable = oj == "?")
+        case o ~ None => o
+      }).flatMap { thisObj =>
+        val (prevObj, prevAlias) = (prev, if (prev == null) null else prev.alias)
+        prev = thisObj
+        //process foreign key shortcut join
+        thisObj match {
+          case o @ Obj(_, a, j @ Join(false, Arr(l @ List(o1 @ Obj(_, a1, _, oj1, n1), _*)), false), oj, n) =>
+            //o1.alias prevail over o.alias, o.{outerJoin, nullable} prevail over o1.{outerJoin, nullable}
+            List(o.copy(alias = (Option(a1).getOrElse(a)), join =
+              j.copy(expr = o1.copy(alias = null, outerJoin = null, nullable = false)),
+              outerJoin = (if (oj == null) oj1 else oj), nullable = n || n1)) ++
+              (if (prevObj == null) List() else l.tail.flatMap {
+                //flattenize array of foreign key shortcut joins
+                case o2 @ Obj(_, a2, _, oj2, n2) => List((if (prevAlias != null) Obj(Ident(List(prevAlias)),
+                  null, NoJoin, null, false)
+                else Obj(prevObj.obj, null, NoJoin, null, false)),
+                  o.copy(alias = (if (a2 != null) a2 else o.alias), join =
+                    j.copy(expr = o2.copy(alias = null, outerJoin = null, nullable = false)),
+                    outerJoin = (if (oj == null) oj2 else oj), nullable = n || n2))
+                case x => List(o.copy(join = Join(false, x, false)))
+              })
+          case o => List(o)
+        }
       }
-    }
-    Vector(res: _*).lastIndexWhere(_.outerJoin == "r") match {
-      case -1 => res
-      //set nullable flag for all objs right to the last obj with outer join
-      case x => res.zipWithIndex.map(t => if (t._2 < x && !t._1.nullable) t._1.copy(nullable = true) else t._1)
-    }
+      Vector(res: _*).lastIndexWhere(_.outerJoin == "r") match {
+        case -1 => res
+        //set nullable flag for all objs right to the last obj with outer join
+        case x => res.zipWithIndex.map(t => if (t._2 < x && !t._1.nullable) t._1.copy(nullable = true) else t._1)
+      }
   } named "objs"
   def column: MemParser[Col] = (qualifiedIdentAll |
     (expr ~ opt(":" ~> ident) ~ opt(stringLiteral | qualifiedIdent))) ^^ {
