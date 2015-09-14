@@ -597,8 +597,8 @@ class QueryTest extends Suite {
     assertResult(0){ORT.insert("dummy", Map("dummy" -> 2), "dummy = -1")}
     assertResult(1){ORT.insert("dummy", Map("dummy" -> 2), ":dummy = 2")}
     assertResult(0){ORT.update("address", Map("nr" -> 10033, "addr" -> "gugu"), "addr ~ 'Ri'")}
-    assertResult(0) { ORT.delete("emp", 10053, "ename ~~ :ename", Map("ename" -> "ivans%")) }
-    assertResult(1) { ORT.delete("emp", 10053, "ename ~~ :ename", Map("ename" -> "van%")) }
+    assertResult(0) { ORT.delete("emp e", 10053, "ename ~~ :ename", Map("ename" -> "ivans%")) }
+    assertResult(1) { ORT.delete("emp e", 10053, "ename ~~ :ename", Map("ename" -> "van%")) }
     
     println("\n---- Object INSERT, UPDATE ------\n")
     

@@ -50,15 +50,19 @@ trait ORT {
     Query.build(save, saveable, false)(resources)()
   }
   def delete(name: String, id: Any, filter: String = null, filterParams: Map[String, Any] = null)
-  (implicit resources: Resources = Env): Any = (for {
-    table <- resources.metaData.tableOption(resources.tableName(name))
-    pk <- table.key.cols.headOption
-    if table.key.cols.size == 1
-  } yield {
-    val delete = s"-${table.name}[$pk = ?${Option(filter).map(f => s" & ($f)").getOrElse("")}]"
-    Query.build(delete, Map("1" -> id) ++ Option(filterParams).getOrElse(Map()), false)(resources)()
-  }) getOrElse {
-    error(s"Table $name not found or table primary key not found or table primary key consists of more than one column")
+  (implicit resources: Resources = Env): Any = {
+    val Array(tableName, alias) = name.split("\\s+").padTo(2, null)
+    (for {
+      table <- resources.metaData.tableOption(resources.tableName(tableName))
+      pk <- table.key.cols.headOption
+      if table.key.cols.size == 1
+    } yield {
+      val delete = s"-${table.name}${Option(alias).map(" " + _).getOrElse("")}[$pk = ?${Option(filter)
+        .map(f => s" & ($f)").getOrElse("")}]"
+      Query.build(delete, Map("1" -> id) ++ Option(filterParams).getOrElse(Map()), false)(resources)()
+    }) getOrElse {
+      error(s"Table $name not found or table primary key not found or table primary key consists of more than one column")
+    }
   }
   
   /** insert methods to multiple tables
