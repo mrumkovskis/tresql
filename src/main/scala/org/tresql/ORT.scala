@@ -5,15 +5,18 @@ import sys._
 
 /** Object Relational Transformations - ORT */
 trait ORT {
-  
+
   case class OneToOne(rootTable: String, keys: Set[String])
   case class OneToOneBag(relations: OneToOne, obj: Map[String, Any])
-  
+
+  /** <object name | property name>[:<reference to parent>][:actions in form <[+=-]> indicating insertu, update, delete] */
+  val PROP_PATTERN = new scala.util.matching.Regex(
+    """(\w+)(:(\w+))?(:\[([+=-]+)\])?""", "table", null, "ref", null, "actions")
   /** <object name | property name>[:<linked property name>][#(insert | update | delete)] */
-  val PROP_PATTERN = """(\w+)(:(\w+))?(#(\w+))?"""r
-  
+  val PROP_PATTERN_OLD = """(\w+)(:(\w+))?(#(\w+))?"""r
+
   type ObjToMapConverter[T] = (T) => (String, Map[String, _])
-  
+
   def insert(name: String, obj: Map[String, Any], filter: String = null)
     (implicit resources: Resources = Env): Any =
       insertInternal(name, obj, tresql_structure(obj), filter)
@@ -24,18 +27,18 @@ trait ORT {
     Env log (s"\nStructure: $struct")
     Query.build(insert, obj, false)(resources)()
   }
-  
+
   def update(name: String, obj: Map[String, Any], filter: String = null)
-    (implicit resources: Resources = Env): Any = 
+    (implicit resources: Resources = Env): Any =
     updateInternal(name, obj, tresql_structure(obj), filter)
-  
+
   //TODO update where unique key (not only pk specified)
   private def updateInternal(name: String, obj: Map[String, Any], struct: Map[String, Any], filter: String = null)
     (implicit resources: Resources = Env): Any = {
     val update = update_tresql(name, struct, null, null, null, filter, resources)
     if(update == null) error(s"Cannot update data. Table not found or no primary key or no updateable columns found for the object: $name")
     Env log (s"\nStructure: $struct")
-    Query.build(update, obj, false)(resources)()    
+    Query.build(update, obj, false)(resources)()
   }
   /**
    * Saves object obj specified by parameter name. If object primary key is set object
@@ -64,20 +67,20 @@ trait ORT {
       error(s"Table $name not found or table primary key not found or table primary key consists of more than one column")
     }
   }
-  
+
   /** insert methods to multiple tables
    *  Tables must be ordered in parent -> child direction. */
   def insertMultiple(obj: Map[String, Any], names: String*)(filter: String = null)(
       implicit resources: Resources = Env): Any = {
-    val (nobj, struct) = multipleOneToOneTransformation(obj, names: _*) 
+    val (nobj, struct) = multipleOneToOneTransformation(obj, names: _*)
     insertInternal(names.head, nobj, tresql_structure(struct), filter)
   }
-  
+
   /** update to multiple tables
    *  Tables must be ordered in parent -> child direction. */
   def updateMultiple(obj: Map[String, Any], names: String*)(filter: String = null)(
       implicit resources: Resources = Env): Any = {
-    val (nobj, struct) = multipleOneToOneTransformation(obj, names: _*) 
+    val (nobj, struct) = multipleOneToOneTransformation(obj, names: _*)
     updateInternal(names.head, nobj, tresql_structure(struct), filter)
   }
 
@@ -101,17 +104,17 @@ trait ORT {
   def insertObj[T](obj: T, filter: String = null)(
       implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
     val v = conv(obj)
-    insert(v._1, v._2, filter) 
+    insert(v._1, v._2, filter)
   }
   def updateObj[T](obj: T, filter: String = null)(
       implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
     val v = conv(obj)
-    update(v._1, v._2, filter) 
+    update(v._1, v._2, filter)
   }
   def saveObj[T](obj: T, filter: String = null)(
       implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
     val v = conv(obj)
-    save(v._1, v._2, filter) 
+    save(v._1, v._2, filter)
   }
 
   def tresql_structure[M <: Map[String, Any]](obj: M)(
@@ -138,7 +141,7 @@ trait ORT {
       case x => x
     }(bf.asInstanceOf[scala.collection.generic.CanBuildFrom[Map[String, Any], (String, Any), M]]) //somehow cast is needed
   }
-  
+
   def insert_tresql(
       name: String,
       obj: Map[String, Any],
@@ -146,9 +149,9 @@ trait ORT {
       oneToOneRoot: String,
       oneToOne: OneToOne,
       filter: String,
-      resources: Resources): String = {    
+      resources: Resources): String = {
     //insert statement column, value map from obj
-    val Array(objName, refPropName) = name.split(":").padTo(2, null)
+    val PROP_PATTERN(objName, _, refPropName, _, action) = name
     resources.metaData.tableOption(resources.tableName(objName)).map(table => {
       val ptn = if (parent != null) resources.tableName(parent) else null
       val refColName = if (parent == null) null else if (refPropName == null)
@@ -230,15 +233,15 @@ trait ORT {
     val md = resources.metaData
     md.tableOption(resources.tableName(name)).flatMap(table => {
       var pkProp: Option[String] = None
-      //stupid thing - map find methods conflicting from different traits 
+      //stupid thing - map find methods conflicting from different traits
       def findPkProp = pkProp.orElse {
         pkProp = obj.asInstanceOf[TraversableOnce[(String, _)]].find(
           n => table.key == metadata.Key(List(resources.colName(name, n._1)))).map(_._1)
         pkProp
       }
       def childUpdates(n:String, o:Map[String, _]) = {
-        val Array(childObjName, refPropName) = n.split(":").padTo(2, null)
-        md.tableOption(resources.tableName(childObjName)).flatMap(childTable => 
+        val PROP_PATTERN(childObjName, _, refPropName, _, action) = n
+        md.tableOption(resources.tableName(childObjName)).flatMap(childTable =>
           (findPkProp orElse Option(firstPkProp)).map (pk => {
             Option(refPropName).map(resources.colName(childObjName, _)).orElse(
                 importedKeyOption(table.name, childTable)).map {
@@ -293,7 +296,7 @@ trait ORT {
       }
     }).orNull
   }
-  
+
   def lookup_tresql(refPropName: String, refColName: String, objName: String, obj: Map[String, _], resources: Resources) =
     resources.metaData.tableOption(resources.tableName(objName)).filter(_.key.cols.size == 1).map(table => {
       val pk = table.key.cols.head
@@ -310,20 +313,20 @@ trait ORT {
           /*reference column set to reference property variable value*/
           refColName -> resources.valueExpr(objName, refPropName))
       }
-    }).orNull  
-  
+    }).orNull
+
   //TODO returns lookup table name not object name. lookup_tresql requires object name, so the
   //two must be equal.
   def lookupObject(refColName: String, table: metadata.Table) = table.refTable.get(List(refColName))
-  
+
   def save_tresql(name:String, obj:Map[String, _], resources:Resources) = {
     val x = del_upd_ins_obj(name, obj, resources)
     val (n:String, saveable:ListMap[String, Any]) = x.get(name + "#insert").map(
         (name + "#insert", _))getOrElse(x.get(name + "#update").map((name + "#update", _)).getOrElse(
             error("Cannot save data. "))).asInstanceOf[(String, ListMap[String, Any])]
-    del_upd_ins_tresql(null, n, saveable, resources) -> saveable    
+    del_upd_ins_tresql(null, n, saveable, resources) -> saveable
   }
-  
+
   //returns ListMap so that it is guaranteed that #delete, #update, #insert props are in correct order
   private def del_upd_ins_obj(name:String, obj:Map[String, _], resources:Resources):ListMap[String, Any] =
   resources.metaData.tableOption(resources.tableName(name.split(":")(0))).map { table => {
@@ -347,22 +350,22 @@ trait ORT {
       }
     })
     if (pk == null) ListMap(name + "#insert" -> tresqlObj)
-    else ListMap(name + "#delete" -> pk, name + "#update" -> tresqlObj) 
+    else ListMap(name + "#delete" -> pk, name + "#update" -> tresqlObj)
   }}.getOrElse(ListMap())
 
   private def del_upd_ins_tresql(parentTable: metadata.Table, name: String, obj: ListMap[String, Any],
     res: Resources): String = {
-    val PROP_PATTERN(objName, _, refPropName, _, action) = name
+    val PROP_PATTERN_OLD(objName, _, refPropName, _, action) = name
     val table = res.metaData.table(res.tableName(objName))
     var pkProp: String = null
-    //stupid thing - map find methods conflicting from different traits 
+    //stupid thing - map find methods conflicting from different traits
     def findPkProp = if(pkProp != null) pkProp else {
       pkProp = obj.asInstanceOf[TraversableOnce[(String, _)]].find(
         n => table.key == metadata.Key(List(res.colName(objName, n._1)))).map(_._1).get
       pkProp
-    }    
+    }
     def delete(delkey: String, delvals: Seq[_]) = {
-      val PROP_PATTERN(delObj, _, parRefProp, _, delact) = delkey
+      val PROP_PATTERN_OLD(delObj, _, parRefProp, _, delact) = delkey
       val delTable = res.metaData.table(res.tableName(delObj))
       val refCol = if (parRefProp != null) res.colName(delObj, parRefProp) else {
         val rfs = delTable.refs(table.name)
@@ -403,7 +406,7 @@ trait ORT {
         (if (parentTable != null) " '" + name + "'" else "")
     }
   }
-    
+
   private def importedKeyOption(tableName: String, childTable: metadata.Table) =
     Option(childTable.refs(tableName)).filter(_.size == 1).map(_(0).cols(0))
 
@@ -414,7 +417,7 @@ trait ORT {
       "'. Instead these refs found: " + refs)
     refs(0).cols(0)
   }
-  
+
   /* Returns zero or one imported key from table for each relation. In the case of multiple
    * imported keys pointing to the same relation the one specified after : symbol is chosen
    * or exception is thrown.
@@ -427,7 +430,7 @@ trait ORT {
       if (refs.size == 1) keys + refs.head.cols.head
       else if (refs.size == 0 || refs.exists(r => keys.contains(r.cols.head))) keys
       else error(s"Ambiguous refs: $refs from table ${table.name} to table $relation")
-    }  
+    }
   }
 }
 
