@@ -39,13 +39,13 @@ class QueryTest extends Suite {
         b.SQLExpr("null", Nil)
       else b.SQLExpr(sqlSnippet, vars)
     }
-    
+
     def null_macros(b: QueryBuilder) = null
 
     def sql_concat(b: QueryBuilder, exprs: Expr*) =
       b.SQLConcatExpr(exprs: _*)
 
-  }  
+  }
   Env.functions = new TestFunctions
   Env.macros = Macros
   Env.cache = new SimpleCache(-1)
@@ -59,13 +59,13 @@ class QueryTest extends Suite {
   new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
     sql => val st = conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
   }
-  
+
   def test {
     execStatements
-    if (util.Properties.versionString contains "2.10") 
+    if (util.Properties.versionString contains "2.10")
       Class.forName("org.tresql.test.TresqlJavaApiTest").newInstance.asInstanceOf[Runnable].run
   }
-    
+
   private def execStatements {
     def parsePars(pars: String, sep:String = ";"): Map[String, Any] = {
       val DF = new java.text.SimpleDateFormat("yyyy-MM-dd")
@@ -88,7 +88,7 @@ class QueryTest extends Suite {
         case A(a, ac) =>
           if (ac.length == 0) List()
           else ac.split(",").map(par).toList
-        case x => error("unparseable parameter: " + x)        
+        case x => error("unparseable parameter: " + x)
       }
       val pl = pars.split(sep).map(par).toList
       if (map) {
@@ -121,13 +121,13 @@ class QueryTest extends Suite {
     assertResult(10)(Query.unique[Int]("dept[10]{deptno}#(deptno)"))
     assertResult(Some(10))(Query.headOption[Int]("dept{deptno}#(deptno)"))
     intercept[Exception](Query.unique[Int]("dept{deptno}#(deptno)"))
-    intercept[Exception](Query.unique[Int]("dept[100]{deptno}#(deptno)"))    
-    intercept[Exception](Query.head[Int]("dept[100]{deptno}#(deptno)"))    
+    intercept[Exception](Query.unique[Int]("dept[100]{deptno}#(deptno)"))
+    intercept[Exception](Query.head[Int]("dept[100]{deptno}#(deptno)"))
     assertResult(None)(Query.headOption[Int]("dept[100]{deptno}#(deptno)"))
     assertResult("ACCOUNTING")(Query.unique[String]("dept[10]{dname}#(deptno)"))
     //option binding
     assertResult("ACCOUNTING")(Query.unique[String]("dept[?]{dname}#(deptno)", Some(10)))
-    assertResult("1981-11-17")(Query.unique[java.sql.Date]("emp[sal = 5000]{hiredate}").toString)    
+    assertResult("1981-11-17")(Query.unique[java.sql.Date]("emp[sal = 5000]{hiredate}").toString)
     assertResult(BigDecimal(10))(Query.unique[BigDecimal]("dept[10]{deptno}#(deptno)"))
     assertResult(5)(Query.unique[Int]("inc_val_5(?)", 0))
     assertResult(20)(Query.unique[Int]("inc_val_5(inc_val_5(?))", 10))
@@ -149,7 +149,7 @@ class QueryTest extends Suite {
     //bind variables absence error message
     assert(intercept[MissingBindVariableException](Query("emp[?]")).name === "1")
     assert(intercept[MissingBindVariableException](Query("emp[:nr]")).name === "nr")
-    
+
     var op = OutPar()
     assertResult(List(Vector(List(10, "x"))))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x")
         .toListOfVectors)
@@ -159,21 +159,21 @@ class QueryTest extends Suite {
         Map("1" -> 10, "2" -> "ACC%")))
     assertResult(None)(Query.headOption[Int]("dept[?]", -1))
     //dynamic tests
-    assertResult(1900)(Query("salgrade[1] {hisal, losal}").foldLeft(0)((x, r) => x + 
+    assertResult(1900)(Query("salgrade[1] {hisal, losal}").foldLeft(0)((x, r) => x +
         r.i.hisal + r.i.losal))
-    assertResult(1900)(Query("salgrade[1] {hisal, losal}").foldLeft(0L)((x, r) => x + 
+    assertResult(1900)(Query("salgrade[1] {hisal, losal}").foldLeft(0L)((x, r) => x +
         r.l.hisal + r.l.losal))
-    assertResult(1900.00)(Query("salgrade[1] {hisal, losal}").foldLeft(0D)((x, r) => x + 
+    assertResult(1900.00)(Query("salgrade[1] {hisal, losal}").foldLeft(0D)((x, r) => x +
         r.dbl.hisal + r.dbl.losal))
-    assertResult(1900)(Query("salgrade[1] {hisal, losal}").foldLeft(BigDecimal(0))((x, r) => x + 
+    assertResult(1900)(Query("salgrade[1] {hisal, losal}").foldLeft(BigDecimal(0))((x, r) => x +
         r.bd.hisal + r.bd.losal))
-    assertResult("KING PRESIDENT")(Query("emp[7839] {ename, job}").foldLeft("")((x, r) => 
+    assertResult("KING PRESIDENT")(Query("emp[7839] {ename, job}").foldLeft("")((x, r) =>
         r.s.ename + " " + r.s.job))
-    assertResult("1982-12-09")(Query("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) => 
+    assertResult("1982-12-09")(Query("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) =>
         r.d.hiredate.toString))
-    assertResult("1982-12-09 00:00:00.0")(Query("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) => 
+    assertResult("1982-12-09 00:00:00.0")(Query("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) =>
         r.t.hiredate.toString))
-    assertResult("KING PRESIDENT")(Query("emp[7839] {ename, job}").foldLeft("")((x, r) => 
+    assertResult("KING PRESIDENT")(Query("emp[7839] {ename, job}").foldLeft("")((x, r) =>
         r.ename + " " + r.job))
     //typed tests
     assertResult(("MILLER", BigDecimal(2300.35)))(Query.head[(String, BigDecimal)]("emp[hiredate = '1982-01-23']{ename, sal}"))
@@ -214,14 +214,14 @@ class QueryTest extends Suite {
     assertResult(List(0.00, 0.00, 0.00)) {
       Query("emp/dept[10] {(sal + -sal) salary}#(1)") map (_.salary) toList
     }
-    
+
     //transformer test
     implicit val transformer: PartialFunction[(String, Any), Any] = {case ("dname", v) => "!" + v}
     assertResult(List(Map("dname" -> "!ACCOUNTING", "emps" -> List(Map("ename" -> "CLARK"),
         Map("ename" -> "KING"), Map("ename" -> "MILLER"))))) {
       Query.toListOfMaps[Map]("dept[10]{dname, |emp{ename}#(1) emps}")
     }
-    
+
     //bind variables test
     assertResult(List(10, 20, 30, 40)){
       val ex = Query.build("dept[?]{deptno}")
@@ -249,7 +249,7 @@ class QueryTest extends Suite {
       Query.head[java.sql.Blob]("car_image[carnr = ?] {image}", 2222).length
     }
     assertResult(List("ACCOUNTING", "OPERATIONS", "RESEARCH", "SALES")) {
-      Query.list[java.io.Reader]("dept{dname}#(1)").map(r => 
+      Query.list[java.io.Reader]("dept{dname}#(1)").map(r =>
         new String(Stream.continually(r.read).takeWhile(-1 !=).map(_.toChar).toArray)).toList
     }
     assertResult(List("ACCOUNTING", "OPERATIONS", "RESEARCH", "SALES")) {
@@ -290,16 +290,16 @@ class QueryTest extends Suite {
         [#dept, :dname, :loc]""",
       Map("dname" -> "LAW", "loc" -> "DALLAS", "emps" -> scala.Array(
         Map("ename" -> "SMITH"), Map("ename" -> "LEWIS")))).toListOfVectors)
-      
+
     //row API
     assertResult(List("CLARK, KING, MILLER"))(Query("dept[10] {dname, |emp {ename}#(1) emps}")
         .toListOfRows.map(r => r.listOfRows("emps").map(_.ename).mkString(", ")))
-        
+
     //tresql string interpolation tests
     var name = "S%"
     assertResult(List(Vector("SCOTT"), Vector("SMITH"), Vector("SMITH"))) {
       tresql"emp [ename ~ $name] {ename}#(1)".toListOfVectors
-    }    
+    }
     val salary = 1000
     assertResult(List(Vector("SCOTT")))(tresql"emp [ename ~ $name & sal > $salary] {ename}#(1)".toListOfVectors)
     name = null
@@ -307,12 +307,12 @@ class QueryTest extends Suite {
       tresql"emp [ename ~ $name? & sal < $salary?] {ename}#(1)".toListOfVectors
     }
     assertResult(List(Vector(0)))(tresql"dummy" toListOfVectors)
-     
-    
+
+
     println("\n----------- ORT tests ------------\n")
-    
+
     println("\n--- INSERT ---\n")
-    
+
     var obj:Map[String, Any] = Map("deptno" -> null, "dname" -> "LAW2", "loc" -> "DALLAS",
       "calculated_field"->333, "another_calculated_field"->"A",
       "emp" -> scala.Array(Map("empno" -> null, "ename" -> "SMITH", "deptno" -> null,
@@ -325,7 +325,7 @@ class QueryTest extends Suite {
     assertResult((List(1, List(List((List(1, List(List(1, 1))),10005), (List(1, List(List(1))),10006)))),10004))(
         ORT.insert("dept", obj))
     intercept[Exception](ORT.insert("no_table", obj))
-        
+
     //insert with set parent id and do not insert existing tables with no link to parent
     //(work under dept)
     obj = Map("deptno" -> 50, "dname" -> "LAW3", "loc" -> "FLORIDA",
@@ -337,15 +337,15 @@ class QueryTest extends Suite {
     obj = Map("dname" -> "FOOTBALL", "loc" -> "MIAMI",
         "emp" -> List(Map("ename" -> "BROWN"), Map("ename" -> "CHRIS")))
     assertResult((List(1, List(List((1,10010), (1,10011)))),10009))(ORT.insert("dept", obj))
-    
+
     obj = Map("ename" -> "KIKI", "deptno" -> 50, "car"-> List(Map("name"-> "GAZ")))
     assertResult((1,10012))(ORT.insert("emp", obj))
-    
+
     //Ambiguous references to table: emp. Refs: List(Ref(List(empno)), Ref(List(empno_mgr)))
     obj = Map("emp" -> Map("empno" -> null, "ename" -> "BROWN", "deptno" -> null,
             "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null))))
     intercept[Exception](ORT.insert("emp", obj))
-    
+
     //child foreign key is also its primary key
     obj = Map("deptno" -> 60, "dname" -> "POLAR", "loc" -> "ALASKA",
               "dept_addr" -> List(Map("addr" -> "Halibut")))
@@ -354,11 +354,11 @@ class QueryTest extends Suite {
     obj = Map("dname" -> "BEACH", "loc" -> "HAWAII",
               "dept_addr" -> List(Map("deptnr" -> 1, "addr" -> "Honolulu", "zip_code" -> "1010")))
     assertResult((List(1, List(List(1))),10013))(ORT.insert("dept", obj))
-            
+
     obj = Map("deptno" -> null, "dname" -> "DRUGS",
               "car" -> List(Map("nr" -> "UUU", "name" -> "BEATLE")))
     assertResult((List(1, List(List((1, "UUU")))),10014))(ORT.insert("dept", obj))
-        
+
     //multiple column primary key
     obj = Map("empno"->7788, "car_nr" -> "1111")
     assertResult(1)(ORT.insert("car_usage", obj))
@@ -369,18 +369,18 @@ class QueryTest extends Suite {
     intercept[SQLException](ORT.insert("car_usage", obj))
     obj = Map("empno" -> 7839)
     intercept[SQLException](ORT.insert("car_usage", obj))
-    
+
     //value clause test
     obj = Map("car_nr" -> 2222, "empname" -> "SCOTT", "date_from" -> "2013-11-06")
     assertResult(1)(ORT.insert("car_usage", obj))
-    
+
     println("\n--- UPDATE ---\n")
-    
+
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
         "emp"->List(
             Map("empno"->null, "ename"->"ANNA", "mgr"->7788, "mgr_name"->null,
               "work:empno"->List(Map("wdate"->"2012-7-9", "hours"->8, "empno_mgr"->7839),
-                                 Map("wdate"->"2012-7-10", "hours"->10, "empno_mgr"->7839))), 
+                                 Map("wdate"->"2012-7-10", "hours"->10, "empno_mgr"->7839))),
             Map("empno"->null, "ename"->"MARY", "mgr"->7566, "mgr_name"->null,
               "work:empno" -> List())),
         "calculated_children"->List(Map("x"->5)), "deptno"->40,
@@ -388,16 +388,16 @@ class QueryTest extends Suite {
         "work"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
             Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
             "car" -> List(Map("nr" -> "EEE", "name" -> "BEATLE"), Map("nr" -> "III", "name" -> "FIAT")))
-    assertResult(List(1, 
-        List(0, 
-            List((List(1, List(List(1, 1))),10015), 
+    assertResult(List(1,
+        List(0,
+            List((List(1, List(List(1, 1))),10015),
                 (List(1, List(List())),10016)),
             0, List((1,"EEE"), (1,"III")))))(ORT.update("dept", obj))
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
               Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
         "calculated_children"->List(Map("x"->5)), "deptno"->40)
-    assertResult(List(1, List(2, List(1, 1))))(ORT.update("emp", obj)) 
+    assertResult(List(1, List(2, List(1, 1))))(ORT.update("emp", obj))
     //no child record is updated since no relation is found with car and ambiguous relation is
     //found with work
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
@@ -411,22 +411,22 @@ class QueryTest extends Suite {
     obj = Map("deptno" -> 60, "dname" -> "POLAR BEAR", "loc" -> "ALASKA",
               "dept_addr" -> List(Map("addr" -> "Halibut", "zip_code" -> "1010")))
     assertResult(List(1, List(List(1))))(ORT.update("dept", obj))
-    
+
     //value clause test
     obj = Map("nr" -> 4444, "dname" -> "ACCOUNTING")
     assertResult(1)(ORT.update("car", obj))
     obj = Map("nr" -> 4444, "dname" -> "<NONE>")
     intercept[java.sql.SQLIntegrityConstraintViolationException](ORT.update("car", obj))
-    
+
     //update only children (no first level table column updates)
     obj = Map("nr" -> 4444, "tyres" -> List(Map("brand" -> "GOOD YEAR", "season" -> "S"),
         Map("brand" -> "PIRELLI", "season" -> "W")))
     assertResult(List(0, List((1,10017), (1,10018))))(ORT.update("car", obj))
-    
+
     //delete children
     obj = Map("nr" -> 4444, "name" -> "LAMBORGHINI", "tyres" -> List())
     assertResult(List(1, List(2, List())))(ORT.update("car", obj))
-    
+
     //update three level, for the first second level object it's third level is empty
     obj = Map("deptno" -> 10013, "emp" -> List(
         Map("ename" -> "ELKHADY",
@@ -445,14 +445,14 @@ class QueryTest extends Suite {
             "work:empno" -> List())))
     assertResult(List(2, List((List(1, List(List())), 10021), (List(1, List(List())), 10022))))(
       ORT.update("dept", obj))
-      
-    
+
+
     println("\n--- DELETE ---\n")
-    
+
     assertResult(1)(ORT.delete("emp", 7934))
-    
+
     println("\n--- SAVE ---\n")
-    
+
     obj = Map("dname" -> "SALES", "loc" -> "WASHINGTON", "calculated_field" -> 222,
       "emp" -> List(
         Map("empno" -> 7499, "ename" -> "ALLEN SMITH", "job" -> "SALESMAN", "mgr" -> 7698,
@@ -462,7 +462,7 @@ class QueryTest extends Suite {
         Map("empno" -> null, "ename" -> "DEISE ROSE", "job" -> "SALESGIRL", "mgr" -> 7698,
             "mgr_name" -> null, "deptno" -> 30),
         Map("empno" -> 7698, "ename" -> "BLAKE", "job" -> "SALESMAN", "mgr" -> 7839,
-            "mgr_name" -> null, "deptno" -> 30)),         
+            "mgr_name" -> null, "deptno" -> 30)),
       "calculated_children" -> List(Map("x" -> 5)), "deptno" -> 30)
       assertResult(List(1, List(3, List(1, 1, 1), List((1,10023)))))(ORT.save("dept", obj))
 
@@ -470,44 +470,44 @@ class QueryTest extends Suite {
         "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->7788, "hours"->10, "empno_mgr"->7839),
               Map("wdate"->"2012-7-13", "empno"->7788, "hours"->3, "empno_mgr"->7839)),
         "calculated_children"->List(Map("x"->5)), "deptno"->20)
-    assertResult(List(1, List(2, List(1, 1))))(ORT.save("emp", obj))    
-    
+    assertResult(List(1, List(2, List(1, 1))))(ORT.save("emp", obj))
+
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
         "emp"->List(
             Map("empno"->null, "ename"->"AMY", "mgr"->7788, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
                 "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->null, "hours"->5, "empno_mgr"->7839),
-              Map("wdate"->"2012-7-13", "empno"->null, "hours"->2, "empno_mgr"->7839))), 
+              Map("wdate"->"2012-7-13", "empno"->null, "hours"->2, "empno_mgr"->7839))),
             Map("empno"->null, "ename"->"LENE", "mgr"->7566, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
                 "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->null, "hours"->5, "empno_mgr"->7839),
               Map("wdate"->"2012-7-13", "empno"->null, "hours"->2, "empno_mgr"->7839)))),
         "calculated_children"->List(Map("x"->5)), "deptno"->40)
     assertResult(List(1, List(2, List((List(1, List(0, List(1, 1))),10024),
         (List(1, List(0, List(1, 1))),10025)))))(ORT.save("dept", obj))
-    
+
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(), "calculated_children"->List(Map("x"->5)), "deptno"->20)
     assertResult(List(1, List(2)))(ORT.save("emp", obj))
 
     println("\n---- Multiple table INSERT, UPDATE ------\n")
-    
+
     obj = Map("dname" -> "SPORTS", "addr" -> "Brisbane", "zip_code" -> "4000")
     assertResult((List(1, List(1)),10026))(ORT.insertMultiple(obj, "dept", "dept_addr")())
 
     obj = Map("deptno" -> 10026, "loc" -> "Brisbane", "addr" -> "Roma st. 150")
     assertResult(List(1, List(1)))(ORT.updateMultiple(obj, "dept", "dept_addr")())
-    
+
     assertResult(List(Map(
         "dname" -> "SPORTS", "loc" -> "Brisbane",
         "addr" -> List(Map("addr" -> "Roma st. 150", "zip_code" -> "4000"))))) {
       tresql"dept[dname = 'SPORTS'] {dname, loc, |dept_addr {addr, zip_code} addr}".toListOfMaps
     }
-    
+
     //update only first table in one to one relationship
     obj = Map("deptno" -> 60, "dname" -> "POLAR BEAR", "loc" -> "ALASKA")
     assertResult(1)(ORT.updateMultiple(obj, "dept", "dept_addr")())
-    
+
     println("\n-------- EXTENDED CASES --------\n")
-    
+
     //insert, update one to one relationship (pk of the extended table is fk for the base table) with children for the extended table
     obj = Map("dname" -> "PANDA BREEDING",
         "dept_addr" -> List(Map("addr" -> "Chengdu", "zip_code" -> "2000",
@@ -526,25 +526,25 @@ class QueryTest extends Suite {
     obj = Map("brand" -> "DUNLOP", "season" -> "W", "carnr" -> Map("name" -> "VW"))
     assertResult(List(10028, (1,10029))) { ORT.insert("tyres", obj) }
     obj = Map("brand" -> "CONTINENTAL", "season" -> "W", "carnr" -> Map("nr" -> "UUU", "name" -> "VW"))
-    assertResult(List(1, (1,10030))) { ORT.insert("tyres", obj) }
+    assertResult(List("UUU", (1,10030))) { ORT.insert("tyres", obj) }
     obj = Map("nr" -> 10029, "season" -> "S", "carnr" -> Map("name" -> "SKODA"))
     assertResult(List(10031, 1)) { ORT.update("tyres", obj) }
     obj = Map("nr" -> 10029, "brand" -> "DUNLOP", "carnr" -> Map("nr" -> "UUU", "name" -> "VOLKSWAGEN"))
-    assertResult(List(1, 1)) { ORT.update("tyres", obj) }
+    assertResult(List("UUU", 1)) { ORT.update("tyres", obj) }
     //one to one relationship with lookup for extended table
     obj = Map("dname" -> "MARKETING", "addr" -> "Valkas str. 1",
         "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Riga"))
     assertResult((List(1, List(List(10033, 1))),10032)) { ORT.insertMultiple(obj, "dept", "dept_addr")() }
     obj = Map("deptno" -> 10032, "dname" -> "MARKET", "addr" -> "Valkas str. 1a",
       "zip_code" -> "LV-1010", "addr_nr" -> Map("nr" -> 10033, "addr" -> "Riga, LV"))
-    assertResult(List(1, List(List(1, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
+    assertResult(List(1, List(List(10033, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
     obj = Map("deptno" -> 10032, "dname" -> "MARKETING", "addr" -> "Liela str.",
       "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Saldus"))
     assertResult(List(1, List(List(10034, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
     //insert of lookup object where it's pk is present but null
     obj = Map("nr" -> 10029, "brand" -> "DUNLOP", "carnr" -> Map("nr" -> null, "name" -> "AUDI"))
     assertResult(List(10035, 1)) { ORT.update("tyres", obj) }
-    
+
     println("\n----------------- Multiple table INSERT UPDATE extended cases ----------------------\n")
 
     obj = Map("dname" -> "AD", "ename" -> "Lee", "wdate" -> "2000-01-01", "hours" -> 3)
@@ -552,7 +552,7 @@ class QueryTest extends Suite {
 
     obj = Map("deptno" -> 10036, "dname" -> "ADVERTISING", "ename" -> "Andy")
     assertResult(List(1, List(1))) { ORT.updateMultiple(obj, "dept", "emp")() }
-    
+
     obj = Map("dname" -> "DIG", "emp" -> List(Map("ename" -> "O'Jay",
         "work:empno" -> List(Map("wdate" -> "2010-05-01", "hours" -> 7)))), "addr" -> "Tvaika 1")
     assertResult((List(1, List(List((List(1, List(List(1))),10038)), 1)),10037)) {
@@ -563,15 +563,15 @@ class QueryTest extends Suite {
 
     obj = Map("deptno" -> 10039, "dname" -> "STOCK", "name" -> "Nissan", "brand" -> "PIRELLI", "season" -> "W")
     assertResult(List(1, List(1, 1))) { ORT.updateMultiple(obj, "dept", "car", "tyres")() }
-    
+
     obj = Map("deptno" -> 10039, "dname" -> "STOCK", "name" -> "Nissan Patrol",
         "tyres" -> List(Map("brand" -> "CONTINENTAL", "season" -> "W")))
     assertResult(List(1, List(List(1, List(1, List((1,10040))))))) { ORT.updateMultiple(obj, "dept", "car")() }
-    
+
     obj = Map("dname" -> "NEW STOCK", "name" -> "Audi Q7",
         "tyres" -> List(Map("brand" -> "NOKIAN", "season" -> "S")))
     assertResult((List(1, List(List(1, List(List((1,10042)))))),10041)) { ORT.insertMultiple (obj, "dept", "car")() }
-    
+
     println("\n-------- Lookup extended cases - chaining, children --------\n")
 
     obj = Map("brand" -> "Nokian", "season" -> "W", "carnr" ->
@@ -580,7 +580,7 @@ class QueryTest extends Suite {
 
     obj = Map("nr" -> 10045, "brand" -> "Nokian", "season" -> "S", "carnr" ->
       Map("nr" -> 10044, "name" -> "Mercedes Benz", "deptnr" -> Map("deptno" -> 10043, "dname" -> "Logistics dept")))
-    assertResult(List(List(1, 1), 1)) { ORT.update("tyres", obj) }
+    assertResult(List(10044, 1)) { ORT.update("tyres", obj) }
 
     obj = Map("dname" -> "MILITARY", "loc" -> "Alabama", "emp" -> List(
       Map("ename" -> "Selina", "mgr" -> null),
@@ -591,7 +591,12 @@ class QueryTest extends Suite {
       Map("ename" -> "Selina", "mgr" -> null),
       Map("ename" -> "Vano", "mgr" -> Map("ename" -> "Pedro", "deptno" -> Map("deptno" -> 10048, "dname" -> "Head")))))
     assertResult(List(1, List(2, List(List(null, (1,10051)), List(10052, (1,10053)))))) { ORT.update("dept", obj) }
-    
+
+    obj = Map("name" -> "Dodge", "car_usage" -> List(
+      Map("empno" -> Map("empno" -> null, "ename" -> "Nicky", "job" -> "MGR", "deptno" -> 10)),
+      Map("empno" -> Map("empno" -> 10052, "ename" -> "Lara", "job" -> "MGR", "deptno" -> 10))))
+    assertResult((List(1, List(List(List(10055, 1), List(10052, 1)))),10054)) { ORT.insert("car", obj) }
+
     println("\n-------- insert, update with additional filter --------\n")
     //insert, update with additional filter
     assertResult(0){ORT.insert("dummy", Map("dummy" -> 2), "dummy = -1")}
@@ -599,15 +604,15 @@ class QueryTest extends Suite {
     assertResult(0){ORT.update("address", Map("nr" -> 10033, "addr" -> "gugu"), "addr ~ 'Ri'")}
     assertResult(0) { ORT.delete("emp e", 10053, "ename ~~ :ename", Map("ename" -> "ivans%")) }
     assertResult(1) { ORT.delete("emp e", 10053, "ename ~~ :ename", Map("ename" -> "van%")) }
-    
+
     println("\n---- Object INSERT, UPDATE ------\n")
-    
+
     implicit def pohatoMap[T <: Poha](o: T): (String, Map[String, _]) = o match {
       case Car(nr, name) => "car" -> Map("nr" -> nr, "name" -> name)
     }
     assertResult((1,8888))(ORT.insertObj(Car(8888, "OPEL")))
-    assertResult(1)(ORT.updateObj(Car(8888, "SAAB")))    
-    
+    assertResult(1)(ORT.updateObj(Car(8888, "SAAB")))
+
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
 
     nr = 0
@@ -625,10 +630,10 @@ class QueryTest extends Suite {
         }
       case _ =>
     }
-    
+
     println("\n-------------- CACHE -----------------\n")
     Env.cache map println
-    
+
   }
-    
+
 }

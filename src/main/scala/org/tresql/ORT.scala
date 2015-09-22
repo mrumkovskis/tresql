@@ -9,9 +9,9 @@ trait ORT {
   case class OneToOne(rootTable: String, keys: Set[String])
   case class OneToOneBag(relations: OneToOne, obj: Map[String, Any])
 
-  /** <object name | property name>[:<reference to parent>][:actions in form <[+=-]> indicating insertu, update, delete] */
+  /** <object name | property name>[:<reference to parent>][:actions in form <[+=-]> indicating insert, update, delete] */
   val PROP_PATTERN = new scala.util.matching.Regex(
-    """(\w+)(:(\w+))?(:\[([+=-]+)\])?""", "table", null, "ref", null, "actions")
+    """(\w+)(:(\w+))?(\[([+=-]+)\])?""", "table", null, "ref", null, "actions")
   /** <object name | property name>[:<linked property name>][#(insert | update | delete)] */
   val PROP_PATTERN_OLD = """(\w+)(:(\w+))?(#(\w+))?"""r
 
@@ -150,8 +150,9 @@ trait ORT {
       oneToOne: OneToOne,
       filter: String,
       resources: Resources): String = {
-    //insert statement column, value map from obj
-    val PROP_PATTERN(objName, _, refPropName, _, action) = name
+    val (objName, refPropName, insertAction, updateAction, deleteAction) =
+      parseProperty(name)
+    //insert action, update action, delete action
     resources.metaData.tableOption(resources.tableName(objName)).map(table => {
       val ptn = if (parent != null) resources.tableName(parent) else null
       val refColName = if (parent == null) null else if (refPropName == null)
@@ -230,6 +231,8 @@ trait ORT {
       oneToOne: OneToOne,
       filter: String,
       resources: Resources): String = {
+    val (objName, refPropName, insertAction, updateAction, deleteAction) =
+      parseProperty(name)
     val md = resources.metaData
     md.tableOption(resources.tableName(name)).flatMap(table => {
       var pkProp: Option[String] = None
@@ -298,26 +301,31 @@ trait ORT {
   }
 
   def lookup_tresql(refPropName: String, refColName: String, objName: String, obj: Map[String, _], resources: Resources) =
-    resources.metaData.tableOption(resources.tableName(objName)).filter(_.key.cols.size == 1).map(table => {
+    resources.metaData.tableOption(resources.tableName(objName)).filter(_.key.cols.size == 1).map {
+      table =>
       val pk = table.key.cols.head
-      obj.find(t => resources.colName(objName, t._1) == pk).map(_._1)
-         .filter(obj(_) != null)
-         .map(pkProp => { //update
-        List( /*lookup object update*/
-          s"|_changeEnv('$refPropName', ${update_tresql(objName, obj, null, null, null, null, resources)})",
-          /*reference to lookup object primary key*/
-          refColName -> resources.valueExpr(objName, s"$refPropName.$pkProp"))
-      }).getOrElse { /*insert*/
-        List(/*lookup object insert, set reference property variable to inserted object primary key*/
-            s":$refPropName = |_lookupInsert('$refPropName', ${insert_tresql(objName, obj, null, null, null, null, resources)})",
-          /*reference column set to reference property variable value*/
-          refColName -> resources.valueExpr(objName, refPropName))
-      }
-    }).orNull
+      val pkProp = obj.find(t => resources.colName(objName, t._1) == pk).map(_._1).orNull
+      val insert = insert_tresql(objName, obj, null, null, null, null, resources)
+      val update = update_tresql(objName, obj, null, null, null, null, resources)
+      List(
+        s":$refPropName = |_lookup_edit('$refPropName', ${
+          if (pkProp == null) "null" else s"'$pkProp'"}, $insert, $update)",
+        refColName -> resources.valueExpr(objName, refPropName))
+    }.orNull
 
   //TODO returns lookup table name not object name. lookup_tresql requires object name, so the
   //two must be equal.
   def lookupObject(refColName: String, table: metadata.Table) = table.refTable.get(List(refColName))
+
+  private def parseProperty(name: String) = {
+    val PROP_PATTERN(objName, _, refPropName, _, action) = name
+    //insert action, update action, delete action
+    val (ia, ua, da) = Option(action).map (a =>
+      (action contains "+", action contains "=", action contains "-")
+    ).getOrElse {(true, false, true)}
+    (objName, refPropName, ia, ua, da)
+  }
+
 
   def save_tresql(name:String, obj:Map[String, _], resources:Resources) = {
     val x = del_upd_ins_obj(name, obj, resources)
