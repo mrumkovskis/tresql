@@ -385,17 +385,19 @@ class QueryTest extends Suite {
               "work:empno" -> List())),
         "calculated_children"->List(Map("x"->5)), "deptno"->40,
         //this will not be inserted since work has no relation to dept
-        "work"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
+        "work"->List(
+            Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
             Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
-            "car" -> List(Map("nr" -> "EEE", "name" -> "BEATLE"), Map("nr" -> "III", "name" -> "FIAT")))
+        "car" -> List(Map("nr" -> "EEE", "name" -> "BEATLE"), Map("nr" -> "III", "name" -> "FIAT")))
     assertResult(List(1,
         List(0,
             List((List(1, List(List(1, 1))),10015),
                 (List(1, List(List())),10016)),
             0, List((1,"EEE"), (1,"III")))))(ORT.update("dept", obj))
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
-        "work:empno"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
-              Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
+        "work:empno"->List(
+          Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
+          Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
         "calculated_children"->List(Map("x"->5)), "deptno"->40)
     assertResult(List(1, List(2, List(1, 1))))(ORT.update("emp", obj))
     //no child record is updated since no relation is found with car and ambiguous relation is

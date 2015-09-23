@@ -582,16 +582,16 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   /* Expression is built only from macros to ensure ORT lookup editing. */
   case class LookupEditExpr(
     obj: String,
-    pk: String,
+    idName: String,
     insertExpr: Expr,
     updateExpr: Expr)
   extends BaseExpr {
     override def apply() = env(obj) match {
       case m: Map[String, Any] =>
-        if (pk != null && (m contains pk) && m(pk) != null) {
-          val lookupObjPk = m(pk)
+        if (idName != null && (m contains idName) && m(idName) != null) {
+          val lookupObjId = m(idName)
           updateExpr(m)
-          lookupObjPk
+          lookupObjId
         } else extractId(insertExpr(m))
       case null => null
       case x => error(s"Cannot set environment variables for the expression. $x is not a map.")
@@ -601,7 +601,26 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
       case s: Seq[_] => s.last match { case (_, id) => id } //array expression
       case x => error(s"Unable to extract id from expr result: $x, expr: $expr")
     }
-    def defaultSQL = s"LookupEditExpr($obj, $pk, $insertExpr, $updateExpr)"
+    def defaultSQL = s"LookupEditExpr($obj, $idName, $insertExpr, $updateExpr)"
+  }
+  /* Expression is built from macros to ensure ORT children editing */
+  case class InsertOrUpdateExpr(idName: String, insertExpr: Expr, updateExpr: Expr)
+  extends BaseExpr {
+    override def apply() =
+      if (idName != null && env.containsNearest(idName) && env(idName) != null)
+        updateExpr() else insertExpr()
+    def defaultSQL = s"InsertOrUpdateExpr($idName, $insertExpr, $updateExpr)"
+  }
+  /* Expression is built from macros to ensure ORT children editing */
+  case class DeleteChildrenExpr(obj: String, idName: String, expr: Expr)
+  extends BaseExpr {
+    override def apply() {
+      env(obj) match {
+        case s: Seq[Map[String, _]] =>
+          expr(Map("ids" -> s.map(_(idName)).filter(_ != null)))
+      }
+    }
+    override def defaultSQL = s"DeleteChildrenExpr($obj, $idName, $expr)"
   }
 
   abstract class BaseExpr extends PrimitiveExpr {
@@ -673,7 +692,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
       x
     })
 
-  //DML statements are defined outsided buildInternal method since they are called from other QueryBuilder
+  //DML statements are defined outside of buildInternal method since they are called from other QueryBuilder
   private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: Any) = {
     new InsertExpr(IdentExpr(table.ident), alias, Option(cols) map (_ map (buildInternal(_, COL_CTX)) filter {
       case x @ ColExpr(IdentExpr(_), _, _, _, _) => true
