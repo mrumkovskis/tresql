@@ -24,10 +24,10 @@ trait ORT {
       name: String,
       obj: Map[String, Any],
       struct: Map[String, Any],
-      multipleToRoot: Map[String, String],
+      refsToRoot: Map[String, String],
       filter: String)
     (implicit resources: Resources = Env): Any = {
-    val insert = insert_tresql(name, struct, null, multipleToRoot, null, filter, resources)
+    val insert = insert_tresql(name, struct, null, refsToRoot, null, filter, resources)
     if(insert == null) error("Cannot insert data. Table not found for object: " + name)
     Env log (s"\nStructure: $struct")
     Query.build(insert, obj, false)(resources)()
@@ -42,10 +42,10 @@ trait ORT {
       name: String,
       obj: Map[String, Any],
       struct: Map[String, Any],
-      multipleToRoot: Map[String, String],
+      refsToRoot: Map[String, String],
       filter: String = null)
     (implicit resources: Resources = Env): Any = {
-    val update = update_tresql(name, struct, null, multipleToRoot, null, filter, resources)
+    val update = update_tresql(name, struct, null, refsToRoot, null, filter, resources)
     if(update == null) error(s"Cannot update data. Table not found or no primary key or no updateable columns found for the object: $name")
     Env log (s"\nStructure: $struct")
     Query.build(update, obj, false)(resources)()
@@ -82,16 +82,16 @@ trait ORT {
    *  Tables must be ordered in parent -> child direction. */
   def insertMultiple(obj: Map[String, Any], names: String*)(filter: String = null)(
       implicit resources: Resources = Env): Any = {
-    val (nobj, struct, multipleToRoot) = multipleOneToOneTransformation(obj, names: _*)
-    insertInternal(names.head, nobj, tresql_structure(struct), multipleToRoot, filter)
+    val (nobj, struct, refsToRoot) = multipleOneToOneTransformation(obj, names: _*)
+    insertInternal(names.head, nobj, tresql_structure(struct), refsToRoot, filter)
   }
 
   /** update to multiple tables
    *  Tables must be ordered in parent -> child direction. */
   def updateMultiple(obj: Map[String, Any], names: String*)(filter: String = null)(
       implicit resources: Resources = Env): Any = {
-    val (nobj, struct, multipleToRoot) = multipleOneToOneTransformation(obj, names: _*)
-    updateInternal(names.head, nobj, tresql_structure(struct), multipleToRoot, filter)
+    val (nobj, struct, refsToRoot) = multipleOneToOneTransformation(obj, names: _*)
+    updateInternal(names.head, nobj, tresql_structure(struct), refsToRoot, filter)
   }
 
   /* For each name started with second is generated OneToOne object which contains name's references
@@ -107,7 +107,8 @@ trait ORT {
        x._2 + (name -> OneToOneBag(OneToOne(names.head, importedKeys(n, x._3, resources)), obj)),
        name :: x._3)
     } match {
-      case (obj, struct, n) => (obj, struct, n.tail.map(_ -> n.head).toMap /**/)
+      case (obj, struct, n) =>
+      (obj, struct, n.reverse match { case head :: tail => tail.map(_ -> head).toMap })
     }
 
   //object methods
@@ -156,7 +157,7 @@ trait ORT {
       name: String,
       obj: Map[String, Any],
       parent: String,
-      multipleToRoot: Map[String, String],
+      refsToRoot: Map[String, String],
       oneToOne: OneToOne,
       filter: String,
       resources: Resources): String = {
@@ -180,11 +181,11 @@ trait ORT {
           //children or lookup
           case v: Map[String, _] => lookupObject(cn, table).map(lookupTable =>
             lookup_tresql(n, cn, lookupTable, v, resources)).getOrElse {
-            List(insert_tresql(n, v, objName, multipleToRoot, null,
+            List(insert_tresql(n, v, objName, refsToRoot, null,
                 null /*do not pass filter further*/, resources) -> null)
           }
           //oneToOne child
-          case b: OneToOneBag => List(insert_tresql(n, b.obj, objName, multipleToRoot,
+          case b: OneToOneBag => List(insert_tresql(n, b.obj, objName, refsToRoot,
               b.relations, filter, resources) -> null)
           //pk or fk, one to one relationship
           case _ if table.key.cols == List(cn) /*pk*/ || refPropName == n || refColName == cn /*fk*/
@@ -204,7 +205,7 @@ trait ORT {
              .filter(_._1 != null /*check if prop->col mapping found*/ &&
               (parent == null /*first level obj*/ || refColName != null || oneToOne != null /*child obj (must have reference to parent)*/ )) ++
               (if (refColName == null || oneToOne != null) Map()
-                  else Map(refColName -> (s":#${multipleToRoot.getOrElse(ptn, ptn)}") /*add fk col to parent*/ )) ++
+                  else Map(refColName -> (s":#${refsToRoot.getOrElse(ptn, ptn)}") /*add fk col to parent*/ )) ++
               (if (oneToOne != null) oneToOne.keys.map(_ -> s":#${oneToOne.rootTable}").toMap else Map() /* set one to one relationships */) ++
               (if (table.key.cols.length != 1 /*multiple col pk not supported*/ ||
                 (parent != null && ((refColName == null && oneToOne == null) /*no relation to parent found*/ ||
@@ -237,7 +238,7 @@ trait ORT {
       name: String,
       obj: Map[String, Any],
       parent: String,
-      multipleToRoot: Map[String, String],
+      refsToRoot: Map[String, String],
       oneToOne: OneToOne,
       filter: String,
       resources: Resources): String = {
@@ -251,69 +252,76 @@ trait ORT {
           .filter(_ => oneToOne == null) //refCol not relevant in oneToOne case
           .flatMap(p=> importedKeyOption(resources.tableName(p), table)))
         .orNull
-      var pkProp: Option[String] = None
-      def findPkProp = pkProp.orElse {
-        pkProp = obj.find(
-          n => table.key == metadata.Key(List(resources.colName(objName, n._1)))).map(_._1)
-        pkProp
+      println(s"\n\nname = $name, parent = $parent, refCol = $refColName, refs to root = $refsToRoot, one to one = $oneToOne\n\n")
+      def deleteAllChildren = s"-${table.name}[$refColName = :#${refsToRoot.
+        getOrElse(parentTableName, parentTableName)}]"
+      def deleteMissingChildren = {
+        val filter = table.key.cols.headOption.map(k => s" & $k !in :ids").getOrElse("")
+        s"""_delete_children('$name', '${table.name}', -${table
+          .name}[$refColName = :#${refsToRoot.getOrElse(parentTableName,
+            parentTableName)}$filter])"""
       }
-      def deleteAllChildren = s"-${table.name}[$refColName = :#$parentTableName]"
-      def deleteMissingChildren =
-        s"""_delete_children('$name', '${findPkProp.get}', -${table.name}[$refColName
-          = :#$parentTableName & ${table.key.cols.head} !in :ids])"""
-      def isOneToOne(childName: String) = md.tableOption(resources.tableName(childName)).flatMap {
-        t => importedKeyOption(table.name, t).map(t.key.cols.size == 1 && _ == t.key.cols.head) } getOrElse false
-      def update = obj.flatMap((t: (String, _)) => {
+      def oneToOneTable(tname: String) = (for {
+        t <- md.tableOption(resources.tableName(tname))
+        ref <- importedKeyOption(table.name, t)
+        if t.key.cols.size == 1 && ref == t.key.cols.head
+      } yield t).orNull
+      def update = (for {pk <- table.key.cols.headOption} yield obj.flatMap((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(objName, n)
-        if (table.key == metadata.Key(List(cn))) pkProp = Some(n)
         t._2 match {
           //children
           case v: Map[String, _] =>
             lookupObject(cn, table).map(lookupTable =>
               lookup_tresql(n, cn, lookupTable, v, resources))
               .getOrElse {
+                val extTable = oneToOneTable(n)
                 List((
-                  if (isOneToOne(n))
+                  if (extTable != null)
                     update_tresql(n, v, objName,
-                      multipleToRoot + (resources.tableName(n) -> table.name),
-                      null, null /* do no pass filter further */, resources)
-                else update_tresql(n, v, objName, null, null, null, resources)) -> null)
+                      Map(extTable.name -> table.name),
+                      OneToOne(table.name, Set(extTable.key.cols.head)),
+                      null /* do no pass filter further */, resources)
+                  else
+                    update_tresql(n, v, objName, refsToRoot,
+                      null, null, resources)) -> null)
               }
-          case b: OneToOneBag =>
-            List(update_tresql(n, b.obj, objName,
-                multipleToRoot,
+          case b: OneToOneBag => List(update_tresql(n, b.obj, objName, refsToRoot,
                 b.relations, null /* do no pass filter further */, resources) -> null)
-          //do not update pkProp
-          case _ if (Some(n) == pkProp) => Nil
-          case _ if oneToOne != null && oneToOne.keys.contains(cn) => List(cn -> s":#${oneToOne.rootTable}")
+          case _ if table.key == metadata.Key(List(cn)) => Nil //do not update pk
+          case _ if oneToOne != null && oneToOne.keys.contains(cn) =>
+            List(cn -> s":#${oneToOne.rootTable}")
           case _ => List(table.colOption(cn).map(_.name).orNull -> resources.valueExpr(objName, n))
         }
       }).groupBy { case _: String => "l" case _ => "b" } match {
         case m: Map[String, List[_]] =>
           m("b").asInstanceOf[List[(String, String)]].filter(_._1 != null).unzip match {
             case (cols: List[String], vals: List[String]) =>
-              Option(firstPkProp).orElse(pkProp).map{ pk =>
               val lookupTresql = m.get("l").map(_.asInstanceOf[List[String]].map(_ + ", ").mkString).orNull
               //primary key in update condition is taken from sequence so that currId is updated for
               //child records
-              val tresql = cols.mkString(s"=${table.name}[${table.key.cols.head} = ${
-                if (oneToOne != null) ":#" + oneToOne.rootTable //OneToOne root table record id
-                else if (firstPkProp == pk) ":" + firstPkProp //fk to parent = pk
-                else "#" + table.name + (if (refColName != null)
-                  s" & $refColName = :#$parentTableName" else "") //make sure record belongs to parent
+              val tresql = cols.mkString(s"=${table.name}[$pk = ${
+                refsToRoot.get(table.name).map(":#" + _).getOrElse("#" + table.name) +
+                (if (refColName != null)
+                  s" & $refColName = :#${refsToRoot.getOrElse(parentTableName,
+                    parentTableName)}" else "") //make sure record belongs to parent
               }${Option(filter).map(f => s" & ($f)").getOrElse("")}]{", ", ", "}") +
                 vals.filter(_ != null).mkString(" [", ", ", "]")
               val alias = if (parent != null) " '" + name + "'" else ""
-              if (cols.size > 0)
-                Option(lookupTresql).map(lt => s"[$lt$tresql]$alias").getOrElse(tresql + alias)
+              if (cols.size > 0) Option(lookupTresql)
+                .map(lt => s"[$lt$tresql]$alias")
+                .getOrElse(tresql + alias)
               else null
-            }.orNull
           }
-      }
-      def insert = insert_tresql(name, obj, parent, null, null, null, resources)
-      def insertOrUpdate = s"""_insert_or_update('${pkProp.get}', $insert, $update) $name"""
-      if (parent != null && oneToOne == null && firstPkProp == null) { //children with no one to one relationships
+      }).orNull
+      def insert = insert_tresql(name, obj, parent, refsToRoot, null, null, resources)
+      def stripTrailingAlias(tresql: String, alias: String) =
+        if (tresql != null && tresql.endsWith(alias))
+          tresql.dropRight(alias.length) else tresql
+      def insertOrUpdate = s"""_insert_or_update('${table.name}', ${
+        stripTrailingAlias(insert, s" '$name'")}, ${
+        stripTrailingAlias(update, s" '$name'")}) '$name'"""
+      if (parent != null && oneToOne == null) { //children with no one to one relationships
         if (refColName == null) null //no relation to parent found
         else {
           val deleteTresql = if (deleteAction)
@@ -336,8 +344,8 @@ trait ORT {
       table =>
       val pk = table.key.cols.head
       val pkProp = obj.find(t => resources.colName(objName, t._1) == pk).map(_._1).orNull
-      val insert = insert_tresql(objName, obj, null, null, null, null, resources)
-      val update = update_tresql(objName, obj, null, null, null, null, resources)
+      val insert = insert_tresql(objName, obj, null, Map(), null, null, resources)
+      val update = update_tresql(objName, obj, null, Map(), null, null, resources)
       List(
         s":$refPropName = |_lookup_edit('$refPropName', ${
           if (pkProp == null) "null" else s"'$pkProp'"}, $insert, $update)",

@@ -136,7 +136,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   case class IdRefExpr(seqName: String) extends BaseExpr {
     override def apply() = getId(seqName)
     private def getId(name: String): Any = env.currIdOption(name).getOrElse {
-      val t = env.table(seqName)
+      val t = env.table(name)
       t.refTable.get(t.key.cols).map(getId).getOrElse(
           error(s"Current id not found for sequence $seqName in environment"))
     }
@@ -604,20 +604,23 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
     def defaultSQL = s"LookupEditExpr($obj, $idName, $insertExpr, $updateExpr)"
   }
   /* Expression is built from macros to ensure ORT children editing */
-  case class InsertOrUpdateExpr(idName: String, insertExpr: Expr, updateExpr: Expr)
+  case class InsertOrUpdateExpr(table: String, insertExpr: Expr, updateExpr: Expr)
   extends BaseExpr {
+    val idName = env.table(table).key.cols.headOption.orNull
     override def apply() =
       if (idName != null && env.containsNearest(idName) && env(idName) != null)
         updateExpr() else insertExpr()
     def defaultSQL = s"InsertOrUpdateExpr($idName, $insertExpr, $updateExpr)"
   }
   /* Expression is built from macros to ensure ORT children editing */
-  case class DeleteChildrenExpr(obj: String, idName: String, expr: Expr)
+  case class DeleteChildrenExpr(obj: String, table: String, expr: Expr)
   extends BaseExpr {
-    override def apply() {
+    val idName = env.table(table).key.cols.headOption.orNull
+    override def apply() = {
       env(obj) match {
         case s: Seq[Map[String, _]] =>
-          expr(Map("ids" -> s.map(_(idName)).filter(_ != null)))
+          expr(if (idName != null)
+            Map("ids" -> s.map(_(idName)).filter(_ != null)) else Map[String, Any]())
       }
     }
     override def defaultSQL = s"DeleteChildrenExpr($obj, $idName, $expr)"
@@ -639,12 +642,14 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   }
 
   private def executeChildren = {
+    println(s"\nCHILDREN:\n${childUpdates.map(x=> x._2 -> env.get(x._2))}\n")
     childUpdates.map {
       case (ex, null) => ex()
       case (ex, n) if (!env.contains(n)) => ex()
       case (ex, n) => env(n) match {
         case m: Map[String, _] => ex(m)
-        case t: scala.collection.Traversable[Map[String, _]] => t map { ex(_) }
+        case t: scala.collection.Traversable[Map[String, _]] =>
+          t.map{m => println(s"\n\nMAP:\n$m\nEX:\n$ex\n"); ex(m)}
         case a: Array[Map[String, _]] => (a map { ex(_) }).toList
         case x => ex()
       }

@@ -12,9 +12,9 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
     this(null: EnvProvider, resources, reusableExpr)
     update(params)
   }
-  
+
   //provided envs are used for statement closing. this list is filled only if provider is not set.
-  //NOTE: list contains also this environment 
+  //NOTE: list contains also this environment
   private var providedEnvs: List[Env] = Nil
   //is package private since is accessed from QueryBuilder
   private[tresql] val provider: Option[EnvProvider] = Option(_provider)
@@ -22,7 +22,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   private def rootEnv(e: Env): Env = e.provider.map(p=>rootEnv(p.env)).getOrElse(e)
   private val root = rootEnv(this)
   root.providedEnvs = this :: root.providedEnvs
-  
+
   private var vars: Option[scala.collection.mutable.Map[String, Any]] = None
   private var _exprs: Option[Map[Expr, Int]] = None
   private val ids = scala.collection.mutable.Map[String, Any]()
@@ -31,17 +31,18 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
 
   def apply(name: String): Any = get(name).map {
     case e: Expr => e()
-    case x => x    
+    case x => x
   } getOrElse (throw new MissingBindVariableException(name))
-  
-  def get(name: String) = vars.flatMap(_.get(name)) orElse provider.map(_.env(name))
+
+  def get(name: String): Option[Any] =
+    vars.flatMap(_.get(name)) orElse provider.flatMap(_.env.get(name))
 
   /* if not found into this variable map look into provider's if such exists */
   def contains(name: String): Boolean =
     vars.map(_.contains(name))
      .filter(_ == true)
      .getOrElse(provider.map(_.env.contains(name)).getOrElse(false))
-  
+
   /* finds closest env with vars map set (Some(vars)) and looks there if variable exists */
   def containsNearest(name: String): Boolean =
     vars.map(_.contains(name)).getOrElse(provider.map(_.env.containsNearest(name)).getOrElse(false))
@@ -53,9 +54,9 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   private[tresql] def update(vars: Map[String, Any]) {
     this.vars = if (vars == null) None else Some(scala.collection.mutable.Map(vars.toList: _*))
   }
-  
+
   private [tresql] def updateExprs(exprs: Map[Expr, Int]) = _exprs = Option(exprs)
-  
+
   def apply(rIdx: Int): Result = {
     var i = 0
     var e: Env = this
@@ -74,12 +75,12 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   private[tresql] def statement_=(st: java.sql.PreparedStatement) = _statement = st
 
   private[tresql] def result = _result
-  private[tresql] def result_=(r: Result) = _result = r 
-    
+  private[tresql] def result_=(r: Result) = _result = r
+
   private[tresql] def closeStatement {
     root.providedEnvs foreach (e=> if (e.statement != null) e.statement.close)
   }
-  
+
   private[tresql] def nextId(seqName: String): Any = {
     //TODO perhaps built expressions can be used to improve performance?
     val id = Query.unique[Any](resources.idExpr(seqName))
@@ -91,14 +92,14 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
     ids.get(seqName) orElse provider.flatMap(_.env.currIdOption(seqName))
   //update current id. This is called from QueryBuilder.IdExpr
   private[tresql] def currId(seqName: String, id: Any): Unit = ids(seqName) = id
-  
+
   //resources methods
   def conn: java.sql.Connection = provider.map(_.env.conn).getOrElse(resources.conn)
   override def metaData = provider.map(_.env.metaData).getOrElse(resources.metaData)
   override def dialect: PartialFunction[Expr, String] = provider.map(_.env.dialect).getOrElse(resources.dialect)
   override def idExpr = provider.map(_.env.idExpr).getOrElse(resources.idExpr)
   override def queryTimeout = provider.map(_.env.queryTimeout).getOrElse(resources.queryTimeout)
-  
+
   //meta data methods
   def table(name: String) = metaData.table(name)
   def tableOption(name:String) = metaData.tableOption(name)
@@ -132,7 +133,7 @@ object Env extends Resources {
   private var query_timeout = 0
   //recursive execution depth
   private var _recursive_stack_depth = 50
-  
+
   def apply(params: Map[String, Any], reusableExpr: Boolean) = new Env(params, this, reusableExpr)
   def conn = { val c = threadConn.get; if (c == null) sharedConn else c }
   override def metaData = _metaData.get
@@ -146,7 +147,7 @@ object Env extends Resources {
   def macroMethod(name: String) = _macrosMethods.map(_(name)).get
   def cache = _cache
   override def queryTimeout = query_timeout
-  
+
   def conn_=(conn: java.sql.Connection) = this.threadConn set conn
   def metaData_=(metaData: MetaData) = this._metaData = Option(metaData)
   def dialect_=(dialect: PartialFunction[Expr, String]) = this._dialect =
@@ -160,20 +161,20 @@ object Env extends Resources {
     this._macros = Option(macr)
     this._macrosMethods = macros.flatMap(f => Option(f.getClass.getMethods.map(m => m.getName -> m).toMap))
   }
-  
+
   def recursive_stack_dept = _recursive_stack_depth
   def recursive_stack_dept_=(depth: Int) = _recursive_stack_depth = depth
-  
+
   def cache_=(cache: Cache) = this._cache = Option(cache)
   def queryTimeout_=(timeout: Int) = this.query_timeout = timeout
-  
+
   def logLevel = threadLogLevel.get
   def logLevel_=(level: Any) = level match {
     case l: Int => threadLogLevel.set(Some(l))
     case None | null => threadLogLevel.set(None)
     case l: Option[Int] => threadLogLevel.set(l)
   }
-  
+
   def log(msg: => String, level: Int = 0): Unit = if (_logger != null) _logger(msg,
       level + logLevel.getOrElse(0))
   def logger = _logger
@@ -214,7 +215,7 @@ trait NameMap {
   def colName(objectName:String, propertyName:String):String = propertyName
   /** Column value expression in tresql statement value clause.
    *  Default is named bind variable - {{{:propertyName}}} */
-  def valueExpr(objectName: String, propertyName: String) = ":" + propertyName  
+  def valueExpr(objectName: String, propertyName: String) = ":" + propertyName
 }
 
 trait EnvProvider {

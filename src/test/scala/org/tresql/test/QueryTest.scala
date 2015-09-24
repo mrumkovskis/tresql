@@ -456,7 +456,7 @@ class QueryTest extends Suite {
     println("\n--- SAVE ---\n")
 
     obj = Map("dname" -> "SALES", "loc" -> "WASHINGTON", "calculated_field" -> 222,
-      "emp" -> List(
+      "emp[+=-]" -> List(
         Map("empno" -> 7499, "ename" -> "ALLEN SMITH", "job" -> "SALESMAN", "mgr" -> 7698,
             "mgr_name" -> null, "deptno" -> 30),
         Map("empno" -> 7654, "ename" -> "MARTIN BLAKE", "job" -> "SALESMAN", "mgr" -> 7698,
@@ -466,25 +466,29 @@ class QueryTest extends Suite {
         Map("empno" -> 7698, "ename" -> "BLAKE", "job" -> "SALESMAN", "mgr" -> 7839,
             "mgr_name" -> null, "deptno" -> 30)),
       "calculated_children" -> List(Map("x" -> 5)), "deptno" -> 30)
-      assertResult(List(1, List(3, List(1, 1, 1), List((1,10023)))))(ORT.save("dept", obj))
+      assertResult(List(1, List(3, List(1, 1, (1,10023), 1))))(ORT.update("dept", obj))
 
-    obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
-        "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->7788, "hours"->10, "empno_mgr"->7839),
-              Map("wdate"->"2012-7-13", "empno"->7788, "hours"->3, "empno_mgr"->7839)),
-        "calculated_children"->List(Map("x"->5)), "deptno"->20)
-    assertResult(List(1, List(2, List(1, 1))))(ORT.save("emp", obj))
+    obj = Map("empno" -> 7788, "ename"->"SCOTT", "mgr"-> 7839,
+      "work:empno[-=+]" -> List(
+        Map("wdate"->"2012-7-12", "empno"->7788, "hours"->10, "empno_mgr"->7839),
+        Map("wdate"->"2012-7-13", "empno"->7788, "hours"->3, "empno_mgr"->7839)),
+      "calculated_children"->List(Map("x"->5)), "deptno"->20)
+    assertResult(List(1, List(2, List(1, 1))))(ORT.update("emp", obj))
 
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
-        "emp"->List(
-            Map("empno"->null, "ename"->"AMY", "mgr"->7788, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
-                "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->null, "hours"->5, "empno_mgr"->7839),
+        "emp[+-=]"->List(
+          Map("empno"->null, "ename"->"AMY", "mgr"->7788, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
+            "work:empno[=-+]"->List(
+              Map("wdate"->"2012-7-12", "empno"->null, "hours"->5, "empno_mgr"->7839),
               Map("wdate"->"2012-7-13", "empno"->null, "hours"->2, "empno_mgr"->7839))),
-            Map("empno"->null, "ename"->"LENE", "mgr"->7566, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
-                "work:empno"->List(Map("wdate"->"2012-7-12", "empno"->null, "hours"->5, "empno_mgr"->7839),
-              Map("wdate"->"2012-7-13", "empno"->null, "hours"->2, "empno_mgr"->7839)))),
+          Map("empno"->null, "ename"->"LENE", "mgr"->7566, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
+            "work:empno[=+-]"->List(
+              Map("wdate"->"2012-7-14", "empno"->null, "hours"->5, "empno_mgr"->7839),
+              Map("wdate"->"2012-7-15", "empno"->null, "hours"->2, "empno_mgr"->7839)))),
         "calculated_children"->List(Map("x"->5)), "deptno"->40)
-    assertResult(List(1, List(2, List((List(1, List(0, List(1, 1))),10024),
-        (List(1, List(0, List(1, 1))),10025)))))(ORT.save("dept", obj))
+    assertResult(List(1, List(0, List((List(1, List(List(1, 1))),10024),
+      (List(1, List(1)),10025)))))(ORT.update("dept", obj))
+    //sys.error("done")
 
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(), "calculated_children"->List(Map("x"->5)), "deptno"->20)
