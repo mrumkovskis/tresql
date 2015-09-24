@@ -642,14 +642,12 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   }
 
   private def executeChildren = {
-    println(s"\nCHILDREN:\n${childUpdates.map(x=> x._2 -> env.get(x._2))}\n")
     childUpdates.map {
       case (ex, null) => ex()
       case (ex, n) if (!env.contains(n)) => ex()
       case (ex, n) => env(n) match {
         case m: Map[String, _] => ex(m)
-        case t: scala.collection.Traversable[Map[String, _]] =>
-          t.map{m => println(s"\n\nMAP:\n$m\nEX:\n$ex\n"); ex(m)}
+        case t: scala.collection.Traversable[Map[String, _]] => t.map(ex(_))
         case a: Array[Map[String, _]] => (a map { ex(_) }).toList
         case x => ex()
       }

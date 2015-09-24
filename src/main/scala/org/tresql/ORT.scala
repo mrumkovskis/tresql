@@ -11,7 +11,7 @@ trait ORT {
 
   /** <object name | property name>[:<reference to parent>][:actions in form <[+=-]> indicating insert, update, delete] */
   val PROP_PATTERN = new scala.util.matching.Regex(
-    """(\w+)(:(\w+))?(\[([+=-]+)\])?""", "table", null, "ref", null, "actions")
+    """(\w+)(:(\w+))?(\[(-?=?\+?)\])?""", "table", null, "ref", null, "actions")
   /** <object name | property name>[:<linked property name>][#(insert | update | delete)] */
   val PROP_PATTERN_OLD = """(\w+)(:(\w+))?(#(\w+))?"""r
 
@@ -50,18 +50,7 @@ trait ORT {
     Env log (s"\nStructure: $struct")
     Query.build(update, obj, false)(resources)()
   }
-  /**
-   * Saves object obj specified by parameter name. If object primary key is set object
-   * is updated, if object primary key is not set object is inserted. Children are merged
-   * with database i.e. new ones are inserted, existing ones updated, deleted ones deleted.
-   * Children structure i.e. property set must be identical, since one tresql statement is used
-   * for all of the children
-   */
-  def save(name: String, obj: Map[String, _], filter: String = null)(implicit resources: Resources = Env): Any = {
-    val (save, saveable) = save_tresql(name, obj, resources)
-    Env log saveable.toString
-    Query.build(save, saveable, false)(resources)()
-  }
+
   def delete(name: String, id: Any, filter: String = null, filterParams: Map[String, Any] = null)
   (implicit resources: Resources = Env): Any = {
     val Array(tableName, alias) = name.split("\\s+").padTo(2, null)
@@ -121,11 +110,6 @@ trait ORT {
       implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
     val v = conv(obj)
     update(v._1, v._2, filter)
-  }
-  def saveObj[T](obj: T, filter: String = null)(
-      implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
-    val v = conv(obj)
-    save(v._1, v._2, filter)
   }
 
   def tresql_structure[M <: Map[String, Any]](obj: M)(
@@ -252,7 +236,6 @@ trait ORT {
           .filter(_ => oneToOne == null) //refCol not relevant in oneToOne case
           .flatMap(p=> importedKeyOption(resources.tableName(p), table)))
         .orNull
-      println(s"\n\nname = $name, parent = $parent, refCol = $refColName, refs to root = $refsToRoot, one to one = $oneToOne\n\n")
       def deleteAllChildren = s"-${table.name}[$refColName = :#${refsToRoot.
         getOrElse(parentTableName, parentTableName)}]"
       def deleteMissingChildren = {
@@ -363,95 +346,6 @@ trait ORT {
       (action contains "+", action contains "=", action contains "-")
     ).getOrElse {(true, false, true)}
     (objName, refPropName, ia, ua, da)
-  }
-
-
-  def save_tresql(name:String, obj:Map[String, _], resources:Resources) = {
-    val x = del_upd_ins_obj(name, obj, resources)
-    val (n:String, saveable:ListMap[String, Any]) = x.get(name + "#insert").map(
-        (name + "#insert", _))getOrElse(x.get(name + "#update").map((name + "#update", _)).getOrElse(
-            error("Cannot save data. "))).asInstanceOf[(String, ListMap[String, Any])]
-    del_upd_ins_tresql(null, n, saveable, resources) -> saveable
-  }
-
-  //returns ListMap so that it is guaranteed that #delete, #update, #insert props are in correct order
-  private def del_upd_ins_obj(name:String, obj:Map[String, _], resources:Resources):ListMap[String, Any] =
-  resources.metaData.tableOption(resources.tableName(name.split(":")(0))).map { table => {
-    var pk:Any = null
-    //convert map to list map which guarantees map entry order
-    val tresqlObj = ListMap(obj.toList:_*).flatMap(entry=> {
-      val (prop, col) = entry._1->resources.colName(name, entry._1)
-      entry._2 match {
-        case x if(table.key == metadata.Key(List(col))) => pk = x; ListMap(entry)
-        //process child table entry
-        case cht:List[Map[String, Any]] => cht.foldLeft(ListMap(
-            prop + "#delete" -> List[Any](),
-            prop + "#update" -> List[Any](),
-            prop + "#insert" -> List[Any]()))((m, v)=> {
-              m.map(t=> t._1->(del_upd_ins_obj(prop, v, resources).get(t._1).map(_ :: t._2).getOrElse(t._2)))
-            }).filter(t=> t._2.size > 0 || (t._1.endsWith("#delete") &&
-                //check that delete table exists
-                resources.metaData.tableOption(resources.tableName(t._1.takeWhile(!Set(':', '#').contains(_)))) != None))
-        //eliminate props not matching col in database
-        case x => table.colOption(col).map(c=> ListMap(entry)).getOrElse(ListMap())
-      }
-    })
-    if (pk == null) ListMap(name + "#insert" -> tresqlObj)
-    else ListMap(name + "#delete" -> pk, name + "#update" -> tresqlObj)
-  }}.getOrElse(ListMap())
-
-  private def del_upd_ins_tresql(parentTable: metadata.Table, name: String, obj: ListMap[String, Any],
-    res: Resources): String = {
-    val PROP_PATTERN_OLD(objName, _, refPropName, _, action) = name
-    val table = res.metaData.table(res.tableName(objName))
-    var pkProp: String = null
-    //stupid thing - map find methods conflicting from different traits
-    def findPkProp = if(pkProp != null) pkProp else {
-      pkProp = obj.asInstanceOf[TraversableOnce[(String, _)]].find(
-        n => table.key == metadata.Key(List(res.colName(objName, n._1)))).map(_._1).get
-      pkProp
-    }
-    def delete(delkey: String, delvals: Seq[_]) = {
-      val PROP_PATTERN_OLD(delObj, _, parRefProp, _, delact) = delkey
-      val delTable = res.metaData.table(res.tableName(delObj))
-      val refCol = if (parRefProp != null) res.colName(delObj, parRefProp) else {
-        val rfs = delTable.refs(table.name)
-        if (rfs.size == 1) rfs(0).cols(0) else error("Cannot create delete statement. None or too much refs from "
-          + delTable.name + " to " + table.name + ". Refs: " + rfs)
-      }
-      "-" + delTable.name + "[" + refCol + " = :" + findPkProp +
-        (if (delvals.size > 0) " & " + delTable.key.cols(0) + " !in(:'" + delkey + "')" else "") + "]"
-    }
-    obj map {
-      case (n, Seq(v: ListMap[String, _], _*)) => (del_upd_ins_tresql(table, n, v, res), null)
-      case (n, v: Seq[_]) if (n.endsWith("#delete")) => (delete(n, v), null)
-      case (n, value) => {
-        val col = res.colName(objName, n)
-        action match {
-          case "insert" => value match {
-            //pk null, get it from sequence
-            case x if (table.key == metadata.Key(List(col))) => (col, "#" + table.name)
-            //fk null, if unambiguous link to parent found get it from parent sequence reference
-            case null if ((refPropName != null && refPropName == n) || (refPropName == null &&
-              parentTable != null && (table.refs(parentTable.name) match {
-                case List(metadata.Ref(List(c), _)) => c == col
-                case _ => false
-              }))) => (col, ":#" + parentTable.name)
-            //value
-            case _ => (col, res.valueExpr(objName, n))
-          }
-          case "update" => if (table.key == metadata.Key(List(col))) {
-            pkProp = n; (null, null)
-          } else (col, ":" + n)
-        }
-      }
-    } filter (_._1 != null) unzip match {
-      case (cols: List[_], vals: List[_]) => (action match {
-        case "insert" => "+" + table.name
-        case "update" => "=" + table.name + "[:" + pkProp + "]"
-      }) + cols.mkString("{", ",", "}") + vals.filter(_ != null).mkString("[", ",", "]") +
-        (if (parentTable != null) " '" + name + "'" else "")
-    }
   }
 
   private def importedKeyOption(tableName: String, childTable: metadata.Table) =
