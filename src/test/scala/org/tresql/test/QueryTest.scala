@@ -453,7 +453,7 @@ class QueryTest extends Suite {
 
     assertResult(1)(ORT.delete("emp", 7934))
 
-    println("\n--- SAVE ---\n")
+    println("\n--- SAVE - merge children ---\n")
 
     obj = Map("dname" -> "SALES", "loc" -> "WASHINGTON", "calculated_field" -> 222,
       "emp[-=+]" -> List(
