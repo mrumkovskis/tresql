@@ -19,10 +19,15 @@ trait ORT {
 
   def insert(name: String, obj: Map[String, Any], filter: String = null)
     (implicit resources: Resources = Env): Any =
-      insertInternal(name, obj, tresql_structure(obj), filter)
-  private def insertInternal(name: String, obj: Map[String, Any], struct: Map[String, Any], filter: String)
+      insertInternal(name, obj, tresql_structure(obj), Map(), filter)
+  private def insertInternal(
+      name: String,
+      obj: Map[String, Any],
+      struct: Map[String, Any],
+      multipleToRoot: Map[String, String],
+      filter: String)
     (implicit resources: Resources = Env): Any = {
-    val insert = insert_tresql(name, struct, null, null, null, filter, resources)
+    val insert = insert_tresql(name, struct, null, multipleToRoot, null, filter, resources)
     if(insert == null) error("Cannot insert data. Table not found for object: " + name)
     Env log (s"\nStructure: $struct")
     Query.build(insert, obj, false)(resources)()
@@ -30,12 +35,17 @@ trait ORT {
 
   def update(name: String, obj: Map[String, Any], filter: String = null)
     (implicit resources: Resources = Env): Any =
-    updateInternal(name, obj, tresql_structure(obj), filter)
+    updateInternal(name, obj, tresql_structure(obj), Map(), filter)
 
   //TODO update where unique key (not only pk specified)
-  private def updateInternal(name: String, obj: Map[String, Any], struct: Map[String, Any], filter: String = null)
+  private def updateInternal(
+      name: String,
+      obj: Map[String, Any],
+      struct: Map[String, Any],
+      multipleToRoot: Map[String, String],
+      filter: String = null)
     (implicit resources: Resources = Env): Any = {
-    val update = update_tresql(name, struct, null, null, null, filter, resources)
+    val update = update_tresql(name, struct, null, multipleToRoot, null, filter, resources)
     if(update == null) error(s"Cannot update data. Table not found or no primary key or no updateable columns found for the object: $name")
     Env log (s"\nStructure: $struct")
     Query.build(update, obj, false)(resources)()
@@ -72,22 +82,22 @@ trait ORT {
    *  Tables must be ordered in parent -> child direction. */
   def insertMultiple(obj: Map[String, Any], names: String*)(filter: String = null)(
       implicit resources: Resources = Env): Any = {
-    val (nobj, struct) = multipleOneToOneTransformation(obj, names: _*)
-    insertInternal(names.head, nobj, tresql_structure(struct), filter)
+    val (nobj, struct, multipleToRoot) = multipleOneToOneTransformation(obj, names: _*)
+    insertInternal(names.head, nobj, tresql_structure(struct), multipleToRoot, filter)
   }
 
   /** update to multiple tables
    *  Tables must be ordered in parent -> child direction. */
   def updateMultiple(obj: Map[String, Any], names: String*)(filter: String = null)(
       implicit resources: Resources = Env): Any = {
-    val (nobj, struct) = multipleOneToOneTransformation(obj, names: _*)
-    updateInternal(names.head, nobj, tresql_structure(struct), filter)
+    val (nobj, struct, multipleToRoot) = multipleOneToOneTransformation(obj, names: _*)
+    updateInternal(names.head, nobj, tresql_structure(struct), multipleToRoot, filter)
   }
 
   /* For each name started with second is generated OneToOne object which contains name's references
    * to all of previous names */
   def multipleOneToOneTransformation(obj: Map[String, Any], names: String*)(
-    implicit resources: Resources = Env): (Map[String, Any], ListMap[String, Any]) =
+    implicit resources: Resources = Env): (Map[String, Any], ListMap[String, Any], Map[String, String]) =
     names.tail.foldLeft((
         obj,
         ListMap(obj.toSeq: _*), //use list map so that names are ordered as specified in parameters
@@ -97,7 +107,7 @@ trait ORT {
        x._2 + (name -> OneToOneBag(OneToOne(names.head, importedKeys(n, x._3, resources)), obj)),
        name :: x._3)
     } match {
-      case (obj, struct, _) => obj -> struct
+      case (obj, struct, n) => (obj, struct, n.tail.map(_ -> n.head).toMap /**/)
     }
 
   //object methods
@@ -146,7 +156,7 @@ trait ORT {
       name: String,
       obj: Map[String, Any],
       parent: String,
-      oneToOneRoot: String,
+      multipleToRoot: Map[String, String],
       oneToOne: OneToOne,
       filter: String,
       resources: Resources): String = {
@@ -170,11 +180,11 @@ trait ORT {
           //children or lookup
           case v: Map[String, _] => lookupObject(cn, table).map(lookupTable =>
             lookup_tresql(n, cn, lookupTable, v, resources)).getOrElse {
-            List(insert_tresql(n, v, objName, Option(oneToOne).map(_.rootTable).orNull,
-                null, null /*do not pass filter further*/, resources) -> null)
+            List(insert_tresql(n, v, objName, multipleToRoot, null,
+                null /*do not pass filter further*/, resources) -> null)
           }
           //oneToOne child
-          case b: OneToOneBag => List(insert_tresql(n, b.obj, objName, b.relations.rootTable,
+          case b: OneToOneBag => List(insert_tresql(n, b.obj, objName, multipleToRoot,
               b.relations, filter, resources) -> null)
           //pk or fk, one to one relationship
           case _ if table.key.cols == List(cn) /*pk*/ || refPropName == n || refColName == cn /*fk*/
@@ -194,7 +204,7 @@ trait ORT {
              .filter(_._1 != null /*check if prop->col mapping found*/ &&
               (parent == null /*first level obj*/ || refColName != null || oneToOne != null /*child obj (must have reference to parent)*/ )) ++
               (if (refColName == null || oneToOne != null) Map()
-                  else Map(refColName -> (s":#${if (oneToOneRoot != null) oneToOneRoot else ptn}") /*add fk col to parent*/ )) ++
+                  else Map(refColName -> (s":#${multipleToRoot.getOrElse(ptn, ptn)}") /*add fk col to parent*/ )) ++
               (if (oneToOne != null) oneToOne.keys.map(_ -> s":#${oneToOne.rootTable}").toMap else Map() /* set one to one relationships */) ++
               (if (table.key.cols.length != 1 /*multiple col pk not supported*/ ||
                 (parent != null && ((refColName == null && oneToOne == null) /*no relation to parent found*/ ||
@@ -227,7 +237,7 @@ trait ORT {
       name: String,
       obj: Map[String, Any],
       parent: String,
-      firstPkProp: String,
+      multipleToRoot: Map[String, String],
       oneToOne: OneToOne,
       filter: String,
       resources: Resources): String = {
@@ -266,13 +276,13 @@ trait ORT {
                 List((
                   if (isOneToOne(n))
                     update_tresql(n, v, objName,
-                      if (parent == null) findPkProp.orNull else firstPkProp,
+                      multipleToRoot + (resources.tableName(n) -> table.name),
                       null, null /* do no pass filter further */, resources)
                 else update_tresql(n, v, objName, null, null, null, resources)) -> null)
               }
           case b: OneToOneBag =>
             List(update_tresql(n, b.obj, objName,
-                md.table(b.relations.rootTable).key.cols.head, /*TODO may be get rid of firstPkProp*/
+                multipleToRoot,
                 b.relations, null /* do no pass filter further */, resources) -> null)
           //do not update pkProp
           case _ if (Some(n) == pkProp) => Nil

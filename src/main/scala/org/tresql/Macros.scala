@@ -18,9 +18,11 @@ class Macros {
         String valueOf objName.value,
         if (idName.value == null) null else String valueOf idName.value,
         insertExpr, updateExpr)
+        
   def _insert_or_update(b: QueryBuilder,
     idName: String, insertExpr: Expr, updateExpr: Expr) =
     b.InsertOrUpdateExpr(idName, insertExpr, updateExpr)
+    
   def _delete_children(b: QueryBuilder,
     objName: QueryBuilder#ConstExpr,
     idName: QueryBuilder#ConstExpr,
