@@ -459,7 +459,7 @@ class QueryTest extends Suite {
     println("\n--- SAVE - merge children ---\n")
 
     obj = Map("dname" -> "SALES", "loc" -> "WASHINGTON", "calculated_field" -> 222,
-      "emp[-=+]" -> List(
+      "emp[+-=]" -> List(
         Map("empno" -> 7499, "ename" -> "ALLEN SMITH", "job" -> "SALESMAN", "mgr" -> 7698,
             "mgr_name" -> null, "deptno" -> 30),
         Map("empno" -> 7654, "ename" -> "MARTIN BLAKE", "job" -> "SALESMAN", "mgr" -> 7698,
@@ -472,20 +472,20 @@ class QueryTest extends Suite {
       assertResult(List(1, List(3, List(1, 1, (1,10023), 1))))(ORT.update("dept", obj))
 
     obj = Map("empno" -> 7788, "ename"->"SCOTT", "mgr"-> 7839,
-      "work:empno[-=+]" -> List(
+      "work:empno[+-=]" -> List(
         Map("wdate"->"2012-7-12", "empno"->7788, "hours"->10, "empno_mgr"->7839),
         Map("wdate"->"2012-7-13", "empno"->7788, "hours"->3, "empno_mgr"->7839)),
       "calculated_children"->List(Map("x"->5)), "deptno"->20)
     assertResult(List(1, List(2, List(1, 1))))(ORT.update("emp", obj))
 
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
-        "emp[-=+]"->List(
+        "emp[+-=]"->List(
           Map("empno"->null, "ename"->"AMY", "mgr"->7788, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
-            "work:empno[-=+]"->List(
+            "work:empno[+-=]"->List(
               Map("wdate"->"2012-7-12", "empno"->null, "hours"->5, "empno_mgr"->7839),
               Map("wdate"->"2012-7-13", "empno"->null, "hours"->2, "empno_mgr"->7839))),
           Map("empno"->null, "ename"->"LENE", "mgr"->7566, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
-            "work:empno[-=+]"->List(
+            "work:empno[+-=]"->List(
               Map("wdate"->"2012-7-14", "empno"->null, "hours"->5, "empno_mgr"->7839),
               Map("wdate"->"2012-7-15", "empno"->null, "hours"->2, "empno_mgr"->7839)))),
         "calculated_children"->List(Map("x"->5)), "deptno"->40)
@@ -493,7 +493,7 @@ class QueryTest extends Suite {
       (List(1, List(List(1, 1))),10025)))))(ORT.update("dept", obj))
 
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
-        "work:empno[-=+]"->List(),
+        "work:empno[+-=]"->List(),
         "calculated_children"->List(Map("x"->5)), "deptno"->20)
     assertResult(List(1, List(2, List())))(ORT.update("emp", obj))
 
@@ -625,26 +625,26 @@ class QueryTest extends Suite {
     println("\n-------- SAVE - extended cases --------\n")
 
     obj = Map("dname" -> "TRUCK DEPT",
-      "car[=+]" -> List(
+      "car[+=]" -> List(
         Map("name" -> "VOLVO",
-          "tyres[=+]" -> List(
+          "tyres[+=]" -> List(
             Map("brand" -> "BRIDGESTONE", "season" -> "S",
-              "tyres_usage[=+]" -> List(
+              "tyres_usage[+=]" -> List(
                 Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-04-25"),
                 Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-05-01"))),
             Map("brand" -> "COPARTNER", "season" -> "W",
-              "tyres_usage[=+]" -> List(
+              "tyres_usage[+=]" -> List(
                 Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-09-25"),
                 Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-10-01"))))
        ),
        Map("name" -> "TATA",
-          "tyres[=+]" -> List(
+          "tyres[+=]" -> List(
            Map("brand" -> "METRO TYRE", "season" -> "S",
-             "tyres_usage[=+]" -> List(
+             "tyres_usage[+=]" -> List(
                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-04-25"),
                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-05-01"))),
            Map("brand" -> "GRL", "season" -> "W",
-             "tyres_usage[=+]" -> List(
+             "tyres_usage[+=]" -> List(
                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-09-25"),
                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-10-01")))))))
     assertResult((List(1, List(List((List(1, List(List((List(1,
@@ -653,24 +653,24 @@ class QueryTest extends Suite {
       (List(1, List(List(1, 1))),10062)))),10060)))),10056))(ORT.insert("dept", obj))
 
     obj = Map("deptno" -> 10056, "dname" -> "TRUCK DEPT",
-      "car[=+]" -> List(
+      "car[+=]" -> List(
         Map("nr" -> 10057, "name" -> "VOLVO",
-          "tyres[=+]" -> List(
+          "tyres[+=]" -> List(
             Map("nr" -> 10058, "brand" -> "BRIDGESTONE", "season" -> "S",
-              "tyres_usage[=+]" -> List(
+              "tyres_usage[+=]" -> List(
                 Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-04-01"))),
             Map("nr" -> null, "brand" -> "ADDO", "season" -> "W",
-              "tyres_usage[=+]" -> List(
+              "tyres_usage[+=]" -> List(
                 Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-09-25"),
                 Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-10-01"))))),
         Map("nr" -> 10060, "name" -> "TATA MOTORS",
-          "tyres[=+]" -> List(
+          "tyres[+=]" -> List(
            Map("nr" -> 10061, "brand" -> "METRO TYRE", "season" -> "S",
-             "tyres_usage[=+]" -> List(
+             "tyres_usage[+=]" -> List(
                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-04-25"),
                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-05-01"))),
            Map("nr" -> 10062, "brand" -> "GRL", "season" -> "W",
-             "tyres_usage[=+]" -> List(
+             "tyres_usage[+=]" -> List(
                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-09-25"),
                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-10-01")))))))
       assertResult(List(1, List(List(List(1, List(List(List(1, List(List(1))),
