@@ -11,6 +11,8 @@ trait ORT {
 
   /** <object name | property name>[:<reference to parent>][:actions in form <[+=-]> indicating insert, update, delete] */
   val PROP_PATTERN = new scala.util.matching.Regex(
+    //"""(\w+)(:(\w+))?(\[([-=+]+)\])?""", "table", null, "ref", null, "actions")
+    //action flags must be ordered due to deeper level children structure problem
     """(\w+)(:(\w+))?(\[(-?=?\+?)\])?""", "table", null, "ref", null, "actions")
   /** <object name | property name>[:<linked property name>][#(insert | update | delete)] */
   val PROP_PATTERN_OLD = """(\w+)(:(\w+))?(#(\w+))?"""r
@@ -158,6 +160,7 @@ trait ORT {
               s"""Ambiguous references from table '${table.name}' to table '$ptn'.
               Reference must be one and must consist of one column. Found: $x""")
       } else resources.colName(objName, refPropName)
+      println(s"\n\nINSERT: obj = $objName, parent = $ptn, refCol = $refColName, actions = $name\n\n")
       obj.flatMap((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(objName, n)
@@ -236,6 +239,7 @@ trait ORT {
           .filter(_ => oneToOne == null) //refCol not relevant in oneToOne case
           .flatMap(p=> importedKeyOption(resources.tableName(p), table)))
         .orNull
+      println(s"\n\nUPDATE: obj = $objName, parent = $parentTableName, refCol = $refColName, actions = $name\n\n")
       def deleteAllChildren = s"-${table.name}[$refColName = :#${refsToRoot.
         getOrElse(parentTableName, parentTableName)}]"
       def deleteMissingChildren = {
@@ -249,7 +253,9 @@ trait ORT {
         ref <- importedKeyOption(table.name, t)
         if t.key.cols.size == 1 && ref == t.key.cols.head
       } yield t).orNull
-      def update = (for {pk <- table.key.cols.headOption} yield obj.flatMap((t: (String, _)) => {
+      def update = (for {pk <- table.key.cols.headOption} yield {
+        println(s"\n\nUPDATE LOCAL ENTER: obj = $objName, parent = $parentTableName, refCol = $refColName, actions = $name, pk = $pk, refs to root: $refsToRoot, onetoone: $oneToOne\n\n")
+        obj.flatMap((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(objName, n)
         t._2 match {
@@ -291,12 +297,14 @@ trait ORT {
               }${Option(filter).map(f => s" & ($f)").getOrElse("")}]{", ", ", "}") +
                 vals.filter(_ != null).mkString(" [", ", ", "]")
               val alias = if (parent != null) " '" + name + "'" else ""
-              if (cols.size > 0) Option(lookupTresql)
+              val finalTresql = if (cols.size > 0) Option(lookupTresql)
                 .map(lt => s"[$lt$tresql]$alias")
                 .getOrElse(tresql + alias)
               else null
+              println(s"\n\nUPDATE LOCAL EXIT: obj = $objName, parent = $parentTableName, refCol = $refColName, actions = $name, pk = $pk, refs to root: $refsToRoot, onetoone: $oneToOne\n\n")
+              finalTresql
           }
-      }).orNull
+      }}).orNull
       def insert = insert_tresql(name, obj, parent, refsToRoot, null, null, resources)
       def stripTrailingAlias(tresql: String, alias: String) =
         if (tresql != null && tresql.endsWith(alias))

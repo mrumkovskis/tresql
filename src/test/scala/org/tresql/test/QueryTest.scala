@@ -50,11 +50,14 @@ class QueryTest extends Suite {
   Env.macros = Macros
   Env.cache = new SimpleCache(-1)
   Env.logger = ((msg, level) => println (msg))
-  Env update ( /*object to table name map*/ Map(
-    "emp_dept_view" -> "emp"),
+  Env update ( /*object to table name map*/
+    Map("emp_dept_view" -> "emp"),
     /*property to column name map*/
     Map("car_usage" -> Map("empname" -> ("empno", "(emp[ename = :empname]{empno})")),
-        "car" -> Map("dname" -> ("deptnr", "(case((dept[dname = :dname] {count(deptno)}) = 1, (dept[dname = :dname] {deptno}), -1))"))))
+        "car" ->
+          Map("dname" ->
+            ("deptnr", "(case((dept[dname = :dname] {count(deptno)}) = 1, (dept[dname = :dname] {deptno}), -1))")),
+        "tyres_usage" -> Map("carnr" -> ("carnr", ":#car"))))
   //create test db script
   new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
     sql => val st = conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
@@ -527,7 +530,7 @@ class QueryTest extends Suite {
           Map("addr" -> "Jinjiang District", "zip_code" -> "CN-1234")))))
     assertResult(List(1, List(List(List(1, List(2, List(1, 1))))))) {ORT.update("dept", obj)}
 
-    println("\n-------- Lookup object editing --------\n")
+    println("\n-------- LOOKUP object editing --------\n")
     //edit lookup object
     obj = Map("brand" -> "DUNLOP", "season" -> "W", "carnr" -> Map("name" -> "VW"))
     assertResult(List(10028, (1,10029))) { ORT.insert("tyres", obj) }
@@ -578,7 +581,7 @@ class QueryTest extends Suite {
         "tyres" -> List(Map("brand" -> "NOKIAN", "season" -> "S")))
     assertResult((List(1, List(List(1, List(List((1,10042)))))),10041)) { ORT.insertMultiple (obj, "dept", "car")() }
 
-    println("\n-------- Lookup extended cases - chaining, children --------\n")
+    println("\n-------- LOOKUP extended cases - chaining, children --------\n")
 
     obj = Map("brand" -> "Nokian", "season" -> "W", "carnr" ->
       Map("name" -> "Mercedes", "deptnr" -> Map("dname" -> "Logistics")))
@@ -603,7 +606,7 @@ class QueryTest extends Suite {
       Map("empno" -> Map("empno" -> 10052, "ename" -> "Lara", "job" -> "MGR", "deptno" -> 10))))
     assertResult((List(1, List(List(List(10055, 1), List(10052, 1)))),10054)) { ORT.insert("car", obj) }
 
-    println("\n-------- insert, update with additional filter --------\n")
+    println("\n-------- INSERT, UPDATE with additional filter --------\n")
     //insert, update with additional filter
     assertResult(0){ORT.insert("dummy", Map("dummy" -> 2), "dummy = -1")}
     assertResult(1){ORT.insert("dummy", Map("dummy" -> 2), ":dummy = 2")}
@@ -618,6 +621,60 @@ class QueryTest extends Suite {
     }
     assertResult((1,8888))(ORT.insertObj(Car(8888, "OPEL")))
     assertResult(1)(ORT.updateObj(Car(8888, "SAAB")))
+
+    println("\n-------- SAVE - extended cases --------\n")
+
+    obj = Map("dname" -> "TRUCK DEPT",
+      "car[=+]" -> List(
+        Map("name" -> "VOLVO",
+          "tyres[=+]" -> List(
+            Map("brand" -> "BRIDGESTONE", "season" -> "S",
+              "tyres_usage[=+]" -> List(
+                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-04-25"),
+                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-05-01"))),
+            Map("brand" -> "COPARTNER", "season" -> "W",
+              "tyres_usage[=+]" -> List(
+                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-09-25"),
+                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-10-01"))))
+       ),
+       Map("name" -> "TATA",
+          "tyres[=+]" -> List(
+           Map("brand" -> "METRO TYRE", "season" -> "S",
+             "tyres_usage[=+]" -> List(
+               Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-04-25"),
+               Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-05-01"))),
+           Map("brand" -> "GRL", "season" -> "W",
+             "tyres_usage[=+]" -> List(
+               Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-09-25"),
+               Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-10-01")))))))
+    assertResult((List(1, List(List((List(1, List(List((List(1,
+      List(List(1, 1))),10058), (List(1, List(List(1, 1))),10059)))),10057),
+      (List(1, List(List((List(1, List(List(1, 1))),10061),
+      (List(1, List(List(1, 1))),10062)))),10060)))),10056))(ORT.insert("dept", obj))
+
+    obj = Map("deptno" -> 10056, "dname" -> "TRUCK DEPT",
+      "car[=+]" -> List(
+        Map("nr" -> 10057, "name" -> "VOLVO",
+          "tyres[=+]" -> List(
+            Map("nr" -> 10058, "brand" -> "BRIDGESTONE", "season" -> "S",
+              "tyres_usage[=+]" -> List(
+                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-04-01"))),
+            Map("nr" -> null, "brand" -> "ADDO", "season" -> "W",
+              "tyres_usage[=+]" -> List(
+                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-09-25"),
+                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-10-01"))))
+       ),
+       Map("nr" -> 10060, "name" -> "TATA MOTORS",
+          "tyres[=+]" -> List(
+           Map("nr" -> 10061, "brand" -> "METRO TYRE", "season" -> "S",
+             "tyres_usage[=+]" -> List(
+               Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-04-25"),
+               Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-05-01"))),
+           Map("nr" -> 10062, "brand" -> "GRL", "season" -> "W",
+             "tyres_usage[=+]" -> List(
+               Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-09-25"),
+               Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-10-01")))))))
+      assertResult(List())(ORT.update("dept", obj))
 
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
 
