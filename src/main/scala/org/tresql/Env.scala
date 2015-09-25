@@ -105,6 +105,15 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   def tableOption(name:String) = metaData.tableOption(name)
   def procedure(name: String) = metaData.procedure(name)
   def procedureOption(name:String) = metaData.procedureOption(name)
+
+  def printVariables = "\nBind variables:" +
+    vars.map(_.mkString("\n ", "\n ", "\n")).getOrElse("<none>")
+  def printAllVariables = "\nBind variables:" + printVars(" ")
+  private def printVars(offset: String): String =
+    vars.map(_.mkString("\n" + offset, "\n" + offset, "\n")).
+      getOrElse("\n" + offset + "<none>\n") +
+      provider.map(_.env.printVars(offset + " ")).getOrElse("")
+
 }
 
 object Env extends Resources {

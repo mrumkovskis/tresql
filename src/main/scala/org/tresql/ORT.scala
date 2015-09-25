@@ -160,7 +160,6 @@ trait ORT {
               s"""Ambiguous references from table '${table.name}' to table '$ptn'.
               Reference must be one and must consist of one column. Found: $x""")
       } else resources.colName(objName, refPropName)
-      println(s"\n\nINSERT: obj = $objName, parent = $ptn, refCol = $refColName, actions = $name\n\n")
       obj.flatMap((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(objName, n)
@@ -239,7 +238,6 @@ trait ORT {
           .filter(_ => oneToOne == null) //refCol not relevant in oneToOne case
           .flatMap(p=> importedKeyOption(resources.tableName(p), table)))
         .orNull
-      println(s"\n\nUPDATE: obj = $objName, parent = $parentTableName, refCol = $refColName, actions = $name\n\n")
       def deleteAllChildren = s"-${table.name}[$refColName = :#${refsToRoot.
         getOrElse(parentTableName, parentTableName)}]"
       def deleteMissingChildren = {
@@ -254,7 +252,6 @@ trait ORT {
         if t.key.cols.size == 1 && ref == t.key.cols.head
       } yield t).orNull
       def update = (for {pk <- table.key.cols.headOption} yield {
-        println(s"\n\nUPDATE LOCAL ENTER: obj = $objName, parent = $parentTableName, refCol = $refColName, actions = $name, pk = $pk, refs to root: $refsToRoot, onetoone: $oneToOne\n\n")
         obj.flatMap((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(objName, n)
@@ -301,7 +298,6 @@ trait ORT {
                 .map(lt => s"[$lt$tresql]$alias")
                 .getOrElse(tresql + alias)
               else null
-              println(s"\n\nUPDATE LOCAL EXIT: obj = $objName, parent = $parentTableName, refCol = $refColName, actions = $name, pk = $pk, refs to root: $refsToRoot, onetoone: $oneToOne\n\n")
               finalTresql
           }
       }}).orNull
@@ -309,7 +305,7 @@ trait ORT {
       def stripTrailingAlias(tresql: String, alias: String) =
         if (tresql != null && tresql.endsWith(alias))
           tresql.dropRight(alias.length) else tresql
-      def insertOrUpdate = s"""_insert_or_update('${table.name}', ${
+      def insertOrUpdate = s"""|_insert_or_update('${table.name}', ${
         stripTrailingAlias(insert, s" '$name'")}, ${
         stripTrailingAlias(update, s" '$name'")}) '$name'"""
       if (parent != null && oneToOne == null) { //children with no one to one relationships
@@ -357,10 +353,12 @@ trait ORT {
   }
 
   private def importedKeyOption(tableName: String, childTable: metadata.Table) =
-    Option(childTable.refs(tableName)).filter(_.size == 1).map(_.head.cols.head)
+    Option(childTable.refs(tableName).filter(_.cols.size == 1))
+      .filter(_.size == 1)
+      .map(_.head.cols.head)
 
   private def importedKey(tableName: String, childTable: metadata.Table) = {
-    val refs = childTable.refs(tableName)
+    val refs = childTable.refs(tableName).filter(_.cols.size == 1)
     if (refs.size != 1) error("Cannot link child table '" + childTable.name +
       "'. Must be exactly one reference from child to parent table '" + tableName +
       "'. Instead these refs found: " + refs)

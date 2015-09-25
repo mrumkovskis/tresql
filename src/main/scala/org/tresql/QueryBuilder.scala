@@ -119,12 +119,16 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
 
   case class IdExpr(seqName: String) extends BaseExpr {
     override def apply() = idFromEnv getOrElse env.nextId(seqName)
-    private def idFromEnv = env.tableOption(seqName).map(_.key.cols).filter(_.size == 1).map(_(0))
-        .filter(env containsNearest).flatMap(key => Option(env(key))).map { id =>
-          //if primary key is set as an environment variable use it instead of sequence
-          env.currId(seqName, id)
-          id
-        }
+    private def idFromEnv = for {
+      keys <- env.tableOption(seqName).map(_.key.cols)
+      key <- keys.headOption
+      if keys.size == 1 && env.containsNearest(key) && env(key) != null
+    } yield {
+      //if primary key is set as an environment variable use it instead of sequence
+      val id = env(key)
+      env.currId(seqName, id)
+      id
+    }
     var binded = false
     def defaultSQL = {
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
@@ -527,8 +531,7 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
       if (r > 0) executeChildren match {
         case Nil => r
         case x => List(r, x)
-      }
-      else r
+      } else r
     }
     protected def _sql = "delete from " + table.sql + (if (alias == null) "" else " " + alias) +
       (if (filter == null || filter.size == 0) "" else " where " + where)
@@ -1073,16 +1076,16 @@ class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: 
   def build(ex: String): Expr = build(parseExp(ex).asInstanceOf[Exp])
   def build(ex: Exp): Expr = buildInternal(ex, ctxStack.head)
 
-  override def toString = "QueryBuilder: " + queryDepth
-
   //for debugging purposes
   def printBuilderChain: Unit = {
-    println(s"$this; ${this.exp}")
+    println(s"$this#$envId; Expression: ${this.exp}")
     env.provider.map {
       case b: QueryBuilder => b.printBuilderChain
       case _ =>
     }
   }
+  //for debugging purposes
+  def envId() = s"$queryDepth#${System.identityHashCode(this)}"
 
 }
 

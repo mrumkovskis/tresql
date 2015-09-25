@@ -662,9 +662,8 @@ class QueryTest extends Suite {
             Map("nr" -> null, "brand" -> "ADDO", "season" -> "W",
               "tyres_usage[=+]" -> List(
                 Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-09-25"),
-                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-10-01"))))
-       ),
-       Map("nr" -> 10060, "name" -> "TATA MOTORS",
+                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-10-01"))))),
+        Map("nr" -> 10060, "name" -> "TATA MOTORS",
           "tyres[=+]" -> List(
            Map("nr" -> 10061, "brand" -> "METRO TYRE", "season" -> "S",
              "tyres_usage[=+]" -> List(
@@ -674,7 +673,9 @@ class QueryTest extends Suite {
              "tyres_usage[=+]" -> List(
                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-09-25"),
                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-10-01")))))))
-      assertResult(List())(ORT.update("dept", obj))
+      assertResult(List(1, List(List(List(1, List(List(List(1, List(List(1))),
+        (List(1, List(List(1, 1))),10063)))), List(1, List(List(List(1, List(
+          List(1, 1))), List(1, List(List(1, 1))))))))))(ORT.update("dept", obj))
 
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
 
