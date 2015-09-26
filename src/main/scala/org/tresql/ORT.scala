@@ -19,6 +19,61 @@ trait ORT extends Query {
 
   type ObjToMapConverter[T] = (T) => (String, Map[String, _])
 
+  /** QueryBuilder methods **/
+  override private[tresql] def newInstance(e: Env, depth: Int, idx: Int) =
+    new ORT {
+      override private[tresql] def env = e
+      override private[tresql] def queryDepth = depth
+      override private[tresql] var bindIdx = idx
+    }
+
+  /* Expression is built only from macros to ensure ORT lookup editing. */
+  case class LookupEditExpr(
+    obj: String,
+    idName: String,
+    insertExpr: Expr,
+    updateExpr: Expr)
+  extends BaseExpr {
+    override def apply() = env(obj) match {
+      case m: Map[String, Any] =>
+        if (idName != null && (m contains idName) && m(idName) != null) {
+          val lookupObjId = m(idName)
+          updateExpr(m)
+          lookupObjId
+        } else extractId(insertExpr(m))
+      case null => null
+      case x => error(s"Cannot set environment variables for the expression. $x is not a map.")
+    }
+    def extractId(result: Any) = result match {
+      case (_, id) => id //insert expression
+      case s: Seq[_] => s.last match { case (_, id) => id } //array expression
+      case x => error(s"Unable to extract id from expr result: $x, expr: $insertExpr")
+    }
+    def defaultSQL = s"LookupEditExpr($obj, $idName, $insertExpr, $updateExpr)"
+  }
+  /* Expression is built from macros to ensure ORT children editing */
+  case class InsertOrUpdateExpr(table: String, insertExpr: Expr, updateExpr: Expr)
+  extends BaseExpr {
+    val idName = env.table(table).key.cols.headOption.orNull
+    override def apply() =
+      if (idName != null && env.containsNearest(idName) && env(idName) != null)
+        updateExpr() else insertExpr()
+    def defaultSQL = s"InsertOrUpdateExpr($idName, $insertExpr, $updateExpr)"
+  }
+  /* Expression is built from macros to ensure ORT children editing */
+  case class DeleteChildrenExpr(obj: String, table: String, expr: Expr)
+  extends BaseExpr {
+    val idName = env.table(table).key.cols.headOption.orNull
+    override def apply() = {
+      env(obj) match {
+        case s: Seq[Map[String, _]] =>
+          expr(if (idName != null)
+            Map("ids" -> s.map(_(idName)).filter(_ != null)) else Map[String, Any]())
+      }
+    }
+    override def defaultSQL = s"DeleteChildrenExpr($obj, $idName, $expr)"
+  }
+
   def insert(name: String, obj: Map[String, Any], filter: String = null)
     (implicit resources: Resources = Env): Any =
       insertInternal(name, obj, tresql_structure(obj), Map(), filter)
@@ -251,7 +306,7 @@ trait ORT extends Query {
         ref <- importedKeyOption(table.name, t)
         if t.key.cols.size == 1 && ref == t.key.cols.head
       } yield t).orNull
-      def update = (for {pk <- table.key.cols.headOption} yield {
+      def update = (for {pk <- table.key.cols.headOption} yield
         obj.flatMap((t: (String, _)) => {
         val n = t._1
         val cn = resources.colName(objName, n)
@@ -300,7 +355,7 @@ trait ORT extends Query {
               else null
               finalTresql
           }
-      }}).orNull
+      }).orNull
       def insert = insert_tresql(name, obj, parent, refsToRoot, null, null, resources)
       def stripTrailingAlias(tresql: String, alias: String) =
         if (tresql != null && tresql.endsWith(alias))

@@ -5,11 +5,7 @@ import scala.util.Try
 import QueryParser._
 import metadata.key_
 
-class QueryBuilder private (
-  private[tresql] val env: Env,
-  queryDepth: Int,
-  private var bindIdx: Int)
-  extends EnvProvider with Transformer with Typer {
+trait QueryBuilder extends EnvProvider with Transformer with Typer {
 
   val ROOT_CTX = "ROOT"
   val QUERY_CTX = "QUERY"
@@ -30,10 +26,8 @@ class QueryBuilder private (
       "++", "+",  "-", "&&", "||", "*", "/", "&", "|")
   val OPTIONAL_OPERAND_BIN_OPS = Set("++", "+",  "-", "&&", "||", "*", "/", "&", "|")
 
-  private def this(env: Env) = this(env, 0, 0)
-
-  //parsed expression from which top level expr is built
-  private var exp: Any = null
+  //set by buildInternal method when building Query for potential use in RecursiveExpr
+  private var recursiveQueryExp: QueryParser.Query = null
 
   //used for non flat updates, i.e. hierarhical object.
   private val childUpdates = scala.collection.mutable.ListBuffer[(Expr, String)]()
@@ -62,6 +56,16 @@ class QueryBuilder private (
     tc <- { if (this.joinsWithChildren.size > 0) this.hasHiddenCols = true; this.joinsWithChildren }
     c <- tc._2
   } yield (ColExpr(IdentExpr(List(tc._1, c)), tc._1 + "_" + c + "_", null, Some(false), true))
+
+  /*****************************************************************************
+  ****************** methods to be implemented or overriden ********************
+  ******************************************************************************/
+  private[tresql] def newInstance(env: Env, queryDepth: Int, bindIdx: Int): QueryBuilder
+  private[tresql] def env: Env = error("Unimplemented")
+  private[tresql] def queryDepth: Int = error("Unimplemented")
+  private[tresql] def bindIdx: Int = error("Unimplemented")
+  private[tresql] def bindIdx_=(idx: Int): Unit = error("Unimplemented")
+  /*****************************************************************************/
 
   case class ConstExpr(value: Any) extends BaseExpr {
     override def apply() = value
@@ -326,12 +330,12 @@ class QueryBuilder private (
     override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
   }
 
-  case class RecursiveExpr(exp: Any) extends BaseExpr {
+  case class RecursiveExpr(exp: QueryParser.Query) extends BaseExpr {
     if (queryDepth >= Env.recursive_stack_dept)
       error(s"Recursive execution stack depth $queryDepth exceeded, check for loops in data or increase Env.recursive_stack_dept setting.")
-    val qBuilder = new QueryBuilder(new Env(QueryBuilder.this, QueryBuilder.this.env.reusableExpr),
-        queryDepth + 1, 0)
-    qBuilder.exp = QueryBuilder.this.exp
+    val qBuilder = newInstance(new Env(QueryBuilder.this, env.reusableExpr),
+      queryDepth + 1, 0)
+    qBuilder.recursiveQueryExp = recursiveQueryExp
     lazy val expr: Expr = qBuilder.buildInternal(exp, QUERY_CTX)
     override def apply() = expr()
     def defaultSQL = expr sql
@@ -376,7 +380,6 @@ class QueryBuilder private (
       parentJoin.map(e => Option(fsql).map("(" + _ + ") and " + e.sql)
         .getOrElse(e.sql)).getOrElse(fsql)
     }
-    val queryDepth = QueryBuilder.this.queryDepth
     override def toString = sql + " (" + QueryBuilder.this + ")\n" +
       (if (cols != null) cols.filter(_.separateQuery).map {
         "    " * (queryDepth + 1) + _.toString
@@ -583,53 +586,6 @@ class QueryBuilder private (
       org.tresql.Query.sel(sql, cols, QueryBuilder.this.bindVariables, env,
         allColsFlag, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
     def defaultSQL = expr.filter(_ != null).map(_.sql) mkString ""
-  }
-
-  /* Expression is built only from macros to ensure ORT lookup editing. */
-  case class LookupEditExpr(
-    obj: String,
-    idName: String,
-    insertExpr: Expr,
-    updateExpr: Expr)
-  extends BaseExpr {
-    override def apply() = env(obj) match {
-      case m: Map[String, Any] =>
-        if (idName != null && (m contains idName) && m(idName) != null) {
-          val lookupObjId = m(idName)
-          updateExpr(m)
-          lookupObjId
-        } else extractId(insertExpr(m))
-      case null => null
-      case x => error(s"Cannot set environment variables for the expression. $x is not a map.")
-    }
-    def extractId(result: Any) = result match {
-      case (_, id) => id //insert expression
-      case s: Seq[_] => s.last match { case (_, id) => id } //array expression
-      case x => error(s"Unable to extract id from expr result: $x, expr: $expr")
-    }
-    def defaultSQL = s"LookupEditExpr($obj, $idName, $insertExpr, $updateExpr)"
-  }
-  /* Expression is built from macros to ensure ORT children editing */
-  case class InsertOrUpdateExpr(table: String, insertExpr: Expr, updateExpr: Expr)
-  extends BaseExpr {
-    val idName = env.table(table).key.cols.headOption.orNull
-    override def apply() =
-      if (idName != null && env.containsNearest(idName) && env(idName) != null)
-        updateExpr() else insertExpr()
-    def defaultSQL = s"InsertOrUpdateExpr($idName, $insertExpr, $updateExpr)"
-  }
-  /* Expression is built from macros to ensure ORT children editing */
-  case class DeleteChildrenExpr(obj: String, table: String, expr: Expr)
-  extends BaseExpr {
-    val idName = env.table(table).key.cols.headOption.orNull
-    override def apply() = {
-      env(obj) match {
-        case s: Seq[Map[String, _]] =>
-          expr(if (idName != null)
-            Map("ids" -> s.map(_(idName)).filter(_ != null)) else Map[String, Any]())
-      }
-    }
-    override def defaultSQL = s"DeleteChildrenExpr($obj, $idName, $expr)"
   }
 
   abstract class BaseExpr extends PrimitiveExpr {
@@ -961,9 +917,9 @@ class QueryBuilder private (
     }
 
     def buildWithNew(buildFunc: QueryBuilder => Expr) = {
-      val b = new QueryBuilder(new Env(QueryBuilder.this, QueryBuilder.this.env.reusableExpr),
-          queryDepth + 1, bindIdx)
-      b.exp = exp
+      val b = newInstance(
+        new Env(QueryBuilder.this, QueryBuilder.this.env.reusableExpr),
+        queryDepth + 1, bindIdx)
       val ex = buildFunc(b)
       this.separateQueryFlag = true; this.bindIdx = b.bindIdx
       ex
@@ -985,14 +941,16 @@ class QueryBuilder private (
         //recursive child query
         case UnOp("|", join: Arr) =>
           this.separateQueryFlag = true
-          RecursiveExpr(exp match {
-            case q: QueryParser.Query =>
-              val t = q.tables
-              //copy join condition in the right place for parent child join calculation
-              q.copy(tables = t.head.copy(join = QueryParser.Join(false, join, false)) :: t.tail,
-                  //drop first filter for recursive query, since first filter is used to obtain initial set
-                  filter = q.filter.copy(filters = q.filter.filters drop 1))
-          })
+          if (recursiveQueryExp != null) RecursiveExpr({
+            val t = recursiveQueryExp.tables
+            //copy join condition in the right place for parent child join calculation
+            recursiveQueryExp.copy(
+              tables = t.head.copy(
+                join = QueryParser.Join(false, join, false)) :: t.tail,
+              //drop first filter for recursive query, since first filter is used to obtain initial set
+              filter = recursiveQueryExp.filter.copy(
+                filters = recursiveQueryExp.filter.filters drop 1))
+          }) else null
         //child query
         case UnOp("|", oper) => buildWithNew(_.buildInternal(oper, QUERY_CTX))
         case t: Obj => parseCtx match {
@@ -1008,7 +966,9 @@ class QueryBuilder private (
         }
         case q: QueryParser.Query => parseCtx match {
           case ROOT_CTX => buildWithNew(_.buildInternal(q, QUERY_CTX))
-          case _ => buildSelect(q)
+          case _ =>
+            if (recursiveQueryExp == null) recursiveQueryExp = q //set for potential use in RecursiveExpr
+            buildSelect(q)
         }
         case UnOp(op, oper) =>
           val o = buildInternal(oper, parseCtx)
@@ -1065,23 +1025,13 @@ class QueryBuilder private (
     } finally ctxStack = ctxStack.tail
   }
 
-  private def build_(ex: String): Expr = {
-    exp = parseExp(ex)
-    buildInternal(exp)
-  }
-
-  private def build_(ex: Exp): Expr = {
-    exp = ex
-    buildInternal(ex)
-  }
-
-  //designed for use in macros
-  def build(ex: String): Expr = build(parseExp(ex).asInstanceOf[Exp])
-  def build(ex: Exp): Expr = buildInternal(ex, ctxStack.head)
+  def buildExpr(ex: String): Expr = buildInternal(parseExp(ex).asInstanceOf[Exp])
+  def buildExpr(ex: Exp): Expr = buildInternal(ex,
+    ctxStack.headOption.getOrElse(ROOT_CTX))
 
   //for debugging purposes
   def printBuilderChain: Unit = {
-    println(s"$this#$envId; Expression: ${this.exp}")
+    println(s"$this#$envId")
     env.provider.map {
       case b: QueryBuilder => b.printBuilderChain
       case _ =>
@@ -1090,15 +1040,6 @@ class QueryBuilder private (
   //for debugging purposes
   def envId() = s"$queryDepth#${System.identityHashCode(this)}"
 
-}
-
-object QueryBuilder {
-  def apply(ex: String, env: Env = Env(Map(), true)): Expr = {
-    new QueryBuilder(env).build_(ex)
-  }
-  def apply(ex: Exp, env: Env): Expr = {
-    new QueryBuilder(env).build_(ex)
-  }
 }
 
 sealed abstract class Expr extends (() => Any) with Ordered[Expr] {

@@ -6,7 +6,7 @@ import org.tresql.metadata._
 import sys._
 import java.sql.Connection
 
-trait Query extends TypedQuery {
+trait Query extends QueryBuilder with TypedQuery {
 
   def apply(expr: String, params: Any*)(implicit resources: Resources = Env): Result =
     exec(expr, normalizePars(params: _*), resources)
@@ -16,13 +16,21 @@ trait Query extends TypedQuery {
       case r: Result => r
       case x => SingleValueResult(x)
     }
-    
+
   def build(expr: String, params: Map[String, Any] = null, reusableExpr: Boolean = true)(
     implicit resources: Resources = Env): Expr = {
     Env log expr
-    QueryBuilder(expr, new Env(params, resources, reusableExpr))
+    newInstance(new Env(params, resources, reusableExpr), 0, 0).buildExpr(expr)
   }
-  
+
+  /** QueryBuilder methods **/
+  override private[tresql] def newInstance(e: Env, depth: Int, idx: Int) =
+    new Query {
+      override private[tresql] def env = e
+      override private[tresql] def queryDepth = depth
+      override private[tresql] var bindIdx = idx
+    }
+
   def parse(expr: String) = QueryParser.parseExp(expr)
 
   private[tresql] def normalizePars(pars: Any*): Map[String, Any] = pars match {
@@ -54,8 +62,8 @@ trait Query extends TypedQuery {
       env.updateExprs(res._2)
       (res._1.reverse, res._3)
     } else (cols map rcol, -1)
-    
-    val result = if (allCols) new SelectResult(rs, Vector(cols.flatMap {c => 
+
+    val result = if (allCols) new SelectResult(rs, Vector(cols.flatMap {c =>
       if (c.col.isInstanceOf[QueryBuilder#AllExpr]) jdbcRcols else List(rcol(c))
     }: _*), env)
     else if (identAll) new SelectResult(rs,
@@ -204,7 +212,7 @@ trait Query extends TypedQuery {
         case e:Exception => throw new RuntimeException("Failed to bind variable at index " +
             (idx - 1) + ". Value: " + (String.valueOf(p) match {
               case x if x.length > 100 => x.substring(0, 100) + "..."
-              case x => x 
+              case x => x
             }) + " of class " + (if (p == null) "null" else p.getClass),e)
       }
       idx += 1

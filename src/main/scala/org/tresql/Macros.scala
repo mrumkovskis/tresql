@@ -9,7 +9,7 @@ class Macros {
   def !~~ (b: QueryBuilder, lop: Expr, rop: Expr) =
     b.BinExpr("!~", b.FunExpr("lower", List(lop)), b.FunExpr("lower", List(rop)))
 
-  def _lookup_edit(b: QueryBuilder,
+  def _lookup_edit(b: ORT,
     objName: QueryBuilder#ConstExpr,
     idName: QueryBuilder#ConstExpr,
     insertExpr: Expr,
@@ -19,11 +19,11 @@ class Macros {
         if (idName.value == null) null else String valueOf idName.value,
         insertExpr, updateExpr)
 
-  def _insert_or_update(b: QueryBuilder,
+  def _insert_or_update(b: ORT,
     table: QueryBuilder#ConstExpr, insertExpr: Expr, updateExpr: Expr) =
     b.InsertOrUpdateExpr(String valueOf table.value, insertExpr, updateExpr)
 
-  def _delete_children(b: QueryBuilder,
+  def _delete_children(b: ORT,
     objName: QueryBuilder#ConstExpr,
     tableName: QueryBuilder#ConstExpr,
     deleteExpr: Expr) = b.DeleteChildrenExpr(
