@@ -5,7 +5,10 @@ import scala.util.Try
 import QueryParser._
 import metadata.key_
 
-class QueryBuilder private (val env: Env, queryDepth: Int, private var bindIdx: Int)
+class QueryBuilder private (
+  private[tresql] val env: Env,
+  queryDepth: Int,
+  private var bindIdx: Int)
   extends EnvProvider with Transformer with Typer {
 
   val ROOT_CTX = "ROOT"

@@ -228,7 +228,7 @@ trait NameMap {
 }
 
 trait EnvProvider {
-  def env: Env
+  private[tresql] def env: Env
 }
 
 class MissingBindVariableException(val name: String)
