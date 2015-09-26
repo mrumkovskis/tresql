@@ -4,7 +4,7 @@ import scala.collection.immutable.ListMap
 import sys._
 
 /** Object Relational Transformations - ORT */
-trait ORT {
+trait ORT extends Query {
 
   case class OneToOne(rootTable: String, keys: Set[String])
   case class OneToOneBag(relations: OneToOne, obj: Map[String, Any])
@@ -32,7 +32,7 @@ trait ORT {
     val insert = insert_tresql(name, struct, null, refsToRoot, null, filter, resources)
     if(insert == null) error("Cannot insert data. Table not found for object: " + name)
     Env log (s"\nStructure: $struct")
-    Query.build(insert, obj, false)(resources)()
+    build(insert, obj, false)(resources)()
   }
 
   def update(name: String, obj: Map[String, Any], filter: String = null)
@@ -50,7 +50,7 @@ trait ORT {
     val update = update_tresql(name, struct, null, refsToRoot, null, filter, resources)
     if(update == null) error(s"Cannot update data. Table not found or no primary key or no updateable columns found for the object: $name")
     Env log (s"\nStructure: $struct")
-    Query.build(update, obj, false)(resources)()
+    build(update, obj, false)(resources)()
   }
 
   def delete(name: String, id: Any, filter: String = null, filterParams: Map[String, Any] = null)
@@ -63,7 +63,7 @@ trait ORT {
     } yield {
       val delete = s"-${table.name}${Option(alias).map(" " + _).getOrElse("")}[$pk = ?${Option(filter)
         .map(f => s" & ($f)").getOrElse("")}]"
-      Query.build(delete, Map("1" -> id) ++ Option(filterParams).getOrElse(Map()), false)(resources)()
+      build(delete, Map("1" -> id) ++ Option(filterParams).getOrElse(Map()), false)(resources)()
     }) getOrElse {
       error(s"Table $name not found or table primary key not found or table primary key consists of more than one column")
     }
