@@ -5,7 +5,7 @@ import scala.util.Try
 import QueryParser._
 import metadata.key_
 
-trait QueryBuilder extends EnvProvider with Transformer with Typer {
+trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.tresql.Query =>
 
   val ROOT_CTX = "ROOT"
   val QUERY_CTX = "QUERY"
@@ -26,26 +26,27 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer {
       "++", "+",  "-", "&&", "||", "*", "/", "&", "|")
   val OPTIONAL_OPERAND_BIN_OPS = Set("++", "+",  "-", "&&", "||", "*", "/", "&", "|")
 
+  //bind variables for jdbc prepared statement
+  private val _bindVariables = scala.collection.mutable.ListBuffer[Expr]()
+  private[tresql] lazy val bindVariables = _bindVariables.toList
+  //indicate * in column
+  private[tresql] var allCols = false
+  //indicate table.* in column clause
+  private[tresql] var identAll = false
+  //indicate presence of hidden columns due to external function call
+  private[tresql] var hasHiddenCols = false
+
   //set by buildInternal method when building Query for potential use in RecursiveExpr
-  private var recursiveQueryExp: QueryParser.Query = null
+  private[tresql] var recursiveQueryExp: QueryParser.Query = null
 
   //used for non flat updates, i.e. hierarhical object.
   private val childUpdates = scala.collection.mutable.ListBuffer[(Expr, String)]()
 
   //context stack as buildInternal method is called
   protected var ctxStack = List[String]()
-  //bind variables for jdbc prepared statement
-  private val _bindVariables = scala.collection.mutable.ListBuffer[Expr]()
-  private lazy val bindVariables = _bindVariables.toList
 
   //used internally while building expression
   private var separateQueryFlag = false
-  //indicate * in column
-  private var allCols = false
-  //indicate table.* in column clause
-  private var identAll = false
-  //indicate presence of hidden columns due to external function call
-  private var hasHiddenCols = false
   //table defs from Typer. This is used for establishing relationships between tables and hierarchical queries
   protected var tableDefs: List[Def] = Nil
   //table alias and key column(s) (multiple in the case of composite primary key) to be added as
@@ -214,19 +215,11 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer {
         case "*" => lop * rop
         case "/" => lop / rop
         case "||" => lop + rop
-        case "&&" => org.tresql.Query.sel(sql, cols,
-          QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols,
-          QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
-        case "++" => org.tresql.Query.sel(sql, cols,
-          QueryBuilder.this.bindVariables, env, QueryBuilder.this.allCols,
-          QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
-        case "+" => if (exprType == classOf[SelectExpr])
-          org.tresql.Query.sel(sql, cols, QueryBuilder.this.bindVariables, env,
-            QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
+        case "&&" => sel(sql, cols)
+        case "++" => sel(sql, cols)
+        case "+" => if (exprType == classOf[SelectExpr]) sel(sql, cols)
         else lop + rop
-        case "-" => if (exprType == classOf[SelectExpr])
-          org.tresql.Query.sel(sql, cols, QueryBuilder.this.bindVariables, env,
-            QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
+        case "-" => if (exprType == classOf[SelectExpr]) sel(sql, cols)
         else lop - rop
         case "=" => lop match {
           //assign expression
@@ -305,10 +298,10 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer {
                 case Array(par) => par.isAssignableFrom(classOf[Seq[_]])
                 case _ => false
               })).headOption.map(_.invoke(f, List(p).asInstanceOf[List[Object]]: _*)).orElse(Some(
-              org.tresql.Query.call("{call " + sql + "}", QueryBuilder.this.bindVariables, env)))).get
+              call("{call " + sql + "}")))).get
           }
         }
-      } else org.tresql.Query.call("{call " + sql + "}", QueryBuilder.this.bindVariables, env)
+      } else call("{call " + sql + "}")
     }
     def defaultSQL = name + (params map (_.sql))
       .mkString("(" + (if (distinct) "distinct " else ""), ",", ")")
@@ -350,10 +343,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer {
   case class SelectExpr(tables: List[Table], filter: Expr, cols: List[ColExpr],
     distinct: Boolean, group: Expr, order: Expr,
     offset: Expr, limit: Expr, aliases: Map[String, Table], parentJoin: Option[Expr]) extends BaseExpr {
-    override def apply() = {
-      org.tresql.Query.sel(sql, cols, QueryBuilder.this.bindVariables, env,
-        QueryBuilder.this.allCols, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
-    }
+    override def apply() = sel(sql, cols)
     lazy val defaultSQL = "select " + (if (distinct) "distinct " else "") +
       (if (cols == null) "*" else sqlCols) + " from " + tables.head.sqlName + join(tables) +
       //(filter map where).getOrElse("")
@@ -532,7 +522,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer {
   }
   case class DeleteExpr(table: IdentExpr, alias: String, filter: List[Expr]) extends BaseExpr {
     override def apply() = {
-      val r = org.tresql.Query.update(sql, QueryBuilder.this.bindVariables, env)
+      val r = update(sql)
       //execute children only if this expression has affected some rows
       if (r > 0) executeChildren match {
         case Nil => r
@@ -580,11 +570,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer {
         case Nil => None
         case expr :: tail => findSQL(expr).orElse(findSQLInSeq(tail))
       }
-    val (cols, allColsFlag) = findSQL(this).map(_ -> QueryBuilder.this.allCols)
-      .getOrElse (List(ColExpr(AllExpr(), null, null)) -> true)
-    override def apply() =
-      org.tresql.Query.sel(sql, cols, QueryBuilder.this.bindVariables, env,
-        allColsFlag, QueryBuilder.this.identAll, QueryBuilder.this.hasHiddenCols)
+    val cols = findSQL(this).getOrElse(List(ColExpr(AllExpr(), null, null)))
+    override def apply() = sel(sql, cols)
     def defaultSQL = expr.filter(_ != null).map(_.sql) mkString ""
   }
 
@@ -708,7 +695,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer {
     else vals
   }
 
-  private def buildInternal(parsedExpr: Any, parseCtx: String = ROOT_CTX): Expr = {
+  private[tresql] def buildInternal(parsedExpr: Any, parseCtx: String = ROOT_CTX): Expr = {
     def buildSelect(q: QueryParser.Query) = {
       val tablesAndAliases = buildTables(q.tables)
       if (ctxStack.head == QUERY_CTX && this.tableDefs == Nil) this.tableDefs = defs(tablesAndAliases._1)

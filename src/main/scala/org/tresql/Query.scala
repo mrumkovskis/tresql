@@ -38,9 +38,7 @@ trait Query extends QueryBuilder with TypedQuery {
     case l => l.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
   }
 
-  private[tresql] def sel(sql: String, cols: List[QueryBuilder#ColExpr],
-    bindVariables: List[Expr], env: Env, allCols: Boolean, identAll: Boolean,
-    hasHiddenCols: Boolean): Result = {
+  private[tresql] def sel(sql: String, cols: List[QueryBuilder#ColExpr]): Result = {
     Env log sql
     val st = statement(sql, env)
     bindVars(st, bindVariables)
@@ -76,7 +74,7 @@ trait Query extends QueryBuilder with TypedQuery {
     result
   }
 
-  private[tresql] def update(sql: String, bindVariables: List[Expr], env: Env) = {
+  private[tresql] def update(sql: String) = {
     Env log sql
     val st = statement(sql, env)
     try {
@@ -88,7 +86,7 @@ trait Query extends QueryBuilder with TypedQuery {
     }
   }
 
-  private[tresql] def call(sql: String, bindVariables: List[Expr], env: Env) = {
+  private[tresql] def call(sql: String) = {
     Env log sql
     val st = statement(sql, env, true).asInstanceOf[CallableStatement]
     var result: Any = null
