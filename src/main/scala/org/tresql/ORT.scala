@@ -22,7 +22,7 @@ trait ORT extends Query {
   /** QueryBuilder methods **/
   override private[tresql] def newInstance(e: Env, depth: Int, idx: Int) =
     new ORT {
-      override private[tresql] def env = e
+      override def env = e
       override private[tresql] def queryDepth = depth
       override private[tresql] var bindIdx = idx
     }

@@ -26,7 +26,7 @@ trait Query extends QueryBuilder with TypedQuery {
   /** QueryBuilder methods **/
   override private[tresql] def newInstance(e: Env, depth: Int, idx: Int) =
     new Query {
-      override private[tresql] def env = e
+      override def env = e
       override private[tresql] def queryDepth = depth
       override private[tresql] var bindIdx = idx
     }

@@ -62,7 +62,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   ****************** methods to be implemented or overriden ********************
   ******************************************************************************/
   private[tresql] def newInstance(env: Env, queryDepth: Int, bindIdx: Int): QueryBuilder
-  private[tresql] def env: Env = error("Unimplemented")
+  def env: Env = error("Unimplemented")
   private[tresql] def queryDepth: Int = error("Unimplemented")
   private[tresql] def bindIdx: Int = error("Unimplemented")
   private[tresql] def bindIdx_=(idx: Int): Unit = error("Unimplemented")
