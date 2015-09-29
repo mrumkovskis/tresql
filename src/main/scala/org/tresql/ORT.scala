@@ -13,7 +13,7 @@ trait ORT extends Query {
   val PROP_PATTERN = new scala.util.matching.Regex(
     //"""(\w+)(:(\w+))?(\[([-=+]+)\])?""", "table", null, "ref", null, "actions")
     //action flags must be ordered due to deeper level children structure problem
-    """(\w+)(:(\w+))?(\[(\+?-?=?)\])?""", "table", null, "ref", null, "actions")
+    """([^:^\[^\]]+)(:([^:^\[^\]]+))?(\[(\+?-?=?)\])?""", "table", null, "ref", null, "actions")
   /** <object name | property name>[:<linked property name>][#(insert | update | delete)] */
   val PROP_PATTERN_OLD = """(\w+)(:(\w+))?(#(\w+))?"""r
 
