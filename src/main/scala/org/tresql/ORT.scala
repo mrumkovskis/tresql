@@ -9,9 +9,8 @@ trait ORT extends Query {
   case class OneToOne(rootTable: String, keys: Set[String])
   case class OneToOneBag(relations: OneToOne, obj: Map[String, Any])
 
-  /** <object name | property name>[:<reference to parent>][:actions in form <[+=-]> indicating insert, update, delete] */
+  /** <object name | property name>[:<reference to parent>][:actions in form <[+-=]> indicating insert, update, delete] */
   val PROP_PATTERN = new scala.util.matching.Regex(
-    //"""(\w+)(:(\w+))?(\[([-=+]+)\])?""", "table", null, "ref", null, "actions")
     //action flags must be ordered due to deeper level children structure problem
     """([^:^\[^\]]+)(:([^:^\[^\]]+))?(\[(\+?-?=?)\])?""", "table", null, "ref", null, "actions")
 
