@@ -190,41 +190,25 @@ object Env extends Resources {
   def logger_=(logger: (=> String, Int) => Unit) = this._logger = logger
 }
 
-trait Resources extends NameMap {
-  private var _nameMap:Option[(Map[String, String], Map[String, Map[String, (String, String)]])] = None
-  private var _delegateNameMap:Option[NameMap] = None
+trait Resources {
+  private var _valueExprMap: Option[Map[(String, String), String]] = None
 
   def conn: java.sql.Connection
   def metaData: MetaData
   def dialect: PartialFunction[Expr, String] = null
   def idExpr: String => String = s => "nextval('" + s + "')"
   def queryTimeout = 0
-  //name map methods
-  override def tableName(objectName: String): String = _delegateNameMap.map(_.tableName(
-      objectName)).getOrElse(_nameMap.flatMap(_._1.get(objectName)).getOrElse(objectName))
-  override def colName(objectName: String, propertyName: String): String = _delegateNameMap.map(
-      _.colName(objectName, propertyName)).getOrElse(_nameMap.flatMap(_._2.get(objectName).flatMap(
-          _.get(propertyName))).map(_._1).getOrElse(propertyName))
-  override def valueExpr(objectName: String, propertyName: String) = _delegateNameMap.map(
-      _.valueExpr(objectName, propertyName)).getOrElse(_nameMap.flatMap(_._2.get(objectName).flatMap(
-          _.get(propertyName))).map(_._2).getOrElse(super.valueExpr(objectName, propertyName)))
 
-  def nameMap = _delegateNameMap getOrElse this
-  def nameMap_=(map:NameMap) = _delegateNameMap = Option(map).filter(_ != this)
-  /** Set name map for this NameMap implementation
-   * 1. map: object name -> table name,
-   * 2. map: object name -> map: (property name -> (column name -> column value clause)),
-   */
-  def update(map:(Map[String, String], Map[String, Map[String, (String, String)]])) =
-    _nameMap = Option(map)
-}
-
-trait NameMap {
-  def tableName(objectName:String):String = objectName
-  def colName(objectName:String, propertyName:String):String = propertyName
   /** Column value expression in tresql statement value clause.
-   *  Default is named bind variable - {{{:propertyName}}} */
-  def valueExpr(objectName: String, propertyName: String) = ":" + propertyName
+   *  Default is named bind variable - {{{:columnName}}} */
+  def valueExpr(tableName: String, columnName: String) =
+    _valueExprMap.flatMap(_.get((tableName, columnName)))
+      .getOrElse(":" + columnName)
+
+  /** Set value expr map
+   * key: table name -> column name, value: expr passed to tresql
+   */
+  def updateValueExprs(map: Map[(String, String), String]) = _valueExprMap = Option(map)
 }
 
 trait EnvProvider {

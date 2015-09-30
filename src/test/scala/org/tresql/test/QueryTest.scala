@@ -50,14 +50,11 @@ class QueryTest extends Suite {
   Env.macros = Macros
   Env.cache = new SimpleCache(-1)
   Env.logger = ((msg, level) => println (msg))
-  Env update ( /*object to table name map*/
-    Map("emp_dept_view" -> "emp"),
-    /*property to column name map*/
-    Map("car_usage" -> Map("empname" -> ("empno", "(emp[ename = :empname]{empno})")),
-        "car" ->
-          Map("dname" ->
-            ("deptnr", "(case((dept[dname = :dname] {count(deptno)}) = 1, (dept[dname = :dname] {deptno}), -1))")),
-        "tyres_usage" -> Map("carnr" -> ("carnr", ":#car"))))
+  Env updateValueExprs (
+    /*value expr*/
+    Map(("car_usage" -> "empno") -> "(emp[empno = :empno]{empno})",
+        ("car" -> "deptnr") -> "(case((dept[deptno = :deptnr] {count(deptno)}) = 1, (dept[deptno = :deptnr] {deptno}), -1))",
+        ("tyres_usage" -> "carnr") -> ":#car"))
   //create test db script
   new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
     sql => val st = conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
@@ -374,7 +371,7 @@ class QueryTest extends Suite {
     intercept[SQLException](ORT.insert("car_usage", obj))
 
     //value clause test
-    obj = Map("car_nr" -> 2222, "empname" -> "SCOTT", "date_from" -> "2013-11-06")
+    obj = Map("car_nr" -> 2222, "empno" -> 7788, "date_from" -> "2013-11-06")
     assertResult(1)(ORT.insert("car_usage", obj))
 
     println("\n--- UPDATE ---\n")
@@ -418,9 +415,9 @@ class QueryTest extends Suite {
     assertResult(List(1, List(List(1))))(ORT.update("dept", obj))
 
     //value clause test
-    obj = Map("nr" -> 4444, "dname" -> "ACCOUNTING")
+    obj = Map("nr" -> 4444, "deptnr" -> 10)
     assertResult(1)(ORT.update("car", obj))
-    obj = Map("nr" -> 4444, "dname" -> "<NONE>")
+    obj = Map("nr" -> 4444, "deptnr" -> -1)
     intercept[java.sql.SQLIntegrityConstraintViolationException](ORT.update("car", obj))
 
     //update only children (no first level table column updates)
