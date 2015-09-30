@@ -288,11 +288,11 @@ trait ORT extends Query {
           .filter(_ => oneToOne == null) //refCol not relevant in oneToOne case
           .flatMap(importedKeyOption(_, table)))
         .orNull
-      def deleteAllChildren = s"-${table.name}[$refColName = :#${refsToRoot.
+      def deleteAllChildren = s"-$tableName[$refColName = :#${refsToRoot.
         getOrElse(parent, parent)}]"
       def deleteMissingChildren = {
         val filter = table.key.cols.headOption.map(k => s" & $k !in :ids").getOrElse("")
-        s"""_delete_children('$name', '${table.name}', -${table
+        s"""_delete_children('$name', '$tableName', -${table
           .name}[$refColName = :#${refsToRoot.getOrElse(parent,
             parent)}$filter])"""
       }
