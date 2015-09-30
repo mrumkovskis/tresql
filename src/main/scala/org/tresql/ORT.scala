@@ -14,8 +14,6 @@ trait ORT extends Query {
     //"""(\w+)(:(\w+))?(\[([-=+]+)\])?""", "table", null, "ref", null, "actions")
     //action flags must be ordered due to deeper level children structure problem
     """([^:^\[^\]]+)(:([^:^\[^\]]+))?(\[(\+?-?=?)\])?""", "table", null, "ref", null, "actions")
-  /** <object name | property name>[:<linked property name>][#(insert | update | delete)] */
-  val PROP_PATTERN_OLD = """(\w+)(:(\w+))?(#(\w+))?"""r
 
   type ObjToMapConverter[T] = (T) => (String, Map[String, _])
 
