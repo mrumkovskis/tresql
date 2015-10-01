@@ -195,14 +195,14 @@ trait ORT extends Query {
   def insert_tresql(
       name: String,
       obj: Map[String, Any],
-      parentChain: List[String],
+      parentChain: List[(String, String)], //tableName -> refColName
       refsToRoot: Map[String, String],
       oneToOne: OneToOne,
       filter: String,
       resources: Resources): String = {
     val (tableName, refPropName, _, _, _, alias) =
       parseProperty(name)
-    val parent = parentChain.headOption.orNull
+    val parent = parentChain.headOption.map(_._1).orNull
     resources.metaData.tableOption(tableName).map(table => {
       val refColName = if (parent == null) null else if (refPropName == null)
         table.refs(parent).filter(_.cols.size == 1) match { //process refs consisting of only one column
@@ -219,13 +219,14 @@ trait ORT extends Query {
           //children or lookup
           case v: Map[String, _] => lookupObject(n, table).map(lookupTable =>
             lookup_tresql(n, lookupTable, v, resources)).getOrElse {
-            List(insert_tresql(n, v, tableName :: parentChain, refsToRoot, null,
-                null /*do not pass filter further*/, resources) -> null)
+            List(insert_tresql(n, v, (tableName, refColName) :: parentChain,
+              refsToRoot, null, null /*do not pass filter further*/,
+              resources) -> null)
           }
           //oneToOne child
           case b: OneToOneBag => List(
-            insert_tresql(n, b.obj, tableName :: parentChain, refsToRoot,
-              b.relations, filter, resources) -> null)
+            insert_tresql(n, b.obj, (tableName, refColName) :: parentChain,
+            refsToRoot, b.relations, filter, resources) -> null)
           //pk or fk, one to one relationship
           case _ if table.key.cols == List(n) /*pk*/ || refColName == n /*fk*/
             || oneToOne != null && oneToOne.keys.contains(n) =>
@@ -272,14 +273,14 @@ trait ORT extends Query {
   def update_tresql(
       name: String,
       obj: Map[String, Any],
-      parentChain: List[String],
+      parentChain: List[(String, String)], //tableName -> refColName
       refsToRoot: Map[String, String],
       oneToOne: OneToOne,
       filter: String,
       resources: Resources): String = {
     val (tableName, refPropName, insertAction, updateAction, deleteAction, alias) =
       parseProperty(name)
-    val parent = parentChain.headOption.orNull
+    val parent = parentChain.headOption.map(_._1).orNull
     val md = resources.metaData
     md.tableOption(tableName).map{table =>
       val refColName = Option(refPropName)
@@ -311,16 +312,16 @@ trait ORT extends Query {
                 val extTable = oneToOneTable(n)
                 List((
                   if (extTable != null)
-                    update_tresql(n, v, tableName :: parentChain,
+                    update_tresql(n, v, (tableName, refColName) :: parentChain,
                       Map(extTable.name -> table.name),
                       OneToOne(table.name, Set(extTable.key.cols.head)),
                       null /* do no pass filter further */, resources)
                   else
-                    update_tresql(n, v, tableName :: parentChain, refsToRoot,
-                      null, null, resources)) -> null)
+                    update_tresql(n, v, (tableName, refColName) :: parentChain,
+                      refsToRoot, null, null, resources)) -> null)
               }
           case b: OneToOneBag => List(
-            update_tresql(n, b.obj, tableName :: parentChain, refsToRoot,
+            update_tresql(n, b.obj, (tableName, refColName) :: parentChain, refsToRoot,
                 b.relations, null /* do no pass filter further */, resources) -> null)
           case _ if table.key == metadata.Key(List(n)) => Nil //do not update pk
           case _ if oneToOne != null && oneToOne.keys.contains(n) =>
