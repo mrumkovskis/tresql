@@ -394,12 +394,12 @@ trait ORT extends Query {
     table.refTable.get(List(refColName))
 
   private def parseProperty(name: String) = {
-    val PROP_PATTERN(objName, _, refPropName, _, action, _, alias) = name
+    val PROP_PATTERN(tableName, _, refPropName, _, action, _, alias) = name
     //insert action, update action, delete action
     val (ia, ua, da) = Option(action).map (a =>
       (action contains "+", action contains "=", action contains "-")
     ).getOrElse {(true, false, true)}
-    (objName, refPropName, ia, ua, da, alias)
+    (tableName, refPropName, ia, ua, da, alias)
   }
 
   private def importedKeyOption(tableName: String, childTable: metadata.Table) =
