@@ -382,7 +382,7 @@ trait ORT extends Query {
     resources: Resources) =
     resources.metaData.tableOption(name).filter(_.key.cols.size == 1).map {
       table =>
-      val pk = table.key.cols.headOption.filter(v => obj.exists(_._1 == v)).orNull
+      val pk = table.key.cols.headOption.filter(obj contains).orNull
       val insert = insert_tresql(name, obj, null, Map(), null, null, resources)
       val update = update_tresql(name, obj, null, Map(), null, null, resources)
       List(
