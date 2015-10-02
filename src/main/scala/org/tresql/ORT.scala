@@ -257,7 +257,7 @@ trait ORT extends Query {
                 case x =>
                   val (cols, vals) = x.unzip
                   val tn = tableName + (if (alias == null) "" else " " + alias)
-                  cols.mkString(s"+$tn {", ", ", "}") +
+                  cols.mkString(s"+$tableName {", ", ", "}") +
                   (vals.filter(_ != null) match {
                     case vs if filter == null => vs.mkString(" [", ", ", "]")
                     case vs => vs.mkString(s" $tn [$filter] {", ", ", "} @(1)")
