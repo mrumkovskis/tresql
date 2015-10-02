@@ -226,7 +226,7 @@ trait ORT extends Query {
           //oneToOne child
           case b: OneToOneBag => List(
             insert_tresql(n, b.obj, (tableName, refColName) :: parentChain,
-            refsToRoot, b.relations, filter, resources) -> null)
+            refsToRoot, b.relations, null /*do no pass filter further*/, resources) -> null)
           //pk or fk, one to one relationship
           case _ if table.key.cols == List(n) /*pk*/ || refColName == n /*fk*/
             || oneToOne != null && oneToOne.keys.contains(n) =>
