@@ -10,7 +10,7 @@ package object tresql {
    */
   
   implicit class Tresql(val sc: StringContext) extends AnyVal {
-    def tresql(params: Any*) = {
+    def tresql(params: Any*)(implicit resources: Resources = Env) = {
       val p = sc.parts
       var optionalVars = Set[Int]()
       Query(p.head + p.tail.zipWithIndex.map(t => {
