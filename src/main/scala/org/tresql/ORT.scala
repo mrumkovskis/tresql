@@ -203,19 +203,21 @@ trait ORT extends Query {
     val (tableName, refPropName, _, _, _, alias) =
       parseProperty(name)
     val parent = parentChain.headOption.map(_._1).orNull
-    resources.metaData.tableOption(tableName).map(table => {
-      val refColName = if (parent == null) null else if (refPropName == null)
-        table.refs(parent).filter(_.cols.size == 1) match { //process refs consisting of only one column
-          case Nil => null
-          case List(ref) => ref.cols.head
-          case x => error(
-              s"""Ambiguous references from table '$tableName' to table '$parent'.
-              Reference must be one and must consist of one column. Found: $x""")
-      } else refPropName
+    (for {
+      table <- resources.metaData.tableOption(tableName)
+      /*child obj (must have reference to parent)*/
+      refColName <- Some(parent).filter(_ == null)/*null if no parent*/ orElse
+        Option(oneToOne).map(_ => null)/*null if one to one*/ orElse Option(refPropName) orElse(
+          table.refs(parent).filter(_.cols.size == 1) match { //process refs consisting of only one column
+            case Nil => None
+            case List(ref) => ref.cols.headOption
+            case x => error(
+                s"""Ambiguous references from table '$tableName' to table '$parent'.
+                Reference must be one and must consist of one column. Found: $x""")
+          })
+    } yield {
       def parentIdRef = s":#${refsToRoot.getOrElse(parent, parent)}"
-      obj.flatMap((t: (String, _)) => {
-        val n = t._1
-        t._2 match {
+      obj.flatMap { case (n, v) => v match {
           //children or lookup
           case v: Map[String, _] => lookupObject(n, table).map(lookupTable =>
             lookup_tresql(n, lookupTable, v, resources)).getOrElse {
@@ -235,15 +237,14 @@ trait ORT extends Query {
           //ordinary field
           case _ => List(table.colOption(n).map(_.name).orNull -> resources.valueExpr(tableName, n))
         }
-      }).groupBy { case _: String => "l" case _ => "b" } match {
+      }.groupBy { case _: String => "l" case _ => "b" } match {
         case m: Map[String, List[_]] =>
           //lookup edit tresql
           val lookupTresql = m.get("l").map(_.asInstanceOf[List[String]].map(_ + ", ").mkString).orNull
           //base table tresql
           val tresql =
             (m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]]
-             .filter(_._1 != null /*check if prop->col mapping found*/ &&
-              (parent == null /*first level obj*/ || refColName != null || oneToOne != null /*child obj (must have reference to parent)*/ )) ++
+             .filter(_._1 != null /*check if prop->col mapping found*/) ++
               (if (refColName == null || oneToOne != null) Map()
                   else Map(refColName -> parentIdRef /*add fk col to parent*/ )) ++
               (if (oneToOne != null) oneToOne.keys.map(_ -> s":#${oneToOne.rootTable}").toMap else Map() /* set one to one relationships */) ++
@@ -300,10 +301,8 @@ trait ORT extends Query {
         ref <- importedKeyOption(table.name, t)
         if t.key.cols.size == 1 && ref == t.key.cols.head
       } yield t).orNull
-      def update = (for {pk <- table.key.cols.headOption} yield
-        obj.flatMap((t: (String, _)) => {
-        val n = t._1
-        t._2 match {
+      def update = (for {pk <- table.key.cols.headOption} yield obj.flatMap {
+        case (n, v) => v match {
           //children
           case v: Map[String, _] =>
             lookupObject(n, table).map(lookupTable =>
@@ -328,7 +327,7 @@ trait ORT extends Query {
             List(n -> s":#${oneToOne.rootTable}")
           case _ => List(table.colOption(n).map(_.name).orNull -> resources.valueExpr(tableName, n))
         }
-      }).groupBy { case _: String => "l" case _ => "b" } match {
+      }.groupBy { case _: String => "l" case _ => "b" } match {
         case m: Map[String, List[_]] =>
           m("b").asInstanceOf[List[(String, String)]].filter(_._1 != null).unzip match {
             case (cols: List[String], vals: List[String]) =>
