@@ -10,7 +10,7 @@ trait ORT extends Query {
   case class OneToOneBag(relations: OneToOne, obj: Map[String, Any])
 
   /** <table | property name>[:<reference to parent or root>*][root table][actions in form <[+-=]> indicating insert, update, delete] [alias]
-  *  Example: table:ref1:ref2->root_table[+-] alias
+  *  Example: table:ref1:ref2->root_table[+-=] alias
   */
   val PROP_PATTERN =
     """(?<table>[^:\[\]\s->]+)(?<refs>(?:\s*:\s*[^:\[\]\s->]+)*)(?:\s*->\s*(?<roottable>[^:\[\]\s->]+))?(?:\s*\[(?<options>\+?-?=?)\])?(?:\s+(?<alias>\w+))?"""r
