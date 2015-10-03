@@ -9,11 +9,11 @@ trait ORT extends Query {
   case class OneToOne(rootTable: String, keys: Set[String])
   case class OneToOneBag(relations: OneToOne, obj: Map[String, Any])
 
-  /** <object name | property name>[:<reference to parent>][:actions in form <[+-=]> indicating insert, update, delete] [alias] */
-  val PROP_PATTERN = new scala.util.matching.Regex(
-    //action flags must be ordered due to deeper level children structure problem
-    """([^:^\[^\]^\s]+)(\s*:\s*([^:^\[^\]^\s]+))?(\s*\[(\+?-?=?)\])?(\s+(\w+))?""",
-      "table", null, "ref", null, "actions", null, "alias")
+  /** <table | property name>[:<reference to parent or root>*][root table][actions in form <[+-=]> indicating insert, update, delete] [alias]
+  *  Example: table:ref1:ref2->root_table[+-] alias
+  */
+  val PROP_PATTERN =
+    """(?<table>[^:\[\]\s->]+)(?<refs>(?:\s*:\s*[^:\[\]\s->]+)*)(?:\s*->\s*(?<roottable>[^:\[\]\s->]+))?(?:\s*\[(?<options>\+?-?=?)\])?(?:\s+(?<alias>\w+))?"""r
 
   type ObjToMapConverter[T] = (T) => (String, Map[String, _])
 
@@ -394,11 +394,12 @@ trait ORT extends Query {
     table.refTable.get(List(refColName))
 
   private def parseProperty(name: String) = {
-    val PROP_PATTERN(tableName, _, refPropName, _, action, _, alias) = name
+    val PROP_PATTERN(tableName, refs, rootTable, action, alias) = name
     //insert action, update action, delete action
     val (ia, ua, da) = Option(action).map (a =>
       (action contains "+", action contains "=", action contains "-")
     ).getOrElse {(true, false, true)}
+    val refPropName = (refs split ":").tail.headOption.orNull
     (tableName, refPropName, ia, ua, da, alias)
   }
 
