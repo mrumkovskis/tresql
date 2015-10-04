@@ -12,8 +12,15 @@ trait ORT extends Query {
   /** <table | property name>[:<reference to parent or root>*][root table][actions in form <[+-=]> indicating insert, update, delete] [alias]
   *  Example: table:ref1:ref2->root_table[+-=] alias
   */
-  val PROP_PATTERN =
-    """(?<table>[^:\[\]\s->]+)(?<refs>(?:\s*:\s*[^:\[\]\s->]+)*)(?:\s*->\s*(?<roottable>[^:\[\]\s->]+))?(?:\s*\[(?<options>\+?-?=?)\])?(?:\s+(?<alias>\w+))?"""r
+  val PROP_PATTERN = {
+    val ident = """[^:\[\]\s->]+"""
+    val table = s"""(?<table>$ident)"""
+    val refs = s"""(?<refs>(?:\\s*:\\s*$ident)*)"""
+    val roottable = s"""(?:\\s*->\\s*(?<roottable>$ident))?"""
+    val options = """(?:\s*\[(?<options>\+?-?=?)\])?"""
+    val alias = """(?:\s+(?<alias>\w+))?"""
+    (table + refs + roottable + options + alias)r
+  }
 
   type ObjToMapConverter[T] = (T) => (String, Map[String, _])
 
