@@ -39,11 +39,13 @@ class QueryTest extends Suite {
         b.SQLExpr("null", Nil)
       else b.SQLExpr(sqlSnippet, vars)
     }
-
     def null_macros(b: QueryBuilder) = null
-
     def sql_concat(b: QueryBuilder, exprs: Expr*) =
       b.SQLConcatExpr(exprs: _*)
+    def if_defined(b: QueryBuilder, v: QueryBuilder#VarExpr, e: Expr) =
+      if (b.env contains v.name) e else null
+    def if_missing(b: QueryBuilder, v: QueryBuilder#VarExpr, e: Expr) =
+      if (b.env contains v.name) null else e
 
   }
   Env.functions = new TestFunctions
