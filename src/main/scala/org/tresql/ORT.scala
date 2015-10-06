@@ -9,10 +9,22 @@ trait ORT extends Query {
   case class OneToOne(rootTable: String, keys: Set[String])
   case class OneToOneBag(relations: OneToOne, obj: Map[String, Any])
 
+  case class PropTable(table: String, refs: Set[String])
+  case class Property(tables: List[PropTable],
+    insert: Boolean, update: Boolean, delete: Boolean, alias: String)
+
+  val PROP_PATTERN = {
+    val ident = """[^:\[\]\s#]+"""
+    val table = s"$ident(?::$ident)*"
+    val tables = s"""($table(?:#$table)*)"""
+    val options = """(?:\[(\+?-?=?)\])?"""
+    val alias = """(?:\s+(\w+))?"""
+    (tables + options + alias)r
+  }
   /** <table | property name>[:<reference to parent or root>*][root table][actions in form <[+-=]> indicating insert, update, delete] [alias]
   *  Example: table:ref1:ref2->root_table[+-=] alias
   */
-  val PROP_PATTERN = {
+  val PROP_PATTERN_OLD = {
     val ident = """[^:\[\]\s->]+"""
     val table = s"""(?<table>$ident)"""
     val refs = s"""(?<refs>(?:\\s*:\\s*$ident)*)"""
@@ -208,7 +220,7 @@ trait ORT extends Query {
       filter: String,
       resources: Resources): String = {
     val (tableName, refPropName, _, _, _, alias) =
-      parseProperty(name)
+      parsePropertyOld(name)
     val parent = parentChain.headOption.map(_._1).orNull
     (for {
       table <- resources.metaData.tableOption(tableName)
@@ -287,7 +299,7 @@ trait ORT extends Query {
       filter: String,
       resources: Resources): String = {
     val (tableName, refPropName, insertAction, updateAction, deleteAction, alias) =
-      parseProperty(name)
+      parsePropertyOld(name)
     val parent = parentChain.headOption.map(_._1).orNull
     val md = resources.metaData
     md.tableOption(tableName).map{table =>
@@ -400,14 +412,26 @@ trait ORT extends Query {
   def lookupObject(refColName: String, table: metadata.Table) =
     table.refTable.get(List(refColName))
 
-  private def parseProperty(name: String) = {
-    val PROP_PATTERN(tableName, refs, rootTable, action, alias) = name
+  private def parsePropertyOld(name: String) = {
+    val PROP_PATTERN_OLD(tableName, refs, rootTable, action, alias) = name
     //insert action, update action, delete action
     val (ia, ua, da) = Option(action).map (a =>
       (action contains "+", action contains "=", action contains "-")
     ).getOrElse {(true, false, true)}
     val refPropName = (refs split ":").tail.headOption.orNull
     (tableName, refPropName, ia, ua, da, alias)
+  }
+
+  private def parseProperty(name: String) = {
+    val PROP_PATTERN(tables, options, alias) = name
+    //insert update delete option
+    val (i, u, d) = Option(options).map (_ =>
+      (options contains "+", options contains "=", options contains "-")
+    ).getOrElse {(true, false, true)}
+    Property((tables split "#").map{ t =>
+      val x = t split ":"
+      PropTable(x.head, x.tail.toSet)
+    }.toList, i, u, d, alias)
   }
 
   private def importedKeyOption(tableName: String, childTable: metadata.Table) =
