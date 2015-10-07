@@ -229,6 +229,63 @@ trait ORT extends Query {
     }(bf.asInstanceOf[scala.collection.generic.CanBuildFrom[Map[String, Any], (String, Any), M]]) //somehow cast is needed
   }
 
+  def insert_tresql_new(
+    name: String,
+    obj: Map[String, Any],
+    parents: List[PropTable],
+    filter: String)(implicit resources: Resources): String = {
+    def insert(
+      table: metadata.Table,
+      alias: String,
+      refsAndPk: Set[(String, String)],
+      filter: String,
+      obj: Map[String, Any]): String = obj.flatMap { case (n, v) => v match {
+        //children or lookup
+        case o: Map[String, Any] => lookupObject(n, table).map(lookupTable =>
+          lookup_tresql(n, lookupTable, o, resources)).getOrElse {
+          List(insert_tresql_new(n, o, PropTable(table.name,
+            refsAndPk.map(_._1)) :: parents, null) -> null)
+        }
+        //pk or fk
+        case _ if refsAndPk.exists(_._1 == n) => Nil
+        //ordinary field
+        case _ => List(table.colOption(n).map(_.name).orNull -> resources.valueExpr(table.name, n))
+      }
+    }.groupBy { case _: String => "l" case _ => "b"} match {
+      case m: Map[String, List[_]] =>
+      val tableName = table.name
+      //lookup edit tresql
+      val lookupTresql = m.get("l").map(_.asInstanceOf[List[String]].map(_ + ", ").mkString).orNull
+      //base table tresql
+      val tresql =
+        (m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]]
+         .filter(_._1 != null /*check if prop->col mapping found*/) ++ refsAndPk)
+         match {
+           case x if x.size == 0 => null
+           case x =>
+             val (cols, vals) = x.unzip
+             val tn = tableName + alias
+             cols.mkString(s"+$tableName {", ", ", "}") +
+             (vals.filter(_ != null) match {
+               case vs if filter == null => vs.mkString(" [", ", ", "]")
+               case vs => vs.mkString(s" $tn [$filter] {", ", ", "} @(1)")
+             })
+         }
+       Option(tresql).map(t => Option(lookupTresql).map(lt => s"[$lt$t]$alias")
+         .getOrElse(t + alias)).orNull
+
+    }
+    val Property(tables, _, _, _, alias) = parseProperty(name)
+    val parent = parents.headOption
+    val md = resources.metaData
+    tables match {
+      case t :: Nil => md.tableOption(t.table).map { table =>
+        ""
+      }.orNull
+      case t :: tail => ""
+    }
+  }
+
   def insert_tresql(
       name: String,
       obj: Map[String, Any],
