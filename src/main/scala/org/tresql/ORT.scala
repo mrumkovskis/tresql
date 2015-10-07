@@ -90,6 +90,15 @@ trait ORT extends Query {
     }
     override def defaultSQL = s"DeleteChildrenExpr($obj, $idName, $expr)"
   }
+  /*Expression is built from macro. First seq calls env.nextId, for other env.curId is updated*/
+  case class MultiIdExpr(seqNames: String*) extends BaseExpr {
+    override def apply() = {
+      val id = env.nextId(seqNames.head)
+      seqNames.tail.foreach(env.currId(_, id))
+      id
+    }
+    def defaultSQL = s"MultiIdExpr(${seqNames.mkString(", ")})"
+  }
 
   def insert(name: String, obj: Map[String, Any], filter: String = null)
     (implicit resources: Resources = Env): Any =
