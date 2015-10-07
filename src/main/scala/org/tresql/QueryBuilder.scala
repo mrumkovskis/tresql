@@ -490,11 +490,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     //include env.currId(idExpr.seqName) in result if vals contains IdExpr
     override def apply() = {
       val r = super.apply()
-      vals match {
-        case ValuesExpr(ArrExpr(v) :: _) => v.find(_.isInstanceOf[IdExpr])
-          .map(e => env.currId(e.asInstanceOf[IdExpr].seqName)).map((r, _)).getOrElse(r)
-        case _ => r
-      }
+      env.currIdOption(table.defaultSQL).map(r -> _).getOrElse(r)
     }
     override protected def _sql = "insert into " + table.sql + (if (alias == null) "" else " " + alias) +
       " (" + cols.map(_.sql).mkString(", ") + ")" + " " + vals.sql
