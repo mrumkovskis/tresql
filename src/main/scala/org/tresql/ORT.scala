@@ -92,12 +92,15 @@ trait ORT extends Query {
   }
   /*Expression is built from macro. First seq calls env.nextId, for other env.curId is updated*/
   case class MultiIdExpr(seqNames: String*) extends BaseExpr {
+    val idExpr = IdExpr(seqNames.head)
     override def apply() = {
-      val id = env.nextId(seqNames.head)
+      val id = idExpr.apply()
       seqNames.tail.foreach(env.currId(_, id))
       id
     }
-    def defaultSQL = s"MultiIdExpr(${seqNames.mkString(", ")})"
+    override def defaultSQL = idExpr.defaultSQL
+    override def toString = s"${seqNames.mkString("#", ", #", "")} = ${idExpr
+      .idFromEnv.getOrElse("<sequence next value>")}"
   }
 
   def insert(name: String, obj: Map[String, Any], filter: String = null)

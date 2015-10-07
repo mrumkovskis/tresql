@@ -127,7 +127,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
 
   case class IdExpr(seqName: String) extends BaseExpr {
     override def apply() = idFromEnv getOrElse env.nextId(seqName)
-    private def idFromEnv = for {
+    private[tresql] def idFromEnv = for {
       keys <- env.tableOption(seqName).map(_.key.cols)
       key <- keys.headOption
       if keys.size == 1 && env.containsNearest(key) && env(key) != null
@@ -487,9 +487,9 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
 
   class InsertExpr(table: IdentExpr, alias: String, val cols: List[Expr], val vals: Expr)
     extends DeleteExpr(table, alias, null) {
-    //include env.currId(idExpr.seqName) in result if vals contains IdExpr
     override def apply() = {
       val r = super.apply()
+      //include in result id value of the inserted record if it's obtained from IdExpr
       env.currIdOption(table.defaultSQL).map(r -> _).getOrElse(r)
     }
     override protected def _sql = "insert into " + table.sql + (if (alias == null) "" else " " + alias) +
