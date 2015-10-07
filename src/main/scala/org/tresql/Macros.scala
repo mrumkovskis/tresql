@@ -30,7 +30,7 @@ class Macros {
       String valueOf objName.value,
       String valueOf tableName.value,
       deleteExpr)
-   
-  def _multi_id(b: ORT, seqNames: QueryBuilder#ConstExpr*) =
-    b.MultiIdExpr(seqNames.map(String valueOf _.value): _*)
+
+  def _multi_id(b: ORT, seqNames: QueryBuilder#IdentExpr*) =
+    b.MultiIdExpr(seqNames.map(_.name.mkString(".")): _*)
 }

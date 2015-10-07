@@ -169,6 +169,12 @@ trait ORT extends Query {
     updateInternal(names.head, nobj, tresql_structure(struct), refsToRoot, filter)
   }
 
+  def multiSaveProp(names: Seq[String])(implicit resources: Resources = Env) =
+    names.tail.foldLeft(List(names.head)) { (ts, t) =>
+      (t.split(":").head + importedKeysAndPks(t, ts, resources)
+        .mkString(":", ":", "")) :: ts
+  }.reverse.mkString("#")
+
   /* For each name started with second is generated OneToOne object which contains name's references
    * to all of previous names */
   def multipleOneToOneTransformation(obj: Map[String, Any], names: String*)(
@@ -463,6 +469,19 @@ trait ORT extends Query {
    * imported keys pointing to the same relation the one specified after : symbol is chosen
    * or exception is thrown.
    * This is used to find relation columns for insert/update multiple methods. */
+  def importedKeysAndPks(tableName: String, relations: List[String], resources: Resources) = {
+    val x = tableName split ":"
+    val table = resources.metaData.table(x.head)
+    relations.foldLeft(x.tail.toSet) { (keys, rel) =>
+      val relation = rel.split(":").head
+      val refs = table.refs(relation).filter(_.cols.size == 1)
+      (if (refs.size == 1) keys + refs.head.cols.head
+      else if (refs.size == 0 || refs.exists(r => keys.contains(r.cols.head))) keys
+      else error(s"Ambiguous refs: $refs from table ${table.name} to table $relation")) ++
+      table.key.cols.headOption.map(Set(_)).getOrElse(Set())
+    }
+  }
+
   def importedKeys(tableName: String, relations: List[String], resources: Resources) = {
     val x = tableName split ":"
     val table = resources.metaData.table(x.head)

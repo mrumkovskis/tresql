@@ -146,18 +146,17 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   }
 
   case class IdRefExpr(seqName: String) extends BaseExpr {
-    override def apply() = getId(seqName)
-    private def getId(name: String): Any = env.currIdOption(name).getOrElse {
-      val t = env.table(name)
-      t.refTable.get(t.key.cols).map(getId).getOrElse(
-          error(s"Current id not found for sequence $seqName in environment"))
+    override def apply() = getId(seqName).getOrElse(
+        error(s"Current id not found for sequence $seqName in environment"))
+    private def getId(name: String): Option[Any] = env.currIdOption(name).orElse {
+      env.tableOption(name).flatMap(t=> t.refTable.get(t.key.cols).map(getId))
     }
     var binded = false
     def defaultSQL = {
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       "?"
     }
-    override def toString = s":#$seqName = ${this()}"
+    override def toString = s":#$seqName = ${getId(seqName).getOrElse("?")}"
   }
 
   case class ResExpr(nr: Int, col: Any) extends PrimitiveExpr {
