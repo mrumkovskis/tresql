@@ -31,6 +31,8 @@ class Macros {
       String valueOf tableName.value,
       deleteExpr)
 
-  def _multi_id(b: ORT, seqNames: QueryBuilder#IdentExpr*) =
-    b.MultiIdExpr(seqNames.map(_.name.mkString(".")): _*)
+  def _id_ref_id(b: ORT,
+    idRef: QueryBuilder#IdentExpr,
+    id: QueryBuilder#IdentExpr) =
+    b.IdRefIdExpr(idRef.name.mkString("."), id.name.mkString("."))
 }
