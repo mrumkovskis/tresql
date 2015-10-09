@@ -351,11 +351,11 @@ class QueryTest extends Suite {
     //child foreign key is also its primary key
     obj = Map("deptno" -> 60, "dname" -> "POLAR", "loc" -> "ALASKA",
               "dept_addr" -> List(Map("addr" -> "Halibut")))
-    assertResult((List(1, List(List(1))),60))(ORT.insert("dept", obj))
+    assertResult((List(1, List(List((1, 60)))),60))(ORT.insert("dept", obj))
     //child foreign key is also its primary key
     obj = Map("dname" -> "BEACH", "loc" -> "HAWAII",
               "dept_addr" -> List(Map("deptnr" -> 1, "addr" -> "Honolulu", "zip_code" -> "1010")))
-    assertResult((List(1, List(List(1))),10013))(ORT.insert("dept", obj))
+    assertResult((List(1, List(List((1,10013)))),10013))(ORT.insert("dept", obj))
 
     obj = Map("deptno" -> null, "dname" -> "DRUGS",
               "car" -> List(Map("nr" -> "UUU", "name" -> "BEATLE")))
@@ -499,7 +499,7 @@ class QueryTest extends Suite {
     println("\n---- Multiple table INSERT, UPDATE ------\n")
 
     obj = Map("dname" -> "SPORTS", "addr" -> "Brisbane", "zip_code" -> "4000")
-    assertResult((List(1, List(1)),10026))(ORT.insertMultiple(obj, "dept", "dept_addr")())
+    assertResult((List(1, List((1,10026))),10026))(ORT.insertMultiple(obj, "dept", "dept_addr")())
 
     obj = Map("deptno" -> 10026, "loc" -> "Brisbane", "addr" -> "Roma st. 150")
     assertResult(List(1, List(1)))(ORT.updateMultiple(obj, "dept", "dept_addr")())
@@ -521,7 +521,8 @@ class QueryTest extends Suite {
         "dept_addr" -> List(Map("addr" -> "Chengdu", "zip_code" -> "2000",
             "dept_sub_addr" -> List(Map("addr" -> "Jinli str. 10", "zip_code" -> "CN-1234"),
                 Map("addr" -> "Jinjiang District", "zip_code" -> "CN-1234")))))
-    assertResult((List(1, List(List(List(1, List(List(1, 1)))))),10027)) {ORT.insert("dept", obj)}
+    assertResult((List(1, List(List((List(1, List(List(1, 1))),10027)))),10027)) {
+      ORT.insert("dept", obj)}
 
     obj = Map("deptno" -> 10027, "dname" -> "PANDA BREEDING",
       "dept_addr" -> List(Map("addr" -> "Chengdu", "zip_code" -> "CN-1234",
@@ -542,7 +543,7 @@ class QueryTest extends Suite {
     //one to one relationship with lookup for extended table
     obj = Map("dname" -> "MARKETING", "addr" -> "Valkas str. 1",
         "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Riga"))
-    assertResult((List(1, List(List(10033, 1))),10032)) { ORT.insertMultiple(obj, "dept", "dept_addr")() }
+    assertResult((List(1, List(List(10033, (1,10032)))),10032)) { ORT.insertMultiple(obj, "dept", "dept_addr")() }
     obj = Map("deptno" -> 10032, "dname" -> "MARKET", "addr" -> "Valkas str. 1a",
       "zip_code" -> "LV-1010", "addr_nr" -> Map("nr" -> 10033, "addr" -> "Riga, LV"))
     assertResult(List(1, List(List(10033, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
@@ -556,18 +557,18 @@ class QueryTest extends Suite {
     println("\n----------------- Multiple table INSERT UPDATE extended cases ----------------------\n")
 
     obj = Map("dname" -> "AD", "ename" -> "Lee", "wdate" -> "2000-01-01", "hours" -> 3)
-    assertResult((List(1, List(1, 1)),10036)) { ORT.insertMultiple(obj, "dept", "emp", "work:empno")() }
+    assertResult((List(1, List((1,10036), (1,10036))),10036)) { ORT.insertMultiple(obj, "dept", "emp", "work:empno")() }
 
     obj = Map("deptno" -> 10036, "dname" -> "ADVERTISING", "ename" -> "Andy")
     assertResult(List(1, List(1))) { ORT.updateMultiple(obj, "dept", "emp")() }
 
     obj = Map("dname" -> "DIG", "emp" -> List(Map("ename" -> "O'Jay",
         "work:empno" -> List(Map("wdate" -> "2010-05-01", "hours" -> 7)))), "addr" -> "Tvaika 1")
-    assertResult((List(1, List(List((List(1, List(List(1))),10038)), 1)),10037)) {
+    assertResult((List(1, List(List((List(1, List(List(1))),10038)), (1,10037))),10037)) {
       ORT.insertMultiple(obj, "dept", "dept_addr")() }
 
     obj = Map("dname" -> "GARAGE", "name" -> "Nissan", "brand" -> "Dunlop", "season" -> "S")
-    assertResult((List(1, List(1, 1)),10039)) { ORT.insertMultiple(obj, "dept", "car", "tyres")() }
+    assertResult((List(1, List((1,10039), (1,10039))),10039)) { ORT.insertMultiple(obj, "dept", "car", "tyres")() }
 
     obj = Map("deptno" -> 10039, "dname" -> "STOCK", "name" -> "Nissan", "brand" -> "PIRELLI", "season" -> "W")
     assertResult(List(1, List(1, 1))) { ORT.updateMultiple(obj, "dept", "car", "tyres")() }
@@ -578,7 +579,7 @@ class QueryTest extends Suite {
 
     obj = Map("dname" -> "NEW STOCK", "name" -> "Audi Q7",
         "tyres" -> List(Map("brand" -> "NOKIAN", "season" -> "S")))
-    assertResult((List(1, List(List(1, List(List((1,10042)))))),10041)) { ORT.insertMultiple (obj, "dept", "car")() }
+    assertResult((List(1, List((List(1, List(List((1,10042)))),10041))),10041)) { ORT.insertMultiple (obj, "dept", "car")() }
 
     println("\n-------- LOOKUP extended cases - chaining, children --------\n")
 
@@ -608,7 +609,7 @@ class QueryTest extends Suite {
     println("\n-------- INSERT, UPDATE with additional filter --------\n")
     //insert, update with additional filter
     assertResult(0){ORT.insert("dummy", Map("dummy" -> 2), "dummy = -1")}
-    assertResult(1){ORT.insert("dummy d", Map("dummy" -> 2), ":dummy = 2")}
+    assertResult(1){ORT.insert("dummy d", Map("dummy" -> 2), "d.dummy = 2")}
     assertResult(0){ORT.update("address a", Map("nr" -> 10033, "addr" -> "gugu"), "a.addr ~ 'Ri'")}
     assertResult(0) { ORT.delete("emp e", 10053, "ename ~~ :ename", Map("ename" -> "ivans%")) }
     assertResult(1) { ORT.delete("emp e", 10053, "ename ~~ :ename", Map("ename" -> "van%")) }

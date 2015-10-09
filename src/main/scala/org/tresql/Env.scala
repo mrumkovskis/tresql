@@ -48,7 +48,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
     vars.map(_.contains(name)).getOrElse(provider.map(_.env.containsNearest(name)).getOrElse(false))
 
   private[tresql] def update(name: String, value: Any) {
-    vars.get(name) = value
+    vars.map(_(name) = value) orElse (provider.map(_.env(name) = value))
   }
 
   private[tresql] def update(vars: Map[String, Any]) {
@@ -113,6 +113,8 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
     vars.map(_.mkString("\n" + offset, "\n" + offset, "\n")).
       getOrElse("\n" + offset + "<none>\n") +
       provider.map(_.env.printVars(offset + " ")).getOrElse("")
+  override def toString: String = super.toString +
+    provider.map(p=> s":$p#${p.env.toString}").getOrElse("")
 
 }
 

@@ -88,7 +88,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     def defaultSQL = name.mkString(".") + ".*"
   }
 
-  case class VarExpr(name: String, members: List[String], typ: String, opt: Boolean) extends BaseExpr {
+  case class VarExpr(name: String, members: List[String], typ: String, opt: Boolean) extends BaseVarExpr {
     override def apply() = {
       def accessProduct(p: Product, idx: String) = Try(idx.toInt).toOption.map(i =>
           p.productElement(i - 1)).getOrElse(error(s"Variable member '$idx' should be number to access product $p"))
@@ -98,8 +98,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case x => error(s"At the moment cannot evaluate variable member '$mem' from structure $x")
       })
     }
-    var binded = false
-    def defaultSQL = {
+    override def defaultSQL = {
       if (!binded) QueryBuilder.this._bindVariables += this
       val s = (if (!env.reusableExpr && (env contains name) && (members == null | members == Nil)) {
         env(name) match {
@@ -125,7 +124,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     override def toString = if (env contains name) fullName + " = " + this() else fullName
   }
 
-  case class IdExpr(seqName: String) extends BaseExpr {
+  case class IdExpr(seqName: String) extends BaseVarExpr {
     override def apply() = idFromEnv getOrElse env.nextId(seqName)
     private[tresql] def idFromEnv = for {
       keys <- env.tableOption(seqName).map(_.key.cols)
@@ -137,29 +136,19 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       env.currId(seqName, id)
       id
     }
-    var binded = false
-    def defaultSQL = {
-      if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
-      "?"
-    }
     override def toString = s"#$seqName = ${idFromEnv getOrElse "<sequence next value>"}"
   }
 
-  case class IdRefExpr(seqName: String) extends BaseExpr {
+  case class IdRefExpr(seqName: String) extends BaseVarExpr {
     override def apply() = getId(seqName).getOrElse(
-        error(s"Current id not found for sequence $seqName in environment"))
+        error(s"Current id not found for sequence $seqName in environment:\n$env"))
     private def getId(name: String): Option[Any] = env.currIdOption(name).orElse {
       env.tableOption(name).flatMap(t=> t.refTable.get(t.key.cols).map(getId))
-    }
-    var binded = false
-    def defaultSQL = {
-      if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
-      "?"
     }
     override def toString = s":#$seqName = ${getId(seqName).getOrElse("?")}"
   }
 
-  case class ResExpr(nr: Int, col: Any) extends PrimitiveExpr {
+  case class ResExpr(nr: Int, col: Any) extends BaseVarExpr {
     override def apply() = env(nr) match {
       case null => error("Ancestor result with number " + nr + " not found for expression " + this)
       case r => col match {
@@ -169,12 +158,15 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case c: Int => error("column index in result expression must be greater than 0. Is: " + c)
       }
     }
-    var binded = false
+    override def toString = s"$nr($col) = ${Try(this()).getOrElse("value not available")}"
+  }
+
+  class BaseVarExpr extends BaseExpr {
+    private[tresql] var binded = false
     def defaultSQL = {
       if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
       "?"
     }
-    override def toString = s"$nr($col) = ${Try(this()).getOrElse("value not available")}"
   }
 
   case class UnExpr(op: String, operand: Expr) extends BaseExpr {
@@ -442,7 +434,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       case _ => null
     }
     override def toString =
-      s"""${col.toString}${if (alias != null) " " + alias else ""}, hidden = $hidden, separateQuery = $separateQuery, type = $typ"""
+      s"""${col.toString}${if (alias != null) " " + alias
+        else ""}, hidden = $hidden, separateQuery = $separateQuery, type = $typ"""
   }
   case class HiddenColRefExpr(expr: Expr, resType: Class[_]) extends PrimitiveExpr {
     override def apply() = {

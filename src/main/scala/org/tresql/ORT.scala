@@ -92,14 +92,13 @@ trait ORT extends Query {
   }
   /* Expression is built from macro.
    * Effectively env.currId(idSeq, IdRefExpr(idRefSeq)())*/
-  case class IdRefIdExpr(idRefSeq: String, idSeq: String) extends BaseExpr {
+  case class IdRefIdExpr(idRefSeq: String, idSeq: String) extends BaseVarExpr {
     val idRefExpr = IdRefExpr(idRefSeq)
     override def apply() = {
       val id = idRefExpr()
       env.currId(idSeq, id)
       id
     }
-    override def defaultSQL = idRefExpr.defaultSQL
     override def toString = s"$idRefExpr#$idSeq"
   }
 
@@ -113,7 +112,8 @@ trait ORT extends Query {
       refsToRoot: Map[String, String],
       filter: String)
     (implicit resources: Resources = Env): Any = {
-    val insert = insert_tresql(name, struct, Nil, refsToRoot, null, filter, resources)
+    //val insert = insert_tresql(name, struct, Nil, refsToRoot, null, filter, resources)
+    val insert = insert_tresql_new(name, struct, Nil, filter)
     if(insert == null) error("Cannot insert data. Table not found for object: " + name)
     Env log (s"\nStructure: $struct")
     build(insert, obj, false)(resources)()
@@ -157,8 +157,9 @@ trait ORT extends Query {
    *  Tables must be ordered in parent -> child direction. */
   def insertMultiple(obj: Map[String, Any], names: String*)(filter: String = null)(
       implicit resources: Resources = Env): Any = {
-    val (nobj, struct, refsToRoot) = multipleOneToOneTransformation(obj, names: _*)
-    insertInternal(names.head, nobj, tresql_structure(struct), refsToRoot, filter)
+    //val (nobj, struct, refsToRoot) = multipleOneToOneTransformation(obj, names: _*)
+    //insertInternal(names.head, nobj, tresql_structure(struct), refsToRoot, filter)
+    insertInternal(multiSaveProp(names), obj, tresql_structure(obj), Map(), filter)
   }
 
   /** update to multiple tables
@@ -231,14 +232,15 @@ trait ORT extends Query {
 
   def insert_tresql_new(
     name: String,
-    obj: Map[String, Any],
+    struct: Map[String, Any],
     parents: List[TableLink],
     filter: String)(implicit resources: Resources): String = {
     def insert(
       table: metadata.Table,
       alias: String,
-      refsAndPk: Set[(String, String)]): String =
-      obj.flatMap { case (n, v) => v match {
+      refsAndPk: Set[(String, String)],
+      children: List[String] = Nil): String =
+      struct.flatMap { case (n, v) => v match {
         //children or lookup
         case o: Map[String, Any] => lookupObject(n, table).map(lookupTable =>
           lookup_tresql(n, lookupTable, o, resources)).getOrElse {
@@ -258,16 +260,21 @@ trait ORT extends Query {
       //base table tresql
       val tresql =
         (m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]]
-         .filter(_._1 != null /*check if prop->col mapping found*/) ++ refsAndPk)
+         .filter(_._1 != null /*check if prop->col mapping found*/) ++
+           refsAndPk ++ children.map(_ -> null))
          match {
            case x if x.size == 0 => null //no insertable columns found
-           case x =>
-             val (cols, vals) = x.unzip
-             val tn = tableName + alias
+           case cols_vals =>
+             val (cols, vals) = cols_vals.unzip
              cols.mkString(s"+$tableName {", ", ", "}") +
              (vals.filter(_ != null) match {
                case vs if filter == null => vs.mkString(" [", ", ", "]")
-               case vs => vs.mkString(s" $tn [$filter] {", ", ", "} @(1)")
+               case vs =>
+                 val toa = if (alias == null) tableName else alias
+                 val cv = cols_vals filter (_._2 != null)
+                 val sel = s"($tableName{${cv.map(c =>
+                   c._2 + " " + c._1).mkString(", ")}} @(1)) $toa"
+                 cv.map(c => s"$toa.${c._1}").mkString(s" $sel [$filter] {", ", ", "}")
              })
          }
        val tresqlAlias = parents.headOption.map(_ => s" '$name'").getOrElse("")
@@ -292,18 +299,19 @@ trait ORT extends Query {
           }
         }
     } yield {
-      val pk = table.key.cols.headOption.orNull
+      val pk = table.key.cols match {case List(k) => k case _ => null /*no key or multi col key*/}
       def idRefId(idRef: String, id: String) = s"_id_ref_id($idRef, $id)"
-      val baseTresql = insert(table, alias,
+      val linkedTresqls = for{ linkedTable <- tables.tail
+        tableDef <- md.tableOption(linkedTable.table) } yield insert(
+          tableDef, alias, linkedTable.refs.map(_ -> idRefId(
+            table.name, tableDef.name)))
+      insert(
+        table,
+        alias,
         refs.map(r=> r -> (if (r == pk) idRefId(parent.table, table.name) //pk matches ref to parent
-          else s":#${parent.table}")) ++
-        (if (pk == null || refs.contains(pk)) Set() else Set(pk -> s"#${table.name}")))
-      val linkedTresql =
-        (for(linkedTable <- tables.tail if !md.tableOption(linkedTable.table).isEmpty)
-         yield ", " + insert(md.table(linkedTable.table), alias, linkedTable.refs
-         .map(_ -> idRefId(table.name, linkedTable.table)))
-        ).mkString
-      baseTresql + linkedTresql
+          else s":#${parent.table}")) ++ (if (pk == null || refs.contains(pk)) Set()
+          else Set(pk -> s"#${table.name}")),
+        linkedTresqls)
     }).orNull
   }
 
@@ -527,7 +535,7 @@ trait ORT extends Query {
     Property((tables split "#").map{ t =>
       val x = t split ":"
       TableLink(x.head, x.tail.toSet)
-    }.toList, i, u, d, if(alias != null) alias else "")
+    }.toList, i, u, d, alias)
   }
 
   private def importedKeyOption(tableName: String, childTable: metadata.Table) =
