@@ -103,16 +103,10 @@ trait ORT extends Query {
   }
 
   def insert(name: String, obj: Map[String, Any], filter: String = null)
-    (implicit resources: Resources = Env): Any =
-      insertInternal(name, obj, tresql_structure(obj), Map(), filter)
-  private def insertInternal(
-      name: String,
-      obj: Map[String, Any],
-      struct: Map[String, Any],
-      refsToRoot: Map[String, String],
-      filter: String)
+    (implicit resources: Resources = Env): Any = insertInternal(name, obj, filter)
+  private def insertInternal(name: String, obj: Map[String, Any], filter: String)
     (implicit resources: Resources = Env): Any = {
-    //val insert = insert_tresql(name, struct, Nil, refsToRoot, null, filter, resources)
+    val struct = tresql_structure(obj)
     val insert = insert_tresql_new(name, struct, Nil, filter)
     if(insert == null) error("Cannot insert data. Table not found for object: " + name)
     Env log (s"\nStructure: $struct")
@@ -155,12 +149,9 @@ trait ORT extends Query {
 
   /** insert methods to multiple tables
    *  Tables must be ordered in parent -> child direction. */
-  def insertMultiple(obj: Map[String, Any], names: String*)(filter: String = null)(
-      implicit resources: Resources = Env): Any = {
-    //val (nobj, struct, refsToRoot) = multipleOneToOneTransformation(obj, names: _*)
-    //insertInternal(names.head, nobj, tresql_structure(struct), refsToRoot, filter)
-    insertInternal(multiSaveProp(names), obj, tresql_structure(obj), Map(), filter)
-  }
+  def insertMultiple(obj: Map[String, Any], names: String*)(filter: String = null)
+      (implicit resources: Resources = Env): Any =
+        insertInternal(multiSaveProp(names), obj, filter)
 
   /** update to multiple tables
    *  Tables must be ordered in parent -> child direction. */
