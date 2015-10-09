@@ -491,13 +491,13 @@ trait ORT extends Query {
   def lookup_tresql(
     refColName: String,
     name: String,
-    obj: Map[String, _],
+    struct: Map[String, _],
     resources: Resources) =
     resources.metaData.tableOption(name).filter(_.key.cols.size == 1).map {
       table =>
-      val pk = table.key.cols.headOption.filter(obj contains).orNull
-      val insert = insert_tresql(name, obj, Nil, Map(), null, null, resources)
-      val update = update_tresql(name, obj, Nil, Map(), null, null, resources)
+      val pk = table.key.cols.headOption.filter(struct contains).orNull
+      val insert = insert_tresql_new(name, struct, Nil, null)(resources)
+      val update = update_tresql(name, struct, Nil, Map(), null, null, resources)
       List(
         s":$refColName = |_lookup_edit('$refColName', ${
           if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
