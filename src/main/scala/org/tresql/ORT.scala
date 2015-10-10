@@ -109,7 +109,7 @@ trait ORT extends Query {
     val struct = tresql_structure(obj)
     val insert = insert_tresql_new(name, struct, Nil, filter)
     if(insert == null) error("Cannot insert data. Table not found for object: " + name)
-    Env log (s"\nStructure: $struct")
+    Env log (s"\nStructure: $name - $struct")
     build(insert, obj, false)(resources)()
   }
 
