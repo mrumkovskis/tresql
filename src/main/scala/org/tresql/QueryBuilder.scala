@@ -496,8 +496,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     override def apply() = cols match {
       //execute only child updates since this one does not have any column
       case Nil =>
-        //execute any IdExpr in filter for corresponding children IdRefExpr have values
-        if (filter != null) filter foreach (transform (_, {case id: IdExpr => id(); id}))
+        //execute any BaseVarExpr in filter to give chance to update currId for corresponding children IdRefExpr have values
+        if (filter != null) filter foreach (transform (_, {case id: BaseVarExpr => id(); id}))
         executeChildren
       case _ => super.apply()
     }

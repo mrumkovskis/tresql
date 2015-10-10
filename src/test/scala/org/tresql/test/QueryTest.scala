@@ -396,20 +396,26 @@ class QueryTest extends Suite {
             List((List(1, List(List(1, 1))),10015),
                 (List(1, List(List())),10016)),
             0, List((1,"EEE"), (1,"III")))))(ORT.update("dept", obj))
+
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(
           Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
           Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
         "calculated_children"->List(Map("x"->5)), "deptno"->40)
     assertResult(List(1, List(2, List(1, 1))))(ORT.update("emp", obj))
-    //no child record is updated since no relation is found with car and ambiguous relation is
-    //found with work
+
+    //no child record is updated since no relation is found with car
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
-        "work"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
-              Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
         "calculated_children"->List(Map("x"->5)), "deptno"->40,
         "car"-> List(Map("nr" -> "AAA", "name"-> "GAZ", "deptno" -> 15)))
     assertResult(1)(ORT.update("emp", obj))
+
+    //ambiguous relation is found with work
+    obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
+        "work"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
+              Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
+        "calculated_children"->List(Map("x"->5)), "deptno"->40)
+    intercept[Exception](ORT.update("emp", obj))
 
     //child foreign key is also its primary key (one to one relation)
     obj = Map("deptno" -> 60, "dname" -> "POLAR BEAR", "loc" -> "ALASKA",
@@ -558,6 +564,12 @@ class QueryTest extends Suite {
 
     obj = Map("dname" -> "AD", "ename" -> "Lee", "wdate" -> "2000-01-01", "hours" -> 3)
     assertResult((List(1, List((1,10036), (1,10036))),10036)) { ORT.insertMultiple(obj, "dept", "emp", "work:empno")() }
+
+    obj = Map("deptno" -> 10036, "wdate" -> "2015-10-01", "hours" -> 4)
+    assertResult(List(1)) { ORT.updateMultiple(obj, "dept", "emp", "work:empno")() }
+
+    obj = Map("deptno" -> 10036, "work:empno" -> List(Map("wdate" -> "2015-10-10", "hours" -> 5)))
+    assertResult(List(1, List(1), List(1, List(1)))) { ORT.updateMultiple(obj, "dept", "emp")() }
 
     obj = Map("deptno" -> 10036, "dname" -> "ADVERTISING", "ename" -> "Andy")
     assertResult(List(1, List(1))) { ORT.updateMultiple(obj, "dept", "emp")() }
