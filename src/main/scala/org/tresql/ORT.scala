@@ -190,8 +190,9 @@ trait ORT extends Query {
       table: metadata.Table,
       alias: String,
       refsAndPk: Set[(String, String)],
-      children: List[String] = Nil,
-      filter: String = null): String =
+      children: List[String],
+      filter: String,
+      notLink: Boolean): String =
       struct.flatMap { case (n, v) => v match {
         //children or lookup
         case o: Map[String, Any] => lookupObject(n, table).map(lookupTable =>
@@ -229,8 +230,8 @@ trait ORT extends Query {
                  cv.map(c => s"$toa.${c._1}").mkString(s" $sel [$filter] {", ", ", "}")
              })
          }
-       //TODO do not add alias if this is linked tresql!
-       val tresqlAlias = parents.headOption.map(_ => s" '$name'").getOrElse("")
+       val tresqlAlias = parents.headOption.filter(_ => notLink)
+         .map(_ => s" '$name'").getOrElse("")
        Option(tresql).map(t => Option(lookupTresql).map(lt => s"[$lt$t]$tresqlAlias")
          .getOrElse(t + tresqlAlias)).orNull
     }
@@ -250,14 +251,15 @@ trait ORT extends Query {
       val linkedTresqls = for{ linkedTable <- tables.tail
         tableDef <- md.tableOption(linkedTable.table) } yield insert(
           tableDef, alias, linkedTable.refs.map(_ -> idRefId(
-            table.name, tableDef.name))/*no children & do not pass filter to linked tresqls*/)
+            table.name, tableDef.name)),
+          Nil, null, false) //no children & do not pass filter & and reset not link flag to linked tresqls
       insert(
         table,
         alias,
         refs.map(r=> r -> (if (r == pk) idRefId(parent, table.name) //pk matches ref to parent
           else s":#$parent")) ++ (if (pk == null || refs.contains(pk)) Set()
           else Set(pk -> s"#${table.name}")),
-        linkedTresqls.filter(_ != null), filter)
+        linkedTresqls.filter(_ != null), filter, true)
     }).orNull
   }
 
@@ -270,8 +272,9 @@ trait ORT extends Query {
       table: metadata.Table,
       alias: String,
       refsAndPk: Set[(String, String)],
-      children: List[String] = Nil,
-      filter: String = null): String = struct.flatMap {
+      children: List[String],
+      filter: String,
+      notLink: Boolean): String = struct.flatMap {
       case (n, v) => v match {
         //children
         case o: Map[String, _] => lookupObject(n, table).map(lookupTable =>
@@ -297,7 +300,8 @@ trait ORT extends Query {
               cols.mkString(s"=$tn $updateFilter {", ", ", "}") +
               vals.filter(_ != null).mkString("[", ", ", "]")
             //TODO do not add alias if this is linked tresql!
-            val tresqlAlias = parents.headOption.map(_ => s" '$name'").getOrElse("")
+            val tresqlAlias = parents.headOption.filter(_ => notLink)
+              .map(_ => s" '$name'").getOrElse("")
             if (cols.size == 0) null else Option(lookupTresql)
               .map(lt => s"[$lt$tresql]$tresqlAlias")
               .getOrElse(tresql + tresqlAlias)
@@ -334,11 +338,12 @@ trait ORT extends Query {
         val linkedTresqls = for{ linkedTable <- tables.tail
           tableDef <- md.tableOption(linkedTable.table) } yield update(
             tableDef, alias, linkedTable.refs.map(_ -> idRefId(
-              tableName, tableDef.name))) //no children & do not pass filter to linked tresqls
+              tableName, tableDef.name)),
+            Nil, null, false) //no children & do not pass filter & and reset not link flag to linked tresqls
         update(table, alias, refs.map(r=> r -> (
           if (r == pk) idRefId(parent, tableName) //pk matches ref to parent
           else s":#$parent")) ++ (if (isOneToOne) Set() else Set(pk -> s"#$tableName")),
-          linkedTresqls.filter(_ != null), filter)
+          linkedTresqls.filter(_ != null), filter, true)
       }
       if (parent == null) if (pk == null) null else upd
       else if (isOneToOne) upd else
