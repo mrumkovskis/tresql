@@ -569,7 +569,7 @@ class QueryTest extends Suite {
     assertResult(List(1)) { ORT.updateMultiple(obj, "dept", "emp", "work:empno")() }
 
     obj = Map("deptno" -> 10036, "work:empno" -> List(Map("wdate" -> "2015-10-10", "hours" -> 5)))
-    assertResult(List(1, List(1), List(1, List(1)))) { ORT.updateMultiple(obj, "dept", "emp")() }
+    assertResult(List(List(1, List(1)))) { ORT.updateMultiple(obj, "dept", "emp")() }
 
     obj = Map("deptno" -> 10036, "dname" -> "ADVERTISING", "ename" -> "Andy")
     assertResult(List(1, List(1))) { ORT.updateMultiple(obj, "dept", "emp")() }

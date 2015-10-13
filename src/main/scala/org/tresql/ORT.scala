@@ -241,7 +241,8 @@ trait ORT extends Query {
       propTable <- tables.headOption
       table <- md.tableOption(propTable.table)
       refs <- Some(parent).filter(_ == null).map(_ => Set[String]()) /*no parent no refs*/ orElse
-        Some(propTable.refs).filter(_.size > 0) /* refs in prop */orElse
+        Some(propTable.refs)
+         .filter(rfs => rfs.size > 0 && isRefInSet(rfs, table, parent)) /* refs in prop */orElse
           importedKeyOption(table, parent).map(Set(_))
     } yield {
       val pk = table.key.cols match {case List(k) => k case _ => null /*no key or multi col key*/}
@@ -310,7 +311,8 @@ trait ORT extends Query {
       propTable <- tables.headOption
       table <- md.tableOption(propTable.table)
       refs <- Some(parent).filter(_ == null).map(_ => Set[String]()) /*no parent no refs*/ orElse
-        Some(propTable.refs).filter(_.size > 0) /* refs in prop */orElse
+        Some(propTable.refs)
+          .filter(rfs => rfs.size > 0 && isRefInSet(rfs, table, parent)) /* refs in prop */orElse
           importedKeyOption(table, parent).map(Set(_))
     } yield {
       val pk = table.key.cols match {case List(k) => k case _ => null /*no key or multi col key*/}
@@ -342,7 +344,8 @@ trait ORT extends Query {
       else if (isOneToOne) upd else
         if (pk == null) {
           (Option(deleteOption).filter(_ == true).map(_ => delAllChildren) ++
-          Option(insertOption).filter(_ == true).map(_ => ins)).mkString(", ")
+          Option(insertOption).filter(_ == true)
+            .flatMap(_ => Option(ins))).mkString(", ")
         } else {
           (Option(deleteOption).filter(_ == true).map(_ =>
             if(!updateOption) delAllChildren else delMissingChildren) ++
@@ -387,12 +390,12 @@ trait ORT extends Query {
     }.toList, i, u, d, alias)
   }
 
-  private def importedKeyOption(childTable: metadata.Table, tableName: String) =
-    Option(childTable.refs(tableName).filter(_.cols.size == 1)).flatMap {
+  private def importedKeyOption(childTable: metadata.Table, parent: String) =
+    Option(childTable.refs(parent).filter(_.cols.size == 1)).flatMap {
       case Nil => None
       case List(ref) => ref.cols.headOption
       case x => error(
-        s"""Ambiguous references from table '${childTable.name}' to table '$tableName'.
+        s"""Ambiguous references from table '${childTable.name}' to table '$parent'.
            |Reference must be one and must consist of one column. Found: $x"""
            .stripMargin)
     }
@@ -414,6 +417,9 @@ trait ORT extends Query {
       (table.key.cols match {case List(k) => Set(k) case _ => Set()})
     }
   }
+
+  def isRefInSet(refs: Set[String], child: metadata.Table, parent: String) =
+    child.refs(parent).filter(_.cols.size == 1).exists(r => refs.contains(r.cols.head))
 }
 
 object ORT extends ORT
