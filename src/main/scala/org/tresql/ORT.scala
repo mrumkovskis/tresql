@@ -299,7 +299,6 @@ trait ORT extends Query {
             val tresql =
               cols.mkString(s"=$tn $updateFilter {", ", ", "}") +
               vals.filter(_ != null).mkString("[", ", ", "]")
-            //TODO do not add alias if this is linked tresql!
             val tresqlAlias = parents.headOption.filter(_ => notLink)
               .map(_ => s" '$name'").getOrElse("")
             if (cols.size == 0) null else Option(lookupTresql)
