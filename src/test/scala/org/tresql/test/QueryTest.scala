@@ -272,13 +272,13 @@ class QueryTest extends Suite {
     assertResult(List(10, 20, 30))(Query.list[Int]("dept[deptno in ?]{deptno}#(1)", List(30, 20, 10)))
     assertResult(List(10, 20, 30))(Query.list[Int]("dept[deptno in ?]{deptno}#(1)", scala.Array(30, 20, 10)))
     //hierarchical inserts, updates test
-    assertResult(List(Vector(List(1, List(List(1, 1))))))(Query(
+    assertResult(List(Vector((1,List(List(1, 1))))))(Query(
       """dept{deptno, dname, loc, +emp {empno, ename, deptno}[:empno, :ename, :deptno] emps} +
         [:deptno, :dname, :loc]""",
       Map("deptno" -> 50, "dname" -> "LAW", "loc" -> "DALLAS",
         "emps" -> List(Map("empno" -> 1111, "ename" -> "SMITH", "deptno" -> 50),
           Map("empno" -> 2222, "ename" -> "LEWIS", "deptno" -> 50)))).toListOfVectors)
-    assertResult(List(Vector(List(1, List(2, List(1, 1))))))(Query(
+    assertResult(List(Vector((1,List(2, List(1, 1))))))(Query(
       """dept[:deptno]{deptno, dname, loc,
                -emp[deptno = :deptno],
                +emp {empno, ename, deptno} [:empno, :ename, :deptno] emps} =
@@ -287,7 +287,7 @@ class QueryTest extends Suite {
         "emps" -> List(Map("empno" -> 1111, "ename" -> "BROWN", "deptno" -> 50),
           Map("empno" -> 2222, "ename" -> "CHRIS", "deptno" -> 50)))).toListOfVectors)
     assertResult(List(Vector(List(2, 1))))(Query("emp - [deptno = 50], dept - [50]").toListOfVectors)
-    assertResult(List(Vector((List(1, List(List((1,10002), (1,10003)))),10001))))(Query(
+    assertResult(List(Vector(((1,List(List((1,10002), (1,10003)))),10001))))(Query(
       """dept{deptno, dname, loc, +emp {empno, ename, deptno} [#emp, :ename, :#dept] emps} +
         [#dept, :dname, :loc]""",
       Map("dname" -> "LAW", "loc" -> "DALLAS", "emps" -> scala.Array(
@@ -324,7 +324,7 @@ class QueryTest extends Suite {
         Map("empno" -> null, "ename" -> "LEWIS", "deptno" -> null,
             "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")),
             "work:empno"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))))
-    assertResult((List(1, List(List((List(1, List(List(1, 1))),10005), (List(1, List(List(1))),10006)))),10004))(
+    assertResult(((1,List(List(((1,List(List(1, 1))),10005), ((1,List(List(1))),10006)))),10004))(
         ORT.insert("dept", obj))
     intercept[Exception](ORT.insert("no_table", obj))
 
@@ -334,11 +334,11 @@ class QueryTest extends Suite {
         "emp" -> List(Map("empno" -> null, "ename" -> "BROWN", "deptno" -> null),
           Map("empno" -> null, "ename" -> "CHRIS", "deptno" -> null)),
         "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))
-    assertResult((List(1, List(List((1,10007), (1,10008)))),50))(ORT.insert("dept", obj))
+    assertResult(((1,List(List((1,10007), (1,10008)))),50))(ORT.insert("dept", obj))
 
     obj = Map("dname" -> "FOOTBALL", "loc" -> "MIAMI",
         "emp" -> List(Map("ename" -> "BROWN"), Map("ename" -> "CHRIS")))
-    assertResult((List(1, List(List((1,10010), (1,10011)))),10009))(ORT.insert("dept", obj))
+    assertResult(((1,List(List((1,10010), (1,10011)))),10009))(ORT.insert("dept", obj))
 
     obj = Map("ename" -> "KIKI", "deptno" -> 50, "car"-> List(Map("name"-> "GAZ")))
     assertResult((1,10012))(ORT.insert("emp", obj))
@@ -351,15 +351,15 @@ class QueryTest extends Suite {
     //child foreign key is also its primary key
     obj = Map("deptno" -> 60, "dname" -> "POLAR", "loc" -> "ALASKA",
               "dept_addr" -> List(Map("addr" -> "Halibut")))
-    assertResult((List(1, List(List((1, 60)))),60))(ORT.insert("dept", obj))
+    assertResult(((1,List(List((1,60)))),60))(ORT.insert("dept", obj))
     //child foreign key is also its primary key
     obj = Map("dname" -> "BEACH", "loc" -> "HAWAII",
               "dept_addr" -> List(Map("deptnr" -> 1, "addr" -> "Honolulu", "zip_code" -> "1010")))
-    assertResult((List(1, List(List((1,10013)))),10013))(ORT.insert("dept", obj))
+    assertResult(((1,List(List((1,10013)))),10013))(ORT.insert("dept", obj))
 
     obj = Map("deptno" -> null, "dname" -> "DRUGS",
               "car" -> List(Map("nr" -> "UUU", "name" -> "BEATLE")))
-    assertResult((List(1, List(List((1, "UUU")))),10014))(ORT.insert("dept", obj))
+    assertResult(((1,List(List((1,"UUU")))),10014))(ORT.insert("dept", obj))
 
     //multiple column primary key
     obj = Map("empno"->7788, "car_nr" -> "1111")
@@ -391,18 +391,21 @@ class QueryTest extends Suite {
             Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
             Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
         "car" -> List(Map("nr" -> "EEE", "name" -> "BEATLE"), Map("nr" -> "III", "name" -> "FIAT")))
-    assertResult(List(1,
+    assertResult((1,
         List(0,
-            List((List(1, List(List(1, 1))),10015),
-                (List(1, List(List())),10016)),
-            0, List((1,"EEE"), (1,"III")))))(ORT.update("dept", obj))
+            List(((1,
+                List(
+                    List(1, 1))),10015),
+                    ((1,List(List())),10016)),
+                    0,
+                    List((1,"EEE"), (1,"III")))))(ORT.update("dept", obj))
 
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(
           Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
           Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
         "calculated_children"->List(Map("x"->5)), "deptno"->40)
-    assertResult(List(1, List(2, List(1, 1))))(ORT.update("emp", obj))
+    assertResult((1,List(2, List(1, 1))))(ORT.update("emp", obj))
 
     //no child record is updated since no relation is found with car
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
@@ -420,7 +423,7 @@ class QueryTest extends Suite {
     //child foreign key is also its primary key (one to one relation)
     obj = Map("deptno" -> 60, "dname" -> "POLAR BEAR", "loc" -> "ALASKA",
               "dept_addr" -> List(Map("addr" -> "Halibut", "zip_code" -> "1010")))
-    assertResult(List(1, List(List(1))))(ORT.update("dept", obj))
+    assertResult((1,List(List(1))))(ORT.update("dept", obj))
 
     //value clause test
     obj = Map("nr" -> 4444, "deptnr" -> 10)
@@ -435,7 +438,7 @@ class QueryTest extends Suite {
 
     //delete children
     obj = Map("nr" -> 4444, "name" -> "LAMBORGHINI", "tyres" -> List())
-    assertResult(List(1, List(2, List())))(ORT.update("car", obj))
+    assertResult((1,List(2, List())))(ORT.update("car", obj))
 
     //update three level, for the first second level object it's third level is empty
     obj = Map("deptno" -> 10013, "emp" -> List(
@@ -445,16 +448,14 @@ class QueryTest extends Suite {
             "work:empno" -> List(
             Map("wdate" -> "2014-08-27", "hours" -> 8),
             Map("wdate" -> "2014-08-28", "hours" -> 8)))))
-    assertResult(List(0, List((List(1, List(List())), 10019), (List(1, List(List(1, 1))), 10020))))(
-      ORT.update("dept", obj))
+    assertResult(List(0, List(((1,List(List())),10019), ((1,List(List(1, 1))),10020))))(ORT.update("dept", obj))
     //delete third level children
     obj = Map("deptno" -> 10013, "emp" -> List(
         Map("ename" -> "ELKHADY",
             "work:empno" -> List()),
         Map("ename" -> "GUNTER",
             "work:empno" -> List())))
-    assertResult(List(2, List((List(1, List(List())), 10021), (List(1, List(List())), 10022))))(
-      ORT.update("dept", obj))
+    assertResult(List(2, List(((1,List(List())),10021), ((1,List(List())),10022))))(ORT.update("dept", obj))
 
 
     println("\n--- DELETE ---\n")
@@ -474,14 +475,14 @@ class QueryTest extends Suite {
         Map("empno" -> 7698, "ename" -> "BLAKE", "job" -> "SALESMAN", "mgr" -> 7839,
             "mgr_name" -> null, "deptno" -> 30)),
       "calculated_children" -> List(Map("x" -> 5)), "deptno" -> 30)
-      assertResult(List(1, List(3, List(1, 1, (1,10023), 1))))(ORT.update("dept", obj))
+      assertResult((1,List(3, List(1, 1, (1,10023), 1))))(ORT.update("dept", obj))
 
     obj = Map("empno" -> 7788, "ename"->"SCOTT", "mgr"-> 7839,
       "work:empno[+-=]" -> List(
         Map("wdate"->"2012-7-12", "empno"->7788, "hours"->10, "empno_mgr"->7839),
         Map("wdate"->"2012-7-13", "empno"->7788, "hours"->3, "empno_mgr"->7839)),
       "calculated_children"->List(Map("x"->5)), "deptno"->20)
-    assertResult(List(1, List(2, List(1, 1))))(ORT.update("emp", obj))
+    assertResult((1,List(2, List(1, 1))))(ORT.update("emp", obj))
 
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
         "emp[+-=]"->List(
@@ -494,21 +495,21 @@ class QueryTest extends Suite {
               Map("wdate"->"2012-7-14", "empno"->null, "hours"->5, "empno_mgr"->7839),
               Map("wdate"->"2012-7-15", "empno"->null, "hours"->2, "empno_mgr"->7839)))),
         "calculated_children"->List(Map("x"->5)), "deptno"->40)
-    assertResult(List(1, List(0, List((List(1, List(List(1, 1))),10024),
-      (List(1, List(List(1, 1))),10025)))))(ORT.update("dept", obj))
+    assertResult((1,List(0, List(((1,List(List(1, 1))),10024), ((1,List(List(1, 1))),10025)))))(
+        ORT.update("dept", obj))
 
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno[+-=]"->List(),
         "calculated_children"->List(Map("x"->5)), "deptno"->20)
-    assertResult(List(1, List(2, List())))(ORT.update("emp", obj))
+    assertResult((1,List(2, List())))(ORT.update("emp", obj))
 
     println("\n---- Multiple table INSERT, UPDATE ------\n")
 
     obj = Map("dname" -> "SPORTS", "addr" -> "Brisbane", "zip_code" -> "4000")
-    assertResult((List(1, List((1,10026))),10026))(ORT.insertMultiple(obj, "dept", "dept_addr")())
+    assertResult(((1,List((1,10026))),10026))(ORT.insertMultiple(obj, "dept", "dept_addr")())
 
     obj = Map("deptno" -> 10026, "loc" -> "Brisbane", "addr" -> "Roma st. 150")
-    assertResult(List(1, List(1)))(ORT.updateMultiple(obj, "dept", "dept_addr")())
+    assertResult((1,List(1)))(ORT.updateMultiple(obj, "dept", "dept_addr")())
 
     assertResult(List(Map(
         "dname" -> "SPORTS", "loc" -> "Brisbane",
@@ -527,14 +528,13 @@ class QueryTest extends Suite {
         "dept_addr" -> List(Map("addr" -> "Chengdu", "zip_code" -> "2000",
             "dept_sub_addr" -> List(Map("addr" -> "Jinli str. 10", "zip_code" -> "CN-1234"),
                 Map("addr" -> "Jinjiang District", "zip_code" -> "CN-1234")))))
-    assertResult((List(1, List(List((List(1, List(List(1, 1))),10027)))),10027)) {
-      ORT.insert("dept", obj)}
+    assertResult(((1,List(List(((1,List(List(1, 1))),10027)))),10027)) {ORT.insert("dept", obj)}
 
     obj = Map("deptno" -> 10027, "dname" -> "PANDA BREEDING",
       "dept_addr" -> List(Map("addr" -> "Chengdu", "zip_code" -> "CN-1234",
         "dept_sub_addr" -> List(Map("addr" -> "Jinli str. 10", "zip_code" -> "CN-1234"),
           Map("addr" -> "Jinjiang District", "zip_code" -> "CN-1234")))))
-    assertResult(List(1, List(List(List(1, List(2, List(1, 1))))))) {ORT.update("dept", obj)}
+    assertResult((1,List(List((1,List(2, List(1, 1))))))) {ORT.update("dept", obj)}
 
     println("\n-------- LOOKUP object editing --------\n")
     //edit lookup object
@@ -549,13 +549,13 @@ class QueryTest extends Suite {
     //one to one relationship with lookup for extended table
     obj = Map("dname" -> "MARKETING", "addr" -> "Valkas str. 1",
         "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Riga"))
-    assertResult((List(1, List(List(10033, (1,10032)))),10032)) { ORT.insertMultiple(obj, "dept", "dept_addr")() }
+    assertResult(((1,List(List(10033, (1,10032)))),10032)) { ORT.insertMultiple(obj, "dept", "dept_addr")() }
     obj = Map("deptno" -> 10032, "dname" -> "MARKET", "addr" -> "Valkas str. 1a",
       "zip_code" -> "LV-1010", "addr_nr" -> Map("nr" -> 10033, "addr" -> "Riga, LV"))
-    assertResult(List(1, List(List(10033, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
+    assertResult((1,List(List(10033, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
     obj = Map("deptno" -> 10032, "dname" -> "MARKETING", "addr" -> "Liela str.",
       "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Saldus"))
-    assertResult(List(1, List(List(10034, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
+    assertResult((1,List(List(10034, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
     //insert of lookup object where it's pk is present but null
     obj = Map("nr" -> 10029, "brand" -> "DUNLOP", "carnr" -> Map("nr" -> null, "name" -> "AUDI"))
     assertResult(List(10035, 1)) { ORT.update("tyres", obj) }
@@ -563,7 +563,7 @@ class QueryTest extends Suite {
     println("\n----------------- Multiple table INSERT UPDATE extended cases ----------------------\n")
 
     obj = Map("dname" -> "AD", "ename" -> "Lee", "wdate" -> "2000-01-01", "hours" -> 3)
-    assertResult((List(1, List((1,10036), (1,10036))),10036)) { ORT.insertMultiple(obj, "dept", "emp", "work:empno")() }
+    assertResult(((1,List((1,10036), (1,10036))),10036)) { ORT.insertMultiple(obj, "dept", "emp", "work:empno")() }
 
     obj = Map("deptno" -> 10036, "wdate" -> "2015-10-01", "hours" -> 4)
     assertResult(List(1)) { ORT.updateMultiple(obj, "dept", "emp", "work:empno")() }
@@ -572,26 +572,26 @@ class QueryTest extends Suite {
     assertResult(List(List(1, List(1)))) { ORT.updateMultiple(obj, "dept", "emp")() }
 
     obj = Map("deptno" -> 10036, "dname" -> "ADVERTISING", "ename" -> "Andy")
-    assertResult(List(1, List(1))) { ORT.updateMultiple(obj, "dept", "emp")() }
+    assertResult((1, List(1))) { ORT.updateMultiple(obj, "dept", "emp")() }
 
     obj = Map("dname" -> "DIG", "emp" -> List(Map("ename" -> "O'Jay",
         "work:empno" -> List(Map("wdate" -> "2010-05-01", "hours" -> 7)))), "addr" -> "Tvaika 1")
-    assertResult((List(1, List(List((List(1, List(List(1))),10038)), (1,10037))),10037)) {
+    assertResult(((1,List(List(((1,List(List(1))),10038)), (1,10037))),10037)) {
       ORT.insertMultiple(obj, "dept", "dept_addr")() }
 
     obj = Map("dname" -> "GARAGE", "name" -> "Nissan", "brand" -> "Dunlop", "season" -> "S")
-    assertResult((List(1, List((1,10039), (1,10039))),10039)) { ORT.insertMultiple(obj, "dept", "car", "tyres")() }
+    assertResult(((1,List((1,10039), (1,10039))),10039)) { ORT.insertMultiple(obj, "dept", "car", "tyres")() }
 
     obj = Map("deptno" -> 10039, "dname" -> "STOCK", "name" -> "Nissan", "brand" -> "PIRELLI", "season" -> "W")
-    assertResult(List(1, List(1, 1))) { ORT.updateMultiple(obj, "dept", "car", "tyres")() }
+    assertResult((1, List(1, 1))) { ORT.updateMultiple(obj, "dept", "car", "tyres")() }
 
     obj = Map("deptno" -> 10039, "dname" -> "STOCK", "name" -> "Nissan Patrol",
         "tyres" -> List(Map("brand" -> "CONTINENTAL", "season" -> "W")))
-    assertResult(List(1, List(List(1, List(1, List((1,10040))))))) { ORT.updateMultiple(obj, "dept", "car")() }
+    assertResult((1,List((1,List(1, List((1,10040))))))) { ORT.updateMultiple(obj, "dept", "car")() }
 
     obj = Map("dname" -> "NEW STOCK", "name" -> "Audi Q7",
         "tyres" -> List(Map("brand" -> "NOKIAN", "season" -> "S")))
-    assertResult((List(1, List((List(1, List(List((1,10042)))),10041))),10041)) { ORT.insertMultiple (obj, "dept", "car")() }
+    assertResult(((1,List(((1,List(List((1,10042)))),10041))),10041)) { ORT.insertMultiple (obj, "dept", "car")() }
 
     println("\n-------- LOOKUP extended cases - chaining, children --------\n")
 
@@ -606,17 +606,17 @@ class QueryTest extends Suite {
     obj = Map("dname" -> "MILITARY", "loc" -> "Alabama", "emp" -> List(
       Map("ename" -> "Selina", "mgr" -> null),
       Map("ename" -> "Vano", "mgr" -> Map("ename" -> "Carlo", "deptno" -> Map("dname" -> "Head")))))
-    assertResult((List(1, List(List(List(null, (1,10047)), List(10049, (1,10050))))),10046)) { ORT.insert("dept", obj) }
+    assertResult(((1,List(List(List(null, (1,10047)), List(10049, (1,10050))))),10046)) { ORT.insert("dept", obj) }
 
     obj = Map("deptno" -> 10046, "dname" -> "METEO", "loc" -> "Texas", "emp" -> List(
       Map("ename" -> "Selina", "mgr" -> null),
       Map("ename" -> "Vano", "mgr" -> Map("ename" -> "Pedro", "deptno" -> Map("deptno" -> 10048, "dname" -> "Head")))))
-    assertResult(List(1, List(2, List(List(null, (1,10051)), List(10052, (1,10053)))))) { ORT.update("dept", obj) }
+    assertResult((1,List(2, List(List(null, (1,10051)), List(10052, (1,10053)))))) { ORT.update("dept", obj) }
 
     obj = Map("name" -> "Dodge", "car_usage" -> List(
       Map("empno" -> Map("empno" -> null, "ename" -> "Nicky", "job" -> "MGR", "deptno" -> 10)),
       Map("empno" -> Map("empno" -> 10052, "ename" -> "Lara", "job" -> "MGR", "deptno" -> 10))))
-    assertResult((List(1, List(List(List(10055, 1), List(10052, 1)))),10054)) { ORT.insert("car", obj) }
+    assertResult(((1,List(List(List(10055, 1), List(10052, 1)))),10054)) { ORT.insert("car", obj) }
 
     println("\n-------- INSERT, UPDATE with additional filter --------\n")
     //insert, update with additional filter
@@ -659,10 +659,10 @@ class QueryTest extends Suite {
              "tyres_usage[+=]" -> List(
                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-09-25"),
                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-10-01")))))))
-    assertResult((List(1, List(List((List(1, List(List((List(1,
-      List(List(1, 1))),10058), (List(1, List(List(1, 1))),10059)))),10057),
-      (List(1, List(List((List(1, List(List(1, 1))),10061),
-      (List(1, List(List(1, 1))),10062)))),10060)))),10056))(ORT.insert("dept", obj))
+    assertResult(((1,List(
+        List(((1,List(List(((1,List(List(1, 1))),10058), ((1,List(List(1, 1))),10059)))),10057), 
+             ((1,List(List(((1,List(List(1, 1))),10061), ((1,List(List(1, 1))),10062)))),10060))
+        )),10056))(ORT.insert("dept", obj))
 
     obj = Map("deptno" -> 10056, "dname" -> "TRUCK DEPT",
       "car[+=]" -> List(
@@ -685,9 +685,8 @@ class QueryTest extends Suite {
              "tyres_usage[+=]" -> List(
                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-09-25"),
                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-10-01")))))))
-      assertResult(List(1, List(List(List(1, List(List(List(1, List(List(1))),
-        (List(1, List(List(1, 1))),10063)))), List(1, List(List(List(1, List(
-          List(1, 1))), List(1, List(List(1, 1))))))))))(ORT.update("dept", obj))
+      assertResult((1,List(List((1,List(List((1,List(List(1))), ((1,List(List(1, 1))),10063)))),
+          (1,List(List((1,List(List(1, 1))), (1,List(List(1, 1))))))))))(ORT.update("dept", obj))
 
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
 

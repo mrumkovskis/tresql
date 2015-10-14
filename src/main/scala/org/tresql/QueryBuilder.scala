@@ -514,7 +514,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       //execute children only if this expression has affected some rows
       if (r > 0) executeChildren match {
         case Nil => r
-        case x => List(r, x)
+        case x => (r, x)
       } else r
     }
     protected def _sql = "delete from " + table.sql + (if (alias == null) "" else " " + alias) +
