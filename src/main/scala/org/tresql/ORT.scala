@@ -5,30 +5,6 @@ import sys._
 /** Object Relational Transformations - ORT */
 trait ORT extends Query {
 
-  case class TableLink(table: String, refs: Set[String])
-  case class Property(
-    tables: List[TableLink],
-    insert: Boolean,
-    update: Boolean,
-    delete: Boolean,
-    alias: String)
-  case class SaveContext(
-    name: String,
-    struct: Map[String, Any],
-    parents: List[TableLink],
-    filter: String,
-    tables: List[TableLink],
-    insertOption: Boolean,
-    updateOption: Boolean,
-    deleteOption: Boolean,
-    alias: String,
-    parent: String,
-    propTable: String,
-    table: metadata.Table,
-    refs: Set[String],
-    pk: String
-  )
-
   /* table[:ref]*[#table[:ref]*]*[[options]] [alias]
   *  Examples:
   *    dept#car:deptnr:nr#tyres:carnr:nr
@@ -52,6 +28,29 @@ trait ORT extends Query {
       override private[tresql] def queryDepth = depth
       override private[tresql] var bindIdx = idx
     }
+
+  case class TableLink(table: String, refs: Set[String])
+  case class Property(
+    tables: List[TableLink],
+    insert: Boolean,
+    update: Boolean,
+    delete: Boolean,
+    alias: String)
+  case class SaveContext(
+    name: String,
+    struct: Map[String, Any],
+    parents: List[TableLink],
+    filter: String,
+    tables: List[TableLink],
+    insertOption: Boolean,
+    updateOption: Boolean,
+    deleteOption: Boolean,
+    alias: String,
+    parent: String,
+    propTable: String,
+    table: metadata.Table,
+    refs: Set[String],
+    pk: String)
 
   /* Expression is built only from macros to ensure ORT lookup editing. */
   case class LookupEditExpr(
