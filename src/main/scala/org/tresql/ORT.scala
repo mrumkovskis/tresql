@@ -203,8 +203,8 @@ trait ORT extends Query {
     filter: String,
     save_tresql_func: SaveContext => String)
     (implicit resources: Resources): String = {
-      val Property(tables, insertOption, updateOption, deleteOption, alias) =
-        parseProperty(name)
+    val Property(tables, insertOption, updateOption, deleteOption, alias) =
+      parseProperty(name)
     val parent = parents.headOption.map(_.table).orNull
     val md = resources.metaData
     (for {
