@@ -222,7 +222,23 @@ trait ORT extends Query {
     ).orNull
   }
 
-  def insert_tresql(ctx: SaveContext)(implicit resources: Resources): String = {
+  def lookup_tresql(
+    refColName: String,
+    name: String,
+    struct: Map[String, _])(implicit resources: Resources) =
+    resources.metaData.tableOption(name).filter(_.key.cols.size == 1).map {
+      table =>
+      val pk = table.key.cols.headOption.filter(struct contains).orNull
+      val insert = save_tresql(name, struct, Nil, null, insert_tresql)
+      val update = save_tresql(name, struct, Nil, null, update_tresql)
+      List(
+        s":$refColName = |_lookup_edit('$refColName', ${
+          if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
+        refColName -> resources.valueExpr(name, refColName))
+   }.orNull
+
+  private def insert_tresql(ctx: SaveContext)
+    (implicit resources: Resources): String = {
     def single_table_tresql(tableName: String, alias: String,
       cols_vals: List[(String, String)], refsAndPk: Set[(String, String)],
       filter: String) = (cols_vals ++ refsAndPk) match {
@@ -243,7 +259,8 @@ trait ORT extends Query {
       save_tresql(_, _, _, null, insert_tresql))
   }
 
-  def update_tresql(ctx: SaveContext)(implicit resources: Resources): String = {
+  private def update_tresql(ctx: SaveContext)
+    (implicit resources: Resources): String = {
     def single_table_tresql(tableName: String, alias: String,
       cols_vals: List[(String, String)], refsAndPk: Set[(String, String)],
       filter: String) = cols_vals.unzip match {
@@ -287,21 +304,6 @@ trait ORT extends Query {
         })).mkString(", ")
       }
   }
-
-  def lookup_tresql(
-    refColName: String,
-    name: String,
-    struct: Map[String, _])(implicit resources: Resources) =
-    resources.metaData.tableOption(name).filter(_.key.cols.size == 1).map {
-      table =>
-      val pk = table.key.cols.headOption.filter(struct contains).orNull
-      val insert = save_tresql(name, struct, Nil, null, insert_tresql)
-      val update = save_tresql(name, struct, Nil, null, update_tresql)
-      List(
-        s":$refColName = |_lookup_edit('$refColName', ${
-          if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
-        refColName -> resources.valueExpr(name, refColName))
-    }.orNull
 
   private def lookupObject(refColName: String, table: metadata.Table) =
     table.refTable.get(List(refColName))
