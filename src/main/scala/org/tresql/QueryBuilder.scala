@@ -62,10 +62,10 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   ****************** methods to be implemented or overriden ********************
   ******************************************************************************/
   private[tresql] def newInstance(env: Env, queryDepth: Int, bindIdx: Int): QueryBuilder
-  def env: Env = error("Unimplemented")
-  private[tresql] def queryDepth: Int = error("Unimplemented")
-  private[tresql] def bindIdx: Int = error("Unimplemented")
-  private[tresql] def bindIdx_=(idx: Int): Unit = error("Unimplemented")
+  def env: Env = ???
+  private[tresql] def queryDepth: Int = ???
+  private[tresql] def bindIdx: Int = ???
+  private[tresql] def bindIdx_=(idx: Int): Unit = ???
   /*****************************************************************************/
 
   case class ConstExpr(value: Any) extends BaseExpr {
@@ -310,7 +310,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       Env.functions.map(method.invoke(_, (if (varargs) List(p) else p).asInstanceOf[List[Object]]: _*))
         .getOrElse("Functions not defined in Env!")
     }
-    def defaultSQL = error("Method not implemented for external function")
+    def defaultSQL = ???
     override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
   }
 
@@ -419,7 +419,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   }
   case class TableJoin(default: Boolean, expr: Expr, noJoin: Boolean,
     defaultJoinCols: (key_, key_)) extends PrimitiveExpr {
-    def defaultSQL = error("Not implemented")
+    def defaultSQL = ???
     override def toString = "TableJoin(\ndefault: " + default + "\nexpr: " + expr +
       "\nno join flag: " + noJoin + ")\n"
   }
@@ -1069,7 +1069,7 @@ sealed abstract class Expr extends (() => Any) with Ordered[Expr] {
   def apply(params: Seq[Any]): Any = apply(org.tresql.Query.normalizePars(params))
   def apply(params: Map[String, Any]): Any = this
 
-  def close: Unit = error("Close method not implemented in subclass of Expr: " + getClass)
+  def close: Unit = ???
   def exprType: Class[_] = this.getClass
   //overrides function toString method since it is of no use
   override def toString = defaultSQL

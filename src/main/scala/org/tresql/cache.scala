@@ -8,7 +8,7 @@ import scala.collection.JavaConversions._
 trait Cache {
   def get(tresql: String): Option[Any]
   def put(tresql: String, expr: Any)
-  def size: Int = sys.error("Not implemented")
+  def size: Int = ???
 }
 
 /** Cache based on java concurrent hash map */
@@ -26,7 +26,7 @@ class SimpleCache(maxSize: Int) extends Cache {
 
   override def size = cache.size
   def exprs = cache.keySet
-  
+
   override def toString = "Simple cache exprs: " + exprs + "\n" + "Cache size: " + size
 }
 
@@ -39,6 +39,6 @@ class WeakHashCache extends Cache {
 
   override def size = cache.size
   def exprs = cache.keySet
-  
+
   override def toString = "WeakHashCache exprs: " + exprs + "\n" + "Cache size: " + size
 }

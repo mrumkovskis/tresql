@@ -7,23 +7,23 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   val reserved = Set("in", "null", "false", "true")
 
   //comparison operator regular expression
-  val comp_op = """!?in\b|[<>=!~%$]+"""r  
-  
+  val comp_op = """!?in\b|[<>=!~%$]+"""r
+
   //JavaTokenParsers overrides
-  //besides standart whitespace symbols consider as a whitespace also comments in form /* comment */ and //comment 
+  //besides standart whitespace symbols consider as a whitespace also comments in form /* comment */ and //comment
   override val whiteSpace = """(\s*+(/\*(.|\s)*?\*/)?(//.*+(\n|$))?)+"""r
-  
+
   override def stringLiteral: MemParser[String] = ("""("[^"]*+")|('[^']*+')"""r) ^^ {
     case s => s.substring(1, s.length - 1)
   } named "string-literal"
 
-  override def ident: MemParser[String] = super.ident ^? ({ case x if !(reserved contains x) => x }, 
+  override def ident: MemParser[String] = super.ident ^? ({ case x if !(reserved contains x) => x },
       { x => s"'$x' is one of the reserved words: ${reserved.mkString(", ")}" }) named "ident"
-  
+
   override def wholeNumber: MemParser[String] = ("""\d+"""r) named "number"
-      
+
   def decimalNr: MemParser[BigDecimal] = decimalNumber ^^ (BigDecimal(_)) named "decimal-nr"
-  
+
   /** Copied from RegexParsers to support comment handling as whitespace */
   override protected def handleWhiteSpace(source: java.lang.CharSequence, offset: Int): Int =
     if (skipWhitespace)
@@ -32,12 +32,12 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
         case None => offset
       }
     else
-      offset  
+      offset
   //
-      
+
   sealed trait Exp {
     def tresql: String
-  }    
+  }
 
   case class Ident(ident: List[String]) extends Exp {
     def tresql = ident.mkString(".")
@@ -102,7 +102,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       (if (alias != null) " " + alias else "")
   }
   case class Cols(distinct: Boolean, cols: List[Col]) extends Exp {
-    def tresql = sys.error("Not implemented")
+    def tresql = ???
   }
   case class Grp(cols: List[Any], having: Any) extends Exp {
     def tresql = "(" + cols.map(any2tresql).mkString(",") + ")" +
@@ -166,7 +166,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     case l: List[_] => l map any2tresql mkString ", "
     case x => x.toString
   }
-  
+
   //literals
   def TRUE: MemParser[Boolean] = ("\\btrue\\b"r) ^^^ true named "true"
   def FALSE: MemParser[Boolean] = ("\\bfalse\\b"r) ^^^ false named "false"
@@ -175,7 +175,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
 
   def qualifiedIdent: MemParser[Ident] = rep1sep(ident, ".") ^^ Ident named "qualified-ident"
   def qualifiedIdentAll: MemParser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
-  def variable: MemParser[Variable] = ((":" ~> ((ident | stringLiteral) ~ 
+  def variable: MemParser[Variable] = ((":" ~> ((ident | stringLiteral) ~
       rep("." ~> (ident | stringLiteral | wholeNumber)) ~ opt(":" ~> ident) ~ opt("?"))) | "?") ^^ {
     case "?" => Variable("?", null, null,  false)
     case (i: String) ~ (m: List[String]) ~ (t: Option[String]) ~ o => Variable(i, m, t orNull, o != None)
@@ -273,7 +273,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     } ^^ { pr =>
       def extractAlias(expr: Any): (String, Any) = expr match {
         case t: TerOp => extractAlias(t.content)
-        case o@BinOp(_, lop, rop) => 
+        case o@BinOp(_, lop, rop) =>
           val x = extractAlias(rop)
           (x._1, o.copy(rop = x._2))
         case o@UnOp(_, op) =>
@@ -331,7 +331,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
         case q => q
       }
     }  named "query"
-      
+
   def queryWithCols: MemParser[Any] = query ^? ({
       case q @ Query(objs, _, cols, _, _, _, _, _) if cols != null => q
     }, {case x => "Query must contain column clause: " + x}) named "query-with-cols"
@@ -388,7 +388,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     case e :: Nil => e
     case l => Arr(l)
   } named "expr-list"
-  
+
   private def binOp(p: ~[Any, List[~[String, Any]]]): Any = p match {
     case lop ~ Nil => lop
     case lop ~ ((o ~ rop) :: l) => BinOp(o, lop, binOp(this.~(rop, l)))
@@ -416,4 +416,3 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     override def toString = s.subSequence(start, start + length).toString
   }
 }
-
