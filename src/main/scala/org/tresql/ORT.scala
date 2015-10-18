@@ -238,7 +238,7 @@ trait ORT extends Query {
 
   private def insert_tresql(ctx: SaveContext)
     (implicit resources: Resources): String = {
-    def single_table_tresql(tableName: String, alias: String,
+    def table_save_tresql(tableName: String, alias: String,
       cols_vals: List[(String, String)], refsAndPk: Set[(String, String)],
       filter: String) = (cols_vals ++ refsAndPk) match {
         case cols_vals =>
@@ -254,13 +254,13 @@ trait ORT extends Query {
               cv.map(c => s"$toa.${c._1}").mkString(s" $sel [$filter] {", ", ", "}")
           })
       }
-    table_save_tresql(ctx, single_table_tresql,
+    save_tresql_internal(ctx, table_save_tresql,
       save_tresql(_, _, _, null, insert_tresql))
   }
 
   private def update_tresql(ctx: SaveContext)
     (implicit resources: Resources): String = {
-    def single_table_tresql(tableName: String, alias: String,
+    def table_save_tresql(tableName: String, alias: String,
       cols_vals: List[(String, String)], refsAndPk: Set[(String, String)],
       filter: String) = cols_vals.unzip match {
         case (cols: List[String], vals: List[String]) =>
@@ -272,7 +272,7 @@ trait ORT extends Query {
     }
     import ctx._
     val tableName = table.name
-    def upd: String = table_save_tresql(ctx, single_table_tresql,
+    def upd: String = save_tresql_internal(ctx, table_save_tresql,
       save_tresql(_, _, _, null, update_tresql))
     def stripTrailingAlias(tresql: String, alias: String) =
       if (tresql != null && tresql.endsWith(alias))
@@ -350,9 +350,9 @@ trait ORT extends Query {
   private def isRefInSet(refs: Set[String], child: metadata.Table, parent: String) =
     child.refs(parent).filter(_.cols.size == 1).exists(r => refs.contains(r.cols.head))
 
-  private def table_save_tresql(
+  private def save_tresql_internal(
     ctx: SaveContext,
-    single_table_tresql: (
+    table_save_tresql: (
       String, //table name
       String, //alias
       List[(String, String)], //cols vals
@@ -396,7 +396,7 @@ trait ORT extends Query {
              children.map(_ -> null)/*add same level one to one children*/)
            match {
              case x if x.size == 0 => null //no columns found
-             case cols_vals => single_table_tresql(tableName, alias, cols_vals,
+             case cols_vals => table_save_tresql(tableName, alias, cols_vals,
                refsAndPk, filter)
            }
          Option(tresql).map(t =>
