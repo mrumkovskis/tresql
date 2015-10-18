@@ -397,10 +397,10 @@ trait ORT extends Query {
              case cols_vals => table_save_tresql(tableName, alias, cols_vals,
                refsAndPk, filter)
            }
-         Option(tresql).map(t =>
-           Option(lookupTresql).map(lt => s"[$lt$t]$tresqlColAlias")
-             .getOrElse(t + tresqlColAlias))
-           .orNull
+        (for {
+          base <- Option(tresql)
+          tresql <- Option(lookupTresql).map(lookup => s"[$lookup$base]") orElse Some(base)
+        } yield tresql + tresqlColAlias).orNull
     }
     def idRefId(idRef: String, id: String) = s"_id_ref_id($idRef, $id)"
     val md = resources.metaData
