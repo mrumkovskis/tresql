@@ -153,11 +153,28 @@ trait ORT extends Query {
   def updateMultiple(obj: Map[String, Any], names: String*)(filter: String = null)
     (implicit resources: Resources = Env): Any = update(multiSaveProp(names), obj, filter)
 
-  def multiSaveProp(names: Seq[String])(implicit resources: Resources = Env) =
-    names.tail.foldLeft(List(names.head)) { (ts, t) =>
-      (t.split(":").head + importedKeysAndPks(t, ts, resources)
-        .mkString(":", ":", "")) :: ts
-  }.reverse.mkString("#")
+  def multiSaveProp(names: Seq[String])(implicit resources: Resources = Env) = {
+    /* Returns zero or one imported key from table for each relation. In the case of multiple
+     * imported keys pointing to the same relation the one specified after : symbol is chosen
+     * or exception is thrown.
+     * This is used to find relation columns for insert/update multiple methods.
+     * Additionaly primary key of table is returned if it consist only of one column */
+    def importedKeysAndPks(tableName: String, relations: List[String]) = {
+      val x = tableName split ":"
+      val table = resources.metaData.table(x.head)
+      relations.foldLeft(x.tail.toSet) { (keys, rel) =>
+        val relation = rel.split(":").head
+        val refs = table.refs(relation).filter(_.cols.size == 1)
+        (if (refs.size == 1) keys + refs.head.cols.head
+        else if (refs.size == 0 || refs.exists(r => keys.contains(r.cols.head))) keys
+        else error(s"Ambiguous refs: $refs from table ${table.name} to table $relation")) ++
+        (table.key.cols match {case List(k) => Set(k) case _ => Set()})
+      }
+    }
+    names.tail.foldLeft(List(names.head)) { (ts, t) => (t.split(":")
+      .head + importedKeysAndPks(t, ts).mkString(":", ":", "")) :: ts
+    }.reverse.mkString("#")
+  }
 
   //object methods
   def insertObj[T](obj: T, filter: String = null)(
@@ -202,17 +219,39 @@ trait ORT extends Query {
     filter: String,
     save_tresql_func: SaveContext => String)
     (implicit resources: Resources): String = {
+    def parseProperty(name: String) = {
+      val PROP_PATTERN(tables, options, alias) = name
+      //insert update delete option
+      val (i, u, d) = Option(options).map (_ =>
+        (options contains "+", options contains "=", options contains "-")
+      ).getOrElse {(true, false, true)}
+      Property((tables split "#").map{ t =>
+        val x = t split ":"
+        TableLink(x.head, x.tail.toSet)
+      }.toList, i, u, d, alias)
+    }
     val Property(tables, insertOption, updateOption, deleteOption, alias) =
       parseProperty(name)
     val parent = parents.headOption.map(_.table).orNull
     val md = resources.metaData
+    def isRefInSet(refs: Set[String], child: metadata.Table) = child.refs(parent)
+      .filter(_.cols.size == 1).exists(r => refs.contains(r.cols.head))
+    def importedKeyOption(childTable: metadata.Table) =
+      Option(childTable.refs(parent).filter(_.cols.size == 1)).flatMap {
+        case Nil => None
+        case List(ref) => ref.cols.headOption
+        case x => error(
+          s"""Ambiguous references from table '${childTable.name}' to table '$parent'.
+             |Reference must be one and must consist of one column. Found: $x"""
+             .stripMargin)
+      }
     (for {
       propTable <- tables.headOption
       table <- md.tableOption(propTable.table)
       refs <- Some(parent).filter(_ == null).map(_ => Set[String]()) /*no parent no refs*/ orElse
         Some(propTable.refs)
-         .filter(rfs => rfs.size > 0 && isRefInSet(rfs, table, parent)) /* refs in prop */orElse
-          importedKeyOption(table, parent).map(Set(_))
+         .filter(rfs => rfs.size > 0 && isRefInSet(rfs, table)) /* refs in prop */orElse
+          importedKeyOption(table).map(Set(_))
       pk <- Some(table.key.cols).filter(_.size == 1).map(_.head) orElse Some(null)
     } yield save_tresql_func(SaveContext(name, struct, parents, filter, tables,
       insertOption, updateOption, deleteOption, alias, parent, table, refs, pk))
@@ -302,52 +341,6 @@ trait ORT extends Query {
       }
   }
 
-  private def lookupObject(refColName: String, table: metadata.Table) =
-    table.refTable.get(List(refColName))
-
-  private def parseProperty(name: String) = {
-    val PROP_PATTERN(tables, options, alias) = name
-    //insert update delete option
-    val (i, u, d) = Option(options).map (_ =>
-      (options contains "+", options contains "=", options contains "-")
-    ).getOrElse {(true, false, true)}
-    Property((tables split "#").map{ t =>
-      val x = t split ":"
-      TableLink(x.head, x.tail.toSet)
-    }.toList, i, u, d, alias)
-  }
-
-  private def importedKeyOption(childTable: metadata.Table, parent: String) =
-    Option(childTable.refs(parent).filter(_.cols.size == 1)).flatMap {
-      case Nil => None
-      case List(ref) => ref.cols.headOption
-      case x => error(
-        s"""Ambiguous references from table '${childTable.name}' to table '$parent'.
-           |Reference must be one and must consist of one column. Found: $x"""
-           .stripMargin)
-    }
-
-  /* Returns zero or one imported key from table for each relation. In the case of multiple
-   * imported keys pointing to the same relation the one specified after : symbol is chosen
-   * or exception is thrown.
-   * This is used to find relation columns for insert/update multiple methods.
-   * Additionaly primary key of table is returned if it consist only of one column */
-  private def importedKeysAndPks(tableName: String, relations: List[String], resources: Resources) = {
-    val x = tableName split ":"
-    val table = resources.metaData.table(x.head)
-    relations.foldLeft(x.tail.toSet) { (keys, rel) =>
-      val relation = rel.split(":").head
-      val refs = table.refs(relation).filter(_.cols.size == 1)
-      (if (refs.size == 1) keys + refs.head.cols.head
-      else if (refs.size == 0 || refs.exists(r => keys.contains(r.cols.head))) keys
-      else error(s"Ambiguous refs: $refs from table ${table.name} to table $relation")) ++
-      (table.key.cols match {case List(k) => Set(k) case _ => Set()})
-    }
-  }
-
-  private def isRefInSet(refs: Set[String], child: metadata.Table, parent: String) =
-    child.refs(parent).filter(_.cols.size == 1).exists(r => refs.contains(r.cols.head))
-
   private def save_tresql_internal(
     ctx: SaveContext,
     table_save_tresql: (
@@ -372,7 +365,7 @@ trait ORT extends Query {
       tresqlColAlias: String) = struct.flatMap {
       case (n, v) => v match {
         //children
-        case o: Map[String, Any] => lookupObject(n, table).map(lookupTable =>
+        case o: Map[String, Any] => table.refTable.get(List(n)).map(lookupTable =>
           lookup_tresql(n, lookupTable, o)).getOrElse {
           List(children_save_tresql(n, o,
             TableLink(table.name, refsAndPk.map(_._1)) :: parents) -> null)
