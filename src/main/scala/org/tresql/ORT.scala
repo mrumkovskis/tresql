@@ -47,7 +47,6 @@ trait ORT extends Query {
     deleteOption: Boolean,
     alias: String,
     parent: String,
-    propTable: String,
     table: metadata.Table,
     refs: Set[String],
     pk: String)
@@ -216,8 +215,7 @@ trait ORT extends Query {
           importedKeyOption(table, parent).map(Set(_))
       pk <- Some(table.key.cols).filter(_.size == 1).map(_.head) orElse Some(null)
     } yield save_tresql_func(SaveContext(name, struct, parents, filter, tables,
-      insertOption, updateOption, deleteOption, alias, parent, propTable.table,
-      table, refs, pk))
+      insertOption, updateOption, deleteOption, alias, parent, table, refs, pk))
     ).orNull
   }
 
