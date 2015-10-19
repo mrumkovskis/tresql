@@ -39,7 +39,6 @@ trait Query extends QueryBuilder with TypedQuery {
   }
 
   private[tresql] def sel(sql: String, cols: List[QueryBuilder#ColExpr]): Result = {
-    Env log sql
     val st = statement(sql, env)
     bindVars(st, bindVariables)
     var i = 0
@@ -75,7 +74,6 @@ trait Query extends QueryBuilder with TypedQuery {
   }
 
   private[tresql] def update(sql: String) = {
-    Env log sql
     val st = statement(sql, env)
     try {
       bindVars(st, bindVariables)
@@ -87,7 +85,6 @@ trait Query extends QueryBuilder with TypedQuery {
   }
 
   private[tresql] def call(sql: String) = {
-    Env log sql
     val st = statement(sql, env, true).asInstanceOf[CallableStatement]
     var result: Any = null
     var outs: List[Any] = null
@@ -141,6 +138,7 @@ trait Query extends QueryBuilder with TypedQuery {
   }
 
   private def statement(sql: String, env: Env, call: Boolean = false) = {
+    Env log sql
     val conn = env.conn
     if (conn == null) throw new NullPointerException(
       """Connection not found in environment. Check if "Env.conn = conn" (in this case statement execution must be done in the same thread) or "Env.sharedConn = conn" is called.""")

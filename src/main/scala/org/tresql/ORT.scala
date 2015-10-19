@@ -112,18 +112,18 @@ trait ORT extends Query {
   def insert(name: String, obj: Map[String, Any], filter: String = null)
     (implicit resources: Resources = Env): Any = {
     val struct = tresql_structure(obj)
+    Env log (s"\nStructure: $name - $struct")
     val insert = save_tresql(name, struct, Nil, filter, insert_tresql)
     if(insert == null) error("Cannot insert data. Table not found for object: " + name)
-    Env log (s"\nStructure: $name - $struct")
     build(insert, obj, false)(resources)()
   }
 
   def update(name: String, obj: Map[String, Any], filter: String = null)
     (implicit resources: Resources = Env): Any = {
     val struct = tresql_structure(obj)
+    Env log (s"\nStructure: $name - $struct")
     val update = save_tresql(name, struct, Nil, filter, update_tresql)
     if(update == null) error(s"Cannot update data. Table not found or no primary key or no updateable columns found for the object: $name")
-    Env log (s"\nStructure: $name - $struct")
     build(update, obj, false)(resources)()
   }
 
@@ -153,7 +153,7 @@ trait ORT extends Query {
   def updateMultiple(obj: Map[String, Any], names: String*)(filter: String = null)
     (implicit resources: Resources = Env): Any = update(multiSaveProp(names), obj, filter)
 
-  def multiSaveProp(names: Seq[String])(implicit resources: Resources = Env) = {
+  private def multiSaveProp(names: Seq[String])(implicit resources: Resources = Env) = {
     /* Returns zero or one imported key from table for each relation. In the case of multiple
      * imported keys pointing to the same relation the one specified after : symbol is chosen
      * or exception is thrown.
@@ -188,7 +188,7 @@ trait ORT extends Query {
     update(v._1, v._2, filter)
   }
 
-  def tresql_structure[M <: Map[String, Any]](obj: M)(
+  private def tresql_structure[M <: Map[String, Any]](obj: M)(
     /* ensure that returned map is of the same type as passed.
      * For example in the case of ListMap when key ordering is important. */
     implicit bf: scala.collection.generic.CanBuildFrom[M, (String, Any), M]): M = {
@@ -257,21 +257,6 @@ trait ORT extends Query {
       insertOption, updateOption, deleteOption, alias, parent, table, refs, pk))
     ).orNull
   }
-
-  def lookup_tresql(
-    refColName: String,
-    name: String,
-    struct: Map[String, _])(implicit resources: Resources) =
-    resources.metaData.tableOption(name).filter(_.key.cols.size == 1).map {
-      table =>
-      val pk = table.key.cols.headOption.filter(struct contains).orNull
-      val insert = save_tresql(name, struct, Nil, null, insert_tresql)
-      val update = save_tresql(name, struct, Nil, null, update_tresql)
-      List(
-        s":$refColName = |_lookup_edit('$refColName', ${
-          if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
-        refColName -> resources.valueExpr(name, refColName))
-   }.orNull
 
   private def insert_tresql(ctx: SaveContext)
     (implicit resources: Resources): String = {
@@ -356,6 +341,20 @@ trait ORT extends Query {
       List[TableLink] //parent chain
     ) => String)
     (implicit resources: Resources) = {
+    def lookup_tresql(
+      refColName: String,
+      name: String,
+      struct: Map[String, _])(implicit resources: Resources) =
+      resources.metaData.tableOption(name).filter(_.key.cols.size == 1).map {
+        table =>
+        val pk = table.key.cols.headOption.filter(struct contains).orNull
+        val insert = save_tresql(name, struct, Nil, null, insert_tresql)
+        val update = save_tresql(name, struct, Nil, null, update_tresql)
+        List(
+          s":$refColName = |_lookup_edit('$refColName', ${
+            if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
+          refColName -> resources.valueExpr(name, refColName))
+    }.orNull
     import ctx._
     def tresql_string(table: metadata.Table,
       alias: String,
