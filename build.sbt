@@ -6,6 +6,8 @@ scalaVersion := "2.11.6"
 
 crossScalaVersions := Seq("2.10.4", "2.11.6")
 
+//coverageEnabled := true
+
 scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",
   "-language:postfixOps", "-language:implicitConversions")
 
