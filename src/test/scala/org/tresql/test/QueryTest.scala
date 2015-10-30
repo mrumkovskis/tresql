@@ -688,6 +688,14 @@ class QueryTest extends Suite {
       assertResult((1,List(List((1,List(List((1,List(List(1))), ((1,List(List(1, 1))),10063)))),
           (1,List(List((1,List(List(1, 1))), (1,List(List(1, 1))))))))))(ORT.update("dept", obj))
 
+    obj = Map("dname" -> "Service", "emp#work:empno" ->
+      Map("ename" -> "Sophia", "wdate" -> "2015-10-30", "hours" -> 2))
+    assertResult(((1,List(((1,List((1,10065))),10065))),10064))(ORT.insert("dept", obj))
+
+    obj = Map("deptno" -> 10064, "dname" -> "Services", "emp#work:empno[+-=]" ->
+      Map("empno" -> 10065, "wdate" -> "2015-10-30", "hours" -> 8))
+    assertResult((1,List(0, List(1))))(ORT.update("dept", obj))
+
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
 
     nr = 0

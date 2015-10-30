@@ -93,6 +93,8 @@ trait ORT extends Query {
         case s: Seq[Map[String, _]] =>
           expr(if (idName != null)
             Map("ids" -> s.map(_(idName)).filter(_ != null)) else Map[String, Any]())
+        case m: Map[String, _] => expr(if (idName != null)
+          Map("ids" -> m.get(idName).filter(_ != null).toList) else Map[String, Any]())
       }
     }
     override def defaultSQL = s"DeleteChildrenExpr($obj, $idName, $expr)"
@@ -203,12 +205,18 @@ trait ORT extends Query {
           case (k, (v1, _)) => (k, v1)
         }
       })
-    obj.map {
-      case (k, Seq() | Array()) => (k, Map())
-      case (k, l: Seq[Map[String, _]]) => (k, merge(l))
-      case (k, l: Array[Map[String, _]]) => (k, merge(l))
-      case (k, m: Map[String, Any]) => (k, tresql_structure(m))
-      case x => x
+    obj.map { kv =>
+      val optionIdx = kv._1.indexOf("[")
+      val k = if (optionIdx != -1) multiSaveProp(
+        kv._1.substring(0, optionIdx).split("#")) + kv._1.substring(optionIdx)
+        else multiSaveProp(kv._1.split("#"))
+      (k, kv._2 match {
+        case Seq() | Array() => Map()
+        case l: Seq[Map[String, _]] => merge(l)
+        case l: Array[Map[String, _]] => merge(l)
+        case m: Map[String, Any] => tresql_structure(m)
+        case x => x
+      })
     }(bf.asInstanceOf[scala.collection.generic.CanBuildFrom[Map[String, Any], (String, Any), M]]) //somehow cast is needed
   }
 
