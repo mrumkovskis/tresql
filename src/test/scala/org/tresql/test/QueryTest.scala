@@ -688,6 +688,8 @@ class QueryTest extends Suite {
       assertResult((1,List(List((1,List(List((1,List(List(1))), ((1,List(List(1, 1))),10063)))),
           (1,List(List((1,List(List(1, 1))), (1,List(List(1, 1))))))))))(ORT.update("dept", obj))
 
+    println("\n-------- SAVE - extended cases - multiple children --------\n")
+
     obj = Map("dname" -> "Service", "emp#work:empno" ->
       Map("ename" -> "Sophia", "wdate" -> "2015-10-30", "hours" -> 2))
     assertResult(((1,List(((1,List((1,10065))),10065))),10064))(ORT.insert("dept", obj))
