@@ -249,7 +249,7 @@ trait ORT extends Query {
        .filter(_ => parent == null)
        .map((_, null)) orElse
       md.tableOption(tables.head.table) //first table has ref to parent
-        .flatMap(table => refInSet(tables.head.refs, table)
+        .flatMap(table => (refInSet(tables.head.refs, table) orElse imported_key_option(table))
           .map((table, _))) orElse
       (tables.tail match {
         case table :: tail => md.tableOption(table.table)
@@ -271,7 +271,7 @@ trait ORT extends Query {
              .stripMargin)
       }
     (for {
-      (table, ref) <- importedKeyOption(tables)
+      (table, ref) <- {val x = importedKeyOption(tables); println(s"\n\n!!!\n$tables;$x\n!!!\n"); x}
       pk <- Some(table.key.cols).filter(_.size == 1).map(_.head) orElse Some(null)
     } yield save_tresql_func(SaveContext(name, struct, parents, filter, tables,
       insertOption, updateOption, deleteOption, alias, parent, table, ref, pk))
@@ -319,17 +319,17 @@ trait ORT extends Query {
     def stripTrailingAlias(tresql: String, alias: String) =
       if (tresql != null && tresql.endsWith(alias))
         tresql.dropRight(alias.length) else tresql
-    def delAllChildren = s"-$tableName[$ref = :#$parent]"
+    def delAllChildren = s"-$tableName[$refToParent = :#$parent]"
     def delMissingChildren =
       s"""_delete_children('$name', '$tableName', -${table
-        .name}[$ref = :#$parent & $pk !in :ids])"""
+        .name}[$refToParent = :#$parent & $pk !in :ids])"""
     def ins = save_tresql(name, struct, parents, null /*do not pass filter*/,
       insert_tresql)
     def insOrUpd = s"""|_insert_or_update('$tableName', ${
       stripTrailingAlias(ins, s" '$name'")}, ${
       stripTrailingAlias(upd, s" '$name'")}) '$name'"""
     if (parent == null) if (pk == null) null else upd
-    else if (refs contains pk) upd else
+    else if (refToParent == pk) upd else
       if (pk == null) {
         (Option(deleteOption).filter(_ == true).map(_ => delAllChildren) ++
         Option(insertOption).filter(_ == true)
@@ -414,29 +414,31 @@ trait ORT extends Query {
           tresql <- Option(lookupTresql).map(lookup => s"[$lookup$base]") orElse Some(base)
         } yield tresql + tresqlColAlias).orNull
     }
+    val md = resources.metaData
+    val headTable = tables.head
+    val linkedTables = tables.tail
     def idRefId(idRef: String, id: String) = s"_id_ref_id($idRef, $id)"
-    def refsAndPk(tbl: metadata: Table, refs: Set[String]): Set[(String, String)] =
+    def refsAndPk(tbl: metadata.Table, refs: Set[String]): Set[(String, String)] =
       //ref table (set fk and pk)
-      (if (tbl.name == table.name && ref != null) if (ref == pk)
-        Set(pk -> idRefId(parent, tbl.name)) else Set(ref -> s":#$parent") ++
+      (if (tbl.name == table.name && refToParent != null) if (refToParent == pk)
+        Set(pk -> idRefId(parent, tbl.name)) else Set(refToParent -> s":#$parent") ++
           (if (pk == null || refs.contains(pk)) Set() else Set(pk -> s"#${tbl.name}"))
       //not ref table (set pk)
-      else if (pk == null || refs.contains(pk)) Set() else Set(pk -> s"#${tbl.name}")) ++
+      else Option(tbl.key.cols)
+        .filter(k=> k.size == 1 && !refs.contains(k.head)).map(_.head -> s"#${tbl.name}").toSet) ++
       //set refs
-      refs.map(r => r -> (if (r == pk) idRefId(parent, tbl.name) else s""))
-    val md = resources.metaData
-    val linkedTables = tables.tail
+      (if(tbl.name == headTable.table) Set() else refs
+          //filter pk of the linked table in case it matches refToParent
+          .filterNot(tbl.name == table.name && _ == refToParent)
+          .map(_ -> idRefId(headTable.table, tbl.name)))
     val linkedTresqls = for{ linkedTable <- linkedTables
-      tableDef <- md.tableOption(linkedTable.table) } yield tresql_string(
-        tableDef, alias, linkedTable.refs.map(_ -> idRefId(
-          table.name, tableDef.name)),
-        Nil, null, "") //no children & do not pass filter
-    tresql_string(table, alias,
-      refs.map(r=> r -> (if (r == pk) idRefId(parent, table.name) //pk matches ref to parent
-        else s":#$parent")) ++ (if (pk == null || refs.contains(pk)) Set()
-        else Set(pk -> s"#${table.name}")),
-      linkedTresqls.filter(_ != null), filter, Option(parent)
-        .map(_ => s" '$name'").getOrElse(""))
+      tableDef <- md.tableOption(linkedTable.table) } yield tresql_string(tableDef, alias,
+          refsAndPk(tableDef, linkedTable.refs), Nil, null, "") //no children & do not pass filter
+    md.tableOption(headTable.table).map {tableDef =>
+      tresql_string(tableDef, alias, refsAndPk(tableDef, Set()),
+        linkedTresqls.filter(_ != null), filter, Option(parent)
+          .map(_ => s" '$name'").getOrElse(""))
+    }.orNull
   }
 }
 
