@@ -30,6 +30,7 @@ trait ORT extends Query {
     }
 
   case class TableLink(table: String, refs: Set[String])
+  case class ParentRef(table: String, ref: String)
   case class Property(
     tables: List[TableLink],
     insert: Boolean,
@@ -39,7 +40,7 @@ trait ORT extends Query {
   case class SaveContext(
     name: String,
     struct: Map[String, Any],
-    parents: List[TableLink],
+    parents: List[ParentRef],
     filter: String,
     tables: List[TableLink],
     insertOption: Boolean,
@@ -48,7 +49,7 @@ trait ORT extends Query {
     alias: String,
     parent: String,
     table: metadata.Table,
-    refs: Set[String],
+    refToParent: String,
     pk: String)
 
   /* Expression is built only from macros to ensure ORT lookup editing. */
@@ -223,7 +224,7 @@ trait ORT extends Query {
   def save_tresql(
     name: String,
     struct: Map[String, Any],
-    parents: List[TableLink],
+    parents: List[ParentRef],
     filter: String,
     save_tresql_func: SaveContext => String)
     (implicit resources: Resources): String = {
@@ -242,9 +243,25 @@ trait ORT extends Query {
       parseProperty(name)
     val parent = parents.headOption.map(_.table).orNull
     val md = resources.metaData
-    def isRefInSet(refs: Set[String], child: metadata.Table) = child.refs(parent)
-      .filter(_.cols.size == 1).exists(r => refs.contains(r.cols.head))
-    def importedKeyOption(childTable: metadata.Table) =
+    //find first imported key to parent in list of table links passed as a param.
+    def importedKeyOption(tables: List[TableLink]): Option[(metadata.Table, String)] =
+      md.tableOption(tables.head.table) //no parent no ref to parent
+       .filter(_ => parent == null)
+       .map((_, null)) orElse
+      md.tableOption(tables.head.table) //first table has ref to parent
+        .flatMap(table => refInSet(tables.head.refs, table)
+          .map((table, _))) orElse
+      (tables.tail match {
+        case table :: tail => md.tableOption(table.table)
+          .flatMap(t=>
+            imported_key_option(t)
+              .filterNot(table.refs.contains) //linked table has ref to parent
+              .map((t, _))) orElse importedKeyOption(tail)
+        case Nil => None //no ref to parent
+    })
+    def refInSet(refs: Set[String], child: metadata.Table) = refs.find(r =>
+      child.refs(parent).filter(_.cols.size == 1).exists(_.cols.head == r))
+    def imported_key_option(childTable: metadata.Table) =
       Option(childTable.refs(parent).filter(_.cols.size == 1)).flatMap {
         case Nil => None
         case List(ref) => ref.cols.headOption
@@ -254,15 +271,10 @@ trait ORT extends Query {
              .stripMargin)
       }
     (for {
-      propTable <- tables.headOption
-      table <- md.tableOption(propTable.table)
-      refs <- Some(parent).filter(_ == null).map(_ => Set[String]()) /*no parent no refs*/ orElse
-        Some(propTable.refs)
-         .filter(rfs => rfs.size > 0 && isRefInSet(rfs, table)) /* refs in prop */orElse
-          importedKeyOption(table).map(Set(_))
+      (table, ref) <- importedKeyOption(tables)
       pk <- Some(table.key.cols).filter(_.size == 1).map(_.head) orElse Some(null)
     } yield save_tresql_func(SaveContext(name, struct, parents, filter, tables,
-      insertOption, updateOption, deleteOption, alias, parent, table, refs, pk))
+      insertOption, updateOption, deleteOption, alias, parent, table, ref, pk))
     ).orNull
   }
 
@@ -307,10 +319,10 @@ trait ORT extends Query {
     def stripTrailingAlias(tresql: String, alias: String) =
       if (tresql != null && tresql.endsWith(alias))
         tresql.dropRight(alias.length) else tresql
-    def delAllChildren = s"-$tableName[${refs.map(_ + s" = :#$parent").mkString(" & ")}]"
+    def delAllChildren = s"-$tableName[$ref = :#$parent]"
     def delMissingChildren =
       s"""_delete_children('$name', '$tableName', -${table
-        .name}[${refs.map(_ + s" = :#$parent").mkString(" & ")} & $pk !in :ids])"""
+        .name}[$ref = :#$parent & $pk !in :ids])"""
     def ins = save_tresql(name, struct, parents, null /*do not pass filter*/,
       insert_tresql)
     def insOrUpd = s"""|_insert_or_update('$tableName', ${
@@ -346,7 +358,7 @@ trait ORT extends Query {
     children_save_tresql: (
       String, //table property
       Map[String, Any], //saveable structure
-      List[TableLink] //parent chain
+      List[ParentRef] //parent chain
     ) => String)
     (implicit resources: Resources) = {
     def lookup_tresql(
@@ -375,7 +387,7 @@ trait ORT extends Query {
         case o: Map[String, Any] => table.refTable.get(List(n)).map(lookupTable =>
           lookup_tresql(n, lookupTable, o)).getOrElse {
           List(children_save_tresql(n, o,
-            TableLink(table.name, refsAndPk.map(_._1)) :: parents) -> null)
+            ParentRef(table.name, refToParent) :: parents) -> null)
         }
         //pk or ref to parent
         case _ if refsAndPk.exists(_._1 == n) => Nil
@@ -403,6 +415,15 @@ trait ORT extends Query {
         } yield tresql + tresqlColAlias).orNull
     }
     def idRefId(idRef: String, id: String) = s"_id_ref_id($idRef, $id)"
+    def refsAndPk(tbl: metadata: Table, refs: Set[String]): Set[(String, String)] =
+      //ref table (set fk and pk)
+      (if (tbl.name == table.name && ref != null) if (ref == pk)
+        Set(pk -> idRefId(parent, tbl.name)) else Set(ref -> s":#$parent") ++
+          (if (pk == null || refs.contains(pk)) Set() else Set(pk -> s"#${tbl.name}"))
+      //not ref table (set pk)
+      else if (pk == null || refs.contains(pk)) Set() else Set(pk -> s"#${tbl.name}")) ++
+      //set refs
+      refs.map(r => r -> (if (r == pk) idRefId(parent, tbl.name) else s""))
     val md = resources.metaData
     val linkedTables = tables.tail
     val linkedTresqls = for{ linkedTable <- linkedTables
