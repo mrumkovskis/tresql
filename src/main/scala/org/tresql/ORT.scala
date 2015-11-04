@@ -207,11 +207,7 @@ trait ORT extends Query {
         }
       })
     obj.map { kv =>
-      val optionIdx = kv._1.indexOf("[")
-      val k = if (optionIdx != -1) multiSaveProp(
-        kv._1.substring(0, optionIdx).split("#")) + kv._1.substring(optionIdx)
-        else multiSaveProp(kv._1.split("#"))
-      (k, kv._2 match {
+      (kv._1, kv._2 match {
         case Seq() | Array() => Map()
         case l: Seq[Map[String, _]] => merge(l)
         case l: Array[Map[String, _]] => merge(l)
@@ -229,7 +225,13 @@ trait ORT extends Query {
     save_tresql_func: SaveContext => String)
     (implicit resources: Resources): String = {
     def parseProperty(name: String) = {
-      val PROP_PATTERN(tables, options, alias) = name
+      def setLinks(name: String) =
+        if (parents.isEmpty || name.indexOf("#") == -1) name else {
+          val optionIdx = name.indexOf("[")
+          if (optionIdx != -1) multiSaveProp(name.substring(0, optionIdx)
+            .split("#")) + name.substring(optionIdx) else multiSaveProp(name.split("#"))
+        }
+      val PROP_PATTERN(tables, options, alias) = setLinks(name)
       //insert update delete option
       val (i, u, d) = Option(options).map (_ =>
         (options contains "+", options contains "=", options contains "-")
@@ -271,7 +273,7 @@ trait ORT extends Query {
              .stripMargin)
       }
     (for {
-      (table, ref) <- {val x = importedKeyOption(tables); println(s"\n\n!!!\n$tables;$x\n!!!\n"); x}
+      (table, ref) <- importedKeyOption(tables)
       pk <- Some(table.key.cols).filter(_.size == 1).map(_.head) orElse Some(null)
     } yield save_tresql_func(SaveContext(name, struct, parents, filter, tables,
       insertOption, updateOption, deleteOption, alias, parent, table, ref, pk))
