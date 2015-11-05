@@ -54,7 +54,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   //built by child builder
   private var joinsWithChildren: Set[(String, List[String])] = Set()
   lazy val joinsWithChildrenColExprs = for {
-    tc <- { if (this.joinsWithChildren.size > 0) this.hasHiddenCols = true; this.joinsWithChildren }
+    tc <- { if (!this.joinsWithChildren.isEmpty) this.hasHiddenCols = true; this.joinsWithChildren }
     c <- tc._2
   } yield (ColExpr(IdentExpr(List(tc._1, c)), tc._1 + "_" + c + "_", null, Some(false), true))
 
@@ -103,7 +103,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       val s = (if (!env.reusableExpr && (env contains name) && (members == null | members == Nil)) {
         env(name) match {
           case l: scala.collection.Traversable[_] =>
-            if (l.size > 0) ("?," * (l size) dropRight 1) + s"/*$name*/" else {
+            if (!l.isEmpty) ("?," * (l size) dropRight 1) + s"/*$name*/" else {
               if (!binded) QueryBuilder.this._bindVariables.trimEnd(1)
               //return null for empty collection (not to fail in 'in' operator)
               s"null/*$name*/"
@@ -518,7 +518,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       } else r
     }
     protected def _sql = "delete from " + table.sql + (if (alias == null) "" else " " + alias) +
-      (if (filter == null || filter.size == 0) "" else " where " + where)
+      (if (filter == null || filter.isEmpty) "" else " where " + where)
     lazy val defaultSQL = _sql
     def where = filter match {
       case (c @ ConstExpr(x)) :: Nil => Option(alias).getOrElse(table.sql) + "." +
@@ -676,7 +676,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     val allExprIdx = vals.indexWhere(_.isInstanceOf[AllExpr])
     def v(i: Int) = buildInternal(Variable("?", null, null, false), VALUES_CTX)
     if (diff > 0 || allExprIdx != -1) allExprIdx match {
-      case -1 if vals.size == 0 => 1 to diff map v toList //empty value clause
+      case -1 if vals.isEmpty => 1 to diff map v toList //empty value clause
       case -1 => vals //perhaps hierarchical update
       case i => vals.patch(i, 0 to diff map v, 1)
     }
@@ -964,7 +964,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
           val l = buildInternal(lop, parseCtx)
           if (l == null) null else {
             val r = rop.map(buildInternal(_, parseCtx)).filter(_ != null)
-            if (r.size == 0) null else InExpr(l, r, not)
+            if (r.isEmpty) null else InExpr(l, r, not)
           }
         case Fun(n, pl: List[_], d) =>
           val pars = pl map { buildInternal(_, FUN_CTX) }
@@ -972,7 +972,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => IdentAllExpr(i.ident)
         case Arr(l: List[_]) => l map { buildInternal(_, parseCtx) } filter (_ != null) match {
-          case al if al.size > 0 => ArrExpr(al) case _ => null
+          case al if !al.isEmpty => ArrExpr(al) case _ => null
         }
         case Variable("?", _, t, o) =>
           this.bindIdx += 1; VarExpr(this.bindIdx.toString, Nil, t, o)

@@ -169,7 +169,7 @@ trait ORT extends Query {
         val relation = rel.split(":").head
         val refs = table.refs(relation).filter(_.cols.size == 1)
         (if (refs.size == 1) keys + refs.head.cols.head
-        else if (refs.size == 0 || refs.exists(r => keys.contains(r.cols.head))) keys
+        else if (refs.isEmpty || refs.exists(r => keys.contains(r.cols.head))) keys
         else error(s"Ambiguous refs: $refs from table ${table.name} to table $relation")) ++
         (table.key.cols match {case List(k) => Set(k) case _ => Set()})
       }
@@ -199,10 +199,10 @@ trait ORT extends Query {
       lm.tail.foldLeft(tresql_structure(lm.head))((l, m) => {
         val x = tresql_structure(m)
         l map (t => (t._1, (t._2, x.getOrElse(t._1, null)))) map {
-          case (k, (v1: Map[String, _], v2: Map[String, _])) if v1.size > 0 && v2.size > 0 =>
+          case (k, (v1: Map[String, _], v2: Map[String, _])) if !v1.isEmpty && !v2.isEmpty =>
             (k, merge(List(v1, v2)))
-          case (k, (v1: Map[String, _], _)) if v1.size > 0 => (k, v1)
-          case (k, (_, v2: Map[String, _])) if v2.size > 0 => (k, v2)
+          case (k, (v1: Map[String, _], _)) if !v1.isEmpty => (k, v1)
+          case (k, (_, v2: Map[String, _])) if !v2.isEmpty => (k, v2)
           case (k, (v1, _)) => (k, v1)
         }
       })
@@ -246,32 +246,35 @@ trait ORT extends Query {
     val parent = parents.headOption.map(_.table).orNull
     val md = resources.metaData
     //find first imported key to parent in list of table links passed as a param.
-    def importedKeyOption(tables: List[TableLink]): Option[(metadata.Table, String)] =
+    def importedKeyOption(tables: List[TableLink]): Option[(metadata.Table, String)] = {
+      def refInSet(refs: Set[String], child: metadata.Table) = refs.find(r =>
+        child.refs(parent).filter(_.cols.size == 1).exists(_.cols.head == r))
+      def imported_key_option(childTable: metadata.Table) =
+        Option(childTable.refs(parent).filter(_.cols.size == 1)).flatMap {
+          case Nil => None
+          case List(ref) => ref.cols.headOption
+          case x => error(
+            s"""Ambiguous references from table '${childTable.name}' to table '$parent'.
+             |Reference must be one and must consist of one column. Found: $x"""
+              .stripMargin)
+        }
+      def processLinkedTables(linkedTables: List[TableLink]): Option[(metadata.Table, String)] =
+        linkedTables match {
+          case table :: tail => md.tableOption(table.table)
+            .flatMap(t =>
+              imported_key_option(t)
+                .filterNot(table.refs.contains) //linked table has ref to parent
+                .map((t, _))) orElse processLinkedTables(tail)
+          case Nil => None //no ref to parent
+        }
       md.tableOption(tables.head.table) //no parent no ref to parent
        .filter(_ => parent == null)
        .map((_, null)) orElse
       md.tableOption(tables.head.table) //first table has ref to parent
         .flatMap(table => (refInSet(tables.head.refs, table) orElse imported_key_option(table))
           .map((table, _))) orElse
-      (tables.tail match {
-        case table :: tail => md.tableOption(table.table)
-          .flatMap(t=>
-            imported_key_option(t)
-              .filterNot(table.refs.contains) //linked table has ref to parent
-              .map((t, _))) orElse importedKeyOption(tail)
-        case Nil => None //no ref to parent
-    })
-    def refInSet(refs: Set[String], child: metadata.Table) = refs.find(r =>
-      child.refs(parent).filter(_.cols.size == 1).exists(_.cols.head == r))
-    def imported_key_option(childTable: metadata.Table) =
-      Option(childTable.refs(parent).filter(_.cols.size == 1)).flatMap {
-        case Nil => None
-        case List(ref) => ref.cols.headOption
-        case x => error(
-          s"""Ambiguous references from table '${childTable.name}' to table '$parent'.
-             |Reference must be one and must consist of one column. Found: $x"""
-             .stripMargin)
-      }
+      processLinkedTables(tables.tail) //look for ref to parent in linked tables
+    }
     (for {
       (table, ref) <- importedKeyOption(tables)
       pk <- Some(table.key.cols).filter(_.size == 1).map(_.head) orElse Some(null)
@@ -407,7 +410,7 @@ trait ORT extends Query {
            .filter(_._1 != null /*check if prop->col mapping found*/) ++
              children.map(_ -> null)/*add same level one to one children*/)
            match {
-             case x if x.size == 0 => null //no columns found
+             case x if x.isEmpty => null //no columns found
              case cols_vals => table_save_tresql(tableName, alias, cols_vals,
                refsAndPk, filter)
            }
