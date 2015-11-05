@@ -310,12 +310,13 @@ trait ORT extends Query {
     def table_save_tresql(tableName: String, alias: String,
       cols_vals: List[(String, String)], refsAndPk: Set[(String, String)],
       filter: String) = cols_vals.unzip match {
-        case (cols: List[String], vals: List[String]) =>
+        case (cols: List[String], vals: List[String]) if !cols.isEmpty =>
           val tn = tableName + (if (alias == null) "" else " " + alias)
           val updateFilter = refsAndPk.map(t=> s"${t._1} = ${t._2}")
             .mkString("[", " & ", s"${if (filter != null) s" & ($filter)" else ""}]")
           cols.mkString(s"=$tn $updateFilter {", ", ", "}") +
           vals.filter(_ != null).mkString("[", ", ", "]")
+        case _ => null
     }
     import ctx._
     val tableName = table.name
@@ -410,7 +411,7 @@ trait ORT extends Query {
            .filter(_._1 != null /*check if prop->col mapping found*/) ++
              children.map(_ -> null)/*add same level one to one children*/)
            match {
-             case x if x.isEmpty => null //no columns found
+             case x if x.isEmpty && refsAndPk.isEmpty => null //no columns & refs found
              case cols_vals => table_save_tresql(tableName, alias, cols_vals,
                refsAndPk, filter)
            }

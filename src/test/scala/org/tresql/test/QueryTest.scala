@@ -438,7 +438,7 @@ class QueryTest extends Suite {
 
     //delete children
     obj = Map("nr" -> 4444, "name" -> "LAMBORGHINI", "tyres" -> List())
-    assertResult((1,List(2)))(ORT.update("car", obj))
+    assertResult((1,List(2, List())))(ORT.update("car", obj))
 
     //update three level, for the first second level object it's third level is empty
     obj = Map("deptno" -> 10013, "emp" -> List(
@@ -455,7 +455,8 @@ class QueryTest extends Suite {
             "work:empno" -> List()),
         Map("ename" -> "GUNTER",
             "work:empno" -> List())))
-    assertResult(List(2, List((1,10021), (1,10022))))(ORT.update("dept", obj))
+    assertResult(List(2, List(((1,List(List())),10021),
+      ((1,List(List())),10022))))(ORT.update("dept", obj))
 
 
     println("\n--- DELETE ---\n")
@@ -501,7 +502,7 @@ class QueryTest extends Suite {
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno[+-=]"->List(),
         "calculated_children"->List(Map("x"->5)), "deptno"->20)
-    assertResult((1,List(2)))(ORT.update("emp", obj))
+    assertResult((1,List(2, List())))(ORT.update("emp", obj))
 
     println("\n---- Multiple table INSERT, UPDATE ------\n")
 
