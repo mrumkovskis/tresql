@@ -120,6 +120,8 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
 
 object Env extends Resources {
   private val threadConn = new ThreadLocal[java.sql.Connection]
+  //query timeout
+  private val query_timeout = new ThreadLocal[Int]
   private val threadLogLevel = new ThreadLocal[Option[Int]] {
     override def initialValue = None
   }
@@ -140,8 +142,6 @@ object Env extends Resources {
   private var _cache: Option[Cache] = None
   //logger
   private var _logger: (=> String, Int) => Unit = null
-  //query timeout
-  private var query_timeout = 0
   //recursive execution depth
   private var _recursive_stack_depth = 50
 
@@ -157,7 +157,7 @@ object Env extends Resources {
   def isMacroDefined(macroName: String) = _macrosMethods.map(_.contains(macroName)).getOrElse(false)
   def macroMethod(name: String) = _macrosMethods.map(_(name)).get
   def cache = _cache
-  override def queryTimeout = query_timeout
+  override def queryTimeout = query_timeout.get
 
   def conn_=(conn: java.sql.Connection) = this.threadConn set conn
   def metaData_=(metaData: MetaData) = this._metaData = Option(metaData)
@@ -177,7 +177,7 @@ object Env extends Resources {
   def recursive_stack_dept_=(depth: Int) = _recursive_stack_depth = depth
 
   def cache_=(cache: Cache) = this._cache = Option(cache)
-  def queryTimeout_=(timeout: Int) = this.query_timeout = timeout
+  def queryTimeout_=(timeout: Int) = this.query_timeout set timeout
 
   def logLevel = threadLogLevel.get
   def logLevel_=(level: Any) = level match {
