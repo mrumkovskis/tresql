@@ -708,6 +708,12 @@ class QueryTest extends Suite {
         "deptno" -> Map("dname" -> "Supervision")))
     assertResult((1,List(0, List(10067, ((1,List((1,10068))),10068)))))(ORT.update("car", obj))
 
+    println("\n--- LOOKUP extended case - separate lookup expression from previous insert expr values ---\n")
+    obj = Map("dname" -> "Design", "name" -> "Tesla", "date_from" -> "2015-11-20",
+      "empno" -> Map("ename" -> "Inna", "deptno" -> 10064))
+    assertResult(((1,List((1,10069), List(10070, (1,10069)))),10069))(
+      ORT.insertMultiple(obj, "dept", "car", "car_usage")())
+
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
 
     nr = 0

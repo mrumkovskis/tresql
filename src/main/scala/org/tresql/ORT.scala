@@ -417,7 +417,10 @@ trait ORT extends Query {
            }
         (for {
           base <- Option(tresql)
-          tresql <- Option(lookupTresql).map(lookup => s"[$lookup$base]") orElse Some(base)
+          tresql <- Option(lookupTresql).map(lookup =>
+              s"([$lookup$base])") //put lookup in braces and array,
+              //so potentially not to conflict with insert expr with multiple values arrays
+            .orElse(Some(base))
         } yield tresql + tresqlColAlias).orNull
     }
     val md = resources.metaData
