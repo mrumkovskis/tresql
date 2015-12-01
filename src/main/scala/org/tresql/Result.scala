@@ -99,7 +99,8 @@ case class SingleValueResult(res: Any) extends Result {
   override def toString = s"SingleValueResult = $res"
 }
 
-class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env, _columnCount: Int = -1)
+class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: Env,
+    sql: String, bindVariables: List[Expr], maxSize: Int = 0, _columnCount: Int = -1)
   extends Result {
   private[this] val md = rs.getMetaData
   private[this] val st = rs.getStatement
@@ -110,6 +111,8 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
     val cwi = cols.zipWithIndex
     (cwi.filter(_._1.name != null).map(t => t._1.name -> t._2).toMap, cwi.filter(_._1.expr != null))
   }
+  private[this] var rowCount = 0
+  
   /** calls jdbc result set next method. after jdbc result set next method returns false closes this result */
   def hasNext = {
     if (rsHasNext && nextCalled) {
@@ -121,7 +124,26 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
     }
     rsHasNext
   }
-  def next = { nextCalled = true; this }
+  def next = { 
+    nextCalled = true
+    if (maxSize > 0) {
+      rowCount += 1
+      maxSizeControl(false)
+    }
+    this
+  }
+  
+  private def maxSizeControl(throwError: Boolean = false) {
+    def maxSizeControlMessage = s"""Result max row count ($maxSize) exceeded.
+      |SQL:
+      |$sql
+      |Bind variables:
+      |${bindVariables.mkString(", ")}"""
+      .stripMargin
+    if (maxSize > 0 && rowCount == maxSize + 1)
+      if (!throwError) Env.log(maxSizeControlMessage, -1) else sys.error(maxSizeControlMessage)
+  }
+  
   def apply(columnIndex: Int) = {
     if (cols(columnIndex).idx != -1) asAny(cols(columnIndex).idx)
     else row(columnIndex)

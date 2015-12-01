@@ -25,7 +25,7 @@ package object tresql {
     val md = jdbcResult.getMetaData
     new SelectResult(jdbcResult, Vector((1 to md.getColumnCount map {
       i => Column(i, md.getColumnLabel(i), null)
-    }): _*), Env(Map(), false))
+    }): _*), Env(Map(), false), "<not available>", Nil, Env.maxResultSize)
   }
 
   //converters

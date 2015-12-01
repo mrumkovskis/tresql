@@ -99,6 +99,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   override def dialect: PartialFunction[Expr, String] = provider.map(_.env.dialect).getOrElse(resources.dialect)
   override def idExpr = provider.map(_.env.idExpr).getOrElse(resources.idExpr)
   override def queryTimeout = provider.map(_.env.queryTimeout).getOrElse(resources.queryTimeout)
+  override def maxResultSize = provider.map(_.env.maxResultSize).getOrElse(resources.maxResultSize)
 
   //meta data methods
   def table(name: String) = metaData.table(name)
@@ -144,6 +145,7 @@ object Env extends Resources {
   private var _logger: (=> String, Int) => Unit = null
   //recursive execution depth
   private var _recursive_stack_depth = 50
+  private var _maxResultSize = 0
 
   def apply(params: Map[String, Any], reusableExpr: Boolean) = new Env(params, this, reusableExpr)
   def conn = { val c = threadConn.get; if (c == null) sharedConn else c }
@@ -158,6 +160,7 @@ object Env extends Resources {
   def macroMethod(name: String) = _macrosMethods.map(_(name)).get
   def cache = _cache
   override def queryTimeout = query_timeout.get
+  override def maxResultSize = _maxResultSize
 
   def conn_=(conn: java.sql.Connection) = this.threadConn set conn
   def metaData_=(metaData: MetaData) = this._metaData = Option(metaData)
@@ -178,6 +181,8 @@ object Env extends Resources {
 
   def cache_=(cache: Cache) = this._cache = Option(cache)
   def queryTimeout_=(timeout: Int) = this.query_timeout set timeout
+  
+  def maxResultSize_=(size: Int) = this._maxResultSize = size
 
   def logLevel = threadLogLevel.get
   def logLevel_=(level: Any) = level match {
@@ -200,6 +205,7 @@ trait Resources {
   def dialect: PartialFunction[Expr, String] = null
   def idExpr: String => String = s => "nextval('" + s + "')"
   def queryTimeout = 0
+  def maxResultSize = 0
 
   /** Column value expression in tresql statement value clause.
    *  Default is named bind variable - {{{:columnName}}} */

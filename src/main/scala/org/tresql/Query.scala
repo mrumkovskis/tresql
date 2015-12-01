@@ -62,12 +62,13 @@ trait Query extends QueryBuilder with TypedQuery {
 
     val result = if (allCols) new SelectResult(rs, Vector(cols.flatMap {c =>
       if (c.col.isInstanceOf[QueryBuilder#AllExpr]) jdbcRcols else List(rcol(c))
-    }: _*), env)
+    }: _*), env, sql, bindVariables, env.maxResultSize)
     else if (identAll) new SelectResult(rs,
-        Vector(jdbcRcols ++ (cols.filter(_.separateQuery) map rcol) :_*), env)
+        Vector(jdbcRcols ++ (cols.filter(_.separateQuery) map rcol) :_*), env, sql, bindVariables,
+          env.maxResultSize)
     else rcols match {
-      case (c, -1) => new SelectResult(rs, Vector(c: _*), env)
-      case (c, s) => new SelectResult(rs, Vector(c: _*), env, s)
+      case (c, -1) => new SelectResult(rs, Vector(c: _*), env, sql, bindVariables, env.maxResultSize)
+      case (c, s) => new SelectResult(rs, Vector(c: _*), env, sql, bindVariables, env.maxResultSize, s)
     }
     env.result = result
     result
@@ -94,7 +95,7 @@ trait Query extends QueryBuilder with TypedQuery {
         val rs = st.getResultSet
         val md = rs.getMetaData
         val res = new SelectResult(rs, Vector(1 to md.getColumnCount map
-          { i => Column(i, md.getColumnLabel(i), null) }: _*), env)
+          { i => Column(i, md.getColumnLabel(i), null) }: _*), env, sql, bindVariables, Env.maxResultSize)
         env.result = res
         result = res
       }
