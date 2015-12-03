@@ -437,3 +437,8 @@ sql_concat(null_macros(), dummy{1}, null_macros()) --> [[1]]
 
 //whitespace test
 emp /*comment*/[/**/ename /****/ ~~ /***/ /*another comment*/'sc%'/* comment */] //comment --> [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 4000.35, null, 20]]
+
+//select with empty from clause
+{1, 'x', true, null} --> [[1, "x", true, null]]
+null[true]{1, 'x', true, null} --> [[1, "x", true, null]]
+null[false]{1, 'x', true, null} --> []

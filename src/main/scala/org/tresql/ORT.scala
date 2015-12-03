@@ -296,8 +296,7 @@ trait ORT extends Query {
             case vs =>
               val toa = if (alias == null) tableName else alias
               val cv = cols_vals filter (_._2 != null)
-              val sel = s"($tableName{${cv.map(c =>
-                c._2 + " " + c._1).mkString(", ")}} @(1)) $toa"
+              val sel = s"(null{${cv.map(c => c._2 + " " + c._1).mkString(", ")}} @(1)) $toa"
               cv.map(c => s"$toa.${c._1}").mkString(s" $sel [$filter] {", ", ", "}")
           })
       }

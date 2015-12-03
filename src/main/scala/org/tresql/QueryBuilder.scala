@@ -332,17 +332,21 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   }
 
   case class SelectExpr(tables: List[Table], filter: Expr, cols: List[ColExpr],
-    distinct: Boolean, group: Expr, order: Expr,
-    offset: Expr, limit: Expr, aliases: Map[String, Table], parentJoin: Option[Expr]) extends BaseExpr {
+      distinct: Boolean, group: Expr, order: Expr,
+      offset: Expr, limit: Expr, aliases: Map[String, Table], parentJoin: Option[Expr]) extends BaseExpr {
     override def apply() = sel(sql, cols)
     lazy val defaultSQL = "select " + (if (distinct) "distinct " else "") +
-      (if (cols == null) "*" else sqlCols) + " from " + tables.head.sqlName + join(tables) +
-      //(filter map where).getOrElse("")
-      Option(where).map(" where " + _).getOrElse("") +
-      (if (group == null) "" else " group by " + group.sql) +
-      (if (order == null) "" else " order by " + order.sql) +
-      (if (offset == null) "" else " offset " + offset.sql) +
-      (if (limit == null) "" else " limit " + limit.sql)
+      (if (cols == null) "*" else sqlCols) + (
+        tables match {
+          case List(Table(ConstExpr(null), _, _, _, _)) => ""
+          case _ => " from " + tables.head.sqlName + join(tables)
+        }) +
+        //(filter map where).getOrElse("")
+        Option(where).map(" where " + _).getOrElse("") +
+        (if (group == null) "" else " group by " + group.sql) +
+        (if (order == null) "" else " order by " + order.sql) +
+        (if (offset == null) "" else " offset " + offset.sql) +
+        (if (limit == null) "" else " limit " + limit.sql)
     def sqlCols = cols.withFilter(!_.separateQuery).map(_.sql).mkString(", ")
     def join(tables: List[Table]): String = {
       //used to find table if alias join is used
@@ -357,7 +361,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     }
     def where = {
       val fsql = Option(filter).map(
-          e => (if (e.exprType == classOf[SelectExpr]) "exists " else "") + e.sql).orNull
+        e => (if (e.exprType == classOf[SelectExpr]) "exists " else "") + e.sql).orNull
       parentJoin.map(e => Option(fsql).map("(" + _ + ") and " + e.sql)
         .getOrElse(e.sql)).getOrElse(fsql)
     }

@@ -197,7 +197,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
      * of the query.
      * Also important is that variable parser is after query parser since ? mark matches variable
      * Also important that insert, delete, update parsers are before query parser */
-  def operand: MemParser[Any] = (TRUE | FALSE | NULL | ALL | function | insert | update | query |
+  def operand: MemParser[Any] = (TRUE | FALSE | ALL | function | insert | update | query |
     decimalNr | stringLiteral | variable | id | idref | result | array) named "operand"
   def function: MemParser[Fun] = (qualifiedIdent <~ "(") ~ opt("#") ~ repsep(expr, ",") <~ ")" ^^ {
     case Ident(a) ~ d ~ b => Fun(a.mkString("."), b, d.map(x=> true).getOrElse(false))
@@ -313,11 +313,18 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
         }
       }
     } named "offset-limit"
-  def query: MemParser[Any] = objs ~ filters ~ opt(columns) ~ opt(group) ~ opt(order) ~
-    opt(offsetLimit) ^^ {
-      case (t :: Nil) ~ Filters(Nil) ~ None ~ None ~ None ~ None => t
-      case t ~ f ~ c ~ g ~ o ~ l => Query(t, f, c.map(_.cols) orNull,
-        c.map(_.distinct) getOrElse false, g.orNull, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
+  def query: MemParser[Any] = ((objs | NULL) ~ filters ~ opt(columns) ~ opt(group) ~ opt(order) ~
+    opt(offsetLimit) | columns) ^^ {
+      case Null ~ Filters(Nil) ~ None ~ None ~ None ~ None => Null //null literal
+      case List(t) ~ Filters(Nil) ~ None ~ None ~ None ~ None => t
+      case t ~ (f: Filters) ~ (c: Option[Cols]) ~ (g: Option[Grp]) ~ (o: Option[Ord]) ~
+        (l: Option[(Any, Any)]) => Query(t match {
+          case tables: List[Obj] => tables
+          case Null => List(Obj(Null, null, null, null))
+        }, f, c.map(_.cols) orNull, c.map(_.distinct) getOrElse false, g.orNull, o.orNull,
+        l.map(_._1) orNull, l.map(_._2) orNull)
+      case c: Cols => Query(List(Obj(Null, null, null, null)), Filters(Nil), c.cols,
+          false, null, null, null, null)
     } ^^ { pr =>
       def toDivChain(objs: List[Obj]): Any = objs match {
         case o :: Nil => o.obj
@@ -330,7 +337,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
         } => toDivChain(objs)
         case q => q
       }
-    }  named "query"
+    } named "query"
 
   def queryWithCols: MemParser[Any] = query ^? ({
       case q @ Query(objs, _, cols, _, _, _, _, _) if cols != null => q

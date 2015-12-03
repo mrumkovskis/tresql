@@ -13,7 +13,15 @@ class QueryTest extends Suite {
   Class.forName("org.hsqldb.jdbc.JDBCDriver")
   val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
   Env.conn = conn
-  Env.dialect = dialects.HSQLDialect
+  Env.dialect = dialects.HSQLDialect orElse {
+    case e: QueryBuilder#SelectExpr =>
+      val b = e.builder
+      e match {
+        case s @ b.SelectExpr(List(b.Table(b.ConstExpr(null), _, _, _, _)), _, _, _, _, _, _, _, _, _) =>
+          s.copy(tables = List(s.tables.head.copy(table = b.IdentExpr(List("dummy"))))).sql
+        case _ => e.defaultSQL
+      }
+  }
   Env.idExpr = s => "nextval('seq')"
   class TestFunctions extends Functions {
     def echo(x: String) = x
