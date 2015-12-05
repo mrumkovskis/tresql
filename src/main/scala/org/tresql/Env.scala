@@ -28,8 +28,9 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   private val ids = scala.collection.mutable.Map[String, Any]()
   private var _result: Result = null
   private var _statement: java.sql.PreparedStatement = null
-  //stores row count returned by SelectResult and all subresults
+  //stores row count returned by SelectResult and all subresults.
   //if resources.maxResultSize is greater than zero
+  //Row count is accumulated only for top level Env i.e. provider is None
   private var _rowCount = 0
 
   def apply(name: String): Any = get(name).map {
