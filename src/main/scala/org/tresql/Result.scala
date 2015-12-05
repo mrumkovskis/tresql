@@ -11,7 +11,7 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
     def length = row.length
     def columnCount = length
     def apply(name: String) = row(columns indexWhere (_.name == name))
-    override def typed[T](idx: Int)(implicit m: scala.reflect.Manifest[T]) = this(idx).asInstanceOf[T] 
+    override def typed[T](idx: Int)(implicit m: scala.reflect.Manifest[T]) = this(idx).asInstanceOf[T]
     override def typed[T](name: String)(implicit m: scala.reflect.Manifest[T]) = this(name).asInstanceOf[T]
     def column(idx: Int) = Result.this.column(idx)
     def columns = (0 to (columnCount - 1)) map column
@@ -28,10 +28,10 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
     override def result =
       throw new UnsupportedOperationException("Result not available, use listOfRows method instead.")
   }
-  
+
   def columns = (0 to (columnCount - 1)) map column
   def values = (0 to (columnCount - 1)).map(this(_))
-  
+
   override def toList = this.map(_ => toRow).toList
 
   def toListOfMaps: List[Map[String, _]] = this.map(_ => rowToMap).toList
@@ -55,7 +55,7 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
     }
     Vector(b: _*)
   }
-  
+
   def toRow: Row = new Row ((0 to (columnCount - 1)) map (this(_) match {
     case r: Result => r.toListOfRows
     case x => x
@@ -78,7 +78,7 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
       }
     }
   }
-  
+
   def close {}
 
   /** needs to be overriden since super class implementation calls hasNext method */
@@ -112,7 +112,7 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
     (cwi.filter(_._1.name != null).map(t => t._1.name -> t._2).toMap, cwi.filter(_._1.expr != null))
   }
   private[this] var rowCount = 0
-  
+
   /** calls jdbc result set next method. after jdbc result set next method returns false closes this result */
   def hasNext = {
     if (rsHasNext && nextCalled) {
@@ -124,26 +124,24 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
     }
     rsHasNext
   }
-  def next = { 
+  def next = {
     nextCalled = true
     if (maxSize > 0) {
-      rowCount += 1
-      maxSizeControl(false)
+      env.rowCount += 1
+      maxSizeControl
     }
     this
   }
-  
-  private def maxSizeControl(throwError: Boolean = false) {
-    def maxSizeControlMessage = s"""Result max row count ($maxSize) exceeded.
-      |SQL:
+
+  private def maxSizeControl {
+    def msg = s"""Result max row count ($maxSize) exceeded. SQL:
       |$sql
       |Bind variables:
       |${bindVariables.mkString(", ")}"""
       .stripMargin
-    if (maxSize > 0 && rowCount == maxSize + 1)
-      if (!throwError) Env.log(maxSizeControlMessage, -1) else sys.error(maxSizeControlMessage)
+    if (env.rowCount > maxSize) throw new TooManyRowsException(msg)
   }
-  
+
   def apply(columnIndex: Int) = {
     if (cols(columnIndex).idx != -1) asAny(cols(columnIndex).idx)
     else row(columnIndex)
@@ -220,15 +218,15 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
     if (cols(columnIndex).idx != -1) rs.getCharacterStream(cols(columnIndex).idx)
     else row(columnIndex).asInstanceOf[java.io.Reader]
   }
-  override def reader(columnLabel: String) = reader(colMap(columnLabel)) 
+  override def reader(columnLabel: String) = reader(colMap(columnLabel))
   override def blob(columnIndex: Int) = {
     if (cols(columnIndex).idx != -1) rs.getBlob(cols(columnIndex).idx)
-    else row(columnIndex).asInstanceOf[java.sql.Blob]    
+    else row(columnIndex).asInstanceOf[java.sql.Blob]
   }
   override def blob(columnLabel: String) = blob(colMap(columnLabel))
   override def clob(columnIndex: Int) = {
     if (cols(columnIndex).idx != -1) rs.getClob(cols(columnIndex).idx)
-    else row(columnIndex).asInstanceOf[java.sql.Clob]    
+    else row(columnIndex).asInstanceOf[java.sql.Clob]
   }
   override def clob(columnLabel: String) = clob(colMap(columnLabel))
 
@@ -273,7 +271,7 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
       case ARRAY | BINARY | BLOB | DATALINK | DISTINCT | JAVA_OBJECT | LONGVARBINARY | NULL |
         OTHER | REF | STRUCT | VARBINARY => rs.getObject(pos)
       //scala BigDecimal is returned instead of java.math.BigDecimal
-      //because it can be easily compared using standart operators (==, <, >, etc) 
+      //because it can be easily compared using standart operators (==, <, >, etc)
       case DECIMAL | NUMERIC => {
         val bd = rs.getBigDecimal(pos); if (rs.wasNull) null else BigDecimal(bd)
       }
@@ -288,12 +286,12 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
       case DOUBLE | FLOAT | REAL => val v = rs.getDouble(pos); if (rs.wasNull) null else v
     }
   }
-  
+
   //optimize value retrieval by name
   class R(row: Seq[Any]) extends Row(row) {
     override def apply(name: String) = row(SelectResult.this.colMap(name))
   }
-   
+
   override def toRow: Row = new R((0 to (columnCount - 1)) map (this(_) match {
     case r: Result => r.toListOfRows
     case x => x
@@ -431,7 +429,7 @@ trait RowLike extends Dynamic with Typed {
     def selectDynamic(col: String) = boolean(col)
     def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
   }
-	
+
   private[tresql] object DynamicJBoolean extends Dynamic {
     def selectDynamic(col: String) = jBoolean(col)
     def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
@@ -462,7 +460,7 @@ trait RowLike extends Dynamic with Typed {
   private[tresql] object DynamicBlob extends Dynamic {
     def selectDynamic(col: String) = blob(col)
     def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-  }  
+  }
   private[tresql] object DynamicReader extends Dynamic {
     def selectDynamic(col: String) = reader(col)
     def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
@@ -470,7 +468,7 @@ trait RowLike extends Dynamic with Typed {
   private[tresql] object DynamicClob extends Dynamic {
     def selectDynamic(col: String) = clob(col)
     def applyDynamic(col: String)(args: Any*) = selectDynamic(col)
-  }    
+  }
   def apply(idx: Int): Any
   def apply(name: String): Any
   def selectDynamic(name: String) = apply(name)
@@ -543,7 +541,7 @@ trait RowLike extends Dynamic with Typed {
   def reader = DynamicReader
   def clob(idx: Int) = typed[java.sql.Clob](idx)
   def clob(name: String) = typed[java.sql.Clob](name)
-  def clob = DynamicClob  
+  def clob = DynamicClob
   def result(idx: Int) = typed[Result](idx)
   def result(name: String) = typed[Result](name)
   def result = DynamicResult
@@ -590,3 +588,5 @@ trait RowLike extends Dynamic with Typed {
 }
 
 case class Column(idx: Int, name: String, private[tresql] val expr: Expr)
+
+class TooManyRowsException(message: String) extends RuntimeException(message)

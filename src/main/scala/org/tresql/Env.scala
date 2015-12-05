@@ -28,6 +28,9 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   private val ids = scala.collection.mutable.Map[String, Any]()
   private var _result: Result = null
   private var _statement: java.sql.PreparedStatement = null
+  //stores row count returned by SelectResult and all subresults
+  //if resources.maxResultSize is greater than zero
+  private var _rowCount = 0
 
   def apply(name: String): Any = get(name).map {
     case e: Expr => e()
@@ -92,6 +95,11 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
     ids.get(seqName) orElse provider.flatMap(_.env.currIdOption(seqName))
   //update current id. This is called from QueryBuilder.IdExpr
   private[tresql] def currId(seqName: String, id: Any): Unit = ids(seqName) = id
+
+  private[tresql] def rowCount: Int = provider.map(_.env.rowCount).getOrElse(_rowCount)
+  private[tresql] def rowCount_=(rc: Int) {
+    provider.map(_.env.rowCount = rc).getOrElse (_rowCount = rc)
+  }
 
   //resources methods
   def conn: java.sql.Connection = provider.map(_.env.conn).getOrElse(resources.conn)
@@ -181,7 +189,7 @@ object Env extends Resources {
 
   def cache_=(cache: Cache) = this._cache = Option(cache)
   def queryTimeout_=(timeout: Int) = this.query_timeout set timeout
-  
+
   def maxResultSize_=(size: Int) = this._maxResultSize = size
 
   def logLevel = threadLogLevel.get
