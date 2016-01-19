@@ -314,7 +314,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       }
     } named "offset-limit"
   def query: MemParser[Any] = ((objs | NULL) ~ filters ~ opt(columns) ~ opt(group) ~ opt(order) ~
-    opt(offsetLimit) | columns) ^^ {
+    opt(offsetLimit) | (columns ~ filters)) ^^ {
       case Null ~ Filters(Nil) ~ None ~ None ~ None ~ None => Null //null literal
       case List(t) ~ Filters(Nil) ~ None ~ None ~ None ~ None => t
       case t ~ (f: Filters) ~ (c: Option[Cols]) ~ (g: Option[Grp]) ~ (o: Option[Ord]) ~
@@ -323,7 +323,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
           case Null => List(Obj(Null, null, null, null))
         }, f, c.map(_.cols) orNull, c.map(_.distinct) getOrElse false, g.orNull, o.orNull,
         l.map(_._1) orNull, l.map(_._2) orNull)
-      case c: Cols => Query(List(Obj(Null, null, null, null)), Filters(Nil), c.cols,
+      case (c: Cols) ~ (f: Filters) => Query(List(Obj(Null, null, null, null)), f, c.cols,
           false, null, null, null, null)
     } ^^ { pr =>
       def toDivChain(objs: List[Obj]): Any = objs match {
