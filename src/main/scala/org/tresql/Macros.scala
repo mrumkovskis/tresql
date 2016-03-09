@@ -3,6 +3,29 @@ package org.tresql
 class Macros {
   def sql(b: QueryBuilder, const: QueryBuilder#ConstExpr) = b.SQLExpr(String valueOf const.value, Nil)
 
+  def if_defined(b: QueryBuilder, v: QueryBuilder#VarExpr, e: Expr) =
+    if (b.env contains v.name) e else null
+
+  def if_missing(b: QueryBuilder, v: QueryBuilder#VarExpr, e: Expr) =
+    if (b.env contains v.name) null else e
+
+  def if_all_defined(b: QueryBuilder, a: QueryBuilder#ArrExpr, e: Expr) =
+    if (a.elements forall {
+      case v: QueryBuilder#VarExpr => b.env contains v.name
+      case x => sys.error(s"Unexpected parameter type in if_all_defined macro, expecting VarExpr: $x")
+    }) e
+    else null
+
+  def if_any_defined(b: QueryBuilder, a: QueryBuilder#ArrExpr, e: Expr) =
+    if (a.elements exists {
+      case v: QueryBuilder#VarExpr => b.env contains v.name
+      case x => sys.error(s"Unexpected parameter type in if_any_defined macro, expecting VarExpr: $x")
+    }) e
+    else null
+
+  def sql_concat(b: QueryBuilder, exprs: Expr*) =
+    b.SQLConcatExpr(exprs: _*)
+
   def ~~ (b: QueryBuilder, lop: Expr, rop: Expr) =
     b.BinExpr("~", b.FunExpr("lower", List(lop)), b.FunExpr("lower", List(rop)))
 
