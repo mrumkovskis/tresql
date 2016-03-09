@@ -25,3 +25,8 @@ bin/*.jar
 
 # db
 lift_proto*
+
+#ensime plugin files
+.ensime
+.ensime_cache/
+
