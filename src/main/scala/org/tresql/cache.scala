@@ -25,7 +25,7 @@ class SimpleCache(maxSize: Int) extends Cache {
   }
 
   override def size = cache.size
-  def exprs = cache.keySet
+  def exprs: java.util.Set[String] = cache.keySet
 
   override def toString = "Simple cache exprs: " + exprs + "\n" + "Cache size: " + size
 }
@@ -38,7 +38,7 @@ class WeakHashCache extends Cache {
   def put(tresql: String, expr: Any) = cache.put(tresql, expr)
 
   override def size = cache.size
-  def exprs = cache.keySet
+  def exprs: java.util.Set[String] = cache.keySet
 
   override def toString = "WeakHashCache exprs: " + exprs + "\n" + "Cache size: " + size
 }
