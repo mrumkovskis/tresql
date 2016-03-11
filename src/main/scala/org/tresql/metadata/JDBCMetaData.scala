@@ -31,6 +31,7 @@ class JDBCMetaData(private val defaultSchema: String = null,
             else defaultSchema, t, null)
           case Array(s, t) => dmd.getTables(null, s, t, null)
           case Array(c, s, t) => dmd.getTables(c, s, t, null)
+          case x => sys.error(s"Unexpected table name: '$name'")
         }
         var m = Set[(String, String)]()
         while (rs.next) {
@@ -84,6 +85,7 @@ class JDBCMetaData(private val defaultSchema: String = null,
             else defaultSchema, p)
           case Array(s, p) => dmd.getProcedures(null, s, p)
           case Array(c, s, p) => dmd.getProcedures(c, s, p)
+          case x => sys.error(s"Unexpected procedure name: '$name'")
         }
         var m = Set[(String, String)]()
         while (rs.next) {
@@ -120,7 +122,7 @@ class JDBCMetaData(private val defaultSchema: String = null,
         rs.close
         procedureCache(name)
       }
-    }    
+    }
   }
   /* Implemented this way because did not understand scala concurrent compatibilities between
    * scala versions 2.9 and 2.10 */
