@@ -11,7 +11,7 @@ crossScalaVersions := Seq("2.10.4", "2.11.6")
 scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",
   "-language:postfixOps", "-language:implicitConversions")
 
-libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "2.1.5" % "test", 
+libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "2.1.5" % "test",
                             "org.hsqldb" % "hsqldb" % "2.2.8" % "test")
 
 libraryDependencies := {
@@ -44,7 +44,7 @@ publishArtifact in Test := false
 pomIncludeRepository := { x => false }
 
 pomExtra := (
-  <url>https://github.com/mrumkovskis/Query</url>
+  <url>https://github.com/uniso/tresql</url>
   <licenses>
     <license>
       <name>MIT</name>
@@ -53,8 +53,8 @@ pomExtra := (
     </license>
   </licenses>
   <scm>
-    <url>git@github.com:mrumkovskis/Query.git</url>
-    <connection>scm:git:git@github.com:mrumkovskis/Query.git</connection>
+    <url>git@github.com:uniso/tresql.git</url>
+    <connection>scm:git:git@github.com:uniso/tresql.git</connection>
   </scm>
   <developers>
     <developer>
