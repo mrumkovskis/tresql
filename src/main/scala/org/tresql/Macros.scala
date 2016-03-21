@@ -33,6 +33,30 @@ class Macros {
     else null
   }
 
+  def if_all_missing(b: QueryBuilder, e: Expr*) = {
+    if (e.size < 2) sys.error("if_all_missing macro must have at least two arguments")
+    val vars = e dropRight 1
+    val expr = e.last
+    if (vars forall {
+      case v: QueryBuilder#VarExpr => !(b.env contains v.name)
+      case null => true
+      case x => sys.error(s"Unexpected parameter type in if_all_missing macro, expecting VarExpr: $x")
+    }) expr
+    else null
+  }
+
+  def if_any_missing(b: QueryBuilder, e: Expr*) = {
+    if (e.size < 2) sys.error("if_any_missing macro must have at least two arguments")
+    val vars = e dropRight 1
+    val expr = e.last
+    if (vars exists {
+      case v: QueryBuilder#VarExpr => !(b.env contains v.name)
+      case null => true
+      case x => sys.error(s"Unexpected parameter type in if_any_missing macro, expecting VarExpr: $x")
+    }) expr
+    else null
+  }
+
   def sql_concat(b: QueryBuilder, exprs: Expr*) =
     b.SQLConcatExpr(exprs: _*)
 

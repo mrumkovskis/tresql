@@ -446,6 +446,14 @@ dept[deptno in if_any_defined(:name, :job, emp[ename ~~ :name? || '%' & job = :j
 dept[deptno in if_all_defined(:name, :job, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
 dept[deptno in if_all_defined(:name?, :job?, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
 dept[deptno in if_all_defined(:name, :job, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST;name='sc --> [["RESEARCH"]]
+dept[deptno in if_any_missing(:name, :job, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST --> [["RESEARCH"]]
+dept[deptno in if_any_missing(:name?, :job?, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST --> [["RESEARCH"]]
+dept[deptno in if_any_missing(:name, :job, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> [["ACCOUNTING"], ["RESEARCH"], ["SALES"]]
+dept[deptno in if_any_missing(:name, :job, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST;name='sc --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
+dept[deptno in if_all_missing(:name, :job, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
+dept[deptno in if_all_missing(:name?, :job?, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
+dept[deptno in if_all_missing(:name, :job, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST;name='sc --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
+dept[deptno in if_all_missing(:name, :job, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> [["ACCOUNTING"], ["RESEARCH"], ["SALES"]]
 
 
 //whitespace test
