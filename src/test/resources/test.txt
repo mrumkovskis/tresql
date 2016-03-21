@@ -435,13 +435,17 @@ sql_concat(sql('/*begin comment */'), sql(' '), dummy{1} ++ dummy{2}, sql('/*end
 sql_concat(sql('/*begin comment */'), sql(' '), (dummy{1}), sql('/*end comment */')) --> [[1]]
 sql_concat(null_macros(), dummy{1}, null_macros()) --> [[1]]
 dept[deptno in if_defined(:name, emp[ename ~~ :name? || '%']{deptno})]{dname}#(1) --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
+dept[deptno in if_defined(:name?, emp[ename ~~ :name? || '%']{deptno})]{dname}#(1) --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
 dept[deptno in if_defined(:name, emp[ename ~~ :name? || '%']{deptno})]{dname}#(1) --> name='sc --> [["RESEARCH"]]
 dept[deptno in if_missing(:name, emp[ename ~~ 'sc' || '%']{deptno})]{dname}#(1) --> [["RESEARCH"]]
+dept[deptno in if_missing(:name?, emp[ename ~~ 'sc' || '%']{deptno})]{dname}#(1) --> [["RESEARCH"]]
 dept[deptno in if_missing(:name, emp[ename ~~ :name? || '%']{deptno})]{dname}#(1) --> name='sc --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
-dept[deptno in if_any_defined([:name, :job], emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST --> [["RESEARCH"]]
-dept[deptno in if_any_defined([:name, :job], emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
-dept[deptno in if_all_defined([:name, :job], emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
-dept[deptno in if_all_defined([:name, :job], emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST;name='sc --> [["RESEARCH"]]
+dept[deptno in if_any_defined(:name, :job, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST --> [["RESEARCH"]]
+dept[deptno in if_any_defined(:name?, :job?, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST --> [["RESEARCH"]]
+dept[deptno in if_any_defined(:name, :job, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
+dept[deptno in if_all_defined(:name, :job, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
+dept[deptno in if_all_defined(:name?, :job?, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
+dept[deptno in if_all_defined(:name, :job, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST;name='sc --> [["RESEARCH"]]
 
 
 //whitespace test

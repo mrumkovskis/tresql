@@ -4,24 +4,34 @@ class Macros {
   def sql(b: QueryBuilder, const: QueryBuilder#ConstExpr) = b.SQLExpr(String valueOf const.value, Nil)
 
   def if_defined(b: QueryBuilder, v: QueryBuilder#VarExpr, e: Expr) =
-    if (b.env contains v.name) e else null
+    if (v != null && (b.env contains v.name)) e else null
 
   def if_missing(b: QueryBuilder, v: QueryBuilder#VarExpr, e: Expr) =
-    if (b.env contains v.name) null else e
+    if (v != null && (b.env contains v.name)) null else e
 
-  def if_all_defined(b: QueryBuilder, a: QueryBuilder#ArrExpr, e: Expr) =
-    if (a.elements forall {
+  def if_all_defined(b: QueryBuilder, e: Expr*) = {
+    if (e.size < 2) sys.error("if_all_defined macro must have at least two arguments")
+    val vars = e dropRight 1
+    val expr = e.last
+    if (vars forall {
       case v: QueryBuilder#VarExpr => b.env contains v.name
+      case null => false
       case x => sys.error(s"Unexpected parameter type in if_all_defined macro, expecting VarExpr: $x")
-    }) e
+    }) expr
     else null
+  }
 
-  def if_any_defined(b: QueryBuilder, a: QueryBuilder#ArrExpr, e: Expr) =
-    if (a.elements exists {
+  def if_any_defined(b: QueryBuilder, e: Expr*) = {
+    if (e.size < 2) sys.error("if_any_defined macro must have at least two arguments")
+    val vars = e dropRight 1
+    val expr = e.last
+    if (vars exists {
       case v: QueryBuilder#VarExpr => b.env contains v.name
+      case null => false
       case x => sys.error(s"Unexpected parameter type in if_any_defined macro, expecting VarExpr: $x")
-    }) e
+    }) expr
     else null
+  }
 
   def sql_concat(b: QueryBuilder, exprs: Expr*) =
     b.SQLConcatExpr(exprs: _*)

@@ -977,6 +977,11 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case Arr(l: List[_]) => l map { buildInternal(_, parseCtx) } filter (_ != null) match {
           case al if !al.isEmpty => ArrExpr(al) case _ => null
         }
+        /* alternative handling of null elements?
+        case Arr(l: List[_]) => l map { buildInternal(_, parseCtx) } match {
+          case al if al.isEmpty || al.exists(_ == null) => null
+          case al => ArrExpr(al)
+        }*/
         case Variable("?", _, t, o) =>
           this.bindIdx += 1; VarExpr(this.bindIdx.toString, Nil, t, o)
         case Variable(n, m, t, o) =>
