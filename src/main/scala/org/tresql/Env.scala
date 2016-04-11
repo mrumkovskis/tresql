@@ -105,7 +105,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   //resources methods
   def conn: java.sql.Connection = provider.map(_.env.conn).getOrElse(resources.conn)
   override def metaData = provider.map(_.env.metaData).getOrElse(resources.metaData)
-  override def dialect: PartialFunction[Expr, String] = provider.map(_.env.dialect).getOrElse(resources.dialect)
+  override def dialect: Dialect = provider.map(_.env.dialect).getOrElse(resources.dialect)
   override def idExpr = provider.map(_.env.idExpr).getOrElse(resources.idExpr)
   override def queryTimeout = provider.map(_.env.queryTimeout).getOrElse(resources.queryTimeout)
   override def maxResultSize = provider.map(_.env.maxResultSize).getOrElse(resources.maxResultSize)
@@ -139,7 +139,7 @@ object Env extends Resources {
   var sharedConn: java.sql.Connection = null
   //meta data object must be thread safe!
   private var _metaData: Option[MetaData] = Some(metadata.JDBCMetaData())
-  private var _dialect: Option[PartialFunction[Expr, String]] = None
+  private var _dialect: Option[Dialect] = None
   private var _idExpr: Option[String => String] = None
   //available functions
   private var _functions: Option[Any] = None
@@ -173,7 +173,7 @@ object Env extends Resources {
 
   def conn_=(conn: java.sql.Connection) = this.threadConn set conn
   def metaData_=(metaData: MetaData) = this._metaData = Option(metaData)
-  def dialect_=(dialect: PartialFunction[Expr, String]) = this._dialect =
+  def dialect_=(dialect: Dialect) = this._dialect =
     Option(dialect).map(_.orElse {case e=> e.defaultSQL})
   def idExpr_=(idExpr: String => String) = this._idExpr = Option(idExpr)
   def functions_=(funcs: Any) = {
@@ -211,7 +211,7 @@ trait Resources {
 
   def conn: java.sql.Connection
   def metaData: MetaData
-  def dialect: PartialFunction[Expr, String] = null
+  def dialect: Dialect = null
   def idExpr: String => String = s => "nextval('" + s + "')"
   def queryTimeout = 0
   def maxResultSize = 0

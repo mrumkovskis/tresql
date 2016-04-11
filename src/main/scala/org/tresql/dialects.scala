@@ -2,7 +2,7 @@ package org.tresql
 
 package object dialects {
 
-  object ANSISQLDialect extends PartialFunction[Expr, String] {
+  object ANSISQLDialect extends Dialect {
     def isDefinedAt(e: Expr) = exec(e)._1
     def apply(e: Expr) = exec(e)._2
     private def exec(e: Expr) = e match {
@@ -13,7 +13,7 @@ package object dialects {
     }
   }
 
-  object HSQLRawDialect extends PartialFunction[Expr, String] {
+  object HSQLRawDialect extends Dialect {
     def isDefinedAt(e: Expr) = e match {
       case e.builder.FunExpr("lower", _: List[_], false) => true
       case e.builder.FunExpr("translate", List(_, e.builder.ConstExpr(from: String),
@@ -31,7 +31,7 @@ package object dialects {
     }
   }
 
-  object OracleRawDialect extends PartialFunction[Expr, String] {
+  object OracleRawDialect extends Dialect {
     def isDefinedAt(e: Expr) = e match {
       case e.builder.BinExpr("-", _, _) => true
       case e: QueryBuilder#SelectExpr if e.limit != null || e.offset != null => true

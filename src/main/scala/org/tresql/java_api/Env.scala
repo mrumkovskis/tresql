@@ -24,8 +24,8 @@ object Env {
   //def colName(objectName: String, propertyName: String): String
   def getConnection: Connection = env.conn
   def setConnection(c: Connection) { env.conn = c }
-  def getDialect: PartialFunction[Expr, String] = env.dialect
-  def setDialect(d: PartialFunction[Expr, String]) { env.dialect = d }
+  def getDialect: Dialect = env.dialect
+  def setDialect(d: Dialect) { env.dialect = d }
   def getFunctions: Object = env.functions.map(_.asInstanceOf[AnyRef]).orNull
   def setFunctions(funcs: Object): Unit = { env.functions = funcs }
   def getIdExprFunc: IdExprFunc = new IdExprFunc {
@@ -33,13 +33,13 @@ object Env {
   }
   def setIdExprFunc(f: IdExprFunc) { env.idExpr = f.getIdExpr }
   //def isDefined(functionName: String): Boolean
-  //def log(msg: => String, level: Int = 0): Unit 
+  //def log(msg: => String, level: Int = 0): Unit
   def getMetadata: MetaData = env.metaData
   def setMetadata(md: MetaData) { env.metaData = md }
   //def getNameMap: NameMap = env.nameMap
   //def setNameMap(m: NameMap) = { env.nameMap = m }
-  //var sharedConn: Connection 
-  //def tableName(objectName: String): String 
+  //var sharedConn: Connection
+  //def tableName(objectName: String): String
   def setLogger(logger: Logger) {
     env.logger = (msg, level) => logger.log(new LogMessage {
       override def get = msg
