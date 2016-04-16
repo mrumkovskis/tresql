@@ -32,7 +32,7 @@ trait Typed { this: RowLike =>
     case x => apply(columnIndex).asInstanceOf[T]
   }
 
-  def typed[T](name: String)(implicit m: scala.reflect.Manifest[T]): T
+  def typed[T:Manifest](name: String): T
 
   def typed[T](implicit converter: Converter[T], m: Manifest[T]): T =
     if (converter != null) converter(this, m) else typed(0).asInstanceOf[T]
@@ -124,7 +124,7 @@ trait TypedResult { this: Result =>
         if (hasNext) error("More than one row for unique result") else Some(v)
       case false => None
     } finally close
-  
+
   def list[T](implicit converter: Converter[T],
       m: Manifest[T]) = this.map(r => this.asInstanceOf[RowLike].typed[T]).toList
 
@@ -256,7 +256,7 @@ trait TypedQuery {this: Query =>
       m: scala.reflect.Manifest[T], r: Resources = Env): Option[T] = {
     apply(expr, params: _*).uniqueOption[T]
   }
-  
+
   def toListOfMaps[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
     implicit transformer: PartialFunction[(String, Any), Any] = null, r: Resources = Env,
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): List[M[String, Any]] =
