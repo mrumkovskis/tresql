@@ -206,7 +206,25 @@ object Env extends Resources {
   def logger_=(logger: (=> String, Int) => Unit) = this._logger = logger
 }
 
-trait Resources {
+trait Resources { self =>
+  private case class Resources_(
+    val _conn: Option[java.sql.Connection] = None,
+    val _metaData: Option[MetaData] = None,
+    val _dialect: Option[Dialect] = None,
+    val _idExpr: Option[String => String] = None,
+    val _queryTimeout: Option[Int] = None,
+    val _maxResultSize: Option[Int] = None) extends Resources {
+    override def conn: java.sql.Connection = _conn getOrElse self.conn
+    override def metaData: MetaData = _metaData getOrElse self.metaData
+    override def dialect: Dialect = _dialect getOrElse self.dialect
+    override def idExpr: String => String = _idExpr getOrElse self.idExpr
+    override def queryTimeout: Int = _queryTimeout getOrElse self.queryTimeout
+    override def maxResultSize: Int = _maxResultSize getOrElse self.maxResultSize
+    override def toString = s"Resources_(conn = $conn, " +
+      s"metaData = $metaData, dialect = $dialect, idExpr = $idExpr, " +
+      s"queryTimeout = $queryTimeout, maxResultSize = $maxResultSize)"
+  }
+
   private var _valueExprMap: Option[Map[(String, String), String]] = None
 
   def conn: java.sql.Connection
@@ -226,6 +244,14 @@ trait Resources {
    * key: table name -> column name, value: expr passed to tresql
    */
   def updateValueExprs(map: Map[(String, String), String]) = _valueExprMap = Option(map)
+
+  //resource construction convenience methods
+  def withConn(conn: java.sql.Connection): Resources = Resources_(_conn = Option(conn))
+  def withMetaData(metaData: MetaData): Resources = Resources_(_metaData = Option(metaData))
+  def withDialect(dialect: Dialect): Resources = Resources_(_dialect = Option(dialect))
+  def withIdExpr(idExpr: String => String): Resources = Resources_(_idExpr = Option(idExpr))
+  def withQueryTimeout(queryTimeout: Int): Resources = Resources_(_queryTimeout = Option(queryTimeout))
+  def withMaxResultSize(maxResultSize: Int): Resources = Resources_(_maxResultSize = Option(maxResultSize))
 }
 
 trait EnvProvider {

@@ -311,6 +311,18 @@ class QueryTest extends Suite {
     }
     assertResult(List(Vector(0)))(tresql"dummy" toListOfVectors)
 
+    //Resources convenience methods test
+    val mr = Env.maxResultSize
+    val qt = Env.queryTimeout
+    val e1 = Env.withMaxResultSize(555)
+    val e2 = e1.withQueryTimeout(333)
+    assertResult((555, qt)) {(e1.maxResultSize, e1.queryTimeout)}
+    assertResult((555, 333)) {(e2.maxResultSize, e2.queryTimeout)}
+    Env.queryTimeout = 222
+    assertResult((555, 222)) {(e1.maxResultSize, e1.queryTimeout)}
+    assertResult((555, 333)) {(e2.maxResultSize, e2.queryTimeout)}
+    Env.maxResultSize = mr
+    Env.queryTimeout = qt
 
     println("\n----------- ORT tests ------------\n")
 
