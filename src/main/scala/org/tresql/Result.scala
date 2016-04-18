@@ -11,8 +11,8 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
     def length = row.length
     def columnCount = length
     def apply(name: String) = row(columns indexWhere (_.name == name))
-    override def typed[T](idx: Int)(implicit m: scala.reflect.Manifest[T]) = this(idx).asInstanceOf[T]
-    override def typed[T](name: String)(implicit m: scala.reflect.Manifest[T]) = this(name).asInstanceOf[T]
+    override def typed[T:Manifest](idx: Int) = this(idx).asInstanceOf[T]
+    override def typed[T:Manifest](name: String) = this(name).asInstanceOf[T]
     def column(idx: Int) = Result.this.column(idx)
     def columns = (0 to (columnCount - 1)) map column
     def values = this
@@ -94,7 +94,7 @@ case class SingleValueResult(res: Any) extends Result {
   def columnCount = 1
   def column(idx: Int) = cols(idx)
   def apply(idx: Int) = row(idx)
-  def typed[T](name: String)(implicit m: Manifest[T]) = this(name).asInstanceOf[T]
+  def typed[T:Manifest](name: String) = this(name).asInstanceOf[T]
   def apply(name: String) = if (name == "value") res else sys.error("column not found: " + name)
   override def toString = s"SingleValueResult = $res"
 }
@@ -148,8 +148,7 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
   }
   //fall back to rs.findColumn method in the case hidden column is referenced
   def apply(columnLabel: String) = colMap get columnLabel map (this(_)) getOrElse asAny(rs.findColumn(columnLabel))
-  def typed[T](columnLabel: String)(implicit m: scala.reflect.Manifest[T]): T =
-    typed[T](colMap(columnLabel))
+  def typed[T:Manifest](columnLabel: String): T = typed[T](colMap(columnLabel))
 
   def columnCount = if (_columnCount == -1) cols.length else _columnCount
   override def column(idx: Int) = cols(idx)

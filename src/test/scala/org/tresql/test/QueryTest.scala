@@ -194,6 +194,14 @@ class QueryTest extends Suite {
       " |car[deptnr = :1(deptno)]{name}#(1) cars}"})
     assertResult(List((10, "ACCOUNTING"), (20, "RESEARCH")))(
         Query.list[Int, String]("dept[deptno = ? | deptno = ?]#(1)", 10, 20))
+    assertResult((10, 10)) {
+      val r = tresql"dept[deptno = 10]{deptno}"
+      r.hasNext
+      r.next
+      val (id1, id2) = (r.typed[Int]("deptno"), r.typed("deptno")(scala.reflect.ManifestFactory.Int))
+      r.close
+      (id1, id2)
+    }
     //typed objects tests
     trait Poha
     case class Car(nr: Int, brand: String) extends Poha
