@@ -13,7 +13,7 @@ trait Cache {
 
 /** Cache based on java concurrent hash map */
 class SimpleCache(maxSize: Int) extends Cache {
-  private val cache = new ConcurrentHashMap[String, Any]
+  private val cache: java.util.Map[String, Any] = new ConcurrentHashMap[String, Any]
 
   def get(tresql: String) = Option(cache.get(tresql))
   def put(tresql: String, expr: Any) = {
@@ -25,7 +25,7 @@ class SimpleCache(maxSize: Int) extends Cache {
   }
 
   override def size = cache.size
-  def exprs: java.util.Set[String] = cache.keySet
+  def exprs = cache.keySet
 
   override def toString = "Simple cache exprs: " + exprs + "\n" + "Cache size: " + size
 }
