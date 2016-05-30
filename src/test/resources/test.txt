@@ -132,6 +132,9 @@ dept[?] {dname, |emp {ename}#(1), (emp [emp.deptno = dept.deptno] {count(*)}) em
 //order
 dept/emp[sal >= losal & sal <= hisal]salgrade {deptno, grade, empno, sal}#(deptno, grade, ~sal) --> [[10, 2, 7934, 1300.00], [10, 4, 7782, 2450.00], [10, 5, 7839, 5000.00], [20, 1, 7876, 1100.00], [20, 1, 7369, 800.00], [20, 4, 7788, 3000.00], [20, 4, 7902, 3000.00], [20, 4, 7566, 2975.00], [30, 1, 7900, 950.00], [30, 2, 7521, 1250.00], [30, 2, 7654, 1250.00], [30, 3, 7499, 1600.00], [30, 3, 7844, 1500.00], [30, 4, 7698, 2850.00]]
 dept/emp[sal >= losal & sal <= hisal]salgrade {deptno, grade, empno, sal}#(null deptno, grade, ~sal, 3 null) --> [[10, 2, 7934, 1300.00], [10, 4, 7782, 2450.00], [10, 5, 7839, 5000.00], [20, 1, 7876, 1100.00], [20, 1, 7369, 800.00], [20, 4, 7788, 3000.00], [20, 4, 7902, 3000.00], [20, 4, 7566, 2975.00], [30, 1, 7900, 950.00], [30, 2, 7521, 1250.00], [30, 2, 7654, 1250.00], [30, 3, 7499, 1600.00], [30, 3, 7844, 1500.00], [30, 4, 7698, 2850.00]]
+dept/emp{ename, dname}#(if_defined(:dname, ename), empno) --> dname='aaa --> [[null, "OPERATIONS"], ["ADAMS", "RESEARCH"], ["ALLEN", "SALES"], ["BLAKE", "SALES"], ["CLARK", "ACCOUNTING"], ["FORD", "RESEARCH"], ["JAMES", "SALES"], ["JONES", "RESEARCH"], ["KING", "ACCOUNTING"], ["MARTIN", "SALES"], ["MILLER", "ACCOUNTING"], ["SCOTT", "RESEARCH"], ["SMITH", "RESEARCH"], ["TURNER", "SALES"], ["WARD", "SALES"]]
+dept/emp{ename, dname}#(if_defined(:dname, ename), empno) --> [[null, "OPERATIONS"], ["SMITH", "RESEARCH"], ["ALLEN", "SALES"], ["WARD", "SALES"], ["JONES", "RESEARCH"], ["MARTIN", "SALES"], ["BLAKE", "SALES"], ["CLARK", "ACCOUNTING"], ["SCOTT", "RESEARCH"], ["KING", "ACCOUNTING"], ["TURNER", "SALES"], ["ADAMS", "RESEARCH"], ["JAMES", "SALES"], ["FORD", "RESEARCH"], ["MILLER", "ACCOUNTING"]]
+dept[dname = '<none>']#(if_defined(:dname, dname)) --> []
 
 //in operator
 dept[deptno in(10)]{deptno}#(1) --> [[10]]

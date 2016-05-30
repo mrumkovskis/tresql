@@ -344,7 +344,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         //(filter map where).getOrElse("")
         Option(where).map(" where " + _).getOrElse("") +
         (if (group == null) "" else " group by " + group.sql) +
-        (if (order == null) "" else " order by " + order.sql) +
+        (if (order == null) "" else Option(order.sql).map(" order by " + _).getOrElse("")) +
         (if (offset == null) "" else " offset " + offset.sql) +
         (if (limit == null) "" else " limit " + limit.sql)
     def sqlCols = cols.withFilter(!_.separateQuery).map(_.sql).mkString(", ")
@@ -471,10 +471,14 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     def defaultSQL = name.mkString(".")
   }
   case class Order(ordExprs: List[(Expr, Expr, Expr)]) extends PrimitiveExpr {
-    def defaultSQL = ordExprs.map(o => (o._2 match {
+    def defaultSQL = ordExprs.filterNot(_._2 == null).map(o => (o._2 match {
       case UnExpr("~", e) => e.sql + " desc"
       case e => e.sql + " asc"
-    }) + (if (o._1 != null) " nulls first" else if (o._3 != null) " nulls last" else "")).mkString(", ")
+    }) + (if (o._1 != null) " nulls first" else if (o._3 != null) " nulls last" else ""))
+    .mkString(", ") match {
+      case "" => null
+      case s => s
+    }
   }
   case class Group(groupExprs: List[Expr], having: Expr) extends PrimitiveExpr {
     def defaultSQL = (groupExprs map (_.sql)).mkString(",") +
