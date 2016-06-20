@@ -6,6 +6,7 @@ import sys._
 trait ORT extends Query {
 
   /* table[:ref]*[#table[:ref]*]*[[options]] [alias]
+  *  Options are to be specified in such order: insert, delete, update, i.e. '+-='
   *  Examples:
   *    dept#car:deptnr:nr#tyres:carnr:nr
   *    dept[+=] alias
