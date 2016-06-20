@@ -88,6 +88,8 @@ class Macros {
       String valueOf tableName.value,
       deleteExpr)
 
+  def _not_delete_ids(b: ORT, idsExpr: Expr) = b.NotDeleteIdsExpr(idsExpr)
+
   def _id_ref_id(b: ORT,
     idRef: QueryBuilder#IdentExpr,
     id: QueryBuilder#IdentExpr) =

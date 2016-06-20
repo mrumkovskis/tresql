@@ -517,7 +517,7 @@ class QueryTest extends Suite {
               Map("wdate"->"2012-7-14", "empno"->null, "hours"->5, "empno_mgr"->7839),
               Map("wdate"->"2012-7-15", "empno"->null, "hours"->2, "empno_mgr"->7839)))),
         "calculated_children"->List(Map("x"->5)), "deptno"->40)
-    assertResult((1,List(0, List(((1,List(List(1, 1))),10024), ((1,List(List(1, 1))),10025)))))(
+    assertResult((1,List(2, List(((1,List(List(1, 1))),10024), ((1,List(List(1, 1))),10025)))))(
         ORT.update("dept", obj))
 
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
@@ -734,6 +734,10 @@ class QueryTest extends Suite {
       "empno" -> Map("ename" -> "Inna", "deptno" -> 10064))
     assertResult(((1,List((1,10069), List(10070, (1,10069)))),10069))(
       ORT.insertMultiple(obj, "dept", "car", "car_usage")())
+
+    println("\n--- Delete all children with save options specified ---\n")
+    obj = Map("nr" -> 10035, "tyres[+-=]" -> Nil)
+    assertResult(List(1, List()))(ORT.update("car", obj))
 
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
 

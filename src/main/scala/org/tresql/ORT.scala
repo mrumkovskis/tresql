@@ -93,13 +93,21 @@ trait ORT extends Query {
     override def apply() = {
       env(obj) match {
         case s: Seq[Map[String, _]] =>
-          expr(if (idName != null)
-            Map("ids" -> s.map(_(idName)).filter(_ != null)) else Map[String, Any]())
-        case m: Map[String, _] => expr(if (idName != null)
-          Map("ids" -> m.get(idName).filter(_ != null).toList) else Map[String, Any]())
+          expr(
+            if (idName != null) Map("ids" -> s.map(_(idName)).filter(_ != null))
+            else Map[String, Any]())
+        case m: Map[String, _] => expr(
+          if (idName != null) Map("ids" -> m.get(idName).filter(_ != null).toList)
+          else Map[String, Any]())
       }
     }
     override def defaultSQL = s"DeleteChildrenExpr($obj, $idName, $expr)"
+  }
+  case class NotDeleteIdsExpr(expr: Expr) extends BaseExpr {
+    override def defaultSQL = env.get("ids").map {
+      case ids: Seq[_] if !ids.isEmpty => expr.sql
+      case _ => "true"
+    }.getOrElse("true")
   }
   /* Expression is built from macro.
    * Effectively env.currId(idSeq, IdRefExpr(idRefSeq)())*/
@@ -328,7 +336,7 @@ trait ORT extends Query {
     def delAllChildren = s"-$tableName[$refToParent = :#$parent]"
     def delMissingChildren =
       s"""_delete_children('$name', '$tableName', -${table
-        .name}[$refToParent = :#$parent & $pk !in :ids])"""
+        .name}[$refToParent = :#$parent & _not_delete_ids($pk !in :ids)])"""
     def ins = save_tresql(name, struct, parents, null /*do not pass filter*/,
       insert_tresql)
     def insOrUpd = s"""|_insert_or_update('$tableName', ${
