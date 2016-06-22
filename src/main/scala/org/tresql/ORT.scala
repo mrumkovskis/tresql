@@ -123,20 +123,27 @@ trait ORT extends Query {
 
   def insert(name: String, obj: Map[String, Any], filter: String = null)
     (implicit resources: Resources = Env): Any = {
-    val struct = tresql_structure(obj)
-    Env log (s"\nStructure: $name - $struct")
-    val insert = save_tresql(name, struct, Nil, filter, insert_tresql)
-    if(insert == null) error("Cannot insert data. Table not found for object: " + name)
-    build(insert, obj, false)(resources)()
+    save(name, obj, filter, insert_tresql, "Cannot insert data. Table not found for object: " + name)
   }
 
   def update(name: String, obj: Map[String, Any], filter: String = null)
     (implicit resources: Resources = Env): Any = {
+    save(name, obj, filter, update_tresql,
+      s"Cannot update data. Table not found or no primary key or no updateable columns found for the object: $name")
+  }
+
+  private def save(
+    name: String,
+    obj: Map[String, Any],
+    filter: String,
+    save_tresql_fun: SaveContext => String,
+    errorMsg: String)
+    (implicit resources: Resources): Any = {
     val struct = tresql_structure(obj)
     Env log (s"\nStructure: $name - $struct")
-    val update = save_tresql(name, struct, Nil, filter, update_tresql)
-    if(update == null) error(s"Cannot update data. Table not found or no primary key or no updateable columns found for the object: $name")
-    build(update, obj, false)(resources)()
+    val tresql = save_tresql(name, struct, Nil, filter, save_tresql_fun)
+    if(tresql == null) error(errorMsg)
+    build(tresql, obj, false)(resources)()
   }
 
   def delete(name: String, id: Any, filter: String = null, filterParams: Map[String, Any] = null)
