@@ -32,7 +32,7 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
   def columns = (0 to (columnCount - 1)) map column
   def values = (0 to (columnCount - 1)).map(this(_))
 
-  override def toList = this.map(_ => toRow).toList
+  override def toList: List[RowLike] = this.map(_ => toRow).toList
 
   def toListOfMaps: List[Map[String, _]] = this.map(_ => rowToMap).toList
   def toListOfRows: List[Row] = toList.asInstanceOf[List[Row]]
