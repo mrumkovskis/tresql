@@ -12,12 +12,13 @@ scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynam
   "-language:postfixOps", "-language:implicitConversions")
 
 libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "2.1.5" % "test",
-                            "org.hsqldb" % "hsqldb" % "2.2.8" % "test")
+                            "org.hsqldb" % "hsqldb" % "2.2.8" % "test",
+                            "org.scala-lang" % "scala-reflect" % scalaVersion.value)
 
 libraryDependencies := {
   CrossVersion.partialVersion(scalaVersion.value) match {
     case Some((2, scalaMajor)) if scalaMajor >= 11 =>
-      libraryDependencies.value :+ "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.2"
+      libraryDependencies.value :+ "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.4"
     case _ =>
       libraryDependencies.value
   }
