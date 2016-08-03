@@ -5,6 +5,7 @@ import java.sql.Connection
 import org.tresql._
 import org.tresql.{ Env => env }
 import org.tresql.metadata.JDBCMetaData
+import CoreTypes._
 
 trait IdExprFunc { def getIdExpr(table: String): String }
 trait LogMessage { def get: String }

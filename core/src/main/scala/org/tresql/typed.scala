@@ -3,6 +3,7 @@ package org.tresql
 import sys._
 import scala.reflect.Manifest
 import scala.collection.generic.CanBuildFrom
+import CoreTypes._
 
 trait Typed { this: RowLike =>
 

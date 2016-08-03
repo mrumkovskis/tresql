@@ -2,6 +2,8 @@ package org.tresql
 
 package object dialects {
 
+  import CoreTypes._
+
   object ANSISQLDialect extends Dialect {
     def isDefinedAt(e: Expr) = exec(e)._1
     def apply(e: Expr) = exec(e)._2

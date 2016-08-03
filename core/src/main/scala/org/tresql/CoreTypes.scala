@@ -1,33 +1,6 @@
-package org
+package org.tresql
 
-package object tresql {
-
-  /**
-   *  tresql string interpolator.
-   *  NOTE: If variable reference in tresql string ends with ?
-   *  i.e. variable is optional and it's value is null, it is filtered out of parameters to be
-   *  passed to Query.
-   */
-
-  implicit class Tresql(val sc: StringContext) extends AnyVal {
-    def tresql(params: Any*)(implicit resources: Resources = Env) = {
-      val p = sc.parts
-      var optionalVars = Set[Int]()
-      Query(p.head + p.tail.zipWithIndex.map(t => {
-        if (t._1.trim.startsWith("?")) optionalVars += t._2
-        ":_" + t._2 + t._1
-      }).mkString, params.zipWithIndex.filterNot(t => t._1 == null && (optionalVars contains t._2))
-        .map(t => ("_" + t._2) -> t._1).toMap)
-    }
-  }
-
-  implicit def jdbcResultToTresqlResult(jdbcResult: java.sql.ResultSet) = {
-    val md = jdbcResult.getMetaData
-    new SelectResult(jdbcResult, Vector((1 to md.getColumnCount map {
-      i => Column(i, md.getColumnLabel(i), null)
-    }): _*), Env(Map(), false), "<not available>", Nil, Env.maxResultSize)
-  }
-
+abstract class CoreTypes {
   type Dialect = PartialFunction[Expr, String]
 
   //converters
@@ -168,5 +141,6 @@ package object tresql {
     val a = m.typeArguments
     (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6)), r.typed(7)(a(7)), r.typed(8)(a(8)), r.typed(9)(a(9)), r.typed(10)(a(10)), r.typed(11)(a(11)), r.typed(12)(a(12)), r.typed(13)(a(13)), r.typed(14)(a(14)), r.typed(15)(a(15)), r.typed(16)(a(16)), r.typed(17)(a(17)), r.typed(18)(a(18)), r.typed(19)(a(19)), r.typed(20)(a(20)), r.typed(21)(a(21))).asInstanceOf[T]
   }
-
 }
+
+object CoreTypes extends CoreTypes

@@ -1,6 +1,7 @@
 package org.tresql
 
 import sys._
+import CoreTypes._
 
 /* Environment for expression building and execution */
 class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolean)
