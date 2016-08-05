@@ -3,10 +3,8 @@ package org.tresql
 import sys._
 import scala.reflect.Manifest
 import scala.collection.generic.CanBuildFrom
-import CoreTypes._
 
 trait Typed { this: RowLike =>
-
   def typed[T](columnIndex: Int)(implicit m: Manifest[T]): T = m.toString match {
     case "Int" => int(columnIndex).asInstanceOf[T]
     case "Long" => long(columnIndex).asInstanceOf[T]
@@ -27,7 +25,7 @@ trait Typed { this: RowLike =>
     case "java.io.Reader" => reader(columnIndex).asInstanceOf[T]
     case "java.sql.Blob" => blob(columnIndex).asInstanceOf[T]
     case "java.sql.Clob" => clob(columnIndex).asInstanceOf[T]
-    case x if x.startsWith("scala.Tuple") => typed((convTuple[Product] _).asInstanceOf[Converter[T]], m)
+    case x if x.startsWith("scala.Tuple") => typed((CoreTypes.convTuple[Product] _).asInstanceOf[CoreTypes.Converter[T]], m)
     case x if x.startsWith("scala.collection.immutable.List") && m.typeArguments.size == 1 =>
       result(columnIndex).map(_.typed(0)(m.typeArguments.head)).toList.asInstanceOf[T]
     case x => apply(columnIndex).asInstanceOf[T]
@@ -35,24 +33,24 @@ trait Typed { this: RowLike =>
 
   def typed[T:Manifest](name: String): T
 
-  def typed[T](implicit converter: Converter[T], m: Manifest[T]): T =
+  def typed[T](implicit converter: CoreTypes.Converter[T], m: Manifest[T]): T =
     if (converter != null) converter(this, m) else typed(0).asInstanceOf[T]
 }
 
 trait TypedResult { this: Result =>
-  def head[T](implicit converter: Converter[T], m: Manifest[T]): T = try hasNext match {
+  def head[T](implicit converter: CoreTypes.Converter[T], m: Manifest[T]): T = try hasNext match {
     case true =>
       next
       this.asInstanceOf[RowLike].typed[T]
     case false => throw new NoSuchElementException("No rows in result")
   } finally close
 
-  def headOption[T](implicit converter: Converter[T],
+  def headOption[T](implicit converter: CoreTypes.Converter[T],
       m: Manifest[T]): Option[T] = try Some(head[T]) catch {
     case e: NoSuchElementException => None
   }
 
-  def unique[T](implicit converter: Converter[T],
+  def unique[T](implicit converter: CoreTypes.Converter[T],
     m: Manifest[T]): T = try hasNext match {
     case true =>
       next
@@ -61,7 +59,7 @@ trait TypedResult { this: Result =>
     case false => error("No rows in result")
   } finally close
 
-  def uniqueOption[T](implicit converter: Converter[T],
+  def uniqueOption[T](implicit converter: CoreTypes.Converter[T],
     m: Manifest[T]): Option[T] = try hasNext match {
     case true =>
       next
@@ -126,9 +124,10 @@ trait TypedResult { this: Result =>
       case false => None
     } finally close
 
-  def list[T](implicit converter: Converter[T],
+  def list[T](implicit converter: CoreTypes.Converter[T],
       m: Manifest[T]) = this.map(r => this.asInstanceOf[RowLike].typed[T]).toList
 
+  import CoreTypes._
   //--------------- GENERATED CODE------------------//
   def head[T1, T2](implicit m1: Manifest[T1], m2: Manifest[T2]) = head[(T1, T2)]
   def head[T1, T2, T3](implicit m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3]) = head[(T1, T2, T3)]
@@ -240,20 +239,19 @@ trait TypedResult { this: Result =>
 }
 
 trait TypedQuery {this: Query =>
-
-  def head[T](expr: String, params: Any*)(implicit converter: Converter[T],
+  def head[T](expr: String, params: Any*)(implicit converter: CoreTypes.Converter[T],
       m: scala.reflect.Manifest[T], r: Resources = Env): T = {
     apply(expr, params: _*).head[T]
   }
-  def headOption[T](expr: String, params: Any*)(implicit converter: Converter[T],
+  def headOption[T](expr: String, params: Any*)(implicit converter: CoreTypes.Converter[T],
       m: scala.reflect.Manifest[T], r: Resources = Env): Option[T] = {
     apply(expr, params: _*).headOption[T]
   }
-  def unique[T](expr: String, params: Any*)(implicit converter: Converter[T],
+  def unique[T](expr: String, params: Any*)(implicit converter: CoreTypes.Converter[T],
       m: scala.reflect.Manifest[T], r: Resources = Env): T = {
     apply(expr, params: _*).unique[T]
   }
-  def uniqueOption[T](expr: String, params: Any*)(implicit converter: Converter[T],
+  def uniqueOption[T](expr: String, params: Any*)(implicit converter: CoreTypes.Converter[T],
       m: scala.reflect.Manifest[T], r: Resources = Env): Option[T] = {
     apply(expr, params: _*).uniqueOption[T]
   }
@@ -283,10 +281,10 @@ trait TypedQuery {this: Query =>
     bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
     apply(expr, params: _*).uniqueOptionAsMap[M]
 
-  def list[T](expr: String, params: Any*)(implicit converter: Converter[T],
+  def list[T](expr: String, params: Any*)(implicit converter: CoreTypes.Converter[T],
       m: scala.reflect.Manifest[T], r: Resources = Env) = apply(expr, params: _*).list[T](converter, m)
 
-
+  import CoreTypes._
   //--------------- GENERATED CODE------------------//
   def head[T1, T2](expr: String, params: Any*)(implicit m1: Manifest[T1], m2: Manifest[T2]) = head[(T1, T2)](expr, params: _*)
   def head[T1, T2, T3](expr: String, params: Any*)(implicit m1: Manifest[T1], m2: Manifest[T2], m3: Manifest[T3]) = head[(T1, T2, T3)](expr, params: _*)

@@ -16,7 +16,8 @@ lazy val commonSettings = Seq(
     },
     addCompilerPlugin("org.scalamacros" % "paradise" % paradiseVersion cross CrossVersion.full),
     publishArtifact in Compile := false,
-    publishMavenStyle := true
+    publishMavenStyle := true,
+    sources in (Compile, doc) := Seq.empty
 )
 
 lazy val core = (project in file("core"))
@@ -33,29 +34,31 @@ lazy val core = (project in file("core"))
     })
   .settings(commonSettings: _*)
 
-lazy val macro = (project in file("macro"))
+lazy val macros = (project in file("macro"))
   .dependsOn(core)
   .settings(
     name := "macro"
   )
   .settings(commonSettings: _*)
 
-  val packageScopes = Seq(packageBin, packageSrc)
+val packageScopes = Seq(packageBin, packageSrc)
 
-  val packageProjects = Seq(core, macro)
+val packageProjects = Seq(core, macros)
 
-  val packageMerges = for {
-    project <- packageProjects
-    scope <- packageScopes
-  } yield mappings in(Compile, scope) := (mappings in (Compile, scope)).value ++ (mappings in (project, Compile, scope)).value
+val packageMerges = for {
+  project <- packageProjects
+  scope <- packageScopes
+} yield mappings in(Compile, scope) := (mappings in (Compile, scope)).value ++ (mappings in (project, Compile, scope)).value
 
 
 lazy val tresql = (project in file("."))
-  .dependsOn(core, macro)
-  .aggregate(core, macro)
+  .dependsOn(core, macros)
+  .aggregate(core, macros)
   .settings(commonSettings: _*)
   .settings(packageMerges: _*)
   .settings(
+    sources in (Compile, doc) := (sources in (core, Compile)).value ++ (sources in (macros, Compile)).value,
+
     name := "tresql",
     unmanagedSources in Test <<= (scalaVersion, unmanagedSources in Test) map {
       (v, d) => (if (v.startsWith("2.10")) d else d filterNot (_.getPath endsWith ".java")).get

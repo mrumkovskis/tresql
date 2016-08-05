@@ -1,7 +1,6 @@
 package org.tresql
 
 import sys._
-import CoreTypes._
 
 /* Environment for expression building and execution */
 class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolean)
@@ -87,6 +86,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   }
 
   private[tresql] def nextId(seqName: String): Any = {
+    import CoreTypes._
     //TODO perhaps built expressions can be used to improve performance?
     val id = Query.unique[Any](resources.idExpr(seqName))
     ids(seqName) = id
@@ -106,7 +106,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   //resources methods
   def conn: java.sql.Connection = provider.map(_.env.conn).getOrElse(resources.conn)
   override def metaData = provider.map(_.env.metaData).getOrElse(resources.metaData)
-  override def dialect: Dialect = provider.map(_.env.dialect).getOrElse(resources.dialect)
+  override def dialect: CoreTypes.Dialect = provider.map(_.env.dialect).getOrElse(resources.dialect)
   override def idExpr = provider.map(_.env.idExpr).getOrElse(resources.idExpr)
   override def queryTimeout = provider.map(_.env.queryTimeout).getOrElse(resources.queryTimeout)
   override def maxResultSize = provider.map(_.env.maxResultSize).getOrElse(resources.maxResultSize)
@@ -140,7 +140,7 @@ object Env extends Resources {
   var sharedConn: java.sql.Connection = null
   //meta data object must be thread safe!
   private var _metaData: Option[MetaData] = Some(metadata.JDBCMetaData())
-  private var _dialect: Option[Dialect] = None
+  private var _dialect: Option[CoreTypes.Dialect] = None
   private var _idExpr: Option[String => String] = None
   //available functions
   private var _functions: Option[Any] = None
@@ -174,7 +174,7 @@ object Env extends Resources {
 
   def conn_=(conn: java.sql.Connection) = this.threadConn set conn
   def metaData_=(metaData: MetaData) = this._metaData = Option(metaData)
-  def dialect_=(dialect: Dialect) = this._dialect =
+  def dialect_=(dialect: CoreTypes.Dialect) = this._dialect =
     Option(dialect).map(_.orElse {case e=> e.defaultSQL})
   def idExpr_=(idExpr: String => String) = this._idExpr = Option(idExpr)
   def functions_=(funcs: Any) = {
@@ -211,13 +211,13 @@ trait Resources { self =>
   private case class Resources_(
     val _conn: Option[java.sql.Connection] = None,
     val _metaData: Option[MetaData] = None,
-    val _dialect: Option[Dialect] = None,
+    val _dialect: Option[CoreTypes.Dialect] = None,
     val _idExpr: Option[String => String] = None,
     val _queryTimeout: Option[Int] = None,
     val _maxResultSize: Option[Int] = None) extends Resources {
     override def conn: java.sql.Connection = _conn getOrElse self.conn
     override def metaData: MetaData = _metaData getOrElse self.metaData
-    override def dialect: Dialect = _dialect getOrElse self.dialect
+    override def dialect: CoreTypes.Dialect = _dialect getOrElse self.dialect
     override def idExpr: String => String = _idExpr getOrElse self.idExpr
     override def queryTimeout: Int = _queryTimeout getOrElse self.queryTimeout
     override def maxResultSize: Int = _maxResultSize getOrElse self.maxResultSize
@@ -230,7 +230,7 @@ trait Resources { self =>
 
   def conn: java.sql.Connection
   def metaData: MetaData
-  def dialect: Dialect = null
+  def dialect: CoreTypes.Dialect = null
   def idExpr: String => String = s => "nextval('" + s + "')"
   def queryTimeout = 0
   def maxResultSize = 0
@@ -249,7 +249,7 @@ trait Resources { self =>
   //resource construction convenience methods
   def withConn(conn: java.sql.Connection): Resources = Resources_(_conn = Option(conn))
   def withMetaData(metaData: MetaData): Resources = Resources_(_metaData = Option(metaData))
-  def withDialect(dialect: Dialect): Resources = Resources_(_dialect = Option(dialect))
+  def withDialect(dialect: CoreTypes.Dialect): Resources = Resources_(_dialect = Option(dialect))
   def withIdExpr(idExpr: String => String): Resources = Resources_(_idExpr = Option(idExpr))
   def withQueryTimeout(queryTimeout: Int): Resources = Resources_(_queryTimeout = Option(queryTimeout))
   def withMaxResultSize(maxResultSize: Int): Resources = Resources_(_maxResultSize = Option(maxResultSize))
