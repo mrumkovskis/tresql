@@ -5,7 +5,6 @@ import java.sql.Connection
 import org.tresql._
 import org.tresql.{ Env => env }
 import org.tresql.metadata.JDBCMetaData
-import CoreTypes._
 
 trait IdExprFunc { def getIdExpr(table: String): String }
 trait LogMessage { def get: String }
@@ -19,6 +18,8 @@ object Metadata {
   def JDBC(defaultSchema: String) = JDBCMetaData(defaultSchema)
 }
 object Env {
+  import CoreTypes._
+
   //def apply(params: Map[String, Any], reusableExpr: Boolean): Env
   def getCache: Cache = env.cache.orNull
   def setCache(c: Cache) { env.cache = c }
