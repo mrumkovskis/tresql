@@ -9,7 +9,7 @@ trait Scope {
   def column(col: String): Option[Col]
 }
 
-trait QueryTyper extends QueryParsers with Scope {
+trait QueryTyper extends QueryParsers with ExpTransformer with Scope {
   trait Def {
     def exp: Exp
     def name: String
