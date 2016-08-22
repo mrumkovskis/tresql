@@ -14,10 +14,10 @@ lazy val commonSettings = Seq(
     else
       Some("releases" at nexus + "service/local/staging/deploy/maven2")
     },
-    addCompilerPlugin("org.scalamacros" % "paradise" % paradiseVersion cross CrossVersion.full),
-    publishArtifact in Compile := false,
-    publishMavenStyle := true,
-    sources in (Compile, doc) := Seq.empty
+  addCompilerPlugin("org.scalamacros" % "paradise" % paradiseVersion cross CrossVersion.full),
+  publishArtifact in Compile := false,
+  publishMavenStyle := true,
+  sources in (Compile, doc) := Seq.empty
 )
 
 lazy val core = (project in file("core"))

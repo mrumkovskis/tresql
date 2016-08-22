@@ -85,7 +85,7 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
   override def toString = getClass.toString + ":" + (columns.mkString(","))
 }
 
-case class SingleValueResult(res: Any) extends Result {
+case class SingleValueResult[T](res: T) extends Result {
   var n = true
   val row = new Row(List(res))
   val cols = List(Column(-1, "value", null))
@@ -94,7 +94,7 @@ case class SingleValueResult(res: Any) extends Result {
   def columnCount = 1
   def column(idx: Int) = cols(idx)
   def apply(idx: Int) = row(idx)
-  def typed[T:Manifest](name: String) = this(name).asInstanceOf[T]
+  def typed[T: Manifest](name: String) = this(name).asInstanceOf[T]
   def apply(name: String) = if (name == "value") res else sys.error("column not found: " + name)
   override def toString = s"SingleValueResult = $res"
 }
