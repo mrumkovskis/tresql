@@ -22,9 +22,8 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope {
     def name: String
     def typ: Manifest[T]
   }
-  case class ColumnDef[T](name: String, exp: Exp)(implicit t: Manifest[T]) extends Def[T] {
-    val typ = t
-  }
+  case class ColumnDef[T](name: String, exp: Exp)(implicit val typ: Manifest[T]) extends Def[T]
+
   case class TableDef(exp: Ident) extends Def[TableDef] {
     val typ: Manifest[TableDef] = ManifestFactory.classType(this.getClass)
     def name = exp.ident mkString "."
@@ -42,9 +41,7 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope {
     def column(col: String) = None
     def procedure(procedure: String) = None
   }
-  case class FunDef[T](name: String, exp: Exp)(implicit t: Manifest[T]) extends Def[T] {
-    val typ = t
-  }
+  case class FunDef[T](name: String, exp: Exp)(implicit val typ: Manifest[T]) extends Def[T]
 
   def table(table: String) = metadata.tableOption(table)
   def column(col: String) = metadata.colOption(col)
