@@ -28,19 +28,34 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope {
     val typ: Manifest[TableDef] = ManifestFactory.classType(this.getClass)
     def name = exp.ident mkString "."
   }
+
+  trait SelectDefBase extends Scope with Def[SelectDefBase] {
+    def cols: List[ColumnDef[_]]
+    val typ: Manifest[SelectDefBase] = ManifestFactory.classType(this.getClass)
+  }
   case class SelectDef(
     name: String,
     cols: List[ColumnDef[_]],
     tables: List[Def[_]],
     exp: Exp,
-    parent: Scope) extends Scope with Def[SelectDef] {
+    parent: Scope) extends SelectDefBase {
 
-    val typ: Manifest[SelectDef] = ManifestFactory.classType(this.getClass)
-    def check = true
     def table(table: String) = None
     def column(col: String) = None
     def procedure(procedure: String) = None
   }
+  case class BinSelectDef(
+    name: String,
+    leftOperand: SelectDefBase,
+    rightOperand: SelectDefBase,
+    exp: Exp,
+    parent: Scope) extends SelectDefBase {
+    val cols = Nil
+    def table(table: String) = None
+    def column(col: String) = None
+    def procedure(procedure: String) = None
+  }
+
   case class FunDef[T](name: String, exp: Exp)(implicit val typ: Manifest[T]) extends Def[T]
 
   def table(table: String) = metadata.tableOption(table)
