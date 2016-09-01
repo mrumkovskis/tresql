@@ -2,9 +2,10 @@ package org.tresql
 
 import java.util.NoSuchElementException
 import sys._
+import scala.reflect.Manifest
 
 /** Implementation of meta data must be thread safe */
-trait MetaData {
+trait MetaData extends metadata.TypeMapper {
   import metadata._
   def join(table1: String, table2: String): (key_, key_) = {
     val t1 = table(table1); val t2 = table(table2)
@@ -41,7 +42,7 @@ trait MetaData {
           importedKeyCols.flatMap(l => refsPk.find(_._2 == keyCol).map(_._1 :: l))
       } map (_.reverse)
     }
-    
+
     refs.groupBy(importedPkKeyCols(_, key)) match {
       case m if m.size == 1 && m.head._1.isDefined => List(refs.minBy(_.cols.size))
       case _ => refs
@@ -94,6 +95,7 @@ package metadata {
       })
     }
   }
+  //case class Col[T](name: String, nullable: Boolean, sqlType: Int, scalaType: Manifest[T])
   case class Col(name: String, nullable: Boolean)
   case class Key(cols: List[String])
   case class Ref(cols: List[String], refCols: List[String])
