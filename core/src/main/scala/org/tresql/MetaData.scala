@@ -49,11 +49,11 @@ trait MetaData extends metadata.TypeMapper {
     }
   }
 
-  def col(table: String, col: String): Col = this.table(table).col(col)
-  def colOption(table: String, col: String): Option[Col] = this.tableOption(table).flatMap(_.colOption(col))
-  def col(col: String): Col =
+  def col(table: String, col: String): Col[_] = this.table(table).col(col)
+  def colOption(table: String, col: String): Option[Col[_]] = this.tableOption(table).flatMap(_.colOption(col))
+  def col(col: String): Col[_] =
     table(col.substring(0, col.lastIndexOf('.'))).col(col.substring(col.lastIndexOf('.') + 1))
-  def colOption(col: String): Option[Col] = tableOption(col.substring(0, col.lastIndexOf('.'))).flatMap(
+  def colOption(col: String): Option[Col[_]] = tableOption(col.substring(0, col.lastIndexOf('.'))).flatMap(
     _.colOption(col.substring(col.lastIndexOf('.') + 1)))
 
   def table(name: String): Table
@@ -64,9 +64,9 @@ trait MetaData extends metadata.TypeMapper {
 
 //TODO pk col storing together with ref col (for multi col key secure support)?
 package metadata {
-  case class Table(name: String, cols: List[Col], key: Key,
+  case class Table(name: String, cols: List[Col[_]], key: Key,
       rfs: Map[String, List[Ref]]) {
-    private val colMap = cols map (c => c.name -> c) toMap
+    private val colMap: Map[String, Col[_]] = cols map (c => c.name -> c) toMap
     val refTable: Map[List[String], String] = rfs.flatMap(t => t._2.map(_.cols -> t._1))
     def col(name: String) = colMap(name)
     def colOption(name: String) = colMap.get(name)
@@ -79,8 +79,12 @@ package metadata {
     def apply(t: Map[String, Any]): Table = {
       Table(t("name").toString.toLowerCase, t("cols") match {
         case l: List[Map[String, String]] => l map { c =>
-          Col(c("name").toString.toLowerCase,
-            c("nullable").asInstanceOf[Boolean])
+          Col(
+            c("name").toString.toLowerCase,
+            c("nullable").asInstanceOf[Boolean],
+            c("sql-type").asInstanceOf[Int],
+            c("scala-type").asInstanceOf[Manifest[_]]
+          )
         }
       }, t("key") match { case l: List[String] => Key(l map (_.toLowerCase)) }, t("refs") match {
         case l: List[Map[String, Any]] => (l map { r =>
@@ -95,8 +99,7 @@ package metadata {
       })
     }
   }
-  //case class Col[T](name: String, nullable: Boolean, sqlType: Int, scalaType: Manifest[T])
-  case class Col(name: String, nullable: Boolean)
+  case class Col[T](name: String, nullable: Boolean, sqlType: Int, scalaType: Manifest[T])
   case class Key(cols: List[String])
   case class Ref(cols: List[String], refCols: List[String])
   case class Procedure(name: String, comments: String, procType: Int,

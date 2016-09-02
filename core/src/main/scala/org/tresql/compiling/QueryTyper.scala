@@ -8,7 +8,7 @@ import scala.reflect.ManifestFactory
 trait Scope {
   def parent: Scope
   def table(table: String): Option[Table]
-  def column(col: String): Option[Col]
+  def column(col: String): Option[Col[_]]
   def procedure(procedure: String): Option[Procedure]
 }
 trait CompiledResult[T <: RowLike] extends Result with Iterator[T] {

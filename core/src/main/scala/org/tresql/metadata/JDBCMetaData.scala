@@ -141,15 +141,15 @@ trait JDBCMetaData extends MetaData {
     import scala.collection.mutable.ListBuffer
     val l: ListBuffer[Map[String, Any]] = ListBuffer()
     while (rs.next) {
-      val name = rs.getString("COLUMN_NAME")
-      val typeInt = rs.getInt("DATA_TYPE")
-      val typeName = rs.getString("TYPE_NAME")
-      val size = rs.getInt("COLUMN_SIZE")
-      val decDig = rs.getInt("DECIMAL_DIGITS")
-      val nullable = rs.getInt("NULLABLE") == DatabaseMetaData.columnNullable
-      val comments = rs.getString("REMARKS")
-      l += Map("name" -> name, "sqlType" -> typeInt, "typeName" -> typeName, "size" -> size,
-          "decimalDigits" -> decDig, "nullable" -> nullable, "comments" -> comments)
+      l += Map(
+        "name" -> rs.getString("COLUMN_NAME"),
+        "sql-type" -> rs.getInt("DATA_TYPE"),
+        "scala-type" -> sql_scala_type_map(rs.getInt("DATA_TYPE")),
+        "type-name" -> rs.getString("TYPE_NAME"),
+        "size" -> rs.getInt("COLUMN_SIZE"),
+        "decimalDigits" -> rs.getInt("DECIMAL_DIGITS"),
+        "nullable" -> (rs.getInt("NULLABLE") == DatabaseMetaData.columnNullable),
+        "comments" -> rs.getString("REMARKS"))
     }
     rs.close
     l.toList
