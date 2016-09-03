@@ -35,7 +35,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       offset
   //
 
-  sealed trait Exp {
+  trait Exp {
     def tresql: String
   }
 

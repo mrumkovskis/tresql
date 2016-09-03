@@ -15,28 +15,35 @@ trait CompiledResult[T <: RowLike] extends Result with Iterator[T] {
   override def toList: List[T] = Nil
 }
 
-trait QueryTyper extends QueryParsers with ExpTransformer with Scope {
+trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper =>
+
+  var nameIdx = 0
   val metadata = Env.metaData
-  trait Def[T] {
+
+  trait TypedExp[T] extends Exp {
     def exp: Exp
-    def name: String
     def typ: Manifest[T]
-  }
-  case class ColumnDef[T](name: String, exp: Exp)(implicit val typ: Manifest[T]) extends Def[T]
-
-  case class TableDef(exp: Ident) extends Def[TableDef] {
-    val typ: Manifest[TableDef] = ManifestFactory.classType(this.getClass)
-    def name = exp.ident mkString "."
+    def tresql = exp.tresql
   }
 
-  trait SelectDefBase extends Scope with Def[SelectDefBase] {
-    def cols: List[ColumnDef[_]]
+  trait ColumnDefBase[T] extends TypedExp[T] {
+    def name: String
+  }
+  case class ColumnDef[T](name: String, exp: Exp)(implicit val typ: Manifest[T]) extends ColumnDefBase[T]
+  case class ChildSelectDef(name: String, exp: SelectDefBase) extends ColumnDefBase[ChildSelectDef] {
+    val typ: Manifest[ChildSelectDef] = ManifestFactory.classType(this.getClass)
+  }
+  case class FunDef[T](name: String, exp: Fun)(implicit val typ: Manifest[T]) extends TypedExp[T]
+
+  case class TableDef(name: String, exp: Exp)
+
+  trait SelectDefBase extends Scope with TypedExp[SelectDefBase] {
+    def cols: List[ColumnDefBase[_]]
     val typ: Manifest[SelectDefBase] = ManifestFactory.classType(this.getClass)
   }
   case class SelectDef(
-    name: String,
-    cols: List[ColumnDef[_]],
-    tables: List[Def[_]],
+    cols: List[ColumnDefBase[_]],
+    tables: List[TableDef],
     exp: Exp,
     parent: Scope) extends SelectDefBase {
 
@@ -45,20 +52,30 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope {
     def procedure(procedure: String) = None
   }
   case class BinSelectDef(
-    name: String,
     leftOperand: SelectDefBase,
     rightOperand: SelectDefBase,
     exp: Exp,
     parent: Scope) extends SelectDefBase {
+
     val cols = Nil
     def table(table: String) = None
     def column(col: String) = None
     def procedure(procedure: String) = None
   }
 
-  case class FunDef[T](name: String, exp: Exp)(implicit val typ: Manifest[T]) extends Def[T]
-
   def table(table: String) = metadata.tableOption(table)
   def column(col: String) = metadata.colOption(col)
   def procedure(procedure: String) = None
+  def parent = null
+
+  def buildTypedDef(exp: Exp) = {
+    val typedExp = transform(exp, {
+      case f: Fun => f
+      case c: Col => c
+      case o: Obj => o
+      case q: Query => q
+      case b: BinOp => b
+      case c @ UnOp("|", _) => c
+    })
+  }
 }
