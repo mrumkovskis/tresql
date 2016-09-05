@@ -58,8 +58,8 @@ trait MetaData extends metadata.TypeMapper {
 
   def table(name: String): Table
   def tableOption(name: String): Option[Table]
-  def procedure(name: String): Procedure
-  def procedureOption(name: String): Option[Procedure]
+  def procedure(name: String): Procedure[_]
+  def procedureOption(name: String): Option[Procedure[_]]
 }
 
 //TODO pk col storing together with ref col (for multi col key secure support)?
@@ -102,9 +102,10 @@ package metadata {
   case class Col[T](name: String, nullable: Boolean, sqlType: Int, scalaType: Manifest[T])
   case class Key(cols: List[String])
   case class Ref(cols: List[String], refCols: List[String])
-  case class Procedure(name: String, comments: String, procType: Int,
-    pars: List[Par], returnSqlType: Int, returnTypeName: String)
-  case class Par(name: String, comments: String, parType: Int, sqlType: Int, typeName: String)
+  case class Procedure[T](name: String, comments: String, procType: Int,
+    pars: List[Par[_]], returnSqlType: Int, returnTypeName: String, scalaReturnType: Manifest[T])
+  case class Par[T](name: String, comments: String, parType: Int, sqlType: Int, typeName: String,
+    scalaType: Manifest[T])
   trait key_ { def cols: List[String] }
   case class uk(cols: List[String]) extends key_
   case class fk(cols: List[String]) extends key_

@@ -12,7 +12,7 @@ import java.sql.DatabaseMetaData
 trait JDBCMetaData extends MetaData {
 
   private val tableCache = new java.util.concurrent.ConcurrentHashMap[String, Table]
-  private val procedureCache = new java.util.concurrent.ConcurrentHashMap[String, Procedure]
+  private val procedureCache = new java.util.concurrent.ConcurrentHashMap[String, Procedure[_]]
 
   def defaultSchema: String = null
   def resources: Resources = Env
@@ -70,7 +70,7 @@ trait JDBCMetaData extends MetaData {
       None
     }
   }
-  def procedure(name: String) = {
+  def procedure(name: String): Procedure[_] = {
     import org.tresql.metadata._
     val conn = resources.conn
     try {
@@ -104,7 +104,7 @@ trait JDBCMetaData extends MetaData {
           }
           val procedureType = rs.getInt("PROCEDURE_TYPE")
           val remarks = rs.getString("REMARKS")
-          var pars = List[Par]()
+          var pars = List[Par[_]]()
           val parsRs = dmd.getProcedureColumns(null, schema, procedureName, null)
           import parsRs._
           while(next) {
@@ -112,15 +112,16 @@ trait JDBCMetaData extends MetaData {
                 getString("REMARKS"),
                 getInt("COLUMN_TYPE"),
                 getInt("DATA_TYPE"),
-                getString("TYPE_NAME"))::pars
+                getString("TYPE_NAME"),
+                sql_scala_type_map(getInt("DATA_TYPE")))::pars
           }
           parsRs.close
           val returnPar = pars.filter(_.parType == DatabaseMetaData.procedureColumnReturn) match {
-            case par::Nil => (par.sqlType, par.typeName)
-            case _ => (-1, null)
+            case par::Nil => (par.sqlType, par.typeName, par.scalaType)
+            case _ => (-1, null, null)
           }
           procedureCache += (name -> Procedure(procedureName.toLowerCase, remarks, procedureType,
-              pars.reverse, returnPar._1, returnPar._2))
+              pars.reverse, returnPar._1, returnPar._2, returnPar._3))
         }
         rs.close
         procedureCache(name)

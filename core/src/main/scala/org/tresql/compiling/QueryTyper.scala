@@ -9,7 +9,7 @@ trait Scope {
   def parent: Scope
   def table(table: String): Option[Table]
   def column(col: String): Option[Col[_]]
-  def procedure(procedure: String): Option[Procedure]
+  def procedure(procedure: String): Option[Procedure[_]]
 }
 trait CompiledResult[T <: RowLike] extends Result with Iterator[T] {
   override def toList: List[T] = Nil
@@ -68,14 +68,20 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
   def procedure(procedure: String) = None
   def parent = null
 
+
   def buildTypedDef(exp: Exp) = {
-    val typedExp = transform(exp, {
+    trait Ctx
+    object TablesCtx extends Ctx
+    object ColsCtx extends Ctx
+    val ctx = scala.collection.mutable.Stack[Ctx](TablesCtx)
+    val builder: PartialFunction[Exp, Exp] = {
       case f: Fun => f
       case c: Col => c
       case o: Obj => o
       case q: Query => q
       case b: BinOp => b
       case c @ UnOp("|", _) => c
-    })
+    }
+    val typedExp = transform(exp, builder)
   }
 }
