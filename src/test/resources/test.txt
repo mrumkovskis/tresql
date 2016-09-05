@@ -128,6 +128,8 @@ emp/dept[10] {dname || ',' || ename name}#(1) --> [["ACCOUNTING,CLARK"], ["ACCOU
 emp[ename ~~ ?]{ename, (dept[?]{dname}) dname, (dept[?]{dname}) dname1} --> 'KIN%; 10; 20 --> [["KING", "ACCOUNTING", "RESEARCH"]]
 dept[?] {dname, (emp [emp.deptno = dept.deptno] {count(*)}) emp_count, |emp {ename}#(1)} --> 10 --> [["ACCOUNTING", 3, [["CLARK"], ["KING"], ["MILLER"]]]]
 dept[?] {dname, |emp {ename}#(1), (emp [emp.deptno = dept.deptno] {count(*)}) emp_count} --> 10 --> [["ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]], 3]]
+//workaround for summing select values in column clause i.e. - {emp{count(*)} + dept{count(*)}}
+({(emp{count(*)}) a, (dept{count(*)}) b}) f {f.a + f.b} --> [[18]]
 
 //order
 dept/emp[sal >= losal & sal <= hisal]salgrade {deptno, grade, empno, sal}#(deptno, grade, ~sal) --> [[10, 2, 7934, 1300.00], [10, 4, 7782, 2450.00], [10, 5, 7839, 5000.00], [20, 1, 7876, 1100.00], [20, 1, 7369, 800.00], [20, 4, 7788, 3000.00], [20, 4, 7902, 3000.00], [20, 4, 7566, 2975.00], [30, 1, 7900, 950.00], [30, 2, 7521, 1250.00], [30, 2, 7654, 1250.00], [30, 3, 7499, 1600.00], [30, 3, 7844, 1500.00], [30, 4, 7698, 2850.00]]
