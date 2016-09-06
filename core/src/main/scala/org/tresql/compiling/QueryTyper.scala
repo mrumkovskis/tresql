@@ -97,7 +97,7 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
           case Obj(Ident(name), _, _, _, _) => TableDef(name mkString ".", no)
           case _ => sys.error(s"Alias missing for from clause select: ${o.tresql}")
         }
-      case o: Obj if ctx.head == BodyCtx => o
+      case o: Obj if ctx.head == BodyCtx => o.copy(obj = builder(o.obj), join = builder(o.join).asInstanceOf[Join])
       case q: Query => q
       case b: BinOp => b
       case c @ UnOp("|", _) if ctx.head == ColsCtx => c
