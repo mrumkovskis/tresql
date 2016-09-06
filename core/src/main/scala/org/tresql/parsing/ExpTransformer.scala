@@ -3,9 +3,8 @@ package org.tresql.parsing
 trait ExpTransformer { this: QueryParsers =>
 
   def transform(exp: Exp, transformer: PartialFunction[Exp, Exp]): Exp = {
-    var transform_traverse: PartialFunction[Exp, Exp] = null
     def tr(x: Any): Any = x match {case e: Exp => transform_traverse(e) case l: List[_] => l map tr case _ => x}
-    transform_traverse = transformer orElse {
+    lazy val transform_traverse: PartialFunction[Exp, Exp] = transformer orElse {
       case e: Ident => e
       case e: Id => e
       case e: IdRef => e
@@ -19,7 +18,7 @@ trait ExpTransformer { this: QueryParsers =>
       case BinOp(o, lop, rop) => BinOp(o, tr(lop), tr(rop))
       case TerOp(lop, op1, mop, op2, rop) => TerOp(tr(lop), op1, tr(mop), op2, tr(rop))
       case In(lop, rop, not) => In(tr(lop), rop map tr, not)
-      case Obj(t, a, j, o, n) => Obj(tr(t), a, tr(j).asInstanceOf[Join], o, n)
+      case Obj(t, a, j, o, n) => Obj(transform_traverse(t), a, tr(j).asInstanceOf[Join], o, n)
       case Join(d, j, n) => Join(d, tr(j), n)
       case Col(c, a, t) => Col(tr(c), a, t)
       case Cols(d, cols) => Cols(d, cols map (tr(_).asInstanceOf[Col]))

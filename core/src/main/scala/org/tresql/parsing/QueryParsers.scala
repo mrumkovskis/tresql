@@ -91,10 +91,10 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   val NoJoin = Join(false, null, true)
   val DefaultJoin = Join(true, null, false)
 
-  case class Obj(obj: Any, alias: String, join: Join, outerJoin: String, nullable: Boolean = false)
+  case class Obj(obj: Exp, alias: String, join: Join, outerJoin: String, nullable: Boolean = false)
       extends Exp {
     def tresql = (if (join != null) join.tresql else "") + (if (outerJoin == "r") "?" else "") +
-      any2tresql(obj) + (if (outerJoin == "l") "?" else if (outerJoin == "i") "!" else "") +
+      obj.tresql + (if (outerJoin == "l") "?" else if (outerJoin == "i") "!" else "") +
       (if (alias != null) " " + alias else "")
   }
   case class Col(col: Any, alias: String, typ: String) extends Exp {
