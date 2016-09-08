@@ -54,7 +54,9 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
     exp: BinOp,
     parent: Scope) extends SelectDefBase {
 
-    val cols = Nil
+    assert (leftOperand.cols.size != rightOperand.cols.size,
+      s"Column count do not match!")
+    val cols = leftOperand.cols
     def table(table: String) = None
     def column(col: String) = None
     def procedure(procedure: String) = None
@@ -120,7 +122,12 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
         SelectDef(cols, tables,
           q.copy(filter = filter, group = grp, order = ord, limit = limit, offset = offset),
           null)
-      case b: BinOp => b
+      case b: BinOp =>
+        (tr(b.lop), tr(b.rop)) match {
+          case (lop: SelectDefBase, rop: SelectDefBase) =>
+            BinSelectDef(lop, rop, b.copy(lop = lop, rop = rop), null)
+          case (lop, rop) => b.copy(lop = lop, rop = rop)
+        }
       case UnOp("|", o: Exp) if ctx.head == ColsCtx => ChildDef(builder(o))
     }
     transform(exp, builder)
