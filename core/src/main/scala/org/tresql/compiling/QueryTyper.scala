@@ -50,9 +50,12 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
       assert(duplicates.size == 0, s"Duplicate table names: ${duplicates.mkString(", ")}")
     }
 
-    def table(table: String) = None//tables.find(_.name == table) orElse parent.table(table)
+    def table(table: String) = tables.find(_.name == table).flatMap {
+      case TableDef(_, Obj(Ident(name), _, _, _, _)) => parent.table(name mkString ".")
+      case TableDef(_, s: SelectDefBase) => null //todo return table based on columns
+    } orElse parent.table(table)
     def column(col: String) = None
-    def procedure(procedure: String) = None
+    def procedure(procedure: String) = parent.procedure(procedure)
   }
   case class BinSelectDef(
     leftOperand: SelectDefBase,
@@ -89,7 +92,7 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
       }.getOrElse(sys.error(s"Unknown function: ${f.name}"))
       case c: Col =>
         val alias = if (c.alias != null) c.alias else c.col match {
-          case Obj(Ident(List(name)), _, _, _, _) => name mkString "."
+          case Obj(Ident(name), _, _, _, _) => name mkString "."
           case _ => null
         }
         ColumnDef(alias, c.copy(col = tr(c.col)))(
