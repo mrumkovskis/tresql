@@ -44,7 +44,13 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
     exp: Query,
     parent: Scope) extends SelectDefBase {
 
-    def table(table: String) = None
+    //check for duplicating tables
+    {
+      val duplicates = tables.groupBy(_.name).filter(_._2.size > 1).map(_._1)
+      assert(duplicates.size == 0, s"Duplicate table names: ${duplicates.mkString(", ")}")
+    }
+
+    def table(table: String) = None//tables.find(_.name == table) orElse parent.table(table)
     def column(col: String) = None
     def procedure(procedure: String) = None
   }
@@ -55,7 +61,7 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
     parent: Scope) extends SelectDefBase {
 
     assert (leftOperand.cols.size != rightOperand.cols.size,
-      s"Column count do not match!")
+      s"Column count do not match ${leftOperand.cols.size} != ${rightOperand.cols.size}!")
     val cols = leftOperand.cols
     def table(table: String) = None
     def column(col: String) = None
@@ -77,13 +83,13 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
     val ctx = scala.collection.mutable.Stack[Ctx](QueryCtx)
 
     def tr(x: Any): Any = x match {case e: Exp => builder(e) case _ => x} //helper function
-    lazy val builder: PartialFunction[Exp, Exp] = {
+    lazy val builder: PartialFunction[Exp, Exp] = transformFunction {
       case f: Fun => procedure(f.name).map { p =>
         FunDef(p.name, f.copy(parameters = f.parameters map tr))(p.scalaReturnType)
       }.getOrElse(sys.error(s"Unknown function: ${f.name}"))
       case c: Col =>
         val alias = if (c.alias != null) c.alias else c.col match {
-          case Obj(Ident(name), _, _, _, _) => name mkString "."
+          case Obj(Ident(List(name)), _, _, _, _) => name mkString "."
           case _ => null
         }
         ColumnDef(alias, c.copy(col = tr(c.col)))(
@@ -99,7 +105,7 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
         val tables = q.tables map { table =>
           val newTable = builder(table.obj)
           ctx push BodyCtx
-          val join = builder(table.join).asInstanceOf[Join]
+          val join = tr(table.join).asInstanceOf[Join]
           ctx.pop
           val name = Option(table.alias).getOrElse(table match {
             case Obj(Ident(name), _, _, _, _) => name mkString "."
@@ -109,7 +115,7 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
         }
         ctx.pop
         ctx push ColsCtx
-        val cols = (q.cols map builder).asInstanceOf[List[ColumnDef[_]]]
+        val cols = if (q.cols != null) (q.cols map builder).asInstanceOf[List[ColumnDef[_]]] else null
         ctx.pop
         ctx push BodyCtx
         val (filter, grp, ord, limit, offset) =
@@ -130,6 +136,16 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
         }
       case UnOp("|", o: Exp) if ctx.head == ColsCtx => ChildDef(builder(o))
     }
-    transform(exp, builder)
+    builder(exp)
   }
+
+  def parseExp(expr: String): Any = try {
+    intermediateResults.get.clear
+    phrase(exprList)(new scala.util.parsing.input.CharSequenceReader(expr)) match {
+      case Success(r, _) => r
+      case x => sys.error(x.toString)
+    }
+  } finally intermediateResults.get.clear
+
+
 }
