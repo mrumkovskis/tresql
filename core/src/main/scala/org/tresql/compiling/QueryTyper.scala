@@ -159,7 +159,6 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
     def tr(x: Any): Any = x match {case e: Exp @unchecked => scoper(e) case _ => x} //helper function
     lazy val scoper: PartialFunction[Exp, Exp] = transformer {
       case sd: SelectDef =>
-        println("\n\nIt is!\n\n")
         val t = (sd.tables map scoper).asInstanceOf[List[TableDef]]
         scope_stack push sd
         val c = (sd.cols map scoper).asInstanceOf[List[ColDef[_]]]
