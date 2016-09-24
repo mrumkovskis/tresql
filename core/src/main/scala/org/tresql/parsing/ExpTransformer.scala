@@ -2,9 +2,10 @@ package org.tresql.parsing
 
 trait ExpTransformer { this: QueryParsers =>
 
-  def transformFunction(transformer: PartialFunction[Exp, Exp]) = {
+  def transformer(fun: PartialFunction[Exp, Exp]): PartialFunction[Exp, Exp] = {
+    lazy val transform_traverse = fun orElse traverse
     def tr(x: Any): Any = x match {case e: Exp => transform_traverse(e) case l: List[_] => l map tr case _ => x}
-    lazy val transform_traverse: PartialFunction[Exp, Exp] = transformer orElse {
+    lazy val traverse: PartialFunction[Exp, Exp] = {
       case e: Ident => e
       case e: Id => e
       case e: IdRef => e
@@ -40,10 +41,6 @@ trait ExpTransformer { this: QueryParsers =>
       case x: Exp => sys.error("Unknown expression: " + x)
     }
     transform_traverse
-  }
-
-  def transform(exp: Exp, transformer: PartialFunction[Exp, Exp]): Exp = {
-    transformFunction(transformer)(exp)
   }
 
   def extract[T](exp: Exp, extractor: PartialFunction[Any, T]): List[T] = {

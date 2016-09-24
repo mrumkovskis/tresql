@@ -18,10 +18,10 @@ object QueryParser extends parsing.QueryParsers with parsing.ExpTransformer {
 
   def transformTresql(tresql: String, transformer: PartialFunction[Exp, Exp]): String =
     parseExp(tresql) match {
-      case exp: Exp => transform(exp, transformer) tresql
+      case exp: Exp => this.transformer(transformer)(exp) tresql
       case _ => tresql
     }
 
   def extractFrom[T](exp: String, extractor: PartialFunction[Any, T]): List[T] =
-    extract(parseExp(exp).asInstanceOf[Exp], extractor)  
+    extract(parseExp(exp).asInstanceOf[Exp], extractor)
 }
