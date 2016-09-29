@@ -696,7 +696,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       if (ctxStack.head == QUERY_CTX && this.tableDefs == Nil) this.tableDefs = defs(tablesAndAliases._1)
       val filter = if (q.filter == null) null else buildFilter(tablesAndAliases._1.last, q.filter.filters)
       val cols = buildCols(q.cols)
-      val distinct = q.distinct
+      val distinct = q.cols != null && q.cols.distinct
       val group = buildInternal(q.group, GROUP_CTX)
       val order = buildInternal(q.order, ORD_CTX)
       val offset = buildInternal(q.offset, LIMIT_CTX)
@@ -752,7 +752,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       if (ctxStack.head == WHERE_CTX && q.filter.filters != Nil && sel.filter == null) null else sel
     }
     def buildSelectFromObj(o: Obj) =
-      buildSelect(QueryParser.Query(List(o), null, null, false, null, null, null, null))
+      buildSelect(QueryParser.Query(List(o), null, null, null, null, null, null))
     //build tables, set nullable flag for tables right to default join or foreign key shortcut join,
     //which is used for implicit left outer join, create aliases map
     def buildTables(tables: List[Obj]) = {
@@ -801,14 +801,14 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
       case o => error("unsupported column definition at this place: " + o)
     }
-    def buildCols(cols: List[Col]) = {
+    def buildCols(cols: Cols) = {
       //reset all cols flags
       this.identAll = false
       this.allCols = false
       if (cols == null)
         List(ColExpr(AllExpr(), null, null, Some(false)))
       else {
-        val colExprs = cols.map(buildInternal(_, COL_CTX).asInstanceOf[ColExpr])
+        val colExprs = cols.cols.map(buildInternal(_, COL_CTX).asInstanceOf[ColExpr])
         var aliases = colExprs flatMap {
           case ColExpr(_, a, _, _, _) if a != null => List(a)
           case ColExpr(IdentExpr(i), null, _, _, _) => List(i.last)

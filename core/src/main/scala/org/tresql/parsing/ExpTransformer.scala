@@ -25,9 +25,9 @@ trait ExpTransformer { this: QueryParsers =>
       case Cols(d, cols) => Cols(d, cols map (tr(_).asInstanceOf[Col]))
       case Grp(cols, hv) => Grp(cols map tr, tr(hv))
       case Ord(cols) => Ord(cols map (c=> (c._1, tr(c._2), c._3)))
-      case Query(objs, filters, cols, d, gr, ord, off, lim) =>
+      case Query(objs, filters, cols, gr, ord, off, lim) =>
         Query(objs map (tr(_).asInstanceOf[Obj]), tr(filters).asInstanceOf[Filters],
-            cols map (tr(_).asInstanceOf[Col]), d, tr(gr).asInstanceOf[Grp], tr(ord).asInstanceOf[Ord],
+            tr(cols).asInstanceOf[Cols], tr(gr).asInstanceOf[Grp], tr(ord).asInstanceOf[Ord],
             tr(off), tr(lim))
       case Insert(t, a, cols, vals) => Insert(tr(t).asInstanceOf[Ident], a,
           cols map (tr(_).asInstanceOf[Col]), tr(vals))
@@ -63,7 +63,7 @@ trait ExpTransformer { this: QueryParsers =>
       case Grp(cols, hv) =>
         extract_collect_traverse(cols); extract_collect_traverse(hv)
       case Ord(cols) => cols.foreach(c => extract_collect_traverse(c._2))
-      case Query(objs, filters, cols, _, gr, ord, off, lim) =>
+      case Query(objs, filters, cols, gr, ord, off, lim) =>
         extract_collect_traverse(objs)
         extract_collect_traverse(filters)
         extract_collect_traverse(cols)

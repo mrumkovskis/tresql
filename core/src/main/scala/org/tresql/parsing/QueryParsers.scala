@@ -102,7 +102,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       (if (alias != null) " " + alias else "")
   }
   case class Cols(distinct: Boolean, cols: List[Col]) extends Exp {
-    def tresql = ???
+    def tresql = (if (distinct) "#" else "") + cols.map(_.tresql).mkString("{", ",", "}")
   }
   case class Grp(cols: List[Any], having: Any) extends Exp {
     def tresql = "(" + cols.map(any2tresql).mkString(",") + ")" +
@@ -113,11 +113,11 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     def tresql = "#(" + cols.map(c => (if (c._1 == Null) "null " else "") +
       any2tresql(c._2) + (if (c._3 == Null) " null" else "")).mkString(",") + ")"
   }
-  case class Query(tables: List[Obj], filter: Filters, cols: List[Col], distinct: Boolean,
+  case class Query(tables: List[Obj], filter: Filters, cols: Cols,
     group: Grp, order: Ord, offset: Any, limit: Any) extends Exp {
     def tresql = tables.map(any2tresql).mkString +
-      filter.tresql + (if (distinct) "#" else "") +
-      (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") +
+      filter.tresql +
+      (if (cols != null) cols.tresql else "") +
       (if (group != null) any2tresql(group) else "") +
       (if (order != null) order.tresql else "") +
       (if (limit != null)
@@ -321,17 +321,16 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
         (l: Option[(Any, Any)]) => Query(t match {
           case tables: List[Obj] => tables
           case Null => List(Obj(Null, null, null, null))
-        }, f, c.map(_.cols) orNull, c.map(_.distinct) getOrElse false, g.orNull, o.orNull,
-        l.map(_._1) orNull, l.map(_._2) orNull)
-      case (c: Cols) ~ (f: Filters) => Query(List(Obj(Null, null, null, null)), f, c.cols,
-          false, null, null, null, null)
+        }, f, c.orNull, g.orNull, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
+      case (c: Cols) ~ (f: Filters) => Query(List(Obj(Null, null, null, null)), f, c,
+        null, null, null, null)
     } ^^ { pr =>
       def toDivChain(objs: List[Obj]): Any = objs match {
         case o :: Nil => o.obj
         case l => BinOp("/", l.head.obj, toDivChain(l.tail))
       }
       pr match {
-        case Query(objs, Filters(Nil), null, false, null, null, null, null) if objs forall {
+        case Query(objs, Filters(Nil), null, null, null, null, null) if objs forall {
           case Obj(_, null, DefaultJoin, null, _) | Obj(_, null, null, null, _) => true
           case _ => false
         } => toDivChain(objs)
@@ -340,7 +339,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     } named "query"
 
   def queryWithCols: MemParser[Any] = query ^? ({
-      case q @ Query(objs, _, cols, _, _, _, _, _) if cols != null => q
+      case q @ Query(objs, _, cols, _, _, _, _) if cols != null => q
     }, {case x => "Query must contain column clause: " + x}) named "query-with-cols"
 
   def insert: MemParser[Insert] = (("+" ~> qualifiedIdent ~ opt(ident) ~ opt(columns) ~

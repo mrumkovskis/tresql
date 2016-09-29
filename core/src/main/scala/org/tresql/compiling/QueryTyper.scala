@@ -27,17 +27,20 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
   }
 
   case class ColDef[T](name: String, exp: Col)(implicit val typ: Manifest[T]) extends TypedExp[T]
+
   case class ChildDef(exp: Exp) extends TypedExp[ChildDef] {
     val typ: Manifest[ChildDef] = ManifestFactory.classType(this.getClass)
   }
+
   case class FunDef[T](name: String, exp: Fun)(implicit val typ: Manifest[T]) extends TypedExp[T]
 
-  case class TableDef(name: String, exp: Exp) extends Exp { def tresql = exp.tresql }
+  case class TableDef(name: String, exp: Obj) extends Exp { def tresql = exp.tresql }
 
   trait SelectDefBase extends TypedExp[SelectDefBase] {
     def cols: List[ColDef[_]]
     val typ: Manifest[SelectDefBase] = ManifestFactory.classType(this.getClass)
   }
+
   case class SelectDef(
     cols: List[ColDef[_]],
     tables: List[TableDef],
@@ -52,7 +55,7 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
 
     def table(table: String) = tables.find(_.name == table).flatMap {
       case TableDef(_, Obj(Ident(name), _, _, _, _)) => parent.table(name mkString ".")
-      case td @ TableDef(_, s: SelectDefBase) => Option(table_from_tabledef(td))
+      case TableDef(n, Obj(s: SelectDefBase, _, _, _, _)) => Option(table_from_selectdef(n, s))
     } orElse parent.table(table)
     def column(col: String) = col.lastIndexOf('.') match {
       case -1 => tables.collect {
@@ -67,19 +70,24 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
 
     def procedure(procedure: String) = parent.procedure(procedure)
 
-    private def table_from_tabledef(td: TableDef) = Table(td.name, td.exp match {
-      case sd: SelectDefBase => sd.cols map col_from_coldef
-    }, null, Map())
+    private def table_from_selectdef(name: String, sd: SelectDefBase) =
+      Table(name, sd.cols map col_from_coldef, null, Map())
     private def col_from_coldef(cd: ColDef[_]) =
       org.tresql.metadata.Col(name = cd.name, true, -1, scalaType = cd.typ)
   }
+
   case class BinSelectDef(
     leftOperand: SelectDefBase,
     rightOperand: SelectDefBase,
     exp: BinOp) extends SelectDefBase {
 
-    assert (leftOperand.cols == null || rightOperand.cols == null ||
-      leftOperand.cols.size == rightOperand.cols.size,
+    assert (leftOperand.cols.exists {
+        case ColDef(_, Col(All | _: IdentAll, _, _)) => true
+        case _ => false
+      } || rightOperand.cols.exists {
+        case ColDef(_, Col(All | _: IdentAll, _, _)) => true
+        case _ => false
+      } || leftOperand.cols.size == rightOperand.cols.size,
       s"Column count do not match ${leftOperand.cols.size} != ${rightOperand.cols.size}")
     val cols = leftOperand.cols
   }
@@ -112,7 +120,7 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
       case Obj(b: Braces, _, _, _, _) if ctx.head == QueryCtx =>
         builder(b) //unwrap braces top level expression
       case o: Obj if ctx.head == QueryCtx | ctx.head == TablesCtx => //obj as query
-        builder(Query(List(o), null, null, false, null, null, null, null))
+        builder(Query(List(o), null, null, null, null, null, null))
       case o: Obj if ctx.head == BodyCtx =>
         o.copy(obj = builder(o.obj), join = builder(o.join).asInstanceOf[Join])
       case q: Query =>
@@ -130,7 +138,9 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
         }
         ctx.pop
         ctx push ColsCtx
-        val cols = if (q.cols != null) (q.cols map builder).asInstanceOf[List[ColDef[_]]] else null
+        val cols =
+          if (q.cols != null) (q.cols.cols map builder).asInstanceOf[List[ColDef[_]]]
+          else List[ColDef[_]](ColDef(null, Col(All, null, null))(null))
         ctx.pop
         ctx push BodyCtx
         val (filter, grp, ord, limit, offset) =
@@ -147,9 +157,11 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
         (tr(b.lop), tr(b.rop)) match {
           case (lop: SelectDefBase, rop: SelectDefBase) =>
             BinSelectDef(lop, rop, b.copy(lop = lop, rop = rop))
+          //TODO process braces expr!!!
           case (lop, rop) => b.copy(lop = lop, rop = rop)
         }
       case UnOp("|", o: Exp @unchecked) if ctx.head == ColsCtx => ChildDef(builder(o))
+      case Braces(exp: Exp) if ctx.head == TablesCtx => builder(exp) //remove braces around table expression, so it can be accessed directly
     }
     builder(exp)
   }
@@ -169,6 +181,46 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
     scoper(exp)
   }
 
+  def resolveColAsterisks(exp: Exp) = {
+    lazy val resolver: PartialFunction[Exp, Exp] = transformer {
+      case sd: SelectDef =>
+        val nsd = sd.copy(tables = {
+          sd.tables.map {
+            case td @ TableDef(_, o @ Obj(sdb: SelectDefBase, _, _, _, _)) =>
+              td.copy(exp = o.copy(obj = resolver(sdb)))
+            case td => td
+          }
+        })
+        nsd.copy (cols = {
+          nsd.cols.flatMap {
+            case ColDef(_, Col(All, n, _)) =>
+              val prefix = if (n == null) "" else n + "_"
+              nsd.tables.flatMap { td =>
+                val table = nsd.table(td.name).getOrElse(sys.error(s"Cannot find table: $td"))
+                val name_prefix = prefix +
+                  (if (nsd.tables.size > 1) td.name.replace('.', '_') + "_" else "")
+                table.cols.map(c => ColDef(name_prefix + c.name, null)(c.scalaType))
+              }
+            case ColDef(_, Col(IdentAll(Ident(ident)), _, _)) =>
+              val name_prefix = ident.mkString("", "_", "_")
+              nsd.table(ident mkString ".")
+                .map(_.cols.map(c => ColDef(name_prefix + c.name, null)(c.scalaType)))
+                .getOrElse(sys.error(s"Cannot find table: ${ident mkString "."}"))
+            case cd @ ColDef(_, c @ Col(chd: ChildDef, _, _)) =>
+              List(cd.copy(exp = c.copy(col = resolver(chd))))
+            case cd => List(cd)
+          }
+        })
+    }
+    resolver(exp)
+  }
+
+  def compile(exp: Exp) = {
+    resolveColAsterisks(
+      resolveScopes(
+        buildTypedDef(exp)))
+  }
+
   override def transformer(fun: PartialFunction[Exp, Exp]): PartialFunction[Exp, Exp] = {
     lazy val local_transformer = fun orElse traverse
     lazy val transform_traverse = local_transformer orElse super.transformer(local_transformer)
@@ -176,7 +228,7 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
       case cd: ColDef[_] => cd.copy(exp = transform_traverse(cd.exp).asInstanceOf[Col])
       case cd: ChildDef => cd.copy(exp = transform_traverse(cd.exp))
       case fd: FunDef[_] => fd.copy(exp = transform_traverse(fd.exp).asInstanceOf[Fun])
-      case td: TableDef => td.copy(exp = transform_traverse(td.exp))
+      case td: TableDef => td.copy(exp = transform_traverse(td.exp).asInstanceOf[Obj])
       case sd: SelectDef =>
         val t = (sd.tables map transform_traverse).asInstanceOf[List[TableDef]]
         val c = (sd.cols map transform_traverse).asInstanceOf[List[ColDef[_]]]
