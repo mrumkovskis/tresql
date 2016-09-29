@@ -43,6 +43,41 @@ trait ExpTransformer { this: QueryParsers =>
     transform_traverse
   }
 
+  def extractor[T](fun: PartialFunction[(T, Exp), T]): PartialFunction[(T, Exp), T] = {
+    val noExtractor: PartialFunction[(T, Exp), T] = {case (r: T, e: Exp) => r}
+    def tr(r: T, x: Any): T = x match {
+      case e: Exp => extract_traverse((r, e))
+      case l: List[_] => l.foldLeft(r) { (fr, el) => tr(fr, el) }
+      case _ => r
+    }
+    lazy val extract_traverse: PartialFunction[(T, Exp), T] = fun orElse noExtractor andThen {
+      case (r: T, e: Exp) => e match {
+        case _: Ident | _: Id | _: IdRef | _: Res | All | _: IdentAll | _: Variable | Null => r
+        case Fun(_, pars, _) => tr(r, pars)
+        case UnOp(_, operand) => tr(r, operand)
+        case BinOp(_, lop, rop) => tr(tr(r, lop), rop)
+        case In(lop, rop, _) => tr(tr(r, lop), rop)
+        case Obj(t, _, j, _, _) => tr(tr(r, t), j)
+        case Join(_, j, _) => tr(r, j)
+        case Col(c, _, _) => tr(r, c)
+        case Cols(_, cols) => tr(r, cols)
+        case Grp(cols, hv) => tr(tr(r, cols), hv)
+        case Ord(cols) => tr(r, cols)
+        case Query(objs, filters, cols, gr, ord, off, lim) =>
+          tr(tr(tr(tr(tr(tr(tr(r, objs), filters), cols), gr), ord), off), lim)
+        case Insert(_, _, cols, vals) => tr(tr(r, cols), vals)
+        case Update(_, _, filter, cols, vals) => tr(tr(tr(r, filter), cols), vals)
+        case Delete(_, _, filter) => tr(r, filter)
+        case Arr(els) => tr(r, els)
+        case Filters(f) => tr(r, f)
+        case Braces(expr) => tr(r, expr)
+        //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
+        case x: Exp => sys.error("Unknown expression: " + x)
+      }
+    }
+    extract_traverse
+  }
+
   def extract[T](exp: Exp, extractor: PartialFunction[Any, T]): List[T] = {
     var result = List[T]()
     var extract_collect_traverse: PartialFunction[Any, Any] = null
