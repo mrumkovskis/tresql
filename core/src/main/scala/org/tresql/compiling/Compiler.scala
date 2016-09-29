@@ -15,7 +15,7 @@ trait CompiledResult[T <: RowLike] extends Result with Iterator[T] {
   override def toList: List[T] = Nil
 }
 
-trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper =>
+trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompiler =>
 
   var nameIdx = 0
   val metadata = Env.metaData
@@ -167,7 +167,7 @@ trait QueryTyper extends QueryParsers with ExpTransformer with Scope { thisTyper
   }
 
   def resolveScopes(exp: Exp) = {
-    val scope_stack = scala.collection.mutable.Stack[Scope](thisTyper)
+    val scope_stack = scala.collection.mutable.Stack[Scope](thisCompiler)
     def tr(x: Any): Any = x match {case e: Exp @unchecked => scoper(e) case _ => x} //helper function
     lazy val scoper: PartialFunction[Exp, Exp] = transformer {
       case sd: SelectDef =>
