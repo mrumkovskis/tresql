@@ -34,6 +34,8 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
 
   case class FunDef[T](name: String, exp: Fun)(implicit val typ: Manifest[T]) extends TypedExp[T]
 
+  //case class Tables(tables: List[TableDef])
+
   case class TableDef(name: String, exp: Obj) extends Exp { def tresql = exp.tresql }
 
   trait SelectDefBase extends TypedExp[SelectDefBase] {
@@ -150,8 +152,17 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
            tr(q.limit),
            tr(q.offset))
         ctx.pop
-        SelectDef(cols, tables,
-          q.copy(filter = filter, group = grp, order = ord, limit = limit, offset = offset),
+        SelectDef(
+          cols,
+          tables,
+          Query(
+            tables = Nil,
+            filter = filter,
+            cols = null,
+            group = grp,
+            order = ord,
+            limit = limit,
+            offset = offset),
           null)
       case b: BinOp =>
         (tr(b.lop), tr(b.rop)) match {
@@ -215,10 +226,20 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     resolver(exp)
   }
 
+  def resolveNames(exp: Exp) = {
+    lazy val namer: PartialFunction[(Scope, Exp), Scope] = extractor {
+      case (_, sd: SelectDef) => sd
+    }
+    namer(thisCompiler -> exp)
+  }
+
   def compile(exp: Exp) = {
-    resolveColAsterisks(
+    val compiledExp = resolveColAsterisks(
       resolveScopes(
-        buildTypedDef(exp)))
+        buildTypedDef(
+          exp)))
+    resolveNames(compiledExp)
+    compiledExp
   }
 
   override def transformer(fun: PartialFunction[Exp, Exp]): PartialFunction[Exp, Exp] = {
