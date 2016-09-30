@@ -241,6 +241,32 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     transform_traverse
   }
 
+  override def extractor[T](fun: PartialFunction[(T, Exp), T]): PartialFunction[(T, Exp), T] = {
+    val noExtr: PartialFunction[(T, Exp), T] = { case x => x._1 }
+    val extr = fun orElse noExtr
+    val wrapper: PartialFunction[(T, Exp), (T, Exp)] = {
+      case t => (extr(t), t._2)
+    }
+    def tr(r: T, x: Any): T = x match {
+      case e: Exp => extract_traverse((r, e))
+      case l: List[_] => l.foldLeft(r) { (fr, el) => tr(fr, el) }
+      case _ => r
+    }
+    lazy val extract_traverse: PartialFunction[(T, Exp), T] =
+      wrapper andThen local_extract_traverse orElse super.extractor(local_extract_traverse)
+    lazy val local_extract_traverse: PartialFunction[(T, Exp), T] = {
+      case (r: T, e) => e match {
+        case cd: ColDef[_] => tr(r, cd.exp)
+        case cd: ChildDef => tr(r, cd.exp)
+        case fd: FunDef[_] => tr(r, fd.exp)
+        case td: TableDef => tr(r, td.exp)
+        case sd: SelectDef => tr(tr(tr(r, sd.tables), sd.cols), sd.exp)
+        case bd: BinSelectDef => tr(tr(r, bd.leftOperand), bd.rightOperand)
+      }
+    }
+    extract_traverse
+  }
+
   def parseExp(expr: String): Any = try {
     intermediateResults.get.clear
     phrase(exprList)(new scala.util.parsing.input.CharSequenceReader(expr)) match {
