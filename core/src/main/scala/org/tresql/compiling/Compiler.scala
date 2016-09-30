@@ -25,24 +25,20 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     def typ: Manifest[T]
     def tresql = exp.tresql
   }
-
+  //helper class for namer to distinguish table references from column references
+  case class TableObj(obj: Exp) extends Exp {
+    def tresql = obj.tresql
+  }
   case class ColDef[T](name: String, exp: Col)(implicit val typ: Manifest[T]) extends TypedExp[T]
-
   case class ChildDef(exp: Exp) extends TypedExp[ChildDef] {
     val typ: Manifest[ChildDef] = ManifestFactory.classType(this.getClass)
   }
-
   case class FunDef[T](name: String, exp: Fun)(implicit val typ: Manifest[T]) extends TypedExp[T]
-
-  //case class Tables(tables: List[TableDef])
-
   case class TableDef(name: String, exp: Obj) extends Exp { def tresql = exp.tresql }
-
   trait SelectDefBase extends TypedExp[SelectDefBase] {
     def cols: List[ColDef[_]]
     val typ: Manifest[SelectDefBase] = ManifestFactory.classType(this.getClass)
   }
-
   case class SelectDef(
     cols: List[ColDef[_]],
     tables: List[TableDef],
@@ -56,14 +52,14 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     }
 
     def table(table: String) = tables.find(_.name == table).flatMap {
-      case TableDef(_, Obj(Ident(name), _, _, _, _)) => parent.table(name mkString ".")
-      case TableDef(n, Obj(s: SelectDefBase, _, _, _, _)) => Option(table_from_selectdef(n, s))
+      case TableDef(_, Obj(TableObj(Ident(name)), _, _, _, _)) => parent.table(name mkString ".")
+      case TableDef(n, Obj(TableObj(s: SelectDefBase), _, _, _, _)) => Option(table_from_selectdef(n, s))
     } orElse parent.table(table)
     def column(col: String) = col.lastIndexOf('.') match {
       case -1 => tables.collect {
         case TableDef(t, _) => table(t).flatMap(_.colOption(col))
-      } match {
-        case List(col) => col
+      } collect { case Some(col) => col } match {
+        case List(col) => Some(col)
         case Nil => None
         case x => sys.error(s"Ambiguous columns: $x")
       }
@@ -77,7 +73,6 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     private def col_from_coldef(cd: ColDef[_]) =
       org.tresql.metadata.Col(name = cd.name, true, -1, scalaType = cd.typ)
   }
-
   case class BinSelectDef(
     leftOperand: SelectDefBase,
     rightOperand: SelectDefBase,
@@ -136,7 +131,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
             case Obj(Ident(name), _, _, _, _) => name mkString "."
             case _ => sys.error(s"Alias missing for from clause select: ${table.tresql}")
           })
-          TableDef(name, table.copy(obj = newTable, join = join))
+          TableDef(name, table.copy(obj = TableObj(newTable), join = join))
         }
         ctx.pop
         ctx push ColsCtx
@@ -173,6 +168,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         }
       case UnOp("|", o: Exp @unchecked) if ctx.head == ColsCtx => ChildDef(builder(o))
       case Braces(exp: Exp) if ctx.head == TablesCtx => builder(exp) //remove braces around table expression, so it can be accessed directly
+      case null => null
     }
     builder(exp)
   }
@@ -182,12 +178,13 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     def tr(x: Any): Any = x match {case e: Exp @unchecked => scoper(e) case _ => x} //helper function
     lazy val scoper: PartialFunction[Exp, Exp] = transformer {
       case sd: SelectDef =>
-        val t = (sd.tables map scoper).asInstanceOf[List[TableDef]]
-        scope_stack push sd
-        val c = (sd.cols map scoper).asInstanceOf[List[ColDef[_]]]
-        val q = scoper(sd.exp).asInstanceOf[Query]
+        val nsd = sd.copy(parent = scope_stack.head)
+        val t = (nsd.tables map scoper).asInstanceOf[List[TableDef]]
+        scope_stack push nsd
+        val c = (nsd.cols map scoper).asInstanceOf[List[ColDef[_]]]
+        val q = scoper(nsd.exp).asInstanceOf[Query]
         scope_stack.pop
-        sd.copy(cols = c, tables = t, exp = q, parent = scope_stack.head)
+        nsd.copy(cols = c, tables = t, exp = q)
     }
     scoper(exp)
   }
@@ -197,7 +194,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case sd: SelectDef =>
         val nsd = sd.copy(tables = {
           sd.tables.map {
-            case td @ TableDef(_, o @ Obj(sdb: SelectDefBase, _, _, _, _)) =>
+            case td @ TableDef(_, o @ Obj(TableObj(sdb: SelectDefBase), _, _, _, _)) =>
               td.copy(exp = o.copy(obj = resolver(sdb)))
             case td => td
           }
@@ -227,10 +224,24 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   }
 
   def resolveNames(exp: Exp) = {
-    lazy val namer: PartialFunction[(Scope, Exp), Scope] = extractor {
-      case (_, sd: SelectDef) => sd
+    trait Ctx
+    object TableCtx extends Ctx
+    object ColumnCtx extends Ctx
+    case class Context(scope: Scope, ctx: Ctx)
+    lazy val namer: PartialFunction[(Context, Exp), Context] = extractor {
+      case (ctx, sd: SelectDef) => ctx.copy(scope = sd) //set new scope
+      case (ctx, _: TableObj) => ctx.copy(ctx = TableCtx) //set table context
+      case (ctx, _: Obj) => ctx.copy(ctx = ColumnCtx) //set column context
+      case (ctx @ Context(scope, TableCtx), Ident(ident)) => //check table
+        val tn = ident mkString "."
+        scope.table(tn).orElse(sys.error(s"Unknown table: $tn"))
+        ctx
+      case (ctx @ Context(scope, ColumnCtx), Ident(ident)) => //check column
+        val cn = ident mkString "."
+        scope.column(cn).orElse(sys.error(s"Unknown column: $cn"))
+        ctx
     }
-    namer(thisCompiler -> exp)
+    namer(Context(thisCompiler, ColumnCtx) -> exp)
   }
 
   def compile(exp: Exp) = {
@@ -250,6 +261,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case cd: ChildDef => cd.copy(exp = transform_traverse(cd.exp))
       case fd: FunDef[_] => fd.copy(exp = transform_traverse(fd.exp).asInstanceOf[Fun])
       case td: TableDef => td.copy(exp = transform_traverse(td.exp).asInstanceOf[Obj])
+      case to: TableObj => to.copy(obj = transform_traverse(to.obj))
       case sd: SelectDef =>
         val t = (sd.tables map transform_traverse).asInstanceOf[List[TableDef]]
         val c = (sd.cols map transform_traverse).asInstanceOf[List[ColDef[_]]]
@@ -262,28 +274,24 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     transform_traverse
   }
 
-  override def extractor[T](fun: PartialFunction[(T, Exp), T]): PartialFunction[(T, Exp), T] = {
-    val noExtr: PartialFunction[(T, Exp), T] = { case x => x._1 }
-    val extr = fun orElse noExtr
-    val wrapper: PartialFunction[(T, Exp), (T, Exp)] = {
-      case t => (extr(t), t._2)
-    }
+  override def extractor[T](
+    fun: PartialFunction[(T, Exp), T],
+    traverser: PartialFunction[(T, Exp), T] = PartialFunction.empty): PartialFunction[(T, Exp), T] = {
     def tr(r: T, x: Any): T = x match {
       case e: Exp => extract_traverse((r, e))
       case l: List[_] => l.foldLeft(r) { (fr, el) => tr(fr, el) }
       case _ => r
     }
     lazy val extract_traverse: PartialFunction[(T, Exp), T] =
-      wrapper andThen local_extract_traverse orElse super.extractor(local_extract_traverse)
+      super.extractor(fun, traverser orElse local_extract_traverse)
     lazy val local_extract_traverse: PartialFunction[(T, Exp), T] = {
-      case (r: T, e) => e match {
-        case cd: ColDef[_] => tr(r, cd.exp)
-        case cd: ChildDef => tr(r, cd.exp)
-        case fd: FunDef[_] => tr(r, fd.exp)
-        case td: TableDef => tr(r, td.exp)
-        case sd: SelectDef => tr(tr(tr(r, sd.tables), sd.cols), sd.exp)
-        case bd: BinSelectDef => tr(tr(r, bd.leftOperand), bd.rightOperand)
-      }
+      case (r: T, cd: ColDef[_]) => tr(r, cd.exp)
+      case (r: T, cd: ChildDef) => tr(r, cd.exp)
+      case (r: T, fd: FunDef[_]) => tr(r, fd.exp)
+      case (r: T, td: TableDef) => tr(r, td.exp)
+      case (r: T, to: TableObj) => tr(r, to.obj)
+      case (r: T, sd: SelectDef) => tr(tr(tr(r, sd.tables), sd.cols), sd.exp)
+      case (r: T, bd: BinSelectDef) => tr(tr(r, bd.leftOperand), bd.rightOperand)
     }
     extract_traverse
   }

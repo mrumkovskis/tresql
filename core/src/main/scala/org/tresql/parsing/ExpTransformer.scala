@@ -43,7 +43,9 @@ trait ExpTransformer { this: QueryParsers =>
     transform_traverse
   }
 
-  def extractor[T](fun: PartialFunction[(T, Exp), T]): PartialFunction[(T, Exp), T] = {
+  def extractor[T](
+    fun: PartialFunction[(T, Exp), T],
+    traverser: PartialFunction[(T, Exp), T] = PartialFunction.empty): PartialFunction[(T, Exp), T] = {
     val noExtr: PartialFunction[(T, Exp), T] = { case x => x._1 }
     val extr = fun orElse noExtr
     val wrapper: PartialFunction[(T, Exp), (T, Exp)] = {
@@ -54,7 +56,7 @@ trait ExpTransformer { this: QueryParsers =>
       case l: List[_] => l.foldLeft(r) { (fr, el) => tr(fr, el) }
       case _ => r
     }
-    lazy val extract_traverse: PartialFunction[(T, Exp), T] = wrapper andThen {
+    lazy val extract_traverse: PartialFunction[(T, Exp), T] = wrapper andThen (traverser orElse {
       case (r: T, e) => e match {
         case _: Ident | _: Id | _: IdRef | _: Res | All | _: IdentAll | _: Variable | Null => r
         case Fun(_, pars, _) => tr(r, pars)
@@ -62,7 +64,7 @@ trait ExpTransformer { this: QueryParsers =>
         case BinOp(_, lop, rop) => tr(tr(r, lop), rop)
         case In(lop, rop, _) => tr(tr(r, lop), rop)
         case TerOp(lop, op1, mop, op2, rop) => tr(tr(tr(r, lop), mop), rop)
-        case Obj(t, _, j, _, _) => tr(tr(r, j), t)
+        case Obj(t, _, j, _, _) => tr(tr(r, j), t) //call tr method in order of writing tresql statement
         case Join(_, j, _) => tr(r, j)
         case Col(c, _, _) => tr(r, c)
         case Cols(_, cols) => tr(r, cols)
@@ -79,7 +81,7 @@ trait ExpTransformer { this: QueryParsers =>
         //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
         case x: Exp => sys.error("Unknown expression: " + x)
       }
-    }
+    })
     extract_traverse
   }
 
