@@ -22,6 +22,6 @@ object QueryParser extends parsing.QueryParsers with parsing.ExpTransformer {
       case _ => tresql
     }
 
-  def extractFrom[T](exp: String, extractor: PartialFunction[Any, T]): List[T] =
-    extract(parseExp(exp).asInstanceOf[Exp], extractor)
+  def extractVariables(exp: String) =
+    extractor(variableExtractor)(Nil -> parseExp(exp).asInstanceOf[Exp]).reverse
 }
