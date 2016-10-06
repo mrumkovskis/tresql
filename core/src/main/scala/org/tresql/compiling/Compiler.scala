@@ -256,12 +256,17 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     exp
   }
 
+  def resolveTypes(exp: Exp) = {
+    exp
+  }
+
   def compile(exp: Exp) = {
-    resolveNames(
-      resolveColAsterisks(
-        resolveScopes(
-          buildTypedDef(
-            exp))))
+    resolveTypes(
+      resolveNames(
+        resolveColAsterisks(
+          resolveScopes(
+            buildTypedDef(
+              exp)))))
   }
 
   override def transformer(fun: PartialFunction[Exp, Exp]): PartialFunction[Exp, Exp] = {
