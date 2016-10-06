@@ -63,7 +63,8 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         case Nil => None
         case x => sys.error(s"Ambiguous columns: $x")
       }
-      case x => table(col.substring(0, x)).flatMap(_.colOption(col.substring(x + 1)))
+      case x =>
+        table(col.substring(0, x)).flatMap(_.colOption(col.substring(x + 1)))
     }
 
     def procedure(procedure: String) = parent.procedure(procedure)
@@ -194,8 +195,8 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case sd: SelectDef =>
         val nsd = sd.copy(tables = {
           sd.tables.map {
-            case td @ TableDef(_, o @ Obj(TableObj(sdb: SelectDefBase), _, _, _, _)) =>
-              td.copy(exp = o.copy(obj = resolver(sdb)))
+            case td @ TableDef(_, Obj(TableObj(_: SelectDefBase), _, _, _, _)) =>
+              resolver(td).asInstanceOf[TableDef]
             case td => td
           }
         })
@@ -228,18 +229,23 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     object TableCtx extends Ctx
     object ColumnCtx extends Ctx
     case class Context(scope: Scope, ctx: Ctx)
-    lazy val namer: PartialFunction[(Context, Exp), Context] = extractor {
-      case (ctx, sd: SelectDef) => ctx.copy(scope = sd) //set new scope
-      case (ctx, _: TableObj) => ctx.copy(ctx = TableCtx) //set table context
-      case (ctx, _: Obj) => ctx.copy(ctx = ColumnCtx) //set column context
+    lazy val namer: PartialFunction[(Context, Exp), Context] = extractorAndTraverser {
+      case (ctx, sd: SelectDef) =>
+        sd.tables foreach (t => namer(ctx -> t))
+        val nctx = ctx.copy(scope = sd) //set new scope
+        sd.cols foreach (c => namer(nctx -> c))
+        namer(nctx -> sd.exp)
+        (ctx, false)
+      case (ctx, _: TableObj) => (ctx.copy(ctx = TableCtx), true) //set table context
+      case (ctx, _: Obj) => (ctx.copy(ctx = ColumnCtx), true) //set column context
       case (ctx @ Context(scope, TableCtx), Ident(ident)) => //check table
         val tn = ident mkString "."
         scope.table(tn).orElse(sys.error(s"Unknown table: $tn"))
-        ctx
+        (ctx, true)
       case (ctx @ Context(scope, ColumnCtx), Ident(ident)) => //check column
         val cn = ident mkString "."
         scope.column(cn).orElse(sys.error(s"Unknown column: $cn"))
-        ctx
+        (ctx, true)
     }
     namer(Context(thisCompiler, ColumnCtx) -> exp)
     exp
