@@ -55,17 +55,22 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case TableDef(_, Obj(TableObj(Ident(name)), _, _, _, _)) => parent.table(name mkString ".")
       case TableDef(n, Obj(TableObj(s: SelectDefBase), _, _, _, _)) => Option(table_from_selectdef(n, s))
     }
+    protected def declared_table(table: String): Option[Table] =
+      this_table(table) orElse (parent match {
+        case p: SelectDef => p.declared_table(table)
+        case _ => None
+      })
     def table(table: String) = this_table(table) orElse parent.table(table)
     def column(col: String) = col.lastIndexOf('.') match {
       case -1 => tables.collect {
-        case TableDef(t, _) => this_table(t).flatMap(_.colOption(col))
+        case TableDef(t, _) => declared_table(t).flatMap(_.colOption(col))
       } collect { case Some(col) => col } match {
         case List(col) => Some(col)
         case Nil => None
         case x => sys.error(s"Ambiguous columns: $x")
       }
       case x =>
-        this_table(col.substring(0, x)).flatMap(_.colOption(col.substring(x + 1)))
+        declared_table(col.substring(0, x)).flatMap(_.colOption(col.substring(x + 1)))
     }
 
     def procedure(procedure: String) = parent.procedure(procedure)
@@ -165,7 +170,6 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         (tr(b.lop), tr(b.rop)) match {
           case (lop: SelectDefBase, rop: SelectDefBase) =>
             BinSelectDef(lop, rop, b.copy(lop = lop, rop = rop))
-          //TODO process braces expr!!!
           case (lop, rop) => b.copy(lop = lop, rop = rop)
         }
       case UnOp("|", o: Exp @unchecked) if ctx.head == ColsCtx => ChildDef(builder(o))
