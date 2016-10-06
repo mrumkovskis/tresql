@@ -45,11 +45,22 @@ trait ExpTransformer { this: QueryParsers =>
 
   def extractor[T](
     fun: PartialFunction[(T, Exp), T],
+    traverser: PartialFunction[(T, Exp), T] = PartialFunction.empty):
+  PartialFunction[(T, Exp), T] = {
+    val wrapper: PartialFunction[(T, Exp), T] = fun orElse { case (x, _) => x }
+    extractorAndTraverser({ case t => (wrapper(t), true)}, traverser)
+  }
+
+  def extractorAndTraverser[T](
+    fun: PartialFunction[(T, Exp), (T, Boolean)],
     traverser: PartialFunction[(T, Exp), T] = PartialFunction.empty): PartialFunction[(T, Exp), T] = {
-    val noExtr: PartialFunction[(T, Exp), T] = { case x => x._1 }
+    val noExtr: PartialFunction[(T, Exp), (T, Boolean)] = { case x => (x._1, true) }
     val extr = fun orElse noExtr
     val wrapper: PartialFunction[(T, Exp), (T, Exp)] = {
-      case t => (extr(t), t._2)
+      case t => extr(t) match {
+        case (res, true) => (res, t._2)
+        case (res, false) => (res, null)
+      }
     }
     def tr(r: T, x: Any): T = x match {
       case e: Exp => extract_traverse((r, e))
@@ -58,7 +69,7 @@ trait ExpTransformer { this: QueryParsers =>
     }
     lazy val extract_traverse: PartialFunction[(T, Exp), T] = wrapper andThen (traverser orElse {
       case (r: T, e) => e match {
-        case _: Ident | _: Id | _: IdRef | _: Res | All | _: IdentAll | _: Variable | Null => r
+        case _: Ident | _: Id | _: IdRef | _: Res | All | _: IdentAll | _: Variable | Null | null => r
         case Fun(_, pars, _) => tr(r, pars)
         case UnOp(_, operand) => tr(r, operand)
         case BinOp(_, lop, rop) => tr(tr(r, lop), rop)

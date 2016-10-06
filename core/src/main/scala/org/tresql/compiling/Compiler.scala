@@ -242,15 +242,15 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         ctx
     }
     namer(Context(thisCompiler, ColumnCtx) -> exp)
+    exp
   }
 
   def compile(exp: Exp) = {
-    val compiledExp = resolveColAsterisks(
-      resolveScopes(
-        buildTypedDef(
-          exp)))
-    resolveNames(compiledExp)
-    compiledExp
+    resolveNames(
+      resolveColAsterisks(
+        resolveScopes(
+          buildTypedDef(
+            exp))))
   }
 
   override def transformer(fun: PartialFunction[Exp, Exp]): PartialFunction[Exp, Exp] = {
@@ -274,16 +274,17 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     transform_traverse
   }
 
-  override def extractor[T](
-    fun: PartialFunction[(T, Exp), T],
-    traverser: PartialFunction[(T, Exp), T] = PartialFunction.empty): PartialFunction[(T, Exp), T] = {
+  override def extractorAndTraverser[T](
+    fun: PartialFunction[(T, Exp), (T, Boolean)],
+    traverser: PartialFunction[(T, Exp), T] = PartialFunction.empty):
+  PartialFunction[(T, Exp), T] = {
     def tr(r: T, x: Any): T = x match {
       case e: Exp => extract_traverse((r, e))
       case l: List[_] => l.foldLeft(r) { (fr, el) => tr(fr, el) }
       case _ => r
     }
     lazy val extract_traverse: PartialFunction[(T, Exp), T] =
-      super.extractor(fun, traverser orElse local_extract_traverse)
+      super.extractorAndTraverser(fun, traverser orElse local_extract_traverse)
     lazy val local_extract_traverse: PartialFunction[(T, Exp), T] = {
       case (r: T, cd: ColDef[_]) => tr(r, cd.exp)
       case (r: T, cd: ChildDef) => tr(r, cd.exp)
