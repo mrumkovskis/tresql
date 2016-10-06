@@ -80,7 +80,7 @@ trait ExpTransformer { this: QueryParsers =>
         case Col(c, _, _) => tr(r, c)
         case Cols(_, cols) => tr(r, cols)
         case Grp(cols, hv) => tr(tr(r, cols), hv)
-        case Ord(cols) => tr(r, cols)
+        case Ord(cols) => tr(r, cols.map(_._2))
         case Query(objs, filters, cols, gr, ord, off, lim) =>
           tr(tr(tr(tr(tr(tr(tr(r, objs), filters), cols), gr), ord), off), lim)
         case Insert(_, _, cols, vals) => tr(tr(r, cols), vals)

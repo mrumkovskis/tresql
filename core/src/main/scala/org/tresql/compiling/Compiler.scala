@@ -51,20 +51,21 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       assert(duplicates.size == 0, s"Duplicate table names: ${duplicates.mkString(", ")}")
     }
 
-    def table(table: String) = tables.find(_.name == table).flatMap {
+    protected def this_table(table: String) = tables.find(_.name == table).flatMap {
       case TableDef(_, Obj(TableObj(Ident(name)), _, _, _, _)) => parent.table(name mkString ".")
       case TableDef(n, Obj(TableObj(s: SelectDefBase), _, _, _, _)) => Option(table_from_selectdef(n, s))
-    } orElse parent.table(table)
+    }
+    def table(table: String) = this_table(table) orElse parent.table(table)
     def column(col: String) = col.lastIndexOf('.') match {
       case -1 => tables.collect {
-        case TableDef(t, _) => table(t).flatMap(_.colOption(col))
+        case TableDef(t, _) => this_table(t).flatMap(_.colOption(col))
       } collect { case Some(col) => col } match {
         case List(col) => Some(col)
         case Nil => None
         case x => sys.error(s"Ambiguous columns: $x")
       }
       case x =>
-        table(col.substring(0, x)).flatMap(_.colOption(col.substring(x + 1)))
+        this_table(col.substring(0, x)).flatMap(_.colOption(col.substring(x + 1)))
     }
 
     def procedure(procedure: String) = parent.procedure(procedure)
@@ -235,7 +236,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         val nctx = ctx.copy(scope = sd) //set new scope
         sd.cols foreach (c => namer(nctx -> c))
         namer(nctx -> sd.exp)
-        (ctx, false)
+        (ctx, false) //return old scope and stop traversing
       case (ctx, _: TableObj) => (ctx.copy(ctx = TableCtx), true) //set table context
       case (ctx, _: Obj) => (ctx.copy(ctx = ColumnCtx), true) //set column context
       case (ctx @ Context(scope, TableCtx), Ident(ident)) => //check table
