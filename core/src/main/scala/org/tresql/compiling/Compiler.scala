@@ -257,7 +257,44 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   }
 
   def resolveTypes(exp: Exp) = {
-    exp
+    val scopes = scala.collection.mutable.Stack[Scope](thisCompiler)
+    def type_from_any(exp: Any) = exp match {
+      case n: java.lang.Number => ManifestFactory.classType(n.getClass)
+      case b: Boolean => ManifestFactory.Boolean
+      case s: String => ManifestFactory.classType(s.getClass)
+      case e: Exp => typer((null, e))
+      case x => ManifestFactory.classType(x.getClass)
+    }
+    lazy val typer: PartialFunction[(Manifest[_], Exp), Manifest[_]] = extractorAndTraverser {
+      case (_, UnOp(op, operand)) => (type_from_any(null, operand), false)
+      case (_, BinOp(op, lop, rop)) =>
+        val (lt, rt) = (type_from_any(lop), type_from_any(rop))
+        (if (lt.toString == "java.lang.String") lt else if (rt == "java.lang.String") rt
+        else if (lt.toString == "java.lang.Boolean") lt else if (rt == "java.lang.Boolean") rt
+        else if (lt <:< rt) rt else if (rt <:< lt) lt else lt, false)
+      case (_, _: TerOp) => (Manifest.Boolean, false)
+      case (_, s: SelectDef) =>
+        if (s.cols.size > 1)
+          sys.error(s"Select must contain only one column, instead:${s.cols.map(_.tresql).mkString(", ")}")
+        else {
+          scopes.push(s)
+          val ret = (type_from_any(s.cols.head), false)
+          scopes.pop
+          ret
+        }
+      case (_, c: Col) => (type_from_any(c.col), false)
+      case (_, Ident(ident)) => (scopes.head.column(ident mkString ".").map(_.scalaType).get, false)
+    }
+    lazy val typeResolver: PartialFunction[Exp, Exp] = transformer {
+      case s: SelectDef =>
+        scopes.push(s)
+        val nsd = s.copy(cols = (s.cols map typeResolver).asInstanceOf[List[ColDef[_]]])
+        scopes.pop
+        nsd
+      case c: ColDef[_] if c.typ == null || c.typ == Manifest.Nothing =>
+        ColDef(c.name, c.exp)(typer((null, c.exp)))
+    }
+    typeResolver(exp)
   }
 
   def compile(exp: Exp) = {
