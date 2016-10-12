@@ -196,8 +196,11 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   }
 
   def resolveColAsterisks(exp: Exp) = {
-    def createCol(col: String): Col =
+    def createCol(col: String): Col = try {
+      intermediateResults.get.clear
       column(new scala.util.parsing.input.CharSequenceReader(col)).get
+    } finally intermediateResults.get.clear
+    
     lazy val resolver: PartialFunction[Exp, Exp] = transformer {
       case sd: SelectDef =>
         val nsd = sd.copy(tables = {
@@ -209,20 +212,14 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         })
         nsd.copy (cols = {
           nsd.cols.flatMap {
-            case ColDef(_, Col(All, n, _)) =>
-              val prefix = if (n == null) "" else n + "_"
+            case ColDef(_, Col(All, _, _)) =>
               nsd.tables.flatMap { td =>
                 val table = nsd.table(td.name).getOrElse(sys.error(s"Cannot find table: $td"))
-                val name_prefix = prefix +
-                  (if (nsd.tables.size > 1) td.name.replace('.', '_') + "_" else "")
-                table.cols.map { c =>
-                  ColDef(name_prefix + c.name, createCol(c.name))(c.scalaType) }
+                table.cols.map { c => ColDef(c.name, createCol(c.name))(c.scalaType) }
               }
             case ColDef(_, Col(IdentAll(Ident(ident)), _, _)) =>
-              val name_prefix = ident.mkString("", "_", "_")
               nsd.table(ident mkString ".")
-                .map(_.cols.map { c =>
-                  ColDef(name_prefix + c.name, createCol(c.name))(c.scalaType) })
+                .map(_.cols.map { c => ColDef(c.name, createCol(c.name))(c.scalaType) })
                 .getOrElse(sys.error(s"Cannot find table: ${ident mkString "."}"))
             case cd @ ColDef(_, c @ Col(chd: ChildDef, _, _)) =>
               List(cd.copy(exp = c.copy(col = resolver(chd))))
@@ -286,9 +283,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
           scopes.pop
           ret
         }
-      case (_, c: Col) =>
-        println("COL!!")
-        (type_from_any(c.col), false)
+      case (_, c: Col) => (type_from_any(c.col), false)
       case (_, Ident(ident)) => (scopes.head.column(ident mkString ".").map(_.scalaType).get, false)
     }
     lazy val type_resolver: PartialFunction[Exp, Exp] = transformer {
@@ -316,7 +311,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     lazy val local_transformer = fun orElse traverse
     lazy val transform_traverse = local_transformer orElse super.transformer(local_transformer)
     lazy val traverse: PartialFunction[Exp, Exp] = {
-      case cd: ColDef[_] => cd.copy(exp = transform_traverse(cd.exp).asInstanceOf[Col])
+      case cd: ColDef[_] => cd.copy(exp = transform_traverse(cd.exp).asInstanceOf[Col])(cd.typ)
       case cd: ChildDef => cd.copy(exp = transform_traverse(cd.exp))
       case fd: FunDef[_] => fd.copy(exp = transform_traverse(fd.exp).asInstanceOf[Fun])
       case td: TableDef => td.copy(exp = transform_traverse(td.exp).asInstanceOf[Obj])

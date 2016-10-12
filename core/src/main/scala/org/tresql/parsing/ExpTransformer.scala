@@ -67,31 +67,33 @@ trait ExpTransformer { this: QueryParsers =>
       case l: List[_] => l.foldLeft(r) { (fr, el) => tr(fr, el) }
       case _ => r
     }
+    def traverse_rest(r: T, e: Exp) = e match {
+      case _: Ident | _: Id | _: IdRef | _: Res | All | _: IdentAll | _: Variable | Null | null => r
+      case Fun(_, pars, _) => tr(r, pars)
+      case UnOp(_, operand) => tr(r, operand)
+      case BinOp(_, lop, rop) => tr(tr(r, lop), rop)
+      case In(lop, rop, _) => tr(tr(r, lop), rop)
+      case TerOp(lop, op1, mop, op2, rop) => tr(tr(tr(r, lop), mop), rop)
+      case Obj(t, _, j, _, _) => tr(tr(r, j), t) //call tr method in order of writing tresql statement
+      case Join(_, j, _) => tr(r, j)
+      case Col(c, _, _) => tr(r, c)
+      case Cols(_, cols) => tr(r, cols)
+      case Grp(cols, hv) => tr(tr(r, cols), hv)
+      case Ord(cols) => tr(r, cols.map(_._2))
+      case Query(objs, filters, cols, gr, ord, off, lim) =>
+        tr(tr(tr(tr(tr(tr(tr(r, objs), filters), cols), gr), ord), off), lim)
+      case Insert(_, _, cols, vals) => tr(tr(r, cols), vals)
+      case Update(_, _, filter, cols, vals) => tr(tr(tr(r, filter), cols), vals)
+      case Delete(_, _, filter) => tr(r, filter)
+      case Arr(els) => tr(r, els)
+      case Filters(f) => tr(r, f)
+      case Braces(expr) => tr(r, expr)
+      //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
+      case x: Exp => sys.error("Unknown expression: " + x)
+    }
     lazy val extract_traverse: PartialFunction[(T, Exp), T] = wrapper andThen (traverser orElse {
-      case (r: T, e) => e match {
-        case _: Ident | _: Id | _: IdRef | _: Res | All | _: IdentAll | _: Variable | Null | null => r
-        case Fun(_, pars, _) => tr(r, pars)
-        case UnOp(_, operand) => tr(r, operand)
-        case BinOp(_, lop, rop) => tr(tr(r, lop), rop)
-        case In(lop, rop, _) => tr(tr(r, lop), rop)
-        case TerOp(lop, op1, mop, op2, rop) => tr(tr(tr(r, lop), mop), rop)
-        case Obj(t, _, j, _, _) => tr(tr(r, j), t) //call tr method in order of writing tresql statement
-        case Join(_, j, _) => tr(r, j)
-        case Col(c, _, _) => tr(r, c)
-        case Cols(_, cols) => tr(r, cols)
-        case Grp(cols, hv) => tr(tr(r, cols), hv)
-        case Ord(cols) => tr(r, cols.map(_._2))
-        case Query(objs, filters, cols, gr, ord, off, lim) =>
-          tr(tr(tr(tr(tr(tr(tr(r, objs), filters), cols), gr), ord), off), lim)
-        case Insert(_, _, cols, vals) => tr(tr(r, cols), vals)
-        case Update(_, _, filter, cols, vals) => tr(tr(tr(r, filter), cols), vals)
-        case Delete(_, _, filter) => tr(r, filter)
-        case Arr(els) => tr(r, els)
-        case Filters(f) => tr(r, f)
-        case Braces(expr) => tr(r, expr)
-        //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
-        case x: Exp => sys.error("Unknown expression: " + x)
-      }
+      case (r: T, e) => traverse_rest(r, e)
+      case (null, e) => traverse_rest(null.asInstanceOf[T], e) //previous case does not match null!
     })
     extract_traverse
   }
