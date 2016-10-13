@@ -269,10 +269,14 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     lazy val typer: PartialFunction[(Manifest[_], Exp), Manifest[_]] = extractorAndTraverser {
       case (_, UnOp(op, operand)) => (type_from_any(operand), false)
       case (_, BinOp(op, lop, rop)) =>
-        val (lt, rt) = (type_from_any(lop), type_from_any(rop))
-        (if (lt.toString == "java.lang.String") lt else if (rt == "java.lang.String") rt
-        else if (lt.toString == "java.lang.Boolean") lt else if (rt == "java.lang.Boolean") rt
-        else if (lt <:< rt) rt else if (rt <:< lt) lt else lt, false)
+        comp_op.findAllIn(op).toList match {
+          case Nil =>
+            val (lt, rt) = (type_from_any(lop), type_from_any(rop))
+            (if (lt.toString == "java.lang.String") lt else if (rt == "java.lang.String") rt
+            else if (lt.toString == "java.lang.Boolean") lt else if (rt == "java.lang.Boolean") rt
+            else if (lt <:< rt) rt else if (rt <:< lt) lt else lt, false)
+          case _ => (Manifest.Boolean, false)
+        }
       case (_, _: TerOp) => (Manifest.Boolean, false)
       case (_, s: SelectDef) =>
         if (s.cols.size > 1)
