@@ -200,7 +200,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       intermediateResults.get.clear
       column(new scala.util.parsing.input.CharSequenceReader(col)).get
     } finally intermediateResults.get.clear
-    
+
     lazy val resolver: PartialFunction[Exp, Exp] = transformer {
       case sd: SelectDef =>
         val nsd = sd.copy(tables = {
@@ -267,7 +267,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case x => ManifestFactory.classType(x.getClass)
     }
     lazy val typer: PartialFunction[(Manifest[_], Exp), Manifest[_]] = extractorAndTraverser {
-      case (_, UnOp(op, operand)) => (type_from_any(null, operand), false)
+      case (_, UnOp(op, operand)) => (type_from_any(operand), false)
       case (_, BinOp(op, lop, rop)) =>
         val (lt, rt) = (type_from_any(lop), type_from_any(rop))
         (if (lt.toString == "java.lang.String") lt else if (rt == "java.lang.String") rt
