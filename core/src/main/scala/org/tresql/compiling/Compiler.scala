@@ -172,7 +172,11 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
             BinSelectDef(lop, rop, b.copy(lop = lop, rop = rop))
           case (lop, rop) => b.copy(lop = lop, rop = rop)
         }
-      case UnOp("|", o: Exp @unchecked) if ctx.head == ColsCtx => ChildDef(builder(o))
+      case UnOp("|", o: Exp @unchecked) if ctx.head == ColsCtx =>
+        ctx push QueryCtx
+        val exp = builder(o)
+        ctx.pop
+        ChildDef(exp)
       case Braces(exp: Exp) if ctx.head == TablesCtx => builder(exp) //remove braces around table expression, so it can be accessed directly
       case null => null
     }
@@ -181,7 +185,6 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
 
   def resolveScopes(exp: Exp) = {
     val scope_stack = scala.collection.mutable.Stack[Scope](thisCompiler)
-    def tr(x: Any): Any = x match {case e: Exp @unchecked => scoper(e) case _ => x} //helper function
     lazy val scoper: PartialFunction[Exp, Exp] = transformer {
       case sd: SelectDef =>
         val nsd = sd.copy(parent = scope_stack.head)
@@ -190,7 +193,8 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         val c = (nsd.cols map scoper).asInstanceOf[List[ColDef[_]]]
         val q = scoper(nsd.exp).asInstanceOf[Query]
         scope_stack.pop
-        nsd.copy(cols = c, tables = t, exp = q)
+        val r = nsd.copy(cols = c, tables = t, exp = q)
+        r
     }
     scoper(exp)
   }
@@ -237,8 +241,11 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     case class Context(scope: Scope, ctx: Ctx)
     lazy val namer: PartialFunction[(Context, Exp), Context] = extractorAndTraverser {
       case (ctx, sd: SelectDef) =>
-        sd.tables foreach (t => namer(ctx -> t))
-        val nctx = ctx.copy(scope = sd) //set new scope
+        val nctx = ctx.copy(scope = sd) //create context with this select as a scope
+        sd.tables foreach { t =>
+          namer(ctx -> t.exp.obj) //table definition check goes within parent scope
+          Option(t.exp.join).map(j => namer(nctx -> j)) //join definition check goes within this select scope
+        }
         sd.cols foreach (c => namer(nctx -> c))
         namer(nctx -> sd.exp)
         (ctx, false) //return old scope and stop traversing
@@ -263,7 +270,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case n: java.lang.Number => ManifestFactory.classType(n.getClass)
       case b: Boolean => ManifestFactory.Boolean
       case s: String => ManifestFactory.classType(s.getClass)
-      case e: Exp => typer((null, e))
+      case e: Exp => typer((ManifestFactory.Nothing, e)) /*null cannot be used since partial function does not match it as type T - Manifest*/
       case x => ManifestFactory.classType(x.getClass)
     }
     lazy val typer: PartialFunction[(Manifest[_], Exp), Manifest[_]] = extractorAndTraverser {
@@ -296,8 +303,11 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         val nsd = s.copy(cols = (s.cols map type_resolver).asInstanceOf[List[ColDef[_]]]) //resolve types only for column defs
         scopes.pop
         nsd
-      case c: ColDef[_] if c.typ == null || c.typ == Manifest.Nothing =>
-        ColDef(c.name, c.exp)(typer((null, c.exp)))
+      case ColDef(n, c @ Col(ChildDef(ch), _, _)) => ColDef(n, c.copy(col = ChildDef(type_resolver(ch))))
+      case c @ ColDef(n, exp) if c.typ == null || c.typ == Manifest.Nothing =>
+        ColDef(n, exp)(typer(
+          (ManifestFactory.Nothing, /*null cannot be used since partial function does not match it as type T - Manifest*/
+          exp)))
     }
     type_resolver(exp)
   }
