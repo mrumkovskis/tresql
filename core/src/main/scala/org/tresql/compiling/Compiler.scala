@@ -29,7 +29,9 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   case class TableObj(obj: Exp) extends Exp {
     def tresql = obj.tresql
   }
-  case class ColDef[T](name: String, exp: Col)(implicit val typ: Manifest[T]) extends TypedExp[T]
+  case class ColDef[T](name: String, col: Any, typ: Manifest[T]) extends TypedExp[T] {
+    def exp = this
+  }
   case class ChildDef(exp: Exp) extends TypedExp[ChildDef] {
     val typ: Manifest[ChildDef] = ManifestFactory.classType(this.getClass)
   }
@@ -86,10 +88,10 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     exp: BinOp) extends SelectDefBase {
 
     assert (leftOperand.cols.exists {
-        case ColDef(_, Col(All | _: IdentAll, _, _)) => true
+        case ColDef(_, All | _: IdentAll, _) => true
         case _ => false
       } || rightOperand.cols.exists {
-        case ColDef(_, Col(All | _: IdentAll, _, _)) => true
+        case ColDef(_, All | _: IdentAll, _) => true
         case _ => false
       } || leftOperand.cols.size == rightOperand.cols.size,
       s"Column count do not match ${leftOperand.cols.size} != ${rightOperand.cols.size}")
@@ -119,8 +121,11 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
           case Obj(Ident(name), _, _, _, _) => name mkString "."
           case _ => null
         }
-        ColDef(alias, c.copy(col = tr(c.col)))(
-          if(c.typ != null) metadata.xsd_scala_type_map(c.typ) else ManifestFactory.Nothing)
+        ColDef(
+          alias,
+          tr(c.col),
+          if(c.typ != null) metadata.xsd_scala_type_map(c.typ) else ManifestFactory.Nothing
+        )
       case Obj(b: Braces, _, _, _, _) if ctx.head == QueryCtx =>
         builder(b) //unwrap braces top level expression
       case o: Obj if ctx.head == QueryCtx | ctx.head == TablesCtx => //obj as query
@@ -144,7 +149,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         ctx push ColsCtx
         val cols =
           if (q.cols != null) (q.cols.cols map builder).asInstanceOf[List[ColDef[_]]]
-          else List[ColDef[_]](ColDef(null, Col(All, null, null))(null))
+          else List[ColDef[_]](ColDef[Nothing](null, All, ManifestFactory.Nothing))
         ctx.pop
         ctx push BodyCtx
         val (filter, grp, ord, limit, offset) =
@@ -216,17 +221,17 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         })
         nsd.copy (cols = {
           nsd.cols.flatMap {
-            case ColDef(_, Col(All, _, _)) =>
+            case ColDef(_, All, _) =>
               nsd.tables.flatMap { td =>
                 val table = nsd.table(td.name).getOrElse(sys.error(s"Cannot find table: $td"))
-                table.cols.map { c => ColDef(c.name, createCol(c.name))(c.scalaType) }
+                table.cols.map { c => ColDef(c.name, createCol(c.name).col, c.scalaType) }
               }
-            case ColDef(_, Col(IdentAll(Ident(ident)), _, _)) =>
+            case ColDef(_, IdentAll(Ident(ident)), _) =>
               nsd.table(ident mkString ".")
-                .map(_.cols.map { c => ColDef(c.name, createCol(c.name))(c.scalaType) })
+                .map(_.cols.map { c => ColDef(c.name, createCol(c.name).col, c.scalaType) })
                 .getOrElse(sys.error(s"Cannot find table: ${ident mkString "."}"))
-            case cd @ ColDef(_, c @ Col(chd: ChildDef, _, _)) =>
-              List(cd.copy(exp = c.copy(col = resolver(chd))))
+            case cd @ ColDef(_, chd: ChildDef, _) =>
+              List(cd.copy(col = resolver(chd)))
             case cd => List(cd)
           }
         })
@@ -294,7 +299,6 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
           scopes.pop
           ret
         }
-      case (_, c: Col) => (type_from_any(c.col), false)
       case (_, Ident(ident)) => (scopes.head.column(ident mkString ".").map(_.scalaType).get, false)
     }
     lazy val type_resolver: PartialFunction[Exp, Exp] = transformer {
@@ -303,9 +307,9 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         val nsd = s.copy(cols = (s.cols map type_resolver).asInstanceOf[List[ColDef[_]]]) //resolve types only for column defs
         scopes.pop
         nsd
-      case ColDef(n, c @ Col(ChildDef(ch), _, _)) => ColDef(n, c.copy(col = ChildDef(type_resolver(ch))))
-      case c @ ColDef(n, exp) if c.typ == null || c.typ == Manifest.Nothing =>
-        ColDef(n, exp)(typer(
+      case ColDef(n, ChildDef(ch), t) => ColDef(n, ChildDef(type_resolver(ch)), t)
+      case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
+        ColDef(n, exp, type_from_any(
           (ManifestFactory.Nothing, /*null cannot be used since partial function does not match it as type T - Manifest*/
           exp)))
     }
@@ -324,8 +328,9 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   override def transformer(fun: PartialFunction[Exp, Exp]): PartialFunction[Exp, Exp] = {
     lazy val local_transformer = fun orElse traverse
     lazy val transform_traverse = local_transformer orElse super.transformer(local_transformer)
+    def tr(x: Any): Any = x match {case e: Exp @unchecked => transform_traverse(e) case _ => x} //helper function
     lazy val traverse: PartialFunction[Exp, Exp] = {
-      case cd: ColDef[_] => cd.copy(exp = transform_traverse(cd.exp).asInstanceOf[Col])(cd.typ)
+      case cd: ColDef[_] => cd.copy(col = tr(cd.col))
       case cd: ChildDef => cd.copy(exp = transform_traverse(cd.exp))
       case fd: FunDef[_] => fd.copy(exp = transform_traverse(fd.exp).asInstanceOf[Fun])
       case td: TableDef => td.copy(exp = transform_traverse(td.exp).asInstanceOf[Obj])
@@ -354,7 +359,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     lazy val extract_traverse: PartialFunction[(T, Exp), T] =
       super.extractorAndTraverser(fun, traverser orElse local_extract_traverse)
     lazy val local_extract_traverse: PartialFunction[(T, Exp), T] = {
-      case (r: T, cd: ColDef[_]) => tr(r, cd.exp)
+      case (r: T, cd: ColDef[_]) => tr(r, cd.col)
       case (r: T, cd: ChildDef) => tr(r, cd.exp)
       case (r: T, fd: FunDef[_]) => tr(r, fd.exp)
       case (r: T, td: TableDef) => tr(r, td.exp)
