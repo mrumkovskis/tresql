@@ -309,9 +309,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         nsd
       case ColDef(n, ChildDef(ch), t) => ColDef(n, ChildDef(type_resolver(ch)), t)
       case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
-        ColDef(n, exp, type_from_any(
-          (ManifestFactory.Nothing, /*null cannot be used since partial function does not match it as type T - Manifest*/
-          exp)))
+        ColDef(n, exp, type_from_any(exp))
     }
     type_resolver(exp)
   }
