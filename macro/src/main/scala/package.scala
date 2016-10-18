@@ -21,6 +21,26 @@ package object tresql extends CoreTypes {
     }
   }
 
+  import scala.language.experimental.macros
+  import scala.reflect.macros.blackbox.Context
+  implicit class Tresqlc(val sc: StringContext) extends AnyVal {
+    def impl(c: Context)(annottees: c.Expr[Any]*)(x: c.Expr[Any]): c.Expr[Any] = {
+      import c.universe._
+      c.Expr[Unit](q"""println("Hello World")""")
+    }
+
+    //def tresqlc(params: Any*)(implicit resources: Resources = Env) = macro impl
+  }
+
+  object Macros {
+    def impl(c: Context) = {
+      import c.universe._
+      c.Expr[Unit](q"""println("Hello World")""")
+    }
+
+    //def hello(s: String): Unit = macro impl
+  }
+
   implicit def jdbcResultToTresqlResult(jdbcResult: java.sql.ResultSet) = {
     val md = jdbcResult.getMetaData
     new SelectResult(jdbcResult, Vector((1 to md.getColumnCount map {
