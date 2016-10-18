@@ -9,8 +9,10 @@ package object tresql extends CoreTypes {
    *  passed to Query.
    */
 
+  implicit val resources: Resources = Env
+
   implicit class Tresql(val sc: StringContext) extends AnyVal {
-    def tresql(params: Any*)(implicit resources: Resources = Env) = {
+    def tresql(params: Any*)(implicit resources: Resources) = {
       val p = sc.parts
       var optionalVars = Set[Int]()
       Query(p.head + p.tail.zipWithIndex.map(t => {
@@ -21,24 +23,21 @@ package object tresql extends CoreTypes {
     }
   }
 
+  import scala.reflect.macros.Context
   import scala.language.experimental.macros
-  import scala.reflect.macros.blackbox.Context
   implicit class Tresqlc(val sc: StringContext) extends AnyVal {
-    def impl(c: Context)(annottees: c.Expr[Any]*)(x: c.Expr[Any]): c.Expr[Any] = {
-      import c.universe._
-      c.Expr[Unit](q"""println("Hello World")""")
-    }
-
-    //def tresqlc(params: Any*)(implicit resources: Resources = Env) = macro impl
+    def tresqlc(params: Any*)(implicit resources: Resources): Unit = macro Macros.impl
   }
 
   object Macros {
-    def impl(c: Context) = {
+    def impl(c: Context)(params: c.Expr[Any]*)(resources: c.Expr[Resources]): c.Expr[Unit] = {
       import c.universe._
-      c.Expr[Unit](q"""println("Hello World")""")
+      println(s"""Args: $params,
+        |env: $resources,
+        |context settings: ${c.settings},
+        |tree: ${c.macroApplication}""".stripMargin)
+      c.Expr[Unit](q"""println("hello world")""")
     }
-
-    //def hello(s: String): Unit = macro impl
   }
 
   implicit def jdbcResultToTresqlResult(jdbcResult: java.sql.ResultSet) = {
