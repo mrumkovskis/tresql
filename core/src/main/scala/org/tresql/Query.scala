@@ -12,23 +12,15 @@ trait Query extends QueryBuilder with TypedQuery {
   def apply(expr: String, params: Any*)(implicit resources: Resources = Env): Result =
     exec(expr, normalizePars(params: _*), resources)
 
-  private def exec[T <: RowLike](
+  private def exec(
     expr: String,
     params: Map[String, Any],
-    resources: Resources,
-    converter: RowConverter[T] = null
+    resources: Resources
   ): Result =
     build(expr, params, false)(resources)() match {
       case r: Result => r
       case x => SingleValueResult(x)
     }
-
-  private[tresql] def apply[T <: RowLike](
-    expr: String,
-    converter: RowConverter[T],
-    params: Any*
-  )(implicit resources: Resources): CompiledResult[T] =
-    exec(expr, normalizePars(params: _*), resources, converter).asInstanceOf[CompiledResult[T]]
 
   def build(
     expr: String,
