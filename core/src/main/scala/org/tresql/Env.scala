@@ -1,6 +1,7 @@
 package org.tresql
 
 import sys._
+import CoreTypes.RowConverter
 
 /* Environment for expression building and execution */
 class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolean)
@@ -32,6 +33,9 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   //if resources.maxResultSize is greater than zero
   //Row count is accumulated only for top level Env i.e. provider is None
   private var _rowCount = 0
+  //used in macro to convert result at certain query depth and column to macro generated object
+  //is set from macro. Row Converters are set in top level Env object i.e. provider is None
+  private var _rowConverters: Option[Map[(Int /*query depth*/, Int /*col idx*/), RowConverter[_]]] = None
 
   def apply(name: String): Any = get(name).map {
     case e: Expr => e()
@@ -101,6 +105,15 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   private[tresql] def rowCount: Int = provider.map(_.env.rowCount).getOrElse(_rowCount)
   private[tresql] def rowCount_=(rc: Int) {
     provider.map(_.env.rowCount = rc).getOrElse (_rowCount = rc)
+  }
+
+  private[tresql] def rowConverter(depth_and_col: (Int, Int)): RowConverter[_] =
+    rowConverters.flatMap(_.get(depth_and_col))
+      .getOrElse(sys.error(s"Query structure is broken, cannot find converter at {dept: ${depth_and_col._1}, col: ${depth_and_col._2} }"))
+  private[tresql] def rowConverters: Option[Map[(Int /*query depth*/, Int /*col idx*/), RowConverter[_]]] =
+    provider.flatMap(_.env.rowConverters)
+  private[tresql] def rowConverters_=(rc: Map[(Int /*query depth*/, Int /*col idx*/), RowConverter[_]]) {
+    provider.map(_.env.rowConverters = rc).getOrElse (_rowConverters = Option(rc))
   }
 
   //resources methods

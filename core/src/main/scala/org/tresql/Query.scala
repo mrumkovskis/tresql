@@ -5,27 +5,46 @@ import java.sql.{ Date, Timestamp, PreparedStatement, CallableStatement, ResultS
 import org.tresql.metadata._
 import sys._
 import java.sql.Connection
+import CoreTypes.RowConverter
 
 trait Query extends QueryBuilder with TypedQuery {
 
   def apply(expr: String, params: Any*)(implicit resources: Resources = Env): Result =
     exec(expr, normalizePars(params: _*), resources)
 
-  private def exec(expr: String, params: Map[String, Any], resources: Resources): Result =
+  private def exec[T <: RowLike](
+    expr: String,
+    params: Map[String, Any],
+    resources: Resources,
+    converter: RowConverter[T] = null
+  ): Result =
     build(expr, params, false)(resources)() match {
       case r: Result => r
       case x => SingleValueResult(x)
     }
 
-  def build(expr: String, params: Map[String, Any] = null, reusableExpr: Boolean = true)(
-    implicit resources: Resources = Env): Expr = {
+  private[tresql] def apply[T <: RowLike](
+    expr: String,
+    converter: RowConverter[T],
+    params: Any*
+  )(implicit resources: Resources): CompiledResult[T] =
+    exec(expr, normalizePars(params: _*), resources, converter).asInstanceOf[CompiledResult[T]]
+
+  def build(
+    expr: String,
+    params: Map[String, Any] = null,
+    reusableExpr: Boolean = true
+  )(implicit resources: Resources = Env): Expr = {
     Env log expr
     newInstance(new Env(params, resources, reusableExpr), 0, 0).buildExpr(expr)
   }
 
   /** QueryBuilder methods **/
-  override private[tresql] def newInstance(e: Env, depth: Int, idx: Int) =
-    new Query {
+  private[tresql] def newInstance(
+    e: Env,
+    depth: Int,
+    idx: Int
+  ) = new Query {
       override def env = e
       override private[tresql] def queryDepth = depth
       override private[tresql] var bindIdx = idx
@@ -39,11 +58,25 @@ trait Query extends QueryBuilder with TypedQuery {
   }
 
   private[tresql] def sel(sql: String, cols: List[QueryBuilder#ColExpr]): Result = {
+    val (rs, columns, visibleColCount) = sel_result(sql, cols)
+    val result =
+      //if (converter == null)
+        new SelectResult(rs, columns, env, sql, bindVariables, env.maxResultSize, visibleColCount)
+      //else
+        //new CompiledSelectResult(rs, columns, env, sql,bindVariables,
+          //env.maxResultSize, visibleColCount, converter)
+    env.result = result
+    result
+  }
+
+  private[this] def sel_result(sql: String, cols: List[QueryBuilder#ColExpr]):
+    (ResultSet, Vector[Column], Int) = { //jdbc result, columns, visible column count
     val st = statement(sql, env)
     bindVars(st, bindVariables)
     var i = 0
     val rs = st.executeQuery
     val md = rs.getMetaData
+    var visibleColCount = -1
     def jdbcRcols = (1 to md.getColumnCount).foldLeft(List[Column]()) {
         (l, j) => i += 1; Column(i, md.getColumnLabel(j), null) :: l
       } reverse
@@ -59,19 +92,18 @@ trait Query extends QueryBuilder with TypedQuery {
       env.updateExprs(res._2)
       (res._1.reverse, res._3)
     } else (cols map rcol, -1)
-
-    val result = if (allCols) new SelectResult(rs, Vector(cols.flatMap {c =>
-      if (c.col.isInstanceOf[QueryBuilder#AllExpr]) jdbcRcols else List(rcol(c))
-    }: _*), env, sql, bindVariables, env.maxResultSize)
-    else if (identAll) new SelectResult(rs,
-        Vector(jdbcRcols ++ (cols.filter(_.separateQuery) map rcol) :_*), env, sql, bindVariables,
-          env.maxResultSize)
-    else rcols match {
-      case (c, -1) => new SelectResult(rs, Vector(c: _*), env, sql, bindVariables, env.maxResultSize)
-      case (c, s) => new SelectResult(rs, Vector(c: _*), env, sql, bindVariables, env.maxResultSize, s)
-    }
-    env.result = result
-    result
+    val columns =
+      if (allCols) Vector(cols.flatMap { c =>
+        if (c.col.isInstanceOf[QueryBuilder#AllExpr]) jdbcRcols else List(rcol(c))
+      }: _*)
+      else if (identAll) Vector(jdbcRcols ++ (cols.filter(_.separateQuery) map rcol) :_*)
+      else rcols match {
+        case (c, -1) => Vector(c: _*)
+        case (c, s) =>
+          visibleColCount = s
+          Vector(c: _*)
+      }
+      (rs, columns, visibleColCount)
   }
 
   private[tresql] def update(sql: String) = {

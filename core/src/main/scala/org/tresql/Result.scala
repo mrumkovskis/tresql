@@ -3,6 +3,7 @@ package org.tresql
 import java.sql.ResultSet
 import java.sql.ResultSetMetaData
 import sys._
+import CoreTypes.RowConverter
 
 trait Result extends Iterator[RowLike] with RowLike with TypedResult {
   class Row(row: Seq[Any]) extends Seq[Any] with RowLike {
@@ -586,17 +587,31 @@ trait RowLike extends Dynamic with Typed {
   def values: Seq[Any]
 }
 
-case class Column(idx: Int, name: String, private[tresql] val expr: Expr)
-
-class TooManyRowsException(message: String) extends RuntimeException(message)
-
 /**
   {{{CompiledResult}}} is retured from {{{Query.apply[T]}}} method.
   Is used from tresql interpolator macro
 */
 trait CompiledResult[T <: RowLike] extends Result with Iterator[T] {
-  protected def converter: RowLike => T
+  protected def converter: RowConverter[T]
   override def toList: List[T] = super.toList map converter
+  def head: T = ???
+  def headOption: Option[T] = ???
+  def unique: T = ???
+  def uniqueOption: Option[T] = ???
+}
+
+case class CompiledSingleValueResult[T <: RowLike](res: T) extends CompiledResult[T] {
+  var n = true
+  val col = Column(0, "value", null)
+  def hasNext = if (n) {n = false; true} else false
+  def next = res
+  def columnCount = 1
+  def column(idx: Int) = col
+  def apply(idx: Int) = res(idx)
+  def typed[T: Manifest](name: String) = res(name).asInstanceOf[T]
+  def apply(name: String) = if (name == "value") res(0) else sys.error("column not found: " + name)
+  def converter = null
+  override def toString = s"SingleValueResult = $res"
 }
 
 class CompiledSelectResult[T <: RowLike] private[tresql] (
@@ -607,7 +622,7 @@ class CompiledSelectResult[T <: RowLike] private[tresql] (
   bindVariables: List[Expr],
   maxSize: Int = 0,
   _columnCount: Int = -1,
-  protected val converter: RowLike => T)
+  protected val converter: RowConverter[T])
     extends SelectResult (rs, cols, env, sql, bindVariables, maxSize, _columnCount)
     with CompiledResult[T] {
 
@@ -615,23 +630,23 @@ class CompiledSelectResult[T <: RowLike] private[tresql] (
       converter(super.next)
     }
 
-    def head: T = try hasNext match {
+    override def head: T = try hasNext match {
       case true => next
       case false => throw new NoSuchElementException("No rows in result")
     } finally close
 
-    def headOption: Option[T] = try Some(head) catch {
+    override def headOption: Option[T] = try Some(head) catch {
       case e: NoSuchElementException => None
     }
 
-    def unique: T = try hasNext match {
+    override def unique: T = try hasNext match {
       case true =>
         val v = next
         if (hasNext) error("More than one row for unique result") else v
       case false => error("No rows in result")
     } finally close
 
-    def uniqueOption: Option[T] = try hasNext match {
+    override def uniqueOption: Option[T] = try hasNext match {
       case true =>
         val v = next
         if (hasNext) error("More than one row for unique result") else Some(v)
@@ -639,3 +654,7 @@ class CompiledSelectResult[T <: RowLike] private[tresql] (
     } finally close
 
   }
+
+  case class Column(idx: Int, name: String, private[tresql] val expr: Expr)
+
+  class TooManyRowsException(message: String) extends RuntimeException(message)
