@@ -124,7 +124,7 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
     }
     rsHasNext
   }
-  def next = {
+  def next: RowLike = {
     nextCalled = true
     if (maxSize > 0) {
       env.rowCount += 1
@@ -589,3 +589,53 @@ trait RowLike extends Dynamic with Typed {
 case class Column(idx: Int, name: String, private[tresql] val expr: Expr)
 
 class TooManyRowsException(message: String) extends RuntimeException(message)
+
+/**
+  {{{CompiledResult}}} is retured from {{{Query.apply[T]}}} method.
+  Is used from tresql interpolator macro
+*/
+trait CompiledResult[T <: RowLike] extends Result with Iterator[T] {
+  protected def converter: RowLike => T
+  override def toList: List[T] = super.toList map converter
+}
+
+class CompiledSelectResult[T <: RowLike] private[tresql] (
+  rs: ResultSet,
+  cols: Vector[Column],
+  env: Env,
+  sql: String,
+  bindVariables: List[Expr],
+  maxSize: Int = 0,
+  _columnCount: Int = -1,
+  protected val converter: RowLike => T)
+    extends SelectResult (rs, cols, env, sql, bindVariables, maxSize, _columnCount)
+    with CompiledResult[T] {
+
+    override def next: T = {
+      converter(super.next)
+    }
+
+    def head: T = try hasNext match {
+      case true => next
+      case false => throw new NoSuchElementException("No rows in result")
+    } finally close
+
+    def headOption: Option[T] = try Some(head) catch {
+      case e: NoSuchElementException => None
+    }
+
+    def unique: T = try hasNext match {
+      case true =>
+        val v = next
+        if (hasNext) error("More than one row for unique result") else v
+      case false => error("No rows in result")
+    } finally close
+
+    def uniqueOption: Option[T] = try hasNext match {
+      case true =>
+        val v = next
+        if (hasNext) error("More than one row for unique result") else Some(v)
+      case false => None
+    } finally close
+
+  }

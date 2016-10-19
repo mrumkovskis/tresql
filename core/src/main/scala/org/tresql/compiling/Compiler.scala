@@ -11,9 +11,6 @@ trait Scope {
   def column(col: String): Option[Col[_]]
   def procedure(procedure: String): Option[Procedure[_]]
 }
-trait CompiledResult[T <: RowLike] extends Result with Iterator[T] {
-  override def toList: List[T] = Nil
-}
 
 trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompiler =>
 

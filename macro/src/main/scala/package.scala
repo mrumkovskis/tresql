@@ -23,20 +23,26 @@ package object tresql extends CoreTypes {
     }
   }
 
-  import scala.reflect.macros.Context
+  //whitebox context is important (not blackbox) since return value of tresql function
+  //must return type actually returned from Macro.impl i.e not CompiledResult[RowLike]
+  import scala.reflect.macros.whitebox.Context
   import scala.language.experimental.macros
   implicit class Tresqlc(val sc: StringContext) extends AnyVal {
-    def tresqlc(params: Any*)(implicit resources: Resources): Unit = macro Macros.impl
+    def tresqlc(params: Any*)(implicit resources: Resources): List[java.lang.Number] = macro Macros.impl
   }
 
   object Macros {
-    def impl(c: Context)(params: c.Expr[Any]*)(resources: c.Expr[Resources]): c.Expr[Unit] = {
+    def impl(c: Context)(params: c.Expr[Any]*)(resources: c.Expr[Resources]): c.Expr[List[java.lang.Number]] = {
       import c.universe._
+      println("Compile time macro called.")
       println(s"""Args: $params,
         |env: $resources,
-        |context settings: ${c.settings},
-        |tree: ${c.macroApplication}""".stripMargin)
-      c.Expr[Unit](q"""println("hello world")""")
+        |context settings: ${c.settings}""".stripMargin)
+      val q"$surroundingTree" = c.macroApplication
+      println(s"surrounding tree:\n$surroundingTree")
+      val q"org.tresql.`package`.Tresqlc(scala.StringContext.apply(..$parts)).tresqlc(..$pars)($res)" = c.macroApplication
+      println(s"parts: $parts, params: $pars, res: $res")
+      c.Expr[List[BigDecimal]](q"""List(BigDecimal(1), BigDecimal(2), BigDecimal(3))""")
     }
   }
 

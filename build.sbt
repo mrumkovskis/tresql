@@ -6,7 +6,8 @@ lazy val commonSettings = Seq(
   //crossScalaVersions := Seq(2.10.4", "2.11.8")
   //coverageEnabled := true
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",
-    "-language:postfixOps", "-language:implicitConversions"),
+    "-language:postfixOps", "-language:implicitConversions",
+    "-Xmacro-settings:metadata=TestJDBCMetadata"),
   publishTo := {
     val nexus = "https://oss.sonatype.org/"
     if (version.value.trim.endsWith("SNAPSHOT"))
