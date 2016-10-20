@@ -28,6 +28,7 @@ package object tresql extends CoreTypes {
       val tresqlString = parts.map { case Literal(Constant(x)) => x } match {
         case l => l.head + l.tail.zipWithIndex.map(t => ":_" + t._2 + t._1).mkString //replace placeholders with variable defs
       }
+      println(s"Macro compiler settings: ${c.settings}")
       println(s"Compiling: $tresqlString")
       //QueryCompiler.compile(tresqlString)
       val tree = q"""
