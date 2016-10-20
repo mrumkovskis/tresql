@@ -22,7 +22,6 @@ package object tresql extends CoreTypes {
   object Macros {
     def impl(c: Context)(params: c.Expr[Any]*)(resources: c.Expr[Resources]): c.Expr[Result] = {
       import c.universe._
-      val q"$surroundingTree" = c.macroApplication
       val q"org.tresql.`package`.Tresql(scala.StringContext.apply(..$parts)).tresql(..$pars)($res)" =
         c.macroApplication
       val tresqlString = parts.map { case Literal(Constant(x)) => x } match {
