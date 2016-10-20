@@ -25,6 +25,11 @@ package object tresql extends CoreTypes {
       val q"$surroundingTree" = c.macroApplication
       val q"org.tresql.`package`.Tresql(scala.StringContext.apply(..$parts)).tresql(..$pars)($res)" =
         c.macroApplication
+      val tresqlString = parts.map { case Literal(Constant(x)) => x } match {
+        case l => l.head + l.tail.zipWithIndex.map(t => ":_" + t._2 + t._1).mkString //replace placeholders with variable defs
+      }
+      println(s"Compiling: $tresqlString")
+      //QueryCompiler.compile(tresqlString)
       val tree = q"""
         var optionalVars = Set[Int]()
         Query(${parts.head} + List[String](..${parts.tail}).zipWithIndex.map { t =>
