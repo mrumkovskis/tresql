@@ -27,8 +27,8 @@ package object tresql extends CoreTypes {
       val tresqlString = parts.map { case Literal(Constant(x)) => x } match {
         case l => l.head + l.tail.zipWithIndex.map(t => ":_" + t._2 + t._1).mkString //replace placeholders with variable defs
       }
-      println(s"Macro compiler settings: ${c.settings}")
       println(s"Compiling: $tresqlString")
+      
       //QueryCompiler.compile(tresqlString)
       val tree = q"""
         var optionalVars = Set[Int]()
@@ -41,6 +41,10 @@ package object tresql extends CoreTypes {
           .map(t => ("_" + t._2) -> t._1).toMap)($res)"""
       c.Expr(tree)
     }
+    def settings(sett: List[String]) = sett.map { _.split("=") match {
+      case Array(key, value) => key.trim -> value.trim
+      case x => sys.error(s"Setting must be in format <key>=<value> with non empty keys and values. Instead found: $x")
+    }}.toMap
   }
 
   implicit def jdbcResultToTresqlResult(jdbcResult: java.sql.ResultSet) = {

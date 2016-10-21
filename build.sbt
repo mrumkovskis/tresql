@@ -3,11 +3,10 @@ val paradiseVersion = "2.1.0"
 lazy val commonSettings = Seq(
   organization := "org.tresql",
   scalaVersion := "2.11.8",
-  //crossScalaVersions := Seq(2.10.4", "2.11.8")
-  //coverageEnabled := true
+  //coverageEnabled := true,
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",
     "-language:postfixOps", "-language:implicitConversions",
-    "-Xmacro-settings:metadata=TestJDBCMetadata"),
+    "-Xmacro-settings:metadataFactoryClass=org.tresql.compiling.CompilerJDBCMetaData, driverClass=org.hsqldb.jdbc.JDBCDriver, url=jdbc:hsqldb:mem:., dbCreateScript=/db.sql"),
   publishTo := {
     val nexus = "https://oss.sonatype.org/"
     if (version.value.trim.endsWith("SNAPSHOT"))
@@ -15,7 +14,6 @@ lazy val commonSettings = Seq(
     else
       Some("releases" at nexus + "service/local/staging/deploy/maven2")
     },
-  addCompilerPlugin("org.scalamacros" % "paradise" % paradiseVersion cross CrossVersion.full),
   publishArtifact in Compile := false,
   publishMavenStyle := true,
   sources in (Compile, doc) := Seq.empty

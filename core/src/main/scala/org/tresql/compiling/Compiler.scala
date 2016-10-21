@@ -2,7 +2,7 @@ package org.tresql.compiling
 
 import org.tresql.parsing._
 import org.tresql.metadata._
-import org.tresql.{Env, Result, RowLike}
+import org.tresql.Env
 import scala.reflect.ManifestFactory
 
 trait Scope {
