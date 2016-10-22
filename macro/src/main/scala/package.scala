@@ -63,8 +63,7 @@ package object tresql extends CoreTypes {
       lazy val generator: PartialFunction[(c.Tree, Exp), c.Tree] = extractorAndTraverser {
         case (tree, sd: SelectDef) =>
           val typeName = c.freshName("Tresql")
-          val fields_convs = sd.cols.zipWithIndex.map { t =>
-            val (c: ColDef[_], idx: Int) = t
+          val fields_convs = sd.cols.zipWithIndex.map { case (c: ColDef[_], idx: Int) =>
             (q"var ${TermName(c.name)}: ${TypeName(c.typ.toString)} = null",
              q"obj.${TermName(c.name)} = row.typed[${TypeName(c.typ.toString)}]($idx)")
           }
