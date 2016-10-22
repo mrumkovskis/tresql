@@ -29,7 +29,7 @@ package object tresql extends CoreTypes {
       }
       Env.metaData = metadata(settings(c.settings))
       Env.log(s"Compiling: $tresqlString")
-      QueryCompiler.compile(tresqlString)
+      val compiledExp = QueryCompiler.compile(tresqlString)
       val tree = q"""
         var optionalVars = Set[Int]()
         Query(${parts.head} + List[String](..${parts.tail}).zipWithIndex.map { t =>
@@ -56,8 +56,20 @@ package object tresql extends CoreTypes {
     }.getOrElse(
       sys.error(s"metadataFactoryClass macro compiler setting missing. Try to set -Xmacro-settings: scala compiler option.")
     )
-    def generateResultClass(exp: QueryCompiler.SelectDef) = {
+
+    def selectResultClassTree(exp: QueryCompiler.SelectDef, c: Context) = {
       import QueryCompiler._
+      import c.universe._
+      lazy val generator: PartialFunction[(c.Tree, Exp), c.Tree] = extractorAndTraverser {
+        case (tree, sd: SelectDef) =>
+          val typeName = c.freshName("Tresql")
+          val fields_convs = sd.cols.zipWithIndex.map { t =>
+            val (c: ColDef[_], idx: Int) = t
+            (q"var ${TermName(c.name)}: ${TypeName(c.typ.toString)} = null",
+             q"obj.${TermName(c.name)} = row.typed[${TypeName(c.typ.toString)}]($idx)")
+          }
+          (q"class A", false)
+      }
     }
   }
 
