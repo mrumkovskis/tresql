@@ -32,13 +32,13 @@ package object tresql extends CoreTypes {
       val compiledExp = QueryCompiler.compile(tresqlString)
       val tree = q"""
         var optionalVars = Set[Int]()
-        Query(${parts.head} + List[String](..${parts.tail}).zipWithIndex.map { t =>
-          if (t._1.trim.startsWith("?")) optionalVars += t._2
-          ":_" + t._2 + t._1
+        Query(${parts.head} + List[String](..${parts.tail}).zipWithIndex.map { case (part, idx) =>
+          if (part.trim.startsWith("?")) optionalVars += idx
+          ":_" + idx + part
         }.mkString, List[Any](..$params)
           .zipWithIndex
-          .filterNot(t => t._1 == null && (optionalVars contains t._2))
-          .map(t => ("_" + t._2) -> t._1).toMap)($res)"""
+          .filterNot { case (param, idx) => param == null && (optionalVars contains idx) }
+          .map { case (param, idx) => ("_" + idx) -> param }.toMap)($res)"""
       c.Expr(tree)
     }
     def settings(sett: List[String]) = sett.map { _.split("=") match {
@@ -63,7 +63,7 @@ package object tresql extends CoreTypes {
       lazy val generator: PartialFunction[(c.Tree, Exp), c.Tree] = extractorAndTraverser {
         case (tree, sd: SelectDef) =>
           val typeName = c.freshName("Tresql")
-          val fields_convs = sd.cols.zipWithIndex.map { case (c: ColDef[_], idx: Int) =>
+          val fields_convs = sd.cols.zipWithIndex.map { case (c, idx) =>
             (q"var ${TermName(c.name)}: ${TypeName(c.typ.toString)} = null",
              q"obj.${TermName(c.name)} = row.typed[${TypeName(c.typ.toString)}]($idx)")
           }
