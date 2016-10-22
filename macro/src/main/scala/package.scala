@@ -27,9 +27,9 @@ package object tresql extends CoreTypes {
       val tresqlString = parts.map { case Literal(Constant(x)) => x } match {
         case l => l.head + l.tail.zipWithIndex.map(t => ":_" + t._2 + t._1).mkString //replace placeholders with variable defs
       }
-      println(s"Compiling: $tresqlString")
-      
-      //QueryCompiler.compile(tresqlString)
+      Env.metaData = metadata(settings(c.settings))
+      Env.log(s"Compiling: $tresqlString")
+      QueryCompiler.compile(tresqlString)
       val tree = q"""
         var optionalVars = Set[Int]()
         Query(${parts.head} + List[String](..${parts.tail}).zipWithIndex.map { t =>
@@ -45,6 +45,20 @@ package object tresql extends CoreTypes {
       case Array(key, value) => key.trim -> value.trim
       case x => sys.error(s"Setting must be in format <key>=<value> with non empty keys and values. Instead found: $x")
     }}.toMap
+    def metadata(conf: Map[String, String]) = conf.get("metadataFactoryClass").map { factory =>
+      Class.forName(factory).newInstance.asInstanceOf[compiling.CompilerMetaData].create(
+        conf.getOrElse("driverClass", null),
+        conf.getOrElse("url", null),
+        conf.getOrElse("user", null),
+        conf.getOrElse("password", null),
+        conf.getOrElse("dbCreateScript", null)
+      )
+    }.getOrElse(
+      sys.error(s"metadataFactoryClass macro compiler setting missing. Try to set -Xmacro-settings: scala compiler option.")
+    )
+    def generateResultClass(exp: QueryCompiler.SelectDef) = {
+      import QueryCompiler._
+    }
   }
 
   implicit def jdbcResultToTresqlResult(jdbcResult: java.sql.ResultSet) = {
