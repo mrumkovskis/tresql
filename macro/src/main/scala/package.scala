@@ -125,7 +125,7 @@ package object tresql extends CoreTypes {
             // TODO unsupported at the moment
             (ctx, false)
           case (ctx, ColDef(name, _, typ)) =>
-            //bizzare way of getting qualified type name, did not find another way...
+            //FIXME bizzare way of getting qualified type name, did not find another way...
             val q"typeOf[$ttt]" = c.parse(s"typeOf[${typ.toString}]")
             //first element of l is field def, second field convertion row which will be placed in converter
             val l = List(q"var ${TermName(name)}: $ttt = _",
