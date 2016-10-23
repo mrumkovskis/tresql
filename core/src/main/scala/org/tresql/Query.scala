@@ -12,6 +12,13 @@ trait Query extends QueryBuilder with TypedQuery {
   def apply(expr: String, params: Any*)(implicit resources: Resources = Env): Result =
     exec(expr, normalizePars(params: _*), resources)
 
+  private[tresql] def compiledResult[T <: RowLike](expr: String, params: Any*)(
+    implicit resources: Resources = Env): CompiledResult[T] = {
+    apply(expr, params: _*)(resources).asInstanceOf[CompiledResult[T]]
+  }
+
+  private[tresql] def converters: Map[(Int, Int), RowConverter[_]] = ???
+
   private def exec(
     expr: String,
     params: Map[String, Any],
@@ -36,11 +43,14 @@ trait Query extends QueryBuilder with TypedQuery {
     e: Env,
     depth: Int,
     idx: Int
-  ) = new Query {
+  ) = {
+    if (converters != null) e.rowConverters = converters
+    new Query {
       override def env = e
       override private[tresql] def queryDepth = depth
       override private[tresql] var bindIdx = idx
     }
+  }
 
   def parse(expr: String) = QueryParser.parseExp(expr)
 

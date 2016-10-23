@@ -588,6 +588,20 @@ trait RowLike extends Dynamic with Typed {
 }
 
 /**
+  {{{CompiledRow}}} is used as superclass for parameter type of {{{CompiledResult[T]}}}
+*/
+trait CompiledRow extends RowLike with Typed {
+  def apply(name: String): Any = ???
+  def apply(idx: Int): Any = ???
+  def column(idx: Int): org.tresql.Column = ???
+  def columnCount: Int = ???
+  def columns: Seq[org.tresql.Column] = ???
+  def rowToMap: Map[String,Any] = ???
+  def values: Seq[Any] = ???
+  def typed[T:Manifest](name: String) = ???
+}
+
+/**
   {{{CompiledResult}}} is retured from {{{Query.apply[T]}}} method.
   Is used from tresql interpolator macro
 */
