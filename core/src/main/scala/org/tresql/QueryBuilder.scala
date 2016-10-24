@@ -35,6 +35,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   private[tresql] var identAll = false
   //indicate presence of hidden columns due to external function call
   private[tresql] var hasHiddenCols = false
+  //children count. Is increased every time buildWithNew method is called or recursive expr created
+  private[tresql] var childrenCount = 0
 
   //set by buildInternal method when building Query for potential use in RecursiveExpr
   private[tresql] var recursiveQueryExp: QueryParser.Query = null
@@ -61,11 +63,13 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   /*****************************************************************************
   ****************** methods to be implemented or overriden ********************
   ******************************************************************************/
-  private[tresql] def newInstance(env: Env, queryDepth: Int, bindIdx: Int): QueryBuilder
+  private[tresql] def newInstance(env: Env, queryDepth: Int, bindIdx: Int, childIdx: Int): QueryBuilder
   def env: Env = ???
   private[tresql] def queryDepth: Int = ???
   private[tresql] def bindIdx: Int = ???
   private[tresql] def bindIdx_=(idx: Int): Unit = ???
+  //childIdx indicates this builder index relatively to it's parent
+  private[tresql] def childIdx: Int = ???
   /*****************************************************************************/
 
   case class ConstExpr(value: Any) extends BaseExpr {
@@ -315,10 +319,11 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   }
 
   case class RecursiveExpr(exp: QueryParser.Query) extends BaseExpr {
+    val childIdx = QueryBuilder.this.childrenCount
     if (queryDepth >= Env.recursive_stack_dept)
       error(s"Recursive execution stack depth $queryDepth exceeded, check for loops in data or increase Env.recursive_stack_dept setting.")
     val qBuilder = newInstance(new Env(QueryBuilder.this, env.reusableExpr),
-      queryDepth + 1, 0)
+      queryDepth + 1, 0, childIdx)
     qBuilder.recursiveQueryExp = recursiveQueryExp
     lazy val expr: Expr = qBuilder.buildInternal(exp, QUERY_CTX)
     override def apply() = expr()
@@ -901,9 +906,11 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     def buildWithNew(buildFunc: QueryBuilder => Expr) = {
       val b = newInstance(
         new Env(QueryBuilder.this, QueryBuilder.this.env.reusableExpr),
-        queryDepth + 1, bindIdx)
+        queryDepth + 1, bindIdx, this.childrenCount)
       val ex = buildFunc(b)
-      this.separateQueryFlag = true; this.bindIdx = b.bindIdx
+      this.separateQueryFlag = true
+      this.bindIdx = b.bindIdx
+      this.childrenCount += 1
       ex
     }
 
@@ -922,17 +929,21 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case Delete(t, a, f) => buildWithNew(_.buildDelete(t, a, f))
         //recursive child query
         case UnOp("|", join: Arr) =>
-          this.separateQueryFlag = true
-          if (recursiveQueryExp != null) RecursiveExpr({
-            val t = recursiveQueryExp.tables
-            //copy join condition in the right place for parent child join calculation
-            recursiveQueryExp.copy(
-              tables = t.head.copy(
-                join = QueryParser.Join(false, join, false)) :: t.tail,
-              //drop first filter for recursive query, since first filter is used to obtain initial set
-              filter = recursiveQueryExp.filter.copy(
-                filters = recursiveQueryExp.filter.filters drop 1))
-          }) else null
+          if (recursiveQueryExp != null) {
+            val e = RecursiveExpr({
+              val t = recursiveQueryExp.tables
+              //copy join condition in the right place for parent child join calculation
+              recursiveQueryExp.copy(
+                tables = t.head.copy(
+                  join = QueryParser.Join(false, join, false)) :: t.tail,
+                //drop first filter for recursive query, since first filter is used to obtain initial set
+                filter = recursiveQueryExp.filter.copy(
+                  filters = recursiveQueryExp.filter.filters drop 1))
+            })
+            this.separateQueryFlag = true
+            this.childrenCount += 1
+            e
+        } else null
         //child query
         case UnOp("|", oper) => buildWithNew(_.buildInternal(oper, QUERY_CTX))
         case t: Obj => parseCtx match {

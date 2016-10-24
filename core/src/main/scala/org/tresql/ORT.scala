@@ -23,11 +23,12 @@ trait ORT extends Query {
   type ObjToMapConverter[T] = (T) => (String, Map[String, _])
 
   /** QueryBuilder methods **/
-  override private[tresql] def newInstance(e: Env, depth: Int, idx: Int) =
+  override private[tresql] def newInstance(e: Env, depth: Int, idx: Int, chIdx: Int) =
     new ORT {
       override def env = e
       override private[tresql] def queryDepth = depth
       override private[tresql] var bindIdx = idx
+      override private[tresql] def childIdx = chIdx
     }
 
   case class TableLink(table: String, refs: Set[String])

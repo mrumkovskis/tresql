@@ -35,20 +35,22 @@ trait Query extends QueryBuilder with TypedQuery {
     reusableExpr: Boolean = true
   )(implicit resources: Resources = Env): Expr = {
     Env log expr
-    newInstance(new Env(params, resources, reusableExpr), 0, 0).buildExpr(expr)
+    newInstance(new Env(params, resources, reusableExpr), 0, 0, 0).buildExpr(expr)
   }
 
   /** QueryBuilder methods **/
   private[tresql] def newInstance(
     e: Env,
     depth: Int,
-    idx: Int
+    idx: Int,
+    chIdx: Int
   ) = {
     if (converters != null) e.rowConverters = converters
     new Query {
       override def env = e
       override private[tresql] def queryDepth = depth
       override private[tresql] var bindIdx = idx
+      override private[tresql] def childIdx = chIdx
     }
   }
 
@@ -61,6 +63,9 @@ trait Query extends QueryBuilder with TypedQuery {
 
   private[tresql] def sel(sql: String, cols: List[QueryBuilder#ColExpr]): Result = {
     val (rs, columns, visibleColCount) = sel_result(sql, cols)
+    println("--------------EXE SELECT---------------")
+    println(s"--DEPTH: $queryDepth, COLIDX: $childIdx, HAS CONVERTERS: ${env.rowConverters != None}-----")
+    println("---------------------------------------")
     val result =
       //if (converter == null)
         new SelectResult(rs, columns, env, sql, bindVariables, env.maxResultSize, visibleColCount)

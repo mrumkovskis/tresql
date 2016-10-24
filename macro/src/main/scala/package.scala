@@ -173,7 +173,7 @@ package object tresql extends CoreTypes {
           override def converters =
             Map[(Int, Int), RowConverter[_]](..$convRegister)
         }
-        Query(${parts.head} + List[String](..${parts.tail}).zipWithIndex.map { case (part, idx) =>
+        query(${parts.head} + List[String](..${parts.tail}).zipWithIndex.map { case (part, idx) =>
           if (part.trim.startsWith("?")) optionalVars += idx
           ":_" + idx + part
         }.mkString, List[Any](..$params)
