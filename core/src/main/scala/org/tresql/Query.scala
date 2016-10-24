@@ -17,7 +17,7 @@ trait Query extends QueryBuilder with TypedQuery {
     apply(expr, params: _*)(resources).asInstanceOf[CompiledResult[T]]
   }
 
-  private[tresql] def converters: Map[(Int, Int), RowConverter[_]] = ???
+  private[tresql] def converters: Map[(Int, Int), RowConverter[_]] = null
 
   private def exec(
     expr: String,
