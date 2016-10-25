@@ -319,13 +319,15 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   }
 
   case class RecursiveExpr(exp: QueryParser.Query) extends BaseExpr {
-    private val initQueryDepth = QueryBuilder.this.queryDepth
+    //take this from childrenCount, since it RecursiveExpr is not built with new builder
     private val initChildIdx = QueryBuilder.this.childrenCount
+    private val rowConverter = env.rowConverter(QueryBuilder.this.queryDepth, initChildIdx)
     if (queryDepth >= Env.recursive_stack_dept)
       error(s"Recursive execution stack depth $queryDepth exceeded, check for loops in data or increase Env.recursive_stack_dept setting.")
     val qBuilder = newInstance(new Env(QueryBuilder.this, env.reusableExpr),
-      queryDepth + 1, 0, childIdx)
+      queryDepth + 1, 0, initChildIdx)
     qBuilder.recursiveQueryExp = recursiveQueryExp
+    //TODO pass rowConverter to built SelectExpr!
     lazy val expr: Expr = qBuilder.buildInternal(exp, QUERY_CTX)
     override def apply() = expr()
     def defaultSQL = expr sql

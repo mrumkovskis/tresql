@@ -107,9 +107,9 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
     provider.map(_.env.rowCount = rc).getOrElse (_rowCount = rc)
   }
 
-  private[tresql] def rowConverter(depth: Int, col: Int): RowConverter[_] =
+  private[tresql] def rowConverter(depth: Int, col: Int): Option[RowConverter[_]] =
     rowConverters.flatMap(_.get((depth, col)))
-      .getOrElse(sys.error(s"Query structure is broken, cannot find converter at {depth: ${depth}, col: ${col} }"))
+      //.getOrElse(sys.error(s"Query structure is broken, cannot find converter at {depth: ${depth}, col: ${col} }"))
   private[tresql] def rowConverters: Option[Map[(Int /*query depth*/, Int /*col idx*/), RowConverter[_]]] =
     provider.flatMap(_.env.rowConverters) orElse _rowConverters
   private[tresql] def rowConverters_=(rc: Map[(Int /*query depth*/, Int /*col idx*/), RowConverter[_]]) {
