@@ -35,8 +35,11 @@ class CompilerJDBCMetaData extends CompilerMetaData {
         else DriverManager.getConnection(url, user, password)
       Env.sharedConn = conn
       if (dbCreateScript != null) {
-        Env.log("Creating database for compiler...")
-        new scala.io.BufferedSource(getClass.getResourceAsStream(dbCreateScript))
+        Env.log(s"Creating database for compiler from script $dbCreateScript...")
+        new scala.io.BufferedSource(
+          Option(getClass
+            .getResourceAsStream(dbCreateScript))
+            .getOrElse(new java.io.FileInputStream(dbCreateScript)))
           .mkString
           .split("//")
           .foreach { sql =>

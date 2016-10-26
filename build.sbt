@@ -6,7 +6,7 @@ lazy val commonSettings = Seq(
   //coverageEnabled := true,
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",
     "-language:postfixOps", "-language:implicitConversions",
-    "-Xmacro-settings:metadataFactoryClass=org.tresql.compiling.CompilerJDBCMetaData, driverClass=org.hsqldb.jdbc.JDBCDriver, url=jdbc:hsqldb:mem:., dbCreateScript=/db.sql, verbose"),
+    "-Xmacro-settings:metadataFactoryClass=org.tresql.compiling.CompilerJDBCMetaData, driverClass=org.hsqldb.jdbc.JDBCDriver, url=jdbc:hsqldb:mem:., dbCreateScript=src/test/resources/db.sql, verbose"),
   publishTo := {
     val nexus = "https://oss.sonatype.org/"
     if (version.value.trim.endsWith("SNAPSHOT"))
