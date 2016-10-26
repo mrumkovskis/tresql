@@ -63,29 +63,40 @@ package object tresql extends CoreTypes {
       import c.universe._
       import CoreTypes.RowConverter
       case class Ctx(
-        //class name which extends RowLike, can be type projection (class1#class2) in case of child queries
-        //in reverse order - starts with innermost child
-        className: List[String],
-        tree: List[c.Tree],
+        //class name which extends RowLike
+        className: String,
+        tree: List[c.Tree], //class (field) & converter definition.
         depth: Int, //select descendancy idx (i.e. QueryBuilder.queryDepth)
-        colIdx: Int,
+        colIdx: Int, //column idx - used in converter
+        childIdx: Int, //child select index - used to get converter from env
         convRegister: List[c.Tree] //Map of converters for Env in form of (Int, Int) -> RowConveter[_]
       )
       def resultClassTree(exp: Exp): Ctx = {
         lazy val generator: PartialFunction[(Ctx, Exp), Ctx] = extractorAndTraverser {
           case (ctx, sd: SelectDef) =>
             val className = c.freshName("Tresql")
-            case class ColsCtx(colTrees: List[List[c.Tree]], colIdx: Int, convRegister: List[c.Tree])
+            case class ColsCtx(
+              colTrees: List[List[c.Tree]],
+              colIdx: Int,
+              childIdx: Int,
+              convRegister: List[c.Tree]
+            )
             val colsCtx = sd.cols
-              .foldLeft(ColsCtx(Nil, 0, ctx.convRegister)) { case (colCt, c) =>
+              .foldLeft(ColsCtx(Nil, 0, 0, ctx.convRegister)) { case (colCt, c) =>
                 val ct = generator(Ctx(
-                  className :: ctx.className,
+                  className,
                   Nil,
                   ctx.depth,
                   colCt.colIdx,
+                  colCt.childIdx,
                   colCt.convRegister
                 ) -> c)
-                ColsCtx(ct.tree :: colCt.colTrees, colCt.colIdx + 1, ct.convRegister)
+                ColsCtx(
+                  ct.tree :: colCt.colTrees,
+                  colCt.colIdx + 1,
+                  ct.childIdx,
+                  ct.convRegister
+                )
               }
             val (fieldDefs, fieldConvs, children) = colsCtx.colTrees
               .map (l => (l.head, l.tail.head, l.tail.tail)) //first two values are field def, field converter, the rest is children
@@ -109,28 +120,30 @@ package object tresql extends CoreTypes {
               }
             """
             //depth for select starts with 1
-            val converterRegister = q"((${ctx.depth + 1} , ${ctx.colIdx}), $converterName)"
+            val converterRegister = q"((${ctx.depth + 1} , ${ctx.childIdx}), $converterName)"
             (Ctx(
-              className :: ctx.className,
+              className,
               classDef :: converterDef :: children,
               ctx.depth,
               ctx.colIdx,
+              ctx.childIdx,
               converterRegister :: colsCtx.convRegister
             ), false)
           case (ctx, ColDef(name, ChildDef(sd: SelectDef), typ)) =>
-            val selDefCtx = generator(
-              Ctx(ctx.className, Nil, ctx.depth + 1, ctx.colIdx, ctx.convRegister) -> sd)
+            val selDefCtx = generator(Ctx(ctx.className, Nil, ctx.depth + 1,
+              ctx.colIdx, ctx.childIdx, ctx.convRegister) -> sd)
             val fieldDef =
               q"""var ${TermName(name)}: org.tresql.CompiledResult[${
-                TypeName(selDefCtx.className.head)}] = _"""
+                TypeName(selDefCtx.className)}] = _"""
             //user type projection: child type in selDefCtx, parent in ctx
             //FIXME bizzare way of getting type projection, did not find another way...
-            val q"typeOf[$childClassType]" = c.parse(s"typeOf[${selDefCtx.className.head}]")
+            val q"typeOf[$childClassType]" = c.parse(s"typeOf[${selDefCtx.className}]")
             val fieldConv =
               q"""obj.${TermName(name)} =
                 row.typed[org.tresql.CompiledResult[$childClassType]](${ctx.colIdx})"""
             (ctx.copy(
               tree = fieldDef :: fieldConv :: selDefCtx.tree,
+              childIdx = ctx.childIdx + 1,
               convRegister = selDefCtx.convRegister
             ), false)
           case (ctx, ColDef(name, ChildDef(_), typ)) =>
@@ -144,7 +157,7 @@ package object tresql extends CoreTypes {
              q"obj.${TermName(name)} = row.typed[$colType](${ctx.colIdx})")
             (ctx.copy(tree = l), false)
         }
-        generator((Ctx(Nil, Nil, 0, 0, Nil), exp))
+        generator((Ctx(null, Nil, 0, 0, 0, Nil), exp))
       }
       val macroSettings = settings(c.settings)
       val verbose = macroSettings.contains("verbose")
@@ -159,9 +172,8 @@ package object tresql extends CoreTypes {
       log(s"Compiling: $tresqlString")
       val compiledExp = compile(tresqlString)
       val resultClassCtx = resultClassTree(compiledExp)
-      val (classDefs, convRegister) =
-        if (resultClassCtx != null) (resultClassCtx.tree, resultClassCtx.convRegister)
-        else (Nil, Nil)
+      val (classType, classDefs, convRegister) = (resultClassCtx.tree,
+        resultClassCtx.convRegister, TypeName(resultClassCtx.className))
       log("------------Class:------------\n")
       log(classDefs) //showCode does not work
       log("------------Converter register:----------\n")
@@ -171,15 +183,18 @@ package object tresql extends CoreTypes {
         var optionalVars = Set[Int]()
         val query = new Query {
           override def converters =
-            Map[(Int, Int), RowConverter[_]](..$convRegister)
+            Map[(Int, Int), RowConverter[_ <: RowLike]](..$convRegister)
         }
-        query(${parts.head} + List[String](..${parts.tail}).zipWithIndex.map { case (part, idx) =>
-          if (part.trim.startsWith("?")) optionalVars += idx
-          ":_" + idx + part
-        }.mkString, List[Any](..$params)
-          .zipWithIndex
-          .filterNot { case (param, idx) => param == null && (optionalVars contains idx) }
-          .map { case (param, idx) => ("_" + idx) -> param }.toMap)($res)"""
+        query.compiledResult[$classType](
+          ${parts.head} + List[String](..${parts.tail})
+            .zipWithIndex.map { case (part, idx) =>
+              if (part.trim.startsWith("?")) optionalVars += idx
+              ":_" + idx + part
+            }.mkString, List[Any](..$params)
+              .zipWithIndex
+              .filterNot { case (param, idx) => param == null && (optionalVars contains idx) }
+              .map { case (param, idx) => ("_" + idx) -> param }.toMap
+        )($res)"""
       c.Expr(tree)
     }
     def settings(sett: List[String]) = sett.map { _.split("=") match {

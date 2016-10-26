@@ -17,7 +17,7 @@ trait Query extends QueryBuilder with TypedQuery {
     apply(expr, params: _*)(resources).asInstanceOf[CompiledResult[T]]
   }
 
-  private[tresql] def converters: Map[(Int, Int), RowConverter[_]] = null
+  private[tresql] def converters: Map[(Int, Int), RowConverter[_ <: RowLike]] = null
 
   private def exec(
     expr: String,
@@ -63,15 +63,12 @@ trait Query extends QueryBuilder with TypedQuery {
 
   private[tresql] def sel(sql: String, cols: List[QueryBuilder#ColExpr]): Result = {
     val (rs, columns, visibleColCount) = sel_result(sql, cols)
-    println("--------------EXE SELECT---------------")
-    println(s"--DEPTH: $queryDepth, COLIDX: $childIdx, HAS CONVERTERS: ${env.rowConverters != None}-----")
-    println("---------------------------------------")
-    val result =
-      //if (converter == null)
-        new SelectResult(rs, columns, env, sql, bindVariables, env.maxResultSize, visibleColCount)
-      //else
-        //new CompiledSelectResult(rs, columns, env, sql,bindVariables,
-          //env.maxResultSize, visibleColCount, converter)
+    val result = env.rowConverter(queryDepth, childIdx).map { conv =>
+      new CompiledSelectResult(rs, columns, env, sql,bindVariables,
+        env.maxResultSize, visibleColCount, conv)
+    }.getOrElse {
+      new SelectResult(rs, columns, env, sql, bindVariables, env.maxResultSize, visibleColCount)
+    }
     env.result = result
     result
   }
