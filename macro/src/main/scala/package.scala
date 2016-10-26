@@ -129,6 +129,7 @@ package object tresql extends CoreTypes {
               ctx.childIdx,
               converterRegister :: colsCtx.convRegister
             ), false)
+          case (ctx, BinSelectDef(leftOperand, _, _)) => generator(ctx -> leftOperand) -> false
           case (ctx, ColDef(name, ChildDef(sd: SelectDef), typ)) =>
             val selDefCtx = generator(Ctx(ctx.className, Nil, ctx.depth + 1,
               ctx.colIdx, ctx.childIdx, ctx.convRegister) -> sd)
@@ -172,8 +173,8 @@ package object tresql extends CoreTypes {
       log(s"Compiling: $tresqlString")
       val compiledExp = compile(tresqlString)
       val resultClassCtx = resultClassTree(compiledExp)
-      val (classType, classDefs, convRegister) = (resultClassCtx.tree,
-        resultClassCtx.convRegister, TypeName(resultClassCtx.className))
+      val (classType, classDefs, convRegister) = (TypeName(resultClassCtx.className),
+        resultClassCtx.tree, resultClassCtx.convRegister)
       log("------------Class:------------\n")
       log(classDefs) //showCode does not work
       log("------------Converter register:----------\n")
