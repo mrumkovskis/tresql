@@ -607,11 +607,33 @@ trait CompiledRow extends RowLike with Typed {
 */
 trait CompiledResult[T <: RowLike] extends Result with Iterator[T] {
   protected def converter: RowConverter[T]
+
+  //cannot call super class to list since it creates other subclasses of RowLike
+
   override def toList: List[T] = super.toList map converter
-  def head: T = ???
-  def headOption: Option[T] = ???
-  def unique: T = ???
-  def uniqueOption: Option[T] = ???
+
+  def head: T = try hasNext match {
+    case true => next
+    case false => throw new NoSuchElementException("No rows in result")
+  } finally close
+
+  def headOption: Option[T] = try Some(head) catch {
+    case e: NoSuchElementException => None
+  }
+
+  def unique: T = try hasNext match {
+    case true =>
+      val v = next
+      if (hasNext) error("More than one row for unique result") else v
+    case false => error("No rows in result")
+  } finally close
+
+  def uniqueOption: Option[T] = try hasNext match {
+    case true =>
+      val v = next
+      if (hasNext) error("More than one row for unique result") else Some(v)
+    case false => None
+  } finally close
 }
 
 case class CompiledSingleValueResult[T <: RowLike](res: T) extends CompiledResult[T] {
@@ -640,32 +662,9 @@ class CompiledSelectResult[T <: RowLike] private[tresql] (
     extends SelectResult (rs, cols, env, sql, bindVariables, maxSize, _columnCount)
     with CompiledResult[T] {
 
-    override def next: T = {
-      converter(super.next)
-    }
-
-    override def head: T = try hasNext match {
-      case true => next
-      case false => throw new NoSuchElementException("No rows in result")
-    } finally close
-
-    override def headOption: Option[T] = try Some(head) catch {
-      case e: NoSuchElementException => None
-    }
-
-    override def unique: T = try hasNext match {
-      case true =>
-        val v = next
-        if (hasNext) error("More than one row for unique result") else v
-      case false => error("No rows in result")
-    } finally close
-
-    override def uniqueOption: Option[T] = try hasNext match {
-      case true =>
-        val v = next
-        if (hasNext) error("More than one row for unique result") else Some(v)
-      case false => None
-    } finally close
+      override def next: T = {
+        converter(super.next)
+      }
 
   }
 

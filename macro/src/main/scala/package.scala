@@ -24,6 +24,12 @@ package object tresql extends CoreTypes {
       var deptno: java.lang.Integer = _
       var dname: java.lang.String = _
       var emps: org.tresql.CompiledResult[Emp] = _
+      override def apply(idx: Int) = idx match {
+        case 0 => deptno
+        case 1 => dname
+        case 2 => emps
+      }
+      override def columnCount = 3
     }
     //RowConverter definition
     object Dept extends RowConverter[Dept] {
@@ -34,11 +40,17 @@ package object tresql extends CoreTypes {
         obj.emps = row.typed[org.tresql.CompiledResult[Emp]](2)
         obj
       }
+      override def columnCount = 2
     }
     class Emp extends CompiledRow {
       var empno: java.lang.Integer = _
       var ename: java.lang.String = _
       var hiredate: java.sql.Date = _
+      override def apply(idx: Int) = idx match {
+        case 0 => empno
+        case 1 => ename
+        case 2 => hiredate
+      }
     }
     object Emp extends RowConverter[Emp] {
       def apply(row: RowLike): Emp = {
@@ -98,15 +110,22 @@ package object tresql extends CoreTypes {
                   ct.convRegister
                 )
               }
-            val (fieldDefs, fieldConvs, children) = colsCtx.colTrees
-              .map (l => (l.head, l.tail.head, l.tail.tail)) //first two values are field def, field converter, the rest is children
-              .foldLeft((List[c.Tree](), List[c.Tree](), List[c.Tree]())) {
-                case ((fs, cvs, chs), (f, cv, ch)) => (f :: fs, cv :: cvs, chs ++ ch)
+            val (fieldDefs, fieldConvs, fieldTerms, children) = colsCtx.colTrees
+              //first three values are field def, field converter, fieldName (as term) and the rest is children
+              .map (l => (l(0), l(1), l(2), l drop 3))
+              .foldLeft((List[c.Tree](), List[c.Tree](), List[c.Tree](), List[c.Tree]())) {
+                case ((fs, cvs, fts, chs), (f, cv, ft, ch)) =>
+                  (f :: fs, cv :: cvs, ft :: fts, chs ++ ch)
               }
+            val colsByIdx = fieldTerms.zipWithIndex.map {case (t, i) => cq"$i => $t"}
             val typeName = TypeName(className)
             val classDef = q"""
               class $typeName extends org.tresql.CompiledRow {
                 ..$fieldDefs
+                override def apply(idx: Int) = idx match {
+                  case ..$colsByIdx
+                }
+                override def columnCount = ${colsByIdx.size}
               }
             """
             val converterName = TermName(className)
@@ -133,6 +152,7 @@ package object tresql extends CoreTypes {
           case (ctx, ColDef(name, ChildDef(sd: SelectDef), typ)) =>
             val selDefCtx = generator(Ctx(ctx.className, Nil, ctx.depth + 1,
               ctx.colIdx, ctx.childIdx, ctx.convRegister) -> sd)
+            val fieldTerm = q"${TermName(name)}"
             val fieldDef =
               q"""var ${TermName(name)}: org.tresql.CompiledResult[${
                 TypeName(selDefCtx.className)}] = _"""
@@ -143,7 +163,7 @@ package object tresql extends CoreTypes {
               q"""obj.${TermName(name)} =
                 row.typed[org.tresql.CompiledResult[$childClassType]](${ctx.colIdx})"""
             (ctx.copy(
-              tree = fieldDef :: fieldConv :: selDefCtx.tree,
+              tree = fieldDef :: fieldConv :: fieldTerm :: selDefCtx.tree,
               childIdx = ctx.childIdx + 1,
               convRegister = selDefCtx.convRegister
             ), false)
@@ -151,11 +171,15 @@ package object tresql extends CoreTypes {
             // TODO unsupported at the moment
             (ctx, false)
           case (ctx, ColDef(name, _, typ)) =>
+            val fieldTerm = q"${TermName(name)}"
             //FIXME bizzare way of getting qualified type name, did not find another way...
             val q"typeOf[$colType]" = c.parse(s"typeOf[${typ.toString}]")
             //first element of l is field def, second field convertion row which will be placed in converter
-            val l = List(q"var ${TermName(name)}: $colType = _",
-             q"obj.${TermName(name)} = row.typed[$colType](${ctx.colIdx})")
+            val l = List(
+              q"var ${TermName(name)}: $colType = _",
+              q"obj.${TermName(name)} = row.typed[$colType](${ctx.colIdx})",
+              fieldTerm
+            )
             (ctx.copy(tree = l), false)
         }
         generator((Ctx(null, Nil, 0, 0, 0, Nil), exp))
