@@ -608,9 +608,8 @@ trait CompiledRow extends RowLike with Typed {
 trait CompiledResult[T <: RowLike] extends Result with Iterator[T] {
   protected def converter: RowConverter[T]
 
-  //cannot call super class to list since it creates other subclasses of RowLike
-
-  override def toList: List[T] = super.toList map converter
+  //better not call super class to list since it creates other subclasses of RowLike
+  override def toList: List[T] = foldLeft(List[T]()) {(l, e) => e :: l}.reverse
 
   def head: T = try hasNext match {
     case true => next
