@@ -28,6 +28,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   }
   case class ColDef[T](name: String, col: Any, typ: Manifest[T]) extends TypedExp[T] {
     def exp = this
+    override def tresql = any2tresql(col)
   }
   case class ChildDef(exp: Exp) extends TypedExp[ChildDef] {
     val typ: Manifest[ChildDef] = ManifestFactory.classType(this.getClass)
@@ -93,6 +94,11 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       } || leftOperand.cols.size == rightOperand.cols.size,
       s"Column count do not match ${leftOperand.cols.size} != ${rightOperand.cols.size}")
     val cols = leftOperand.cols
+  }
+  case class ArrayDef(cols: List[ColDef[_]]) extends TypedExp[ArrayDef] {
+    def exp = this
+    override def tresql = cols.map(c => any2tresql(c.col)).mkString("[", ", ", "]")
+    val typ: Manifest[ArrayDef] = ManifestFactory.classType(this.getClass)
   }
 
   def table(table: String) = metadata.tableOption(table)
@@ -186,6 +192,18 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         ctx.pop
         ChildDef(exp)
       case Braces(exp: Exp) if ctx.head == TablesCtx => builder(exp) //remove braces around table expression, so it can be accessed directly
+      case a: Arr if ctx.head == QueryCtx => ArrayDef(
+        a.elements.zipWithIndex.map { case (el, idx) =>
+          ColDef[Nothing](
+            s"_${idx + 1}",
+            tr(el) match {
+              case s: SelectDefBase => ChildDef(s)
+              case a: ArrayDef => ChildDef(a)
+              case e => e
+            },
+            ManifestFactory.Nothing)
+        }
+      )
       case null => null
     }
     builder(exp)
@@ -344,6 +362,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case bd: BinSelectDef => bd.copy(
         leftOperand = transform_traverse(bd.leftOperand).asInstanceOf[SelectDefBase],
         rightOperand = transform_traverse(bd.rightOperand).asInstanceOf[SelectDefBase])
+      case ad: ArrayDef => ad.copy(cols = (ad.cols map transform_traverse).asInstanceOf[List[ColDef[_]]])
     }
     transform_traverse
   }
@@ -367,6 +386,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case (r: T, to: TableObj) => tr(r, to.obj)
       case (r: T, sd: SelectDef) => tr(tr(tr(r, sd.tables), sd.cols), sd.exp)
       case (r: T, bd: BinSelectDef) => tr(tr(r, bd.leftOperand), bd.rightOperand)
+      case (r: T, ad: ArrayDef) => tr(r, ad.cols)
     }
     extract_traverse
   }
