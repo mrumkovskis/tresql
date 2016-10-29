@@ -21,13 +21,6 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
       case r: Result => r.toListOfMaps
       case x => x
     })).toMap
-    // TODO after Result trait introduction remove these methods
-    override def result(idx: Int) =
-      throw new UnsupportedOperationException("Result not available, use listOfRows method instead.")
-    override def result(name: String) =
-      throw new UnsupportedOperationException("Result not available, use listOfRows method instead.")
-    override def result =
-      throw new UnsupportedOperationException("Result not available, use listOfRows method instead.")
   }
 
   def columns = (0 to (columnCount - 1)) map column
@@ -297,6 +290,22 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
     case x => x
   }) toVector)
 
+}
+
+class ArrayResult(result: List[Any]) extends Result {
+  private val row = new Row(result)
+  private var _hasNext = true
+  def hasNext = if (_hasNext) {
+    _hasNext = false
+    true
+  } else false
+  def next: RowLike = row
+
+  def apply(name: String): Any = row(name)
+  def apply(idx: Int): Any = row(idx)
+  def column(idx: Int): org.tresql.Column = row.column(idx)
+  def columnCount: Int = row.columnCount
+  def typed[T](name: String)(implicit m: Manifest[T]) = row.typed[T](name)
 }
 
 trait RowLike extends Dynamic with Typed {
@@ -606,7 +615,6 @@ trait CompiledRow extends RowLike with Typed {
   Is used from tresql interpolator macro
 */
 trait CompiledResult[T <: RowLike] extends Result with Iterator[T] {
-  protected def converter: RowConverter[T]
 
   //better not call super class to list since it creates other subclasses of RowLike
   override def toList: List[T] = foldLeft(List[T]()) {(l, e) => e :: l}.reverse
@@ -645,7 +653,6 @@ case class CompiledSingleValueResult[T <: RowLike](res: T) extends CompiledResul
   def apply(idx: Int) = res(idx)
   def typed[T: Manifest](name: String) = res(name).asInstanceOf[T]
   def apply(name: String) = if (name == "value") res(0) else sys.error("column not found: " + name)
-  def converter = null
   override def toString = s"SingleValueResult = $res"
 }
 
@@ -657,14 +664,22 @@ class CompiledSelectResult[T <: RowLike] private[tresql] (
   bindVariables: List[Expr],
   maxSize: Int = 0,
   _columnCount: Int = -1,
-  protected val converter: RowConverter[T])
+  converter: RowConverter[T])
     extends SelectResult (rs, cols, env, sql, bindVariables, maxSize, _columnCount)
     with CompiledResult[T] {
 
-      override def next: T = {
-        converter(super.next)
-      }
+    override def next: T = {
+      converter(super.next)
+    }
+  }
 
+  class CompiledArrayResult[T <: RowLike] private[tresql](
+    row: List[Any], converter: RowConverter[T])
+    extends ArrayResult(row) with CompiledResult[T] {
+
+    override def next: T = {
+      converter(super.next)
+    }
   }
 
   case class Column(idx: Int, name: String, private[tresql] val expr: Expr)

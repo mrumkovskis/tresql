@@ -40,7 +40,7 @@ package object tresql extends CoreTypes {
         obj.emps = row.typed[org.tresql.CompiledResult[Emp]](2)
         obj
       }
-      override def columnCount = 2
+      override def columnCount = 3
     }
     class Emp extends CompiledRow {
       var empno: java.lang.Integer = _
@@ -85,7 +85,7 @@ package object tresql extends CoreTypes {
       )
       def resultClassTree(exp: Exp): Ctx = {
         lazy val generator: PartialFunction[(Ctx, Exp), Ctx] = extractorAndTraverser {
-          case (ctx, sd: SelectDef) =>
+          case (ctx, sd: RowDefBase) =>
             val className = c.freshName("Tresql")
             case class ColsCtx(
               colTrees: List[List[c.Tree]],
@@ -138,8 +138,11 @@ package object tresql extends CoreTypes {
                 }
               }
             """
-            //depth for select starts with 1
-            val converterRegister = q"((${ctx.depth + 1} , ${ctx.childIdx}), $converterName)"
+            val depth = sd match {
+              case s: SelectDefBase => ctx.depth + 1 //depth for select starts with 1
+              case _ => ctx.depth
+            }
+            val converterRegister = q"(($depth, ${ctx.childIdx}), $converterName)"
             (Ctx(
               className,
               classDef :: converterDef :: children,
@@ -148,8 +151,7 @@ package object tresql extends CoreTypes {
               ctx.childIdx,
               converterRegister :: colsCtx.convRegister
             ), false)
-          case (ctx, BinSelectDef(leftOperand, _, _)) => generator(ctx -> leftOperand) -> false
-          case (ctx, ColDef(name, ChildDef(sd: SelectDef), typ)) =>
+          case (ctx, ColDef(name, ChildDef(sd: RowDefBase), _)) =>
             val selDefCtx = generator(Ctx(ctx.className, Nil, ctx.depth + 1,
               ctx.colIdx, ctx.childIdx, ctx.convRegister) -> sd)
             val fieldTerm = q"${TermName(name)}"
@@ -157,11 +159,9 @@ package object tresql extends CoreTypes {
               q"""var ${TermName(name)}: org.tresql.CompiledResult[${
                 TypeName(selDefCtx.className)}] = _"""
             //user type projection: child type in selDefCtx, parent in ctx
-            //FIXME bizzare way of getting type projection, did not find another way...
-            val q"typeOf[$childClassType]" = c.parse(s"typeOf[${selDefCtx.className}]")
             val fieldConv =
-              q"""obj.${TermName(name)} =
-                row.typed[org.tresql.CompiledResult[$childClassType]](${ctx.colIdx})"""
+              q"""obj.${TermName(name)} = row.typed[org.tresql.CompiledResult[${
+                TypeName(selDefCtx.className)}]](${ctx.colIdx})"""
             (ctx.copy(
               tree = fieldDef :: fieldConv :: fieldTerm :: selDefCtx.tree,
               childIdx = ctx.childIdx + 1,

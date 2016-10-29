@@ -295,7 +295,7 @@ class QueryTest extends Suite {
       Map("deptno" -> 50, "dname" -> "LAW", "loc" -> "FLORIDA",
         "emps" -> List(Map("empno" -> 1111, "ename" -> "BROWN", "deptno" -> 50),
           Map("empno" -> 2222, "ename" -> "CHRIS", "deptno" -> 50)))).toListOfVectors)
-    assertResult(List(Vector(List(2, 1))))(Query("emp - [deptno = 50], dept - [50]").toListOfVectors)
+    assertResult(List(Vector(2, 1)))(Query("emp - [deptno = 50], dept - [50]").toListOfVectors)
     assertResult(List(Vector(((1,List(List((1,10002), (1,10003)))),10001))))(Query(
       """dept{deptno, dname, loc, +emp {empno, ename, deptno} [#emp, :ename, :#dept] emps} +
         [#dept, :dname, :loc]""",

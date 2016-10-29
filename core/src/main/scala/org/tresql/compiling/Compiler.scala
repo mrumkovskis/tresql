@@ -35,10 +35,14 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   }
   case class FunDef[T](name: String, exp: Fun)(implicit val typ: Manifest[T]) extends TypedExp[T]
   case class TableDef(name: String, exp: Obj) extends Exp { def tresql = exp.tresql }
-  trait SelectDefBase extends TypedExp[SelectDefBase] {
+  //is superclass of select and array
+  trait RowDefBase extends TypedExp[RowDefBase] {
     def cols: List[ColDef[_]]
-    val typ: Manifest[SelectDefBase] = ManifestFactory.classType(this.getClass)
+    val typ: Manifest[RowDefBase] = ManifestFactory.classType(this.getClass)
   }
+  //is superclass of select, union, intersect etc.
+  trait SelectDefBase extends RowDefBase
+
   case class SelectDef(
     cols: List[ColDef[_]],
     tables: List[TableDef],
@@ -95,10 +99,9 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       s"Column count do not match ${leftOperand.cols.size} != ${rightOperand.cols.size}")
     val cols = leftOperand.cols
   }
-  case class ArrayDef(cols: List[ColDef[_]]) extends TypedExp[ArrayDef] {
+  case class ArrayDef(cols: List[ColDef[_]]) extends RowDefBase {
     def exp = this
     override def tresql = cols.map(c => any2tresql(c.col)).mkString("[", ", ", "]")
-    val typ: Manifest[ArrayDef] = ManifestFactory.classType(this.getClass)
   }
 
   def table(table: String) = metadata.tableOption(table)

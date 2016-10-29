@@ -334,7 +334,12 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   }
 
   case class ArrExpr(elements: List[Expr]) extends BaseExpr {
-    override def apply() = elements map (_())
+    override def apply() = {
+      val result = elements map (_())
+      env.rowConverter(queryDepth, childIdx).map { conv =>
+        new CompiledArrayResult(result, conv)
+      }.getOrElse(new ArrayResult(result))
+    }
     def defaultSQL = elements map { _.sql } mkString ("(", ", ", ")")
     override def toString = elements map { _.toString } mkString ("[", ", ", "]")
   }
