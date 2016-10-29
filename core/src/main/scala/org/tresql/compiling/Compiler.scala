@@ -115,7 +115,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       }.getOrElse(sys.error(s"Unknown function: ${f.name}"))
       case c: Col =>
         val alias = if (c.alias != null) c.alias else c.col match {
-          case Obj(Ident(name), _, _, _, _) => name mkString "."
+          case Obj(Ident(name), _, _, _, _) => name.last //use last part of qualified ident as name
           case _ => null
         }
         ColDef(
@@ -145,7 +145,13 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         ctx.pop
         ctx push ColsCtx
         val cols =
-          if (q.cols != null) (q.cols.cols map builder).asInstanceOf[List[ColDef[_]]]
+          if (q.cols != null) (q.cols.cols map builder).asInstanceOf[List[ColDef[_]]] match {
+            case l if l.exists(_.name == null) => //set names of columns
+              l.zipWithIndex.map { case (c, i) =>
+                if (c.name == null) c.copy(name = s"_${i + 1}") else c
+              }
+            case l => l
+          }
           else List[ColDef[_]](ColDef[Nothing](null, All, ManifestFactory.Nothing))
         ctx.pop
         ctx push BodyCtx
