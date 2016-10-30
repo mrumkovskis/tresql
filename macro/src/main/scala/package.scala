@@ -138,11 +138,7 @@ package object tresql extends CoreTypes {
                 }
               }
             """
-            val depth = sd match {
-              case s: SelectDefBase => ctx.depth + 1 //depth for select starts with 1
-              case _ => ctx.depth
-            }
-            val converterRegister = q"(($depth, ${ctx.childIdx}), $converterName)"
+            val converterRegister = q"((${ctx.depth}, ${ctx.childIdx}), $converterName)"
             (Ctx(
               className,
               classDef :: converterDef :: children,
@@ -182,7 +178,11 @@ package object tresql extends CoreTypes {
             )
             (ctx.copy(tree = l), false)
         }
-        generator((Ctx(null, Nil, 0, 0, 0, Nil), exp))
+        val initDepth = exp match {
+          case s: SelectDefBase => 1 //depth for select starts with 1
+          case _ => 0
+        }
+        generator((Ctx(null, Nil, initDepth, 0, 0, Nil), exp))
       }
       val macroSettings = settings(c.settings)
       val verbose = macroSettings.contains("verbose")
