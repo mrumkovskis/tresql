@@ -15,7 +15,7 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
     override def typed[T:Manifest](idx: Int) = this(idx).asInstanceOf[T]
     override def typed[T:Manifest](name: String) = this(name).asInstanceOf[T]
     def column(idx: Int) = Result.this.column(idx)
-    def columns = (0 to (columnCount - 1)) map column
+    def columns: Seq[Column] = (0 to (columnCount - 1)) map column
     def values = this
     def rowToMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
       case r: Result => r.toListOfMaps
@@ -294,6 +294,9 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
 
 class ArrayResult(result: List[Any]) extends Result {
   private val row = new Row(result)
+  private val cols = (0 until row.columnCount) map { i =>
+    Column(i, s"_${i + 1}", null)
+  }
   private var _hasNext = true
   def hasNext = if (_hasNext) {
     _hasNext = false
@@ -303,7 +306,8 @@ class ArrayResult(result: List[Any]) extends Result {
 
   def apply(name: String): Any = row(name)
   def apply(idx: Int): Any = row(idx)
-  def column(idx: Int): org.tresql.Column = row.column(idx)
+  def column(idx: Int): org.tresql.Column = cols(idx)
+  override def columns = cols
   def columnCount: Int = row.columnCount
   def typed[T](name: String)(implicit m: Manifest[T]) = row.typed[T](name)
 }
