@@ -98,7 +98,7 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
   extends Result {
   private[this] val md = rs.getMetaData
   private[this] val st = rs.getStatement
-  private[this] val row = new Array[Any](cols.length)
+  private[this] val children = new Array[Any](cols.length)
   private[this] var rsHasNext = true; private[this] var nextCalled = true
   private[this] var closed = false
   private[this] val (colMap, exprCols) = {
@@ -113,7 +113,7 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
       rsHasNext = rs.next; nextCalled = false
       if (rsHasNext) {
         var i = 0
-        exprCols foreach { c => row(c._2) = c._1.expr() }
+        exprCols foreach { c => children(c._2) = c._1.expr() }
       } else close
     }
     rsHasNext
@@ -138,7 +138,7 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
 
   def apply(columnIndex: Int) = {
     if (cols(columnIndex).idx != -1) asAny(cols(columnIndex).idx)
-    else row(columnIndex)
+    else children(columnIndex)
   }
   //fall back to rs.findColumn method in the case hidden column is referenced
   def apply(columnLabel: String) = colMap get columnLabel map (this(_)) getOrElse asAny(rs.findColumn(columnLabel))
@@ -158,68 +158,68 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
   //concrete type return methods
   override def int(columnIndex: Int): Int = {
     if (cols(columnIndex).idx != -1) rs.getInt(cols(columnIndex).idx)
-    else row(columnIndex).asInstanceOf[Int]
+    else children(columnIndex).asInstanceOf[Int]
   }
   override def int(columnLabel: String): Int = int(colMap(columnLabel))
   override def long(columnIndex: Int): Long = {
     if (cols(columnIndex).idx != -1) rs.getLong(cols(columnIndex).idx)
-    else row(columnIndex).asInstanceOf[Long]
+    else children(columnIndex).asInstanceOf[Long]
   }
   override def long(columnLabel: String): Long = long(colMap(columnLabel))
   override def double(columnIndex: Int): Double = {
     if (cols(columnIndex).idx != -1) rs.getDouble(cols(columnIndex).idx)
-    else row(columnIndex).asInstanceOf[Double]
+    else children(columnIndex).asInstanceOf[Double]
   }
   override def double(columnLabel: String): Double = double(colMap(columnLabel))
   override def bigdecimal(columnIndex: Int): BigDecimal = {
     if (cols(columnIndex).idx != -1) {
       val bd = rs.getBigDecimal(cols(columnIndex).idx); if (rs.wasNull) null else BigDecimal(bd)
-    } else row(columnIndex).asInstanceOf[BigDecimal]
+    } else children(columnIndex).asInstanceOf[BigDecimal]
   }
   override def bigdecimal(columnLabel: String): BigDecimal = bigdecimal(colMap(columnLabel))
   override def string(columnIndex: Int): String = {
     if (cols(columnIndex).idx != -1) rs.getString(cols(columnIndex).idx)
-    else row(columnIndex).asInstanceOf[String]
+    else children(columnIndex).asInstanceOf[String]
   }
   override def string(columnLabel: String): String = string(colMap(columnLabel))
   override def date(columnIndex: Int): java.sql.Date = {
     if (cols(columnIndex).idx != -1) rs.getDate(cols(columnIndex).idx)
-    else row(columnIndex).asInstanceOf[java.sql.Date]
+    else children(columnIndex).asInstanceOf[java.sql.Date]
   }
   override def date(columnLabel: String): java.sql.Date = date(colMap(columnLabel))
   override def timestamp(columnIndex: Int): java.sql.Timestamp = {
     if (cols(columnIndex).idx != -1) rs.getTimestamp(cols(columnIndex).idx)
-    else row(columnIndex).asInstanceOf[java.sql.Timestamp]
+    else children(columnIndex).asInstanceOf[java.sql.Timestamp]
   }
   override def timestamp(columnLabel: String): java.sql.Timestamp = timestamp(colMap(columnLabel))
   override def boolean(columnIndex: Int): Boolean = {
     if (cols(columnIndex).idx != -1) rs.getBoolean(cols(columnIndex).idx)
-    else row(columnIndex).asInstanceOf[Boolean]
+    else children(columnIndex).asInstanceOf[Boolean]
   }
   override def boolean(columnLabel: String): Boolean = boolean(colMap(columnLabel))
   override def bytes(columnIndex: Int): Array[Byte] = {
     if (cols(columnIndex).idx != -1) rs.getBytes(cols(columnIndex).idx)
-    else row(columnIndex).asInstanceOf[Array[Byte]]
+    else children(columnIndex).asInstanceOf[Array[Byte]]
   }
   override def bytes(columnLabel: String) = bytes(colMap(columnLabel))
   override def stream(columnIndex: Int) = {
     if (cols(columnIndex).idx != -1) rs.getBinaryStream(cols(columnIndex).idx)
-    else row(columnIndex).asInstanceOf[java.io.InputStream]
+    else children(columnIndex).asInstanceOf[java.io.InputStream]
   }
   override def stream(columnLabel: String) = stream(colMap(columnLabel))
   override def reader(columnIndex: Int) = {
     if (cols(columnIndex).idx != -1) rs.getCharacterStream(cols(columnIndex).idx)
-    else row(columnIndex).asInstanceOf[java.io.Reader]
+    else children(columnIndex).asInstanceOf[java.io.Reader]
   }
   override def reader(columnLabel: String) = reader(colMap(columnLabel))
   override def blob(columnIndex: Int) = {
     if (cols(columnIndex).idx != -1) rs.getBlob(cols(columnIndex).idx)
-    else row(columnIndex).asInstanceOf[java.sql.Blob]
+    else children(columnIndex).asInstanceOf[java.sql.Blob]
   }
   override def blob(columnLabel: String) = blob(colMap(columnLabel))
   override def clob(columnIndex: Int) = {
     if (cols(columnIndex).idx != -1) rs.getClob(cols(columnIndex).idx)
-    else row(columnIndex).asInstanceOf[java.sql.Clob]
+    else children(columnIndex).asInstanceOf[java.sql.Clob]
   }
   override def clob(columnLabel: String) = clob(colMap(columnLabel))
 
@@ -228,33 +228,33 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
     if (cols(columnIndex).idx != -1) {
       val x = rs.getInt(cols(columnIndex).idx)
       if (rs.wasNull()) null else new java.lang.Integer(x)
-    } else row(columnIndex).asInstanceOf[java.lang.Integer]
+    } else children(columnIndex).asInstanceOf[java.lang.Integer]
   }
   override def jInt(columnLabel: String): java.lang.Integer = jInt(colMap(columnLabel))
   override def jLong(columnIndex: Int): java.lang.Long = {
     if (cols(columnIndex).idx != -1) {
       val x = rs.getLong(cols(columnIndex).idx)
       if (rs.wasNull()) null else new java.lang.Long(x)
-    } else row(columnIndex).asInstanceOf[java.lang.Long]
+    } else children(columnIndex).asInstanceOf[java.lang.Long]
   }
   override def jLong(columnLabel: String): java.lang.Long = jLong(colMap(columnLabel))
   override def jDouble(columnIndex: Int): java.lang.Double = {
     if (cols(columnIndex).idx != -1) {
       val x = rs.getDouble(cols(columnIndex).idx)
       if (rs.wasNull()) null else new java.lang.Double(x)
-    } else row(columnIndex).asInstanceOf[java.lang.Double]
+    } else children(columnIndex).asInstanceOf[java.lang.Double]
   }
   override def jDouble(columnLabel: String): java.lang.Double = jDouble(colMap(columnLabel))
   override def jBigDecimal(columnIndex: Int): java.math.BigDecimal = {
     if (cols(columnIndex).idx != -1) rs.getBigDecimal(cols(columnIndex).idx)
-    else row(columnIndex).asInstanceOf[java.math.BigDecimal]
+    else children(columnIndex).asInstanceOf[java.math.BigDecimal]
   }
   override def jBigDecimal(columnLabel: String): java.math.BigDecimal = jBigDecimal(colMap(columnLabel))
   override def jBoolean(columnIndex: Int): java.lang.Boolean = {
     if (cols(columnIndex).idx != -1) {
       val x = rs.getBoolean(cols(columnIndex).idx)
       if (rs.wasNull()) null else new java.lang.Boolean(x)
-    } else row(columnIndex).asInstanceOf[java.lang.Boolean]
+    } else children(columnIndex).asInstanceOf[java.lang.Boolean]
   }
   override def jBoolean(columnLabel: String): java.lang.Boolean = jBoolean(colMap(columnLabel))
 
