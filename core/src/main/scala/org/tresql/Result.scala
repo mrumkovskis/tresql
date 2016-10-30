@@ -292,8 +292,8 @@ class SelectResult private[tresql] (rs: ResultSet, cols: Vector[Column], env: En
 
 }
 
-class ArrayResult(result: List[Any]) extends Result {
-  private val row = new Row(result)
+class ArrayResult(val value: List[Any]) extends Result {
+  private val row = new Row(value)
   private val cols = (0 until row.columnCount) map { i =>
     Column(i, s"_${i + 1}", null)
   }
@@ -310,6 +310,11 @@ class ArrayResult(result: List[Any]) extends Result {
   override def columns = cols
   def columnCount: Int = row.columnCount
   def typed[T](name: String)(implicit m: Manifest[T]) = row.typed[T](name)
+
+  override def hashCode = value.hashCode
+  override def equals(obj: Any) = value.equals(obj)
+
+  override def toString = value.mkString("ArrayResult(", ", ", ")")
 }
 
 trait RowLike extends Dynamic with Typed {
