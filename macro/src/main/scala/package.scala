@@ -178,11 +178,7 @@ package object tresql extends CoreTypes {
             )
             (ctx.copy(tree = l), false)
         }
-        val initDepth = exp match {
-          case s: SelectDefBase => 1 //depth for select starts with 1
-          case _ => 0
-        }
-        generator((Ctx(null, Nil, initDepth, 0, 0, Nil), exp))
+        generator((Ctx(null, Nil, 0, 0, 0, Nil), exp))
       }
       val macroSettings = settings(c.settings)
       val verbose = macroSettings.contains("verbose")

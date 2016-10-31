@@ -8,6 +8,7 @@ import metadata.key_
 trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.tresql.Query =>
 
   val ROOT_CTX = "ROOT"
+  val ARR_CTX = "ARRAY"
   val QUERY_CTX = "QUERY"
   val FROM_CTX ="FROM_CTX"
   val TABLE_CTX = "TABLE"
@@ -704,6 +705,12 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     else vals
   }
 
+  private def buildArray(a: Arr, ctx: String = ARR_CTX) = a.elements
+    .map { buildInternal(_, ctx) } filter (_ != null) match {
+      case al if !al.isEmpty => ArrExpr(al) case _ => null
+    }
+
+
   private[tresql] def buildInternal(parsedExpr: Any, parseCtx: String = ROOT_CTX): Expr = {
     def buildSelect(q: QueryParser.Query) = {
       val tablesAndAliases = buildTables(q.tables)
@@ -956,8 +963,10 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         //child query
         case UnOp("|", oper) => buildWithNew(_.buildInternal(oper, QUERY_CTX))
         case t: Obj => parseCtx match {
-          case ROOT_CTX => //top level query (might be part of expression list)
-            buildWithNew(_.buildInternal(t, QUERY_CTX))
+          case ROOT_CTX =>
+            buildInternal(t, QUERY_CTX)
+          case ARR_CTX =>
+            buildWithNew(_.buildInternal(t, QUERY_CTX)) //may have other elements in array
           case QUERY_CTX => t match { //top level query
             case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx) //unwrap braces expression
             case _ => buildSelectFromObj(t)
@@ -967,7 +976,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
           case _ => buildIdentOrBracesExpr(t)
         }
         case q: QueryParser.Query => parseCtx match {
-          case ROOT_CTX => buildWithNew(_.buildInternal(q, QUERY_CTX))
+          case ROOT_CTX => buildInternal(q, QUERY_CTX)
+          case ARR_CTX => buildWithNew(_.buildInternal(q, QUERY_CTX)) //may have other elements in array
           case _ =>
             if (recursiveQueryExp == null) recursiveQueryExp = q //set for potential use in RecursiveExpr
             buildSelect(q)
@@ -976,7 +986,9 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
           val o = buildInternal(oper, parseCtx)
           if (o == null) null else UnExpr(op, o)
         case e @ BinOp(op, lop, rop) => parseCtx match {
-          case ROOT_CTX if op != "=" /*do not create new query builder for assignment or equals operation*/=>
+          case ROOT_CTX if op != "=" /*do not create new query for assignment or equals operation*/=>
+            buildInternal(e, QUERY_CTX)
+          case ARR_CTX if op != "=" /*do not create new query builder for assignment or equals operation*/=>
             buildWithNew(_.buildInternal(e, QUERY_CTX))
           case ctx =>
             val l = buildInternal(lop, ctx)
@@ -998,14 +1010,11 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
           maybeCallMacro(FunExpr(n, pars, d))
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => IdentAllExpr(i.ident)
-        case Arr(l: List[_]) => l map { buildInternal(_, parseCtx) } filter (_ != null) match {
-          case al if !al.isEmpty => ArrExpr(al) case _ => null
+        case a: Arr => parseCtx match {
+          case ARR_CTX => buildWithNew(_.buildArray(a))
+          case ROOT_CTX => buildArray(a)
+          case ctx => buildArray(a, ctx)
         }
-        /* alternative handling of null elements?
-        case Arr(l: List[_]) => l map { buildInternal(_, parseCtx) } match {
-          case al if al.isEmpty || al.exists(_ == null) => null
-          case al => ArrExpr(al)
-        }*/
         case Variable("?", _, t, o) =>
           this.bindIdx += 1; VarExpr(this.bindIdx.toString, Nil, t, o)
         case Variable(n, m, t, o) =>
