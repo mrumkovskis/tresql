@@ -339,7 +339,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       val result = elements map (_())
       env.rowConverter(queryDepth, childIdx).map { conv =>
         new CompiledArrayResult(result, conv)
-      }.getOrElse(new ArrayResult(result))
+      }.getOrElse(new DynamicArrayResult(result))
     }
     def defaultSQL = elements map { _.sql } mkString ("(", ", ", ")")
     override def toString = elements map { _.toString } mkString ("[", ", ", "]")
@@ -1080,14 +1080,6 @@ sealed abstract class Expr extends (() => Any) with Ordered[Expr] {
   }
   def |(e: Expr) = this() match {
     case x: Boolean => x | e().asInstanceOf[Boolean]
-    case r1: Result => {
-      val r2 = e().asInstanceOf[Result]
-      val b = new scala.collection.mutable.ListBuffer[Any]
-      r1 foreach { r =>
-        b += r1.toRow ++ (if (r2.hasNext) { r2.next; r2.toRow } else Nil)
-      }
-      b.toList
-    }
   }
   def compare(that: Expr) = {
     this() match {

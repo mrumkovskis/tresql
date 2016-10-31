@@ -207,8 +207,8 @@ class QueryTest extends Suite {
     case class Car(nr: Int, brand: String) extends Poha
     case class Tyre(carNr: Int, brand: String) extends Poha
     implicit def convertRowLiketoPoha[T <: Poha](r: RowLike, m: Manifest[T]): T = m.toString match {
-      case s if s.contains("Car") => Car(r.i.nr, r.s.name).asInstanceOf[T]
-      case s if s.contains("Tyre") => Tyre(r.i.nr, r.s.brand).asInstanceOf[T]
+      case s if s.contains("Car") => Car(r.i("nr"), r.s("name")).asInstanceOf[T]
+      case s if s.contains("Tyre") => Tyre(r.i("nr"), r.s("brand")).asInstanceOf[T]
       case x => error("Unable to convert to object of type: " + x)
     }
     assertResult(List(Car(1111, "PORCHE"), Car(2222, "BMW"), Car(3333, "MERCEDES"),
@@ -236,7 +236,7 @@ class QueryTest extends Suite {
     //bind variables test
     assertResult(List(10, 20, 30, 40)){
       val ex = Query.build("dept[?]{deptno}")
-      val res = List(10, 20, 30, 40) flatMap {p=> ex(List(p)).asInstanceOf[Result].map(_.deptno)}
+      val res = List(10, 20, 30, 40) flatMap {p=> ex(List(p)).asInstanceOf[DynamicResult].map(_.deptno)}
       ex.close
       res
     }
@@ -302,11 +302,15 @@ class QueryTest extends Suite {
       Map("dname" -> "LAW", "loc" -> "DALLAS", "emps" -> scala.Array(
         Map("ename" -> "SMITH"), Map("ename" -> "LEWIS")))).toListOfVectors)
 
-    //row API
-    assertResult(List("CLARK, KING, MILLER"))(Query("dept[10] {dname, |emp {ename}#(1) emps}")
-        .toListOfRows.map(r => r.listOfRows("emps").map(_.ename).mkString(", ")))
-
     //tresql string interpolation tests
+    assertResult("CLARK, KING, MILLER")(tresql"dept[10] {dname, |emp {ename}#(1) emps}"
+        .head.emps.map(_.ename).mkString(", "))
+    assertResult((List(Vector(0), Vector(10)),List(Vector(0)))){
+      val (a, b) = ("acc%", -1)
+      val r = tresql"/(dept[dname ~~ $a]{deptno} + dummy) a#(1), salgrade[$b] {grade} + dummy".head
+      (r._1.toListOfVectors, r._2.toListOfVectors)
+    }
+
     var name = "S%"
     assertResult(List(Vector("SCOTT"), Vector("SMITH"), Vector("SMITH"))) {
       tresql"emp [ename ~ $name] {ename}#(1)".toListOfVectors

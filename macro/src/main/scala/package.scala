@@ -238,7 +238,7 @@ package object tresql extends CoreTypes {
 
   implicit def jdbcResultToTresqlResult(jdbcResult: java.sql.ResultSet) = {
     val md = jdbcResult.getMetaData
-    new SelectResult(jdbcResult, Vector((1 to md.getColumnCount map {
+    new DynamicSelectResult(jdbcResult, Vector((1 to md.getColumnCount map {
       i => Column(i, md.getColumnLabel(i), null)
     }): _*), Env(Map(), false), "<not available>", Nil, Env.maxResultSize)
   }

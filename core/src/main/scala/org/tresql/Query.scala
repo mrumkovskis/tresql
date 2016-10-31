@@ -9,12 +9,12 @@ import CoreTypes.RowConverter
 
 trait Query extends QueryBuilder with TypedQuery {
 
-  def apply(expr: String, params: Any*)(implicit resources: Resources = Env): Result =
-    exec(expr, normalizePars(params: _*), resources)
+  def apply(expr: String, params: Any*)(implicit resources: Resources = Env): DynamicResult =
+    exec(expr, normalizePars(params: _*), resources).asInstanceOf[DynamicResult]
 
   def compiledResult[T <: RowLike](expr: String, params: Any*)(
     implicit resources: Resources = Env): CompiledResult[T] = {
-    apply(expr, params: _*)(resources).asInstanceOf[CompiledResult[T]]
+    exec(expr, normalizePars(params: _*), resources).asInstanceOf[CompiledResult[T]]
   }
 
   private[tresql] def converters: Map[(Int, Int), RowConverter[_ <: RowLike]] = null
@@ -67,7 +67,7 @@ trait Query extends QueryBuilder with TypedQuery {
       new CompiledSelectResult(rs, columns, env, sql,bindVariables,
         env.maxResultSize, visibleColCount, conv)
     }.getOrElse {
-      new SelectResult(rs, columns, env, sql, bindVariables, env.maxResultSize, visibleColCount)
+      new DynamicSelectResult(rs, columns, env, sql, bindVariables, env.maxResultSize, visibleColCount)
     }
     env.result = result
     result
@@ -130,7 +130,7 @@ trait Query extends QueryBuilder with TypedQuery {
       if (st.execute) {
         val rs = st.getResultSet
         val md = rs.getMetaData
-        val res = new SelectResult(rs, Vector(1 to md.getColumnCount map
+        val res = new DynamicSelectResult(rs, Vector(1 to md.getColumnCount map
           { i => Column(i, md.getColumnLabel(i), null) }: _*), env, sql, bindVariables, Env.maxResultSize)
         env.result = res
         result = res

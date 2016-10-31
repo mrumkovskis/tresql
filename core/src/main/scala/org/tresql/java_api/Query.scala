@@ -86,7 +86,7 @@ object Query {
     override def jLong(idx: Int) = x.jLong(idx)
     override def jLong(name: String) = x.jLong(name)
     override def jl(idx: Int) = x.jl(idx)
-    override def jl(name: String) = x.jl.name
+    override def jl(name: String) = x.jl(name)
     override def jBoolean(idx: Int) = x.jBoolean(idx)
     override def jBoolean(name: String) = x.jBoolean(name)
     override def jbl(idx: Int) = x.jbl(idx)
