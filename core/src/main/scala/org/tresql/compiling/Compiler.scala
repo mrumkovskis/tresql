@@ -327,9 +327,10 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     }
     lazy val type_resolver: PartialFunction[Exp, Exp] = transformer {
       case s: SelectDef =>
+        //resolve column types for potential from clause select definitions
         val nsd = s.copy(tables = (s.tables map type_resolver).asInstanceOf[List[TableDef]])
         scopes.push(nsd)
-        val ncols = (nsd.cols map type_resolver).asInstanceOf[List[ColDef[_]]] //resolve types only for column defs
+        val ncols = (nsd.cols map type_resolver).asInstanceOf[List[ColDef[_]]] //resolve types for column defs
         scopes.pop
         nsd.copy(cols = ncols)
       case ColDef(n, ChildDef(ch), t) => ColDef(n, ChildDef(type_resolver(ch)), t)
