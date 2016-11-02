@@ -278,6 +278,10 @@ class DynamicSelectResult private[tresql] (
   override def next: DynamicRow = super.next.asInstanceOf[DynamicRow]
 }
 
+object ArrayResult {
+  def unapplySeq(ar: ArrayResult) = Seq.unapplySeq(ar.values)
+}
+
 trait ArrayResult extends Result {
   private val cols = (0 until values.size) map { i =>
     Column(i, s"_${i + 1}", null)
@@ -303,7 +307,7 @@ trait ArrayResult extends Result {
 }
 
 class DynamicArrayResult(override val values: List[Any]) extends ArrayResult with DynamicResult {
-  override def next: DynamicRow = super.next.asInstanceOf[DynamicRow]  
+  override def next: DynamicRow = super.next.asInstanceOf[DynamicRow]
 }
 
 /**
@@ -390,6 +394,18 @@ class CompiledArrayResult[T <: RowLike] private[tresql](
     converter(super.next)
   }
 }
+
+trait DMLResult extends DynamicResult with CompiledResult[DMLResult] {
+  def count: Option[Int]
+  def id: Option[Any]
+  def children: Option[List[Any]]
+
+  //compatibility with previous tresql versions
+  //override def hashCode = (count)
+
+}
+
+class DeleteResult extends DMLResult
 
 case class Column(idx: Int, name: String, private[tresql] val expr: Expr)
 
