@@ -305,7 +305,9 @@ trait ArrayResult extends SingleRowResult {
   def typed[T](name: String)(implicit m: Manifest[T]) = typed[T](name)
 
   override def hashCode = values.hashCode
-  override def equals(obj: Any) = values.equals(obj)
+  override def equals(obj: Any) = {
+    values.equals(obj)
+  }
 
   override def toString = values.mkString("ArrayResult(", ", ", ")")
 }
@@ -400,29 +402,57 @@ class CompiledArrayResult[T <: RowLike] private[tresql](
 }
 
 trait DMLResult extends DynamicResult with CompiledResult[DMLResult] with SingleRowResult {
-  def count: Option[Int] = None
+  def count: Option[Int]
+  def children: Map[String, Any]
   def id: Option[Any] = None
-  def children: Map[String, Any] = Map()
 
   def next = this
   // Members declared in org.tresql.RowLike
   def apply(name: String): Any = ???
-  def apply(idx: Int): Any = ???
+  def apply(idx: Int): Any = idx match {
+    case 0 => count getOrElse children
+    case 1 => if (children.isEmpty) id.get else children
+    case 2 => id.get
+  }
   def column(idx: Int): org.tresql.Column = ???
-  def columnCount: Int =
-    count.map(_ => 1).getOrElse(0)
-    + id.map(_ => 1).getOrElse(0)
-    + (if (children.isEmpty) 0 else 1)
+  def columnCount: Int = {
+    //ATTENTION! if all three items to be added are put non separate lines expression gives wrong result
+    count.map(_ => 1).getOrElse(0) + id.map(_ => 1).getOrElse(0) + (if (children.isEmpty) 0 else 1)
+  }
   // Members declared in org.tresql.Typed
   def typed[T](name: String)(implicit evidence$1: scala.reflect.Manifest[T]): T = ???
 
   /* Compatibility with previous tresql versions
   Can be following combinations:
-    count, count -> children, children, (count -> children) -> id
+    count, count -> children, count -> id, children, (count -> children) -> id
   */
-  //override def hashCode = compatibilityObj.hashCode
-  //override def equals(obj: Any) = compatibilityObj.equals(obj)
-  //private def compatibilityObj = (count, children. id) match {}
+  override def hashCode = compatibilityObj.hashCode
+  override def equals(obj: Any) = compatibilityObj.equals(obj)
+  private def compatibilityObj: Any = {
+    val x = (count, children, id) match {
+      case (Some(c), ch, None) if ch.isEmpty => c
+      case (Some(c), ch, None) if !ch.isEmpty => c -> compatibilityChildren
+      case (None, ch, None) if !ch.isEmpty => compatibilityChildren
+      case (Some(c), ch, Some(id)) if ch.isEmpty => c -> id
+      case (Some(c), ch, Some(id)) if !ch.isEmpty => (c -> compatibilityChildren) -> id
+    }
+    //println(s"!!!!!!!!!!!!!!: $x")
+    x
+}
+  private def compatibilityChildren: List[Any] = children.map (_._2 match {
+    case dml: DMLResult => dml.compatibilityObj
+    case l: List[_] => l map {
+      case dml: DMLResult => dml.compatibilityObj
+      case x => x
+    }
+    case x => x
+  }).toList
+
+  override def toString = s"""${getClass.getSimpleName}(Row count = ${
+    count.getOrElse(0)}$childrenToString$idToString)"""
+  private def childrenToString = if (children.isEmpty) "" else s", children = ${children}"
+  private def idToString = id.map(id => s", id = $id").getOrElse("")
+
 }
 
 class DeleteResult private[tresql](

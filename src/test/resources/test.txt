@@ -363,12 +363,12 @@ emp[7876] {ename} --> [["kuku"]]
 emp[7876] {ename} --> [["kukuz"]]
 
 //child update
-emp{empno, job, emp[empno = :1(1)]{job} = [:1(2)]}#(1) --> [[7369, "CLERK", 1], [7499, "SALESMAN", 1], [7521, "SALESMAN", 1], [7566, "MANAGER", 1], [7654, "SALESMAN", 1], [7698, "MANAGER", 1], [7782, "MANAGER", 1], [7788, "ANALYST", 1], [7839, "PRESIDENT", 1], [7844, "SALESMAN", 1], [7876, null, 1], [7900, "CLERK", 1], [7902, "ANALYST", 1], [7934, "CLERK", 1]]
+emp{empno, job, emp[empno = :1(1)]{job} = [:1(2)]}#(1) --> [[7369, "CLERK", [[1]]], [7499, "SALESMAN", [[1]]], [7521, "SALESMAN", [[1]]], [7566, "MANAGER", [[1]]], [7654, "SALESMAN", [[1]]], [7698, "MANAGER", [[1]]], [7782, "MANAGER", [[1]]], [7788, "ANALYST", [[1]]], [7839, "PRESIDENT", [[1]]], [7844, "SALESMAN", [[1]]], [7876, null, [[1]]], [7900, "CLERK", [[1]]], [7902, "ANALYST", [[1]]], [7934, "CLERK", [[1]]]]
 
 //----DELETE----
 salgrade - [?] --> 5 --> [[1]]
 //delete table with alias
-dummy d - [], DUMMY {DUMMY} + [0], -dummy[], DUMMY {DUMMY} + [0] --> [[1, 1, 1, 1]]
+dummy d - [], DUMMY {DUMMY} + [0], -dummy[], DUMMY {DUMMY} + [0] --> [[[[1]], [[1]], [[1]], [[1]]]]
 
 //negation
 -1 - 2 --> [[-3]]
@@ -379,7 +379,7 @@ dummy d - [], DUMMY {DUMMY} + [0], -dummy[], DUMMY {DUMMY} + [0] --> [[1, 1, 1, 
 :v = 5, :s = "kuku" --> [[5, "kuku"]]
 
 //----BATCH----
-SALGRADE {GRADE, LOSAL, HISAL} + [?, ?, ?], emp[?] {ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} = [?, ?, ?, ?, ?, ?, ?], emp[?] --> 6; 10000; 11000; 7876; 'ADAMS;  'CLERK; 7788; '1983-01-12; 1100; null; 20; 7788 --> [[1, 1, [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 4000.35, null, 20]]]]
+SALGRADE {GRADE, LOSAL, HISAL} + [?, ?, ?], emp[?] {ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} = [?, ?, ?, ?, ?, ?, ?], emp[?] --> 6; 10000; 11000; 7876; 'ADAMS;  'CLERK; 7788; '1983-01-12; 1100; null; 20; 7788 --> [[[[1]], [[1]], [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 4000.35, null, 20]]]]
 //two unions in batch
 salgrade[?] {grade} + dummy, "A" + " " + "B", dept[dname ~~ ?]{deptno} + dummy, 1 + 3 --> -1; 'kuku% --> [[[[0]], "A B", [[0]], 4]]
 

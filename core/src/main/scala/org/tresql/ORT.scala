@@ -72,8 +72,8 @@ trait ORT extends Query {
       case x => error(s"Cannot set environment variables for the expression. $x is not a map.")
     }
     def extractId(result: Any) = result match {
-      case (_, id) => id //insert expression
-      case a: ArrayResult => a.values.last match { case (_, id) => id } //array expression
+      case i: InsertResult => i.id.get //insert expression
+      case a: ArrayResult => a.values.last match { case i: InsertResult => i.id.get } //array expression
       case x => error(s"Unable to extract id from expr result: $x, expr: $insertExpr")
     }
     def defaultSQL = s"LookupEditExpr($obj, $idName, $insertExpr, $updateExpr)"
