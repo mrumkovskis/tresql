@@ -278,19 +278,23 @@ class DynamicSelectResult private[tresql] (
   override def next: DynamicRow = super.next.asInstanceOf[DynamicRow]
 }
 
-object ArrayResult {
-  def unapplySeq(ar: ArrayResult) = Seq.unapplySeq(ar.values)
-}
-
-trait ArrayResult extends Result {
-  private val cols = (0 until values.size) map { i =>
-    Column(i, s"_${i + 1}", null)
-  }
+trait SingleRowResult extends Result {
   private var _hasNext = true
   def hasNext = if (_hasNext) {
     _hasNext = false
     true
   } else false
+}
+
+object ArrayResult {
+  def unapplySeq(ar: ArrayResult) = Seq.unapplySeq(ar.values)
+}
+
+trait ArrayResult extends SingleRowResult {
+  private val cols = (0 until values.size) map { i =>
+    Column(i, s"_${i + 1}", null)
+  }
+
   def next: RowLike = this
 
   def apply(name: String): Any = values(cols.indexWhere(_.name == name))
@@ -395,17 +399,54 @@ class CompiledArrayResult[T <: RowLike] private[tresql](
   }
 }
 
-trait DMLResult extends DynamicResult with CompiledResult[DMLResult] {
-  def count: Option[Int]
-  def id: Option[Any]
-  def children: Option[List[Any]]
+trait DMLResult extends DynamicResult with CompiledResult[DMLResult] with SingleRowResult {
+  def count: Option[Int] = None
+  def id: Option[Any] = None
+  def children: Map[String, Any] = Map()
 
-  //compatibility with previous tresql versions
-  //override def hashCode = (count)
+  def next = this
+  // Members declared in org.tresql.RowLike
+  def apply(name: String): Any = ???
+  def apply(idx: Int): Any = ???
+  def column(idx: Int): org.tresql.Column = ???
+  def columnCount: Int =
+    count.map(_ => 1).getOrElse(0)
+    + id.map(_ => 1).getOrElse(0)
+    + (if (children.isEmpty) 0 else 1)
+  // Members declared in org.tresql.Typed
+  def typed[T](name: String)(implicit evidence$1: scala.reflect.Manifest[T]): T = ???
 
+  /* Compatibility with previous tresql versions
+  Can be following combinations:
+    count, count -> children, children, (count -> children) -> id
+  */
+  //override def hashCode = compatibilityObj.hashCode
+  //override def equals(obj: Any) = compatibilityObj.equals(obj)
+  //private def compatibilityObj = (count, children. id) match {}
 }
 
-class DeleteResult extends DMLResult
+class DeleteResult private[tresql](
+  _count: Int,
+  override val children: Map[String, Any] = Map()
+) extends DMLResult {
+  override val count = Option(_count)
+}
+
+class UpdateResult private[tresql](
+  _count: Int = -1,
+  override val children: Map[String, Any] = Map()
+) extends DMLResult {
+  private[tresql] def this(r: DMLResult) = this(r.count.getOrElse(-1), r.children)
+  override val count = if (_count < 0) None else Option(_count)
+}
+
+class InsertResult private[tresql](
+  _count: Int,
+  override val children: Map[String, Any] = Map(),
+  override val id: Option[Any] = None
+) extends DMLResult {
+  override val count = Option(_count)
+}
 
 case class Column(idx: Int, name: String, private[tresql] val expr: Expr)
 

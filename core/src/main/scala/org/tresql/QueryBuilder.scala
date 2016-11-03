@@ -43,7 +43,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   private[tresql] var recursiveQueryExp: QueryParser.Query = null
 
   //used for non flat updates, i.e. hierarhical object.
-  private val childUpdates = scala.collection.mutable.ListBuffer[(Expr, String)]()
+  private val _childUpdatesBuildTime = scala.collection.mutable.ListBuffer[(Expr, String)]()
+  private lazy val childUpdates = _childUpdatesBuildTime.toList
 
   //context stack as buildInternal method is called
   protected var ctxStack = List[String]()
@@ -503,9 +504,10 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   class InsertExpr(table: IdentExpr, alias: String, val cols: List[Expr], val vals: Expr)
     extends DeleteExpr(table, alias, null) {
     override def apply() = {
-      val r = super.apply()
+      val r = super.apply().asInstanceOf[DMLResult]
       //include in result id value of the inserted record if it's obtained from IdExpr
-      env.currIdOption(table.defaultSQL).map(r -> _).getOrElse(r)
+      val id = env.currIdOption(table.defaultSQL)
+      new InsertResult(r.count.getOrElse(-1), r.children, id)
     }
     override protected def _sql = "insert into " + table.sql + (if (alias == null) "" else " " + alias) +
       " (" + cols.map(_.sql).mkString(", ") + ")" + " " + vals.sql
@@ -520,8 +522,10 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       case Nil =>
         //execute any BaseVarExpr in filter to give chance to update currId for corresponding children IdRefExpr have values
         if (filter != null) filter foreach (transform (_, {case id: BaseVarExpr => id(); id}))
-        executeChildren
-      case _ => super.apply()
+        new UpdateResult(children = executeChildren)
+      case _ =>
+        val r = super.apply().asInstanceOf[DMLResult]
+        new UpdateResult(r)
     }
     override protected def _sql = "update " + table.sql + (if (alias == null) "" else " " + alias) +
       " set " + (vals match {
@@ -534,10 +538,13 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     override def apply() = {
       val r = update(sql)
       //execute children only if this expression has affected some rows
-      if (r > 0) executeChildren match {
-        case Nil => r
-        case x => (r, x)
-      } else r
+      if (r > 0)
+        if (childUpdates.isEmpty) new DeleteResult(r)
+        else executeChildren match {
+          case x if x.isEmpty => new DeleteResult(r)
+          case x => new DeleteResult(r, x)
+        }
+      else new DeleteResult(r)
     }
     protected def _sql = "delete from " + table.sql + (if (alias == null) "" else " " + alias) +
       (if (filter == null || filter.isEmpty) "" else " where " + where)
@@ -600,17 +607,22 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     def builder = QueryBuilder.this
   }
 
-  private def executeChildren = {
+  private def registerChildUpdate(child: Expr, name: String) = {
+    _childUpdatesBuildTime += {
+      (child, if (name == null) s"_${_childUpdatesBuildTime.size + 1}" else name)
+    }
+  }
+
+  private def executeChildren: Map[String, Any] = {
     childUpdates.map {
-      case (ex, null) => ex()
-      case (ex, n) if (!env.contains(n)) => ex()
-      case (ex, n) => env(n) match {
+      case (ex, n) if (!env.contains(n)) => (n, ex())
+      case (ex, n) => (n, env(n) match {
         case m: Map[String, _] => ex(m)
         case t: scala.collection.Traversable[Map[String, _]] => t.map(ex(_))
         case a: Array[Map[String, _]] => (a map { ex(_) }).toList
         case x => ex()
-      }
-    }.toList
+      })
+    }.foldLeft(scala.collection.immutable.ListMap[String, Any]()) {_ + _} //use list map to preserve children order
   }
 
   //default or fk shortcut join with child.
@@ -658,7 +670,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: Any) = {
     new InsertExpr(IdentExpr(table.ident), alias, Option(cols) map (_ map (buildInternal(_, COL_CTX)) filter {
       case x @ ColExpr(IdentExpr(_), _, _, _, _) => true
-      case e: ColExpr => this.childUpdates += { (e.col, e.name) }; false
+      case e: ColExpr => registerChildUpdate(e.col, e.name); false
     }) getOrElse this.table(table).cols.map(c => IdentExpr(List(c.name))), vals match {
       case arr: List[_] => ValuesExpr(arr map {
         buildInternal(_, VALUES_CTX) match {
@@ -678,7 +690,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       filter.elements map { buildInternal(_, WHERE_CTX) } else null,
       Option(cols) map (_ map (buildInternal(_, COL_CTX)) filter {
         case ColExpr(IdentExpr(_), _, _, _, _) => true
-        case e: ColExpr => this.childUpdates += { (e.col, e.name) }; false
+        case e: ColExpr => registerChildUpdate(e.col, e.name); false
       }) getOrElse this.table(table).cols.map(c => IdentExpr(List(c.name))),
       buildInternal(vals, VALUES_CTX) match {
         case v: ArrExpr => ValuesExpr(patchVals(table, cols, v.elements))
