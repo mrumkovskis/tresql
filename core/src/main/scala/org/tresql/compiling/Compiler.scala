@@ -35,25 +35,16 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   }
   case class FunDef[T](name: String, exp: Fun)(implicit val typ: Manifest[T]) extends TypedExp[T]
   case class TableDef(name: String, exp: Obj) extends Exp { def tresql = exp.tresql }
-  //is superclass of select and array
+
+  //is superclass of sql query and array
   trait RowDefBase extends TypedExp[RowDefBase] {
     def cols: List[ColDef[_]]
     val typ: Manifest[RowDefBase] = ManifestFactory.classType(this.getClass)
   }
-  //is superclass of select, union, intersect etc.
-  trait SelectDefBase extends RowDefBase
 
-  case class SelectDef(
-    cols: List[ColDef[_]],
-    tables: List[TableDef],
-    exp: Query,
-    parent: Scope) extends SelectDefBase with Scope {
-
-    //check for duplicating tables
-    {
-      val duplicates = tables.groupBy(_.name).filter(_._2.size > 1).map(_._1)
-      assert(duplicates.size == 0, s"Duplicate table names: ${duplicates.mkString(", ")}")
-    }
+  //superclass of select and dml statements (insert, update, delete)
+  trait SQLDefBase extends RowDefBase with Scope {
+    def tables: List[TableDef]
 
     protected def this_table(table: String) = tables.find(_.name == table).flatMap {
       case TableDef(_, Obj(TableObj(Ident(name)), _, _, _, _)) => parent.table(name mkString ".")
@@ -84,6 +75,29 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     private def col_from_coldef(cd: ColDef[_]) =
       org.tresql.metadata.Col(name = cd.name, true, -1, scalaType = cd.typ)
   }
+
+  //is superclass of insert, update, delete
+  trait DMLDefBase extends SQLDefBase {
+    override def parent = thisCompiler
+  }
+
+  //is superclass of select, union, intersect etc.
+  trait SelectDefBase extends SQLDefBase
+
+  case class SelectDef(
+    cols: List[ColDef[_]],
+    tables: List[TableDef],
+    exp: Query,
+    parent: Scope) extends SelectDefBase {
+
+    //check for duplicating tables
+    {
+      val duplicates = tables.groupBy(_.name).filter(_._2.size > 1).map(_._1)
+      assert(duplicates.size == 0, s"Duplicate table names: ${duplicates.mkString(", ")}")
+    }
+  }
+
+  //union, intersect, except ...
   case class BinSelectDef(
     leftOperand: SelectDefBase,
     rightOperand: SelectDefBase,
@@ -98,17 +112,40 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       } || leftOperand.cols.size == rightOperand.cols.size,
       s"Column count do not match ${leftOperand.cols.size} != ${rightOperand.cols.size}")
     val cols = leftOperand.cols
+    val tables = leftOperand.tables
+    val parent = leftOperand.parent
   }
+
+  case class InsertDef(
+    cols: List[ColDef[_]],
+    tables: List[TableDef],
+    exp: Insert
+  ) extends DMLDefBase
+
+  case class UpdateDef(
+    cols: List[ColDef[_]],
+    tables: List[TableDef],
+    exp: Update
+  ) extends DMLDefBase
+
+  case class DeleteDef(
+    cols: List[ColDef[_]],
+    tables: List[TableDef],
+    exp: Delete
+  ) extends DMLDefBase
+
   case class ArrayDef(cols: List[ColDef[_]]) extends RowDefBase {
     def exp = this
     override def tresql = cols.map(c => any2tresql(c.col)).mkString("[", ", ", "]")
   }
 
+  //root scope implementation
   def table(table: String) = metadata.tableOption(table)
   def column(col: String) = metadata.colOption(col)
   def procedure(procedure: String) = metadata.procedureOption(procedure)
   def parent = null
 
+  //expression def build
   def buildTypedDef(exp: Exp) = {
     trait Ctx
     object QueryCtx extends Ctx //root context
@@ -129,7 +166,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         }
         ColDef(
           alias,
-          tr(c.col),
+          tr(c.col) match { case x if ctx.head == ColsCtx => x case x: Exp => ChildDef(x) case x => sys.error(s"Exp $x unsupported at this place")},
           if(c.typ != null) metadata.xsd_scala_type_map(c.typ) else ManifestFactory.Nothing
         )
       case Obj(b: Braces, _, _, _, _) if ctx.head == QueryCtx =>
@@ -200,13 +237,31 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
           ColDef[Nothing](
             s"_${idx + 1}",
             tr(el) match {
-              case s: SelectDefBase => ChildDef(s)
+              case s: SQLDefBase => ChildDef(s)
               case a: ArrayDef => ChildDef(a)
               case e => e
             },
             ManifestFactory.Nothing)
         }
       )
+      case i: Insert =>
+        val table = TableDef(i.alias, Obj(TableObj(i.table), null, null, null))
+        ctx push ColsCtx
+        val cols =
+          if (i.cols != null) i.cols.map {
+            case c @ Col(Obj(_: Ident, _, _, _, _), _, _) => builder(c) //insertable col
+            case c => //child expression
+              ctx push QueryCtx
+              val exp = builder(c)
+              ctx.pop
+              exp
+          }.asInstanceOf[List[ColDef[_]]]
+          else Nil
+        ctx.pop
+        ctx push BodyCtx
+        val vals = tr(i.vals)
+        ctx.pop
+        InsertDef(cols, List(table), i.copy(table = null, cols = null, vals = vals))
       case null => null
     }
     builder(exp)
@@ -222,8 +277,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         val c = (nsd.cols map scoper).asInstanceOf[List[ColDef[_]]]
         val q = scoper(nsd.exp).asInstanceOf[Query]
         scope_stack.pop
-        val r = nsd.copy(cols = c, tables = t, exp = q)
-        r
+        nsd.copy(cols = c, tables = t, exp = q)
     }
     scoper(exp)
   }
@@ -277,6 +331,12 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         }
         sd.cols foreach (c => namer(nctx -> c))
         namer(nctx -> sd.exp)
+        (ctx, false) //return old scope and stop traversing
+      case (ctx, id: InsertDef) =>
+        id.tables foreach (t => namer(ctx -> t.exp.obj))
+        val nctx = ctx.copy(scope = id)
+        id.cols foreach (c => namer(nctx -> c))
+        namer(ctx -> id.exp)
         (ctx, false) //return old scope and stop traversing
       case (ctx, _: TableObj) => (ctx.copy(ctx = TableCtx), true) //set table context
       case (ctx, _: Obj) => (ctx.copy(ctx = ColumnCtx), true) //set column context
@@ -333,6 +393,11 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         val ncols = (nsd.cols map type_resolver).asInstanceOf[List[ColDef[_]]] //resolve types for column defs
         scopes.pop
         nsd.copy(cols = ncols)
+      case i: InsertDef =>
+        scopes.push(i)
+        val ncols = (i.cols map type_resolver).asInstanceOf[List[ColDef[_]]]
+        scopes.pop
+        i.copy(cols = ncols)
       case ColDef(n, ChildDef(ch), t) => ColDef(n, ChildDef(type_resolver(ch)), t)
       case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
         ColDef(n, exp, type_from_any(exp))
@@ -367,6 +432,21 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case bd: BinSelectDef => bd.copy(
         leftOperand = transform_traverse(bd.leftOperand).asInstanceOf[SelectDefBase],
         rightOperand = transform_traverse(bd.rightOperand).asInstanceOf[SelectDefBase])
+      case id: InsertDef =>
+        val t = (id.tables map transform_traverse).asInstanceOf[List[TableDef]]
+        val c = (id.cols map transform_traverse).asInstanceOf[List[ColDef[_]]]
+        val i = transform_traverse(id.exp).asInstanceOf[Insert]
+        InsertDef(c, t, i)
+      case ud: UpdateDef =>
+        val t = (ud.tables map transform_traverse).asInstanceOf[List[TableDef]]
+        val c = (ud.cols map transform_traverse).asInstanceOf[List[ColDef[_]]]
+        val u = transform_traverse(ud.exp).asInstanceOf[Update]
+        UpdateDef(c, t, u)
+      case dd: DeleteDef =>
+        val t = (dd.tables map transform_traverse).asInstanceOf[List[TableDef]]
+        val c = (dd.cols map transform_traverse).asInstanceOf[List[ColDef[_]]]
+        val d = transform_traverse(dd.exp).asInstanceOf[Delete]
+        DeleteDef(c, t, d)
       case ad: ArrayDef => ad.copy(cols = (ad.cols map transform_traverse).asInstanceOf[List[ColDef[_]]])
     }
     transform_traverse
@@ -391,6 +471,9 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case (r: T, to: TableObj) => tr(r, to.obj)
       case (r: T, sd: SelectDef) => tr(tr(tr(r, sd.tables), sd.cols), sd.exp)
       case (r: T, bd: BinSelectDef) => tr(tr(r, bd.leftOperand), bd.rightOperand)
+      case (r: T, id: InsertDef) => tr(tr(tr(r, id.tables), id.cols), id.exp)
+      case (r: T, ud: UpdateDef) => tr(tr(tr(r, ud.tables), ud.cols), ud.exp)
+      case (r: T, dd: DeleteDef) => tr(tr(tr(r, dd.tables), dd.cols), dd.exp)
       case (r: T, ad: ArrayDef) => tr(r, ad.cols)
     }
     extract_traverse

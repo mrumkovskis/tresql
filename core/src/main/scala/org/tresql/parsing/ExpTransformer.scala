@@ -30,9 +30,9 @@ trait ExpTransformer { this: QueryParsers =>
             tr(cols).asInstanceOf[Cols], tr(gr).asInstanceOf[Grp], tr(ord).asInstanceOf[Ord],
             tr(off), tr(lim))
       case Insert(t, a, cols, vals) => Insert(tr(t).asInstanceOf[Ident], a,
-          cols map (tr(_).asInstanceOf[Col]), tr(vals))
+          tr(cols).asInstanceOf[List[Col]], tr(vals))
       case Update(t, a, filter, cols, vals) => Update(tr(t).asInstanceOf[Ident], a,
-          tr(filter).asInstanceOf[Arr], cols map (tr(_).asInstanceOf[Col]), tr(vals))
+          tr(filter).asInstanceOf[Arr], tr(cols).asInstanceOf[List[Col]], tr(vals))
       case Delete(t, a, filter) => Delete(tr(t).asInstanceOf[Ident], a, tr(filter).asInstanceOf[Arr])
       case Arr(els) => Arr(els map tr)
       case Filters(f) => Filters(f map (tr(_).asInstanceOf[Arr]))

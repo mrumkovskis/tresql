@@ -85,6 +85,10 @@ package object tresql extends CoreTypes {
       )
       def resultClassTree(exp: Exp): Ctx = {
         lazy val generator: PartialFunction[(Ctx, Exp), Ctx] = extractorAndTraverser {
+          //inserts updates deletes
+          case (ctx, dml: DMLDefBase) =>
+            (ctx.copy(className = "DMLResult"), false)
+          //selects and arrays arrays
           case (ctx, sd: RowDefBase) =>
             val className = c.freshName("Tresql")
             case class ColsCtx(
@@ -163,9 +167,6 @@ package object tresql extends CoreTypes {
               childIdx = ctx.childIdx + 1,
               convRegister = selDefCtx.convRegister
             ), false)
-          case (ctx, ColDef(name, ChildDef(_), typ)) =>
-            // TODO unsupported at the moment
-            (ctx, false)
           case (ctx, ColDef(name, _, typ)) =>
             val fieldTerm = q"${TermName(name)}"
             //FIXME bizzare way of getting qualified type name, did not find another way...
