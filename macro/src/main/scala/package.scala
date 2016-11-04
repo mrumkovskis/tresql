@@ -88,7 +88,7 @@ package object tresql extends CoreTypes {
           //inserts updates deletes
           case (ctx, dml: DMLDefBase) =>
             (ctx.copy(className = "DMLResult"), false)
-          //selects and arrays arrays
+          //selects and arrays
           case (ctx, sd: RowDefBase) =>
             val className = c.freshName("Tresql")
             case class ColsCtx(
