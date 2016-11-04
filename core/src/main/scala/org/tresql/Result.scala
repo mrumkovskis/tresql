@@ -427,7 +427,10 @@ trait DMLResult extends DynamicResult with CompiledResult[DMLResult] with Single
     count, count -> children, count -> id, children, (count -> children) -> id
   */
   override def hashCode = compatibilityObj.hashCode
-  override def equals(obj: Any) = compatibilityObj.equals(obj)
+  override def equals(obj: Any) = obj match {
+    case dml: DMLResult => compatibilityObj.equals(dml.compatibilityObj)
+    case x => compatibilityObj.equals(x)
+  }
   private def compatibilityObj: Any = {
     val x = (count, children, id) match {
       case (Some(c), ch, None) if ch.isEmpty => c
