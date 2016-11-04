@@ -12,7 +12,7 @@ trait Query extends QueryBuilder with TypedQuery {
   def apply(expr: String, params: Any*)(implicit resources: Resources = Env): DynamicResult =
     exec(expr, normalizePars(params: _*), resources).asInstanceOf[DynamicResult]
 
-  private[tresql] def compiledResult[T <: RowLike](expr: String, params: Any*)(
+  def compiledResult[T <: RowLike](expr: String, params: Any*)(
     implicit resources: Resources = Env): CompiledResult[T] = {
     exec(expr, normalizePars(params: _*), resources).asInstanceOf[CompiledResult[T]]
   }
