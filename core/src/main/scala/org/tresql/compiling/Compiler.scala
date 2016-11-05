@@ -52,7 +52,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     }
     protected def declared_table(table: String): Option[Table] =
       this_table(table) orElse (parent match {
-        case p: SelectDef => p.declared_table(table)
+        case p: SQLDefBase => p.declared_table(table)
         case _ => None
       })
     def table(table: String) = this_table(table) orElse parent.table(table)
@@ -130,10 +130,11 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   ) extends DMLDefBase
 
   case class DeleteDef(
-    cols: List[ColDef[_]],
     tables: List[TableDef],
     exp: Delete
-  ) extends DMLDefBase
+  ) extends DMLDefBase {
+    def cols = Nil
+  }
 
   case class ArrayDef(cols: List[ColDef[_]]) extends RowDefBase {
     def exp = this
@@ -252,11 +253,11 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
             ManifestFactory.Nothing)
         }
       )
-      case i: Insert =>
-        val table = TableDef(i.alias, Obj(TableObj(i.table), null, null, null))
+      case dml: DMLExp =>
+        val table = TableDef(dml.alias, Obj(TableObj(dml.table), null, null, null))
         ctx push ColsCtx
         val cols =
-          if (i.cols != null) i.cols.map {
+          if (dml.cols != null) dml.cols.map {
             case c @ Col(Obj(_: Ident, _, _, _, _), _, _) => builder(c) //insertable col
             case c => //child expression
               ctx push QueryCtx
@@ -267,9 +268,18 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
           else Nil
         ctx.pop
         ctx push BodyCtx
-        val vals = tr(i.vals)
+        val filter = if (dml.filter != null) tr(dml.filter).asInstanceOf[Arr] else null
+        val vals = if (dml.vals != null) tr(dml.vals) else null
         ctx.pop
-        InsertDef(cols, List(table), i.copy(table = null, cols = null, vals = vals))
+        dml match {
+          case i: Insert =>
+            InsertDef(cols, List(table), Insert(table = null, alias = null, cols = null, vals = vals))
+          case u: Update =>
+            UpdateDef(cols, List(table), Update(
+              table = null, alias = null, cols = null, filter = filter, vals = vals))
+          case d: Delete =>
+            DeleteDef(List(table), Delete(table = null, alias = null, filter = filter))
+        }
       case null => null
     }
     builder(exp)
@@ -286,6 +296,11 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         val q = scoper(nsd.exp).asInstanceOf[Query]
         scope_stack.pop
         nsd.copy(cols = c, tables = t, exp = q)
+      case dml: DMLDefBase if !dml.isInstanceOf[InsertDef] && scope_stack.head != dml =>
+        scope_stack push dml
+        val ndml = scoper(dml)
+        scope_stack.pop
+        ndml
     }
     scoper(exp)
   }
@@ -340,11 +355,14 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         sd.cols foreach (c => namer(nctx -> c))
         namer(nctx -> sd.exp)
         (ctx, false) //return old scope and stop traversing
-      case (ctx, id: InsertDef) =>
-        id.tables foreach (t => namer(ctx -> t.exp.obj))
-        val nctx = ctx.copy(scope = id)
-        id.cols foreach (c => namer(nctx -> c))
-        namer(ctx -> id.exp)
+      case (ctx, dml: DMLDefBase) =>
+        dml.tables foreach (t => namer(ctx -> t.exp.obj))
+        val nctx = ctx.copy(scope = dml)
+        dml.cols foreach (c => namer(nctx -> c))
+        dml match {
+          case ins: InsertDef => namer(ctx -> ins.exp) //do not change scope for insert value clause name resolving
+          case upd_del => namer(nctx -> upd_del.exp) //change scope for update delete filter and values name resolving
+        }
         (ctx, false) //return old scope and stop traversing
       case (ctx, _: TableObj) => (ctx.copy(ctx = TableCtx), true) //set table context
       case (ctx, _: Obj) => (ctx.copy(ctx = ColumnCtx), true) //set column context
@@ -401,11 +419,15 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         val ncols = (nsd.cols map type_resolver).asInstanceOf[List[ColDef[_]]] //resolve types for column defs
         scopes.pop
         nsd.copy(cols = ncols)
-      case i: InsertDef =>
-        scopes.push(i)
-        val ncols = (i.cols map type_resolver).asInstanceOf[List[ColDef[_]]]
+      case dml: DMLDefBase =>
+        scopes.push(dml)
+        val ncols = (dml.cols map type_resolver).asInstanceOf[List[ColDef[_]]]
         scopes.pop
-        i.copy(cols = ncols)
+        dml match {
+          case ins: InsertDef => ins.copy(cols = ncols)
+          case upd: UpdateDef => upd.copy(cols = ncols)
+          case del: DeleteDef => del
+        }
       case ColDef(n, ChildDef(ch), t) => ColDef(n, ChildDef(type_resolver(ch)), t)
       case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
         ColDef(n, exp, type_from_any(exp))
@@ -452,9 +474,8 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         UpdateDef(c, t, u)
       case dd: DeleteDef =>
         val t = (dd.tables map transform_traverse).asInstanceOf[List[TableDef]]
-        val c = (dd.cols map transform_traverse).asInstanceOf[List[ColDef[_]]]
         val d = transform_traverse(dd.exp).asInstanceOf[Delete]
-        DeleteDef(c, t, d)
+        DeleteDef(t, d)
       case ad: ArrayDef => ad.copy(cols = (ad.cols map transform_traverse).asInstanceOf[List[ColDef[_]]])
     }
     transform_traverse

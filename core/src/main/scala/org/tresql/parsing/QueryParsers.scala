@@ -39,7 +39,13 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     def tresql: String
   }
 
-  trait DMLExp extends Exp
+  trait DMLExp extends Exp {
+    def table: Ident
+    def alias: String
+    def cols: List[Col]
+    def filter: Arr
+    def vals: Any
+  }
 
   case class Ident(ident: List[String]) extends Exp {
     def tresql = ident.mkString(".")
@@ -128,6 +134,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       else "")
   }
   case class Insert(table: Ident, alias: String, cols: List[Col], vals: Any) extends DMLExp {
+    override def filter = null
     def tresql = "+" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
       (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") +
       (if (vals != null) any2tresql(vals) else "")
@@ -139,6 +146,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       (if (vals != null) any2tresql(vals) else "")
   }
   case class Delete(table: Ident, alias: String, filter: Arr) extends DMLExp {
+    override def cols = null
+    override def vals = null
     def tresql = "-" + table.tresql + Option(alias).map(" " + _).getOrElse("") + filter.tresql
   }
   case class Arr(elements: List[Any]) extends Exp {
