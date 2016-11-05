@@ -64,7 +64,7 @@ lazy val tresql = (project in file("."))
       (v, d) => (if (v.startsWith("2.10")) d else d filterNot (_.getPath endsWith ".java")).get
     },
     libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "2.1.5" % "test",
-                                "org.hsqldb" % "hsqldb" % "2.2.8" % "test"),
+                                "org.hsqldb" % "hsqldb" % "2.3.1" % "test"),
     initialCommands in console := "import org.tresql._",
     publishArtifact in Test := false,
     publishArtifact in Compile := true,
