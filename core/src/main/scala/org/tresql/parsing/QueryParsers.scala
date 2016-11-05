@@ -39,6 +39,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     def tresql: String
   }
 
+  trait DMLExp extends Exp
+
   case class Ident(ident: List[String]) extends Exp {
     def tresql = ident.mkString(".")
   }
@@ -125,18 +127,18 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       else if (offset != null) s"@(${any2tresql(offset)}, )"
       else "")
   }
-  case class Insert(table: Ident, alias: String, cols: List[Col], vals: Any) extends Exp {
+  case class Insert(table: Ident, alias: String, cols: List[Col], vals: Any) extends DMLExp {
     def tresql = "+" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
       (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") +
       (if (vals != null) any2tresql(vals) else "")
   }
-  case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Any) extends Exp {
+  case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Any) extends DMLExp {
     def tresql = "=" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
       (if (filter != null) filter.tresql else "") +
       (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") +
       (if (vals != null) any2tresql(vals) else "")
   }
-  case class Delete(table: Ident, alias: String, filter: Arr) extends Exp {
+  case class Delete(table: Ident, alias: String, filter: Arr) extends DMLExp {
     def tresql = "-" + table.tresql + Option(alias).map(" " + _).getOrElse("") + filter.tresql
   }
   case class Arr(elements: List[Any]) extends Exp {

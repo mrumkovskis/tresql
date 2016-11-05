@@ -78,6 +78,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
 
   //is superclass of insert, update, delete
   trait DMLDefBase extends SQLDefBase {
+    override def exp: DMLExp
     override def parent = thisCompiler
   }
 
@@ -191,7 +192,14 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         ctx.pop
         ctx push ColsCtx
         val cols =
-          if (q.cols != null) (q.cols.cols map builder).asInstanceOf[List[ColDef[_]]] match {
+          if (q.cols != null) (q.cols.cols map {
+            case c @ Col(_: DMLExp, _, _) => //child dml statement in select
+              ctx push QueryCtx
+              val nc = builder(c)
+              ctx.pop
+              nc
+            case c => builder(c)
+          }).asInstanceOf[List[ColDef[_]]] match {
             case l if l.exists(_.name == null) => //set names of columns
               l.zipWithIndex.map { case (c, i) =>
                 if (c.name == null) c.copy(name = s"_${i + 1}") else c
