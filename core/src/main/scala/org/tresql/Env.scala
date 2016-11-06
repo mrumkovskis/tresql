@@ -127,10 +127,10 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   override def maxResultSize = provider.map(_.env.maxResultSize).getOrElse(resources.maxResultSize)
 
   //meta data methods
-  def table(name: String) = metaData.table(name)
-  def tableOption(name:String) = metaData.tableOption(name)
-  def procedure(name: String) = metaData.procedure(name)
-  def procedureOption(name:String) = metaData.procedureOption(name)
+  override def table(name: String) = metaData.table(name)
+  override def tableOption(name:String) = metaData.tableOption(name)
+  override def procedure(name: String) = metaData.procedure(name)
+  override def procedureOption(name:String) = metaData.procedureOption(name)
 
   def printVariables = "\nBind variables:" +
     vars.map(_.mkString("\n ", "\n ", "\n")).getOrElse("<none>")

@@ -225,13 +225,7 @@ package object tresql extends CoreTypes {
       case x => sys.error(s"Setting must be in format <key>=<value> or <key>. Instead found: $x")
     }}.toMap
     def metadata(conf: Map[String, String]) = conf.get("metadataFactoryClass").map { factory =>
-      Class.forName(factory).newInstance.asInstanceOf[compiling.CompilerMetaData].create(
-        conf.getOrElse("driverClass", null),
-        conf.getOrElse("url", null),
-        conf.getOrElse("user", null),
-        conf.getOrElse("password", null),
-        conf.getOrElse("dbCreateScript", null)
-      )
+      Class.forName(factory).newInstance.asInstanceOf[compiling.CompilerMetaData].create(conf)
     }.getOrElse(
       sys.error(s"metadataFactoryClass macro compiler setting missing. Try to set -Xmacro-settings: scala compiler option.")
     )

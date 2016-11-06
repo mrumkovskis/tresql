@@ -6,13 +6,7 @@ import org.tresql.metadata.JDBCMetaData
 
 /** Implementation must have empty constructor so can be instantiated with {{{Class.newInstance}}} */
 trait CompilerMetaData {
-  def create(
-    driverClassName: String,
-    url: String,
-    user: String,
-    password: String,
-    dbCreateScript: String
-  ): MetaData
+  def create(conf: Map[String, String]): MetaData
 }
 
 private object Metadata {
@@ -20,13 +14,14 @@ private object Metadata {
 }
 
 class CompilerJDBCMetaData extends CompilerMetaData {
-  def create(
-    driverClassName: String,
-    url: String,
-    user: String,
-    password: String,
-    dbCreateScript: String
-  ) = {
+  override def create(conf: Map[String, String]) = {
+    val driverClassName = conf.getOrElse("driverClass", null)
+    val url = conf.getOrElse("url", null)
+    val user = conf.getOrElse("user", null)
+    val password = conf.getOrElse("password", null)
+    val dbCreateScript = conf.getOrElse("dbCreateScript", null)
+    val functions = conf.getOrElse("functions", null)
+
     if (Metadata.md != null) Metadata.md else {
       Env.logger = ((msg, level) => println (msg))
       Class.forName(driverClassName)
@@ -49,7 +44,12 @@ class CompilerJDBCMetaData extends CompilerMetaData {
           }
         Env.log("Success")
       }
-      Metadata.md = JDBCMetaData()
+      Metadata.md = if (functions == null) JDBCMetaData() else {
+        val f = Class.forName(functions)
+        new JDBCMetaData with CompilerFunctions {
+          override def compilerFunctions = f
+        }
+      }
       Metadata.md
     }
   }

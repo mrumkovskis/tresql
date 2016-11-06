@@ -58,8 +58,11 @@ trait MetaData extends metadata.TypeMapper {
 
   def table(name: String): Table
   def tableOption(name: String): Option[Table]
-  def procedure(name: String): Procedure[_]
-  def procedureOption(name: String): Option[Procedure[_]]
+  /*??? implementations so super can be called from extending trait in the case
+  two implementations of this trait are mixed together.
+  This pattern is used in {{{compiling.CompilerFunctions}}} */
+  def procedure(name: String): Procedure[_] = ???
+  def procedureOption(name: String): Option[Procedure[_]] = ???
 }
 
 //TODO pk col storing together with ref col (for multi col key secure support)?
@@ -103,7 +106,19 @@ package metadata {
   case class Key(cols: List[String])
   case class Ref(cols: List[String], refCols: List[String])
   case class Procedure[T](name: String, comments: String, procType: Int,
-    pars: List[Par[_]], returnSqlType: Int, returnTypeName: String, scalaReturnType: Manifest[T])
+    pars: List[Par[_]], returnSqlType: Int, returnTypeName: String, scalaReturnType: Manifest[T],
+    hasRepeatedPar: Boolean = false) {
+    /**Returns parameter index return type depends on during runtime or -1 if return type does not
+    depend on any parameter type. */
+    def returnTypeParIndex: Int = {
+      import java.lang.reflect._
+      val c = scalaReturnType.runtimeClass
+      if (classOf[TypeVariable[_ <: GenericDeclaration]].isAssignableFrom(c)) {
+        //return type is parameterized
+        pars.indexWhere(_.scalaType.toString == scalaReturnType.toString)
+      } else -1
+    }
+  }
   case class Par[T](name: String, comments: String, parType: Int, sqlType: Int, typeName: String,
     scalaType: Manifest[T])
   trait key_ { def cols: List[String] }
