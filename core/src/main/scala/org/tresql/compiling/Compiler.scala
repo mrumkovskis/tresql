@@ -33,7 +33,14 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   case class ChildDef(exp: Exp) extends TypedExp[ChildDef] {
     val typ: Manifest[ChildDef] = ManifestFactory.classType(this.getClass)
   }
-  case class FunDef[T](name: String, exp: Fun)(implicit val typ: Manifest[T]) extends TypedExp[T]
+  case class FunDef[T](name: String, exp: Fun, typ: Manifest[T], procedure: Procedure[_])
+    extends TypedExp[T] {
+    assert(
+      (procedure.hasRepeatedPar && exp.parameters.size >= procedure.pars.size - 1) ||
+      (!procedure.hasRepeatedPar && exp.parameters.size == procedure.pars.size),
+      s"Function '$name' has wrong number of parameters: ${exp.parameters.size}"
+    )
+  }
   case class TableDef(name: String, exp: Obj) extends Exp { def tresql = exp.tresql }
 
   //is superclass of sql query and array
@@ -159,7 +166,8 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     def tr(x: Any): Any = x match {case e: Exp @unchecked => builder(e) case _ => x} //helper function
     lazy val builder: PartialFunction[Exp, Exp] = transformer {
       case f: Fun => procedure(f.name).map { p =>
-        FunDef(p.name, f.copy(parameters = f.parameters map tr))(p.scalaReturnType)
+        val retType = if (p.returnTypeParIndex == -1) p.scalaReturnType else ManifestFactory.Nothing
+        FunDef(p.name, f.copy(parameters = f.parameters map tr), retType, p)
       }.getOrElse(sys.error(s"Unknown function: ${f.name}"))
       case c: Col =>
         val alias = if (c.alias != null) c.alias else c.col match {
@@ -410,6 +418,10 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
           ret
         }
       case (_, Ident(ident)) => (scopes.head.column(ident mkString ".").map(_.scalaType).get, false)
+      case (_, f: FunDef[_]) =>
+        (if (f.typ != null && f.typ != Manifest.Nothing) f.typ
+        else if (f.procedure.returnTypeParIndex == -1) Manifest.Any
+        else type_from_any(f.exp.parameters(f.procedure.returnTypeParIndex))) -> false
     }
     lazy val type_resolver: PartialFunction[Exp, Exp] = transformer {
       case s: SelectDef =>
@@ -431,6 +443,11 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case ColDef(n, ChildDef(ch), t) => ColDef(n, ChildDef(type_resolver(ch)), t)
       case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
         ColDef(n, exp, type_from_any(exp))
+      case fd @ FunDef(n, f, typ, p) if typ == null || typ == Manifest.Nothing =>
+        val t = if (p.returnTypeParIndex == -1) Manifest.Any else {
+          type_from_any(f.parameters(p.returnTypeParIndex))
+        }
+        fd.copy(typ = t)
     }
     type_resolver(exp)
   }

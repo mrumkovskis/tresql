@@ -2,11 +2,11 @@ package org.tresql.compiling
 
 trait DBAggregateFunctions {
   //aggregate functions
-  def count(col: Any): java.lang.Number
-  def max(col: Any): Any
-  def min(col: Any): Any
-  def sum(col: java.lang.Number): java.lang.Number
-  def avg(col: java.lang.Number): java.lang.Number
+  def count(col: Any): java.lang.Long
+  def max[T](col: T): T
+  def min[T](col: T): T
+  def sum[T](col: T): T
+  def avg[T](col: T): T
 }
 
 trait Functions extends DBAggregateFunctions {
