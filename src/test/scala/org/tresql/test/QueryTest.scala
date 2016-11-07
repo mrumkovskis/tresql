@@ -103,22 +103,12 @@ class QueryTest extends Suite {
       } else pl.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
     }
     println("\n------------------------ Test TreSQL statements ----------------------\n")
-    var nr = 0
-    new scala.io.BufferedSource(getClass.getResourceAsStream("/test.txt"))("UTF-8").getLines.foreach {
-      case l if (l.trim.startsWith("//")) =>
-      case l if (l.trim.length > 0) => {
-        nr += 1
-        val (st, params, patternRes) = l.split("-->") match {
-          case scala.Array(s, r) => (s, null, r)
-          case scala.Array(s, p, r) => (s, p, r)
-        }
-        println(s"Executing test #$nr:")
-        val testRes = jsonize(if (params == null) Query(st) else Query(st, parsePars(params)), Arrays)
-        println("Result: " + testRes)
-        assert(JSON.parseFull(testRes).get === JSON.parseFull(patternRes).get)
-      }
-      case _ =>
-    }
+    testTresqls("/test.txt", (st, params, patternRes, nr) => {
+      println(s"Executing test #$nr:")
+      val testRes = jsonize(if (params == null) Query(st) else Query(st, parsePars(params)), Arrays)
+      println("Result: " + testRes)
+      assert(JSON.parseFull(testRes).get === JSON.parseFull(patternRes).get)
+    })
     println("\n---------------- Test API ----------------------\n")
     assertResult(10)(Query.head[Int]("dept{deptno}#(deptno)"))
     assertResult(10)(Query.unique[Int]("dept[10]{deptno}#(deptno)"))
@@ -744,26 +734,40 @@ class QueryTest extends Suite {
     assertResult(List(1, List()))(ORT.update("car", obj))
 
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
-
-    nr = 0
-    new scala.io.BufferedSource(getClass.getResourceAsStream("/test.txt"))("UTF-8").getLines.foreach {
-      case l if (l.trim.startsWith("//")) =>
-      case l if (l.trim.length > 0) =>
-        val (st, params, patternRes) = l.split("-->") match {
-          case scala.Array(s, r) => (s, null, r)
-          case scala.Array(s, p, r) => (s, p, r)
-        }
-        nr += 1
-        println(s"$nr. Testing tresql method of:\n$st")
-        QueryParser.parseExp(st) match {
-          case e: QueryParser.Exp => assert(e === QueryParser.parseExp(e.tresql))
-        }
-      case _ =>
+    testTresqls("/test.txt", (tresql, _, _, nr) => {
+      println(s"$nr. Testing tresql method of:\n$tresql")
+      QueryParser.parseExp(tresql) match {
+        case e: QueryParser.Exp => assert(e === QueryParser.parseExp(e.tresql))
+      }
+    })
+    println("\n-------------- TEST compiler ----------------\n")
+    //set new metadata
+    Env.metaData = new metadata.JDBCMetaData with compiling.CompilerFunctions {
+      override def compilerFunctions = classOf[compiling.Functions]
     }
+    testTresqls("/test.txt", (tresql, _, _, nr) => {
+      println(s"$nr. Compiling tresql:\n$tresql")
+      QueryCompiler.compile(tresql)
+    })
 
     println("\n-------------- CACHE -----------------\n")
-    Env.cache map println
+    Env.cache map(c => println(s"Cache size: ${c.size}"))
 
   }
 
+  def testTresqls(resource: String, testFunction: (String, String, String, Int) => Unit) = {
+    var nr = 0
+    new scala.io.BufferedSource(getClass.getResourceAsStream(resource))("UTF-8")
+      .getLines.foreach {
+        case l if (l.trim.startsWith("//")) =>
+        case l if (l.trim.length > 0) =>
+          val (st, params, patternRes) = l.split("-->") match {
+            case scala.Array(s, r) => (s, null, r)
+            case scala.Array(s, p, r) => (s, p, r)
+          }
+          nr += 1
+          testFunction(st, params, patternRes, nr)
+        case _ =>
+      }
+  }
 }

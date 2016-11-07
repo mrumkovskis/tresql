@@ -62,17 +62,23 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         case p: SQLDefBase => p.declared_table(table)
         case _ => None
       })
-    def table(table: String) = this_table(table) orElse parent.table(table)
-    def column(col: String) = col.lastIndexOf('.') match {
-      case -1 => tables.collect {
-        case TableDef(t, _) => declared_table(t).flatMap(_.colOption(col))
-      } collect { case Some(col) => col } match {
-        case List(col) => Some(col)
-        case Nil => None
-        case x => sys.error(s"Ambiguous columns: $x")
+    def table(tableName: String) = {
+      val table = tableName.toLowerCase
+      this_table(table) orElse parent.table(table)
+    }
+    def column(colName: String) = {
+      val col = colName.toLowerCase
+      col.lastIndexOf('.') match {
+        case -1 => tables.collect {
+          case TableDef(t, _) => declared_table(t).flatMap(_.colOption(col))
+        } collect { case Some(col) => col } match {
+          case List(col) => Some(col)
+          case Nil => None
+          case x => sys.error(s"Ambiguous columns: $x")
+        }
+        case x =>
+          declared_table(col.substring(0, x)).flatMap(_.colOption(col.substring(x + 1)))
       }
-      case x =>
-        declared_table(col.substring(0, x)).flatMap(_.colOption(col.substring(x + 1)))
     }
 
     def procedure(procedure: String) = parent.procedure(procedure)
@@ -98,9 +104,15 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     exp: Query,
     parent: Scope) extends SelectDefBase {
 
+    println(s"Tables: $tables")
     //check for duplicating tables
     {
-      val duplicates = tables.groupBy(_.name).filter(_._2.size > 1).map(_._1)
+      val duplicates = tables.groupBy(_.name).filter(_._2.size > 1).filterNot {
+        //only valid option is that tables starting with the second table are identifiers and have no join
+        case (_, h :: noJoinTables) => noJoinTables.forall {
+          case TableDef(_, Obj(TableObj(Ident(List(_))), _, Join( _, _, true), _, _)) => true
+        }
+      }
       assert(duplicates.size == 0, s"Duplicate table names: ${duplicates.mkString(", ")}")
     }
   }
@@ -187,14 +199,14 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         o.copy(obj = builder(o.obj), join = builder(o.join).asInstanceOf[Join])
       case q: Query =>
         ctx push TablesCtx
-        val tables = q.tables map { table =>
+        val tables = q.tables.zipWithIndex map { case (table, idx) =>
           val newTable = builder(table.obj)
           ctx push BodyCtx
           val join = tr(table.join).asInstanceOf[Join]
           ctx.pop
           val name = Option(table.alias).getOrElse(table match {
             case Obj(Ident(name), _, _, _, _) => name mkString "."
-            case _ => sys.error(s"Alias missing for from clause select: ${table.tresql}")
+            case _ => s"_${idx + 1}"
           })
           TableDef(name, table.copy(obj = TableObj(newTable), join = join))
         }
