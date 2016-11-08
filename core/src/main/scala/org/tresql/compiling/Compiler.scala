@@ -22,8 +22,14 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     def typ: Manifest[T]
     def tresql = exp.tresql
   }
+
+  case class TableDef(name: String, exp: Obj) extends Exp { def tresql = exp.tresql }
   //helper class for namer to distinguish table references from column references
   case class TableObj(obj: Exp) extends Exp {
+    def tresql = obj.tresql
+  }
+  //helper class for namer to distinguish table with NoJoin, i.e. must be defined it tables clause earlier
+  case class TableAlias(obj: Exp) extends Exp {
     def tresql = obj.tresql
   }
   case class ColDef[T](name: String, col: Any, typ: Manifest[T]) extends TypedExp[T] {
@@ -41,7 +47,6 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       s"Function '$name' has wrong number of parameters: ${exp.parameters.size}"
     )
   }
-  case class TableDef(name: String, exp: Obj) extends Exp { def tresql = exp.tresql }
 
   //is superclass of sql query and array
   trait RowDefBase extends TypedExp[RowDefBase] {
@@ -103,16 +108,12 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     tables: List[TableDef],
     exp: Query,
     parent: Scope) extends SelectDefBase {
-
-    println(s"Tables: $tables")
     //check for duplicating tables
     {
-      val duplicates = tables.groupBy(_.name).filter(_._2.size > 1).filterNot {
-        //only valid option is that tables starting with the second table are identifiers and have no join
-        case (_, h :: noJoinTables) => noJoinTables.forall {
-          case TableDef(_, Obj(TableObj(Ident(List(_))), _, Join( _, _, true), _, _)) => true
-        }
-      }
+      val duplicates = tables.filter { //filter out aliases
+        case TableDef(_, Obj(_: TableAlias, _, _, _, _)) => false
+        case _ => true
+      }.groupBy(_.name).filter(_._2.size > 1)
       assert(duplicates.size == 0, s"Duplicate table names: ${duplicates.mkString(", ")}")
     }
   }
@@ -176,6 +177,55 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     val ctx = scala.collection.mutable.Stack[Ctx](QueryCtx)
 
     def tr(x: Any): Any = x match {case e: Exp @unchecked => builder(e) case _ => x} //helper function
+    def buildTables(tables: List[Obj]): List[TableDef] = {
+      ctx push TablesCtx
+      try {
+        val tdefs = tables.zipWithIndex map { case (table, idx) =>
+          val newTable = builder(table.obj)
+          ctx push BodyCtx
+          val join = tr(table.join).asInstanceOf[Join]
+          ctx.pop
+          val name = Option(table.alias).getOrElse(table match {
+            case Obj(Ident(name), _, _, _, _) => name mkString "."
+            case _ => s"_${idx + 1}"
+          })
+          TableDef(name, table.copy(obj = TableObj(newTable), join = join)) -> idx
+        }
+        tdefs map { case (table, idx) => table match { //process no join aliases
+            //NoJoin alias
+            case td @ TableDef(_, o @ Obj(TableObj(Ident(List(alias))), _,
+              Join(_, _, true), _, _)) => //check if alias exists
+              if (tdefs.view(0, idx).exists(_._1.name == alias))
+                transformer {
+                  case TableObj(obj) => TableAlias(obj)
+                }(td).asInstanceOf[TableDef]
+              else sys.error(s"No join table not defined: $alias")
+            case TableDef(_, Obj(x, _, Join(_, _, true), _, _)) =>
+              sys.error(s"Unsupported no join table: $x")
+            case x => x //ordinary table def
+          }
+        }
+      } finally ctx.pop
+    }
+    def buildCols(cols: Cols): List[ColDef[_]] = {
+      ctx push ColsCtx
+      try if (cols != null) (cols.cols map {
+          case c @ Col(_: DMLExp, _, _) => //child dml statement in select
+            ctx push QueryCtx
+            val nc = builder(c)
+            ctx.pop
+            nc
+          case c => builder(c)
+        }).asInstanceOf[List[ColDef[_]]] match {
+          case l if l.exists(_.name == null) => //set names of columns
+            l.zipWithIndex.map { case (c, i) =>
+              if (c.name == null) c.copy(name = s"_${i + 1}") else c
+            }
+          case l => l
+        }
+        else List[ColDef[_]](ColDef[Nothing](null, All, ManifestFactory.Nothing))
+      finally ctx.pop
+    }
     lazy val builder: PartialFunction[Exp, Exp] = transformer {
       case f: Fun => procedure(f.name).map { p =>
         val retType = if (p.returnTypeParIndex == -1) p.scalaReturnType else ManifestFactory.Nothing
@@ -198,37 +248,8 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case o: Obj if ctx.head == BodyCtx =>
         o.copy(obj = builder(o.obj), join = builder(o.join).asInstanceOf[Join])
       case q: Query =>
-        ctx push TablesCtx
-        val tables = q.tables.zipWithIndex map { case (table, idx) =>
-          val newTable = builder(table.obj)
-          ctx push BodyCtx
-          val join = tr(table.join).asInstanceOf[Join]
-          ctx.pop
-          val name = Option(table.alias).getOrElse(table match {
-            case Obj(Ident(name), _, _, _, _) => name mkString "."
-            case _ => s"_${idx + 1}"
-          })
-          TableDef(name, table.copy(obj = TableObj(newTable), join = join))
-        }
-        ctx.pop
-        ctx push ColsCtx
-        val cols =
-          if (q.cols != null) (q.cols.cols map {
-            case c @ Col(_: DMLExp, _, _) => //child dml statement in select
-              ctx push QueryCtx
-              val nc = builder(c)
-              ctx.pop
-              nc
-            case c => builder(c)
-          }).asInstanceOf[List[ColDef[_]]] match {
-            case l if l.exists(_.name == null) => //set names of columns
-              l.zipWithIndex.map { case (c, i) =>
-                if (c.name == null) c.copy(name = s"_${i + 1}") else c
-              }
-            case l => l
-          }
-          else List[ColDef[_]](ColDef[Nothing](null, All, ManifestFactory.Nothing))
-        ctx.pop
+        val tables = buildTables(q.tables)
+        val cols = buildCols(q.cols)
         ctx push BodyCtx
         val (filter, grp, ord, limit, offset) =
           (tr(q.filter).asInstanceOf[Filters],
@@ -385,6 +406,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         }
         (ctx, false) //return old scope and stop traversing
       case (ctx, _: TableObj) => (ctx.copy(ctx = TableCtx), true) //set table context
+      case (ctx, _: TableAlias) => (ctx, false) //do not check table alias is already checked
       case (ctx, _: Obj) => (ctx.copy(ctx = ColumnCtx), true) //set column context
       case (ctx @ Context(scope, TableCtx), Ident(ident)) => //check table
         val tn = ident mkString "."
@@ -483,6 +505,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case fd: FunDef[_] => fd.copy(exp = transform_traverse(fd.exp).asInstanceOf[Fun])
       case td: TableDef => td.copy(exp = transform_traverse(td.exp).asInstanceOf[Obj])
       case to: TableObj => to.copy(obj = transform_traverse(to.obj))
+      case ta: TableAlias => ta.copy(obj = transform_traverse(ta.obj))
       case sd: SelectDef =>
         val t = (sd.tables map transform_traverse).asInstanceOf[List[TableDef]]
         val c = (sd.cols map transform_traverse).asInstanceOf[List[ColDef[_]]]
@@ -527,6 +550,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case (r: T, fd: FunDef[_]) => tr(r, fd.exp)
       case (r: T, td: TableDef) => tr(r, td.exp)
       case (r: T, to: TableObj) => tr(r, to.obj)
+      case (r: T, ta: TableAlias) => tr(r, ta.obj)
       case (r: T, sd: SelectDef) => tr(tr(tr(r, sd.tables), sd.cols), sd.exp)
       case (r: T, bd: BinSelectDef) => tr(tr(r, bd.leftOperand), bd.rightOperand)
       case (r: T, id: InsertDef) => tr(tr(tr(r, id.tables), id.cols), id.exp)

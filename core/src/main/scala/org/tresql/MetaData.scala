@@ -51,10 +51,13 @@ trait MetaData extends metadata.TypeMapper {
 
   def col(table: String, col: String): Col[_] = this.table(table).col(col)
   def colOption(table: String, col: String): Option[Col[_]] = this.tableOption(table).flatMap(_.colOption(col))
-  def col(col: String): Col[_] =
-    table(col.substring(0, col.lastIndexOf('.'))).col(col.substring(col.lastIndexOf('.') + 1))
-  def colOption(col: String): Option[Col[_]] = tableOption(col.substring(0, col.lastIndexOf('.'))).flatMap(
-    _.colOption(col.substring(col.lastIndexOf('.') + 1)))
+  def col(col: String): Col[_] = colOption(col)
+    .getOrElse(sys.error(s"Column not found: $col"))
+  def colOption(col: String): Option[Col[_]] = {
+    val colIdx = col.lastIndexOf('.')
+    if (colIdx == -1) sys.error(s"Table must be specified for col in format: <table>.$col")
+    tableOption(col.substring(0, colIdx)).flatMap(_.colOption(col.substring(colIdx + 1)))
+  }
 
   def table(name: String): Table
   def tableOption(name: String): Option[Table]
