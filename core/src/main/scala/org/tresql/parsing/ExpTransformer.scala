@@ -2,10 +2,14 @@ package org.tresql.parsing
 
 trait ExpTransformer { this: QueryParsers =>
 
-  def transformer(fun: PartialFunction[Exp, Exp]): PartialFunction[Exp, Exp] = {
+  type Transformer = PartialFunction[Exp, Exp]
+  type Extractor[T] = PartialFunction[(T, Exp), T]
+  type ExtractorAndTraverser[T] = PartialFunction[(T, Exp), (T, Boolean)]
+
+  def transformer(fun: Transformer): Transformer = {
     lazy val transform_traverse = fun orElse traverse
     def tr(x: Any): Any = x match {case e: Exp => transform_traverse(e) case l: List[_] => l map tr case _ => x}
-    lazy val traverse: PartialFunction[Exp, Exp] = {
+    lazy val traverse: Transformer = {
       case e: Ident => e
       case e: Id => e
       case e: IdRef => e
@@ -44,17 +48,16 @@ trait ExpTransformer { this: QueryParsers =>
   }
 
   def extractor[T](
-    fun: PartialFunction[(T, Exp), T],
-    traverser: PartialFunction[(T, Exp), T] = PartialFunction.empty):
-  PartialFunction[(T, Exp), T] = {
-    val wrapper: PartialFunction[(T, Exp), T] = fun orElse { case (x, _) => x }
+    fun: Extractor[T],
+    traverser: Extractor[T] = PartialFunction.empty): Extractor[T] = {
+    val wrapper: Extractor[T] = fun orElse { case (x, _) => x }
     extractorAndTraverser({ case t => (wrapper(t), true)}, traverser)
   }
 
   def extractorAndTraverser[T](
-    fun: PartialFunction[(T, Exp), (T, Boolean)],
-    traverser: PartialFunction[(T, Exp), T] = PartialFunction.empty): PartialFunction[(T, Exp), T] = {
-    val noExtr: PartialFunction[(T, Exp), (T, Boolean)] = { case x => (x._1, true) }
+    fun: ExtractorAndTraverser[T],
+    traverser: Extractor[T] = PartialFunction.empty): Extractor[T] = {
+    val noExtr: ExtractorAndTraverser[T] = { case x => (x._1, true) }
     val extr = fun orElse noExtr
     val wrapper: PartialFunction[(T, Exp), (T, Exp)] = {
       case t => extr(t) match {
@@ -91,7 +94,7 @@ trait ExpTransformer { this: QueryParsers =>
       //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
       case x: Exp => sys.error("Unknown expression: " + x)
     }
-    lazy val extract_traverse: PartialFunction[(T, Exp), T] = wrapper andThen (traverser orElse {
+    lazy val extract_traverse: Extractor[T] = wrapper andThen (traverser orElse {
       case (r: T, e) => traverse_rest(r, e)
       case (null, e) => traverse_rest(null.asInstanceOf[T], e) //previous case does not match null!
     })
@@ -99,7 +102,7 @@ trait ExpTransformer { this: QueryParsers =>
   }
 
   //extract variables in reverse order
-  def variableExtractor: PartialFunction[(List[Variable], Exp), List[Variable]] = {
+  def variableExtractor: Extractor[List[Variable]] = {
     var bindIdx = 0
     ({
       case (l, v @ Variable("?", _, _, _)) =>

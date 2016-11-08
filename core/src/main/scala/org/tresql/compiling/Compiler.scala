@@ -75,7 +75,9 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       val col = colName.toLowerCase
       col.lastIndexOf('.') match {
         case -1 => tables.collect {
-          case TableDef(t, _) => declared_table(t).flatMap(_.colOption(col))
+          //collect columns only from tables (not aliases)
+          case TableDef(t, Obj(_: TableObj, _, _, _, _)) =>
+            declared_table(t).flatMap(_.colOption(col))
         } collect { case Some(col) => col } match {
           case List(col) => Some(col)
           case Nil => None
@@ -180,7 +182,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     def buildTables(tables: List[Obj]): List[TableDef] = {
       ctx push TablesCtx
       try {
-        val tdefs = tables.zipWithIndex map { case (table, idx) =>
+        val td1 = tables.zipWithIndex map { case (table, idx) =>
           val newTable = builder(table.obj)
           ctx push BodyCtx
           val join = tr(table.join).asInstanceOf[Join]
@@ -191,11 +193,12 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
           })
           TableDef(name, table.copy(obj = TableObj(newTable), join = join)) -> idx
         }
-        tdefs map { case (table, idx) => table match { //process no join aliases
+        //process no join aliases
+        val td2 = td1 map { case (table, idx) => table match {
             //NoJoin alias
             case td @ TableDef(_, o @ Obj(TableObj(Ident(List(alias))), _,
               Join(_, _, true), _, _)) => //check if alias exists
-              if (tdefs.view(0, idx).exists(_._1.name == alias))
+              if (td1.view(0, idx).exists(_._1.name == alias))
                 transformer {
                   case TableObj(obj) => TableAlias(obj)
                 }(td).asInstanceOf[TableDef]
@@ -204,6 +207,17 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
               sys.error(s"Unsupported no join table: $x")
             case x => x //ordinary table def
           }
+        }
+        //add table alias to foreign key alias joins with unqualified names
+        td2.tail.scanLeft(td2.head) { case (left, right) =>
+          lazy val tr: Transformer = transformer {
+            case o: Obj => o.copy(join = tr(o.join).asInstanceOf[Join]) //transform only join
+            //add left table alias to foreign key alias join ident
+            case j @ Join(_, o @ Obj(Ident(List(fkAlias)), _, _, _, _), false) =>
+              j.copy(expr = o.copy(obj = Ident(List(left.name, fkAlias))))
+            case null => null
+          }
+          tr(right).asInstanceOf[TableDef]
         }
       } finally ctx.pop
     }
@@ -226,7 +240,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         else List[ColDef[_]](ColDef[Nothing](null, All, ManifestFactory.Nothing))
       finally ctx.pop
     }
-    lazy val builder: PartialFunction[Exp, Exp] = transformer {
+    lazy val builder: Transformer = transformer {
       case f: Fun => procedure(f.name).map { p =>
         val retType = if (p.returnTypeParIndex == -1) p.scalaReturnType else ManifestFactory.Nothing
         FunDef(p.name, f.copy(parameters = f.parameters map tr), retType, p)
@@ -328,7 +342,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
 
   def resolveScopes(exp: Exp) = {
     val scope_stack = scala.collection.mutable.Stack[Scope](thisCompiler)
-    lazy val scoper: PartialFunction[Exp, Exp] = transformer {
+    lazy val scoper: Transformer = transformer {
       case sd: SelectDef =>
         val nsd = sd.copy(parent = scope_stack.head)
         val t = (nsd.tables map scoper).asInstanceOf[List[TableDef]]
@@ -352,7 +366,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       column(new scala.util.parsing.input.CharSequenceReader(col)).get
     } finally intermediateResults.get.clear
 
-    lazy val resolver: PartialFunction[Exp, Exp] = transformer {
+    lazy val resolver: Transformer = transformer {
       case sd: SelectDef =>
         val nsd = sd.copy(tables = {
           sd.tables.map {
@@ -386,7 +400,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     object TableCtx extends Ctx
     object ColumnCtx extends Ctx
     case class Context(scope: Scope, ctx: Ctx)
-    lazy val namer: PartialFunction[(Context, Exp), Context] = extractorAndTraverser {
+    lazy val namer: Extractor[Context] = extractorAndTraverser {
       case (ctx, sd: SelectDef) =>
         val nctx = ctx.copy(scope = sd) //create context with this select as a scope
         sd.tables foreach { t =>
@@ -430,7 +444,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case e: Exp => typer((ManifestFactory.Nothing, e)) /*null cannot be used since partial function does not match it as type T - Manifest*/
       case x => ManifestFactory.classType(x.getClass)
     }
-    lazy val typer: PartialFunction[(Manifest[_], Exp), Manifest[_]] = extractorAndTraverser {
+    lazy val typer: Extractor[Manifest[_]] = extractorAndTraverser {
       case (_, UnOp(op, operand)) => (type_from_any(operand), false)
       case (_, BinOp(op, lop, rop)) =>
         comp_op.findAllIn(op).toList match {
@@ -457,7 +471,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         else if (f.procedure.returnTypeParIndex == -1) Manifest.Any
         else type_from_any(f.exp.parameters(f.procedure.returnTypeParIndex))) -> false
     }
-    lazy val type_resolver: PartialFunction[Exp, Exp] = transformer {
+    lazy val type_resolver: Transformer = transformer {
       case s: SelectDef =>
         //resolve column types for potential from clause select definitions
         val nsd = s.copy(tables = (s.tables map type_resolver).asInstanceOf[List[TableDef]])
@@ -495,11 +509,11 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
               exp)))))
   }
 
-  override def transformer(fun: PartialFunction[Exp, Exp]): PartialFunction[Exp, Exp] = {
+  override def transformer(fun: Transformer): Transformer = {
     lazy val local_transformer = fun orElse traverse
     lazy val transform_traverse = local_transformer orElse super.transformer(local_transformer)
     def tr(x: Any): Any = x match {case e: Exp @unchecked => transform_traverse(e) case _ => x} //helper function
-    lazy val traverse: PartialFunction[Exp, Exp] = {
+    lazy val traverse: Transformer = {
       case cd: ColDef[_] => cd.copy(col = tr(cd.col))
       case cd: ChildDef => cd.copy(exp = transform_traverse(cd.exp))
       case fd: FunDef[_] => fd.copy(exp = transform_traverse(fd.exp).asInstanceOf[Fun])
@@ -534,17 +548,16 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   }
 
   override def extractorAndTraverser[T](
-    fun: PartialFunction[(T, Exp), (T, Boolean)],
-    traverser: PartialFunction[(T, Exp), T] = PartialFunction.empty):
-  PartialFunction[(T, Exp), T] = {
+    fun: ExtractorAndTraverser[T],
+    traverser: Extractor[T] = PartialFunction.empty): Extractor[T] = {
     def tr(r: T, x: Any): T = x match {
       case e: Exp => extract_traverse((r, e))
       case l: List[_] => l.foldLeft(r) { (fr, el) => tr(fr, el) }
       case _ => r
     }
-    lazy val extract_traverse: PartialFunction[(T, Exp), T] =
+    lazy val extract_traverse: Extractor[T] =
       super.extractorAndTraverser(fun, traverser orElse local_extract_traverse)
-    lazy val local_extract_traverse: PartialFunction[(T, Exp), T] = {
+    lazy val local_extract_traverse: Extractor[T] = {
       case (r: T, cd: ColDef[_]) => tr(r, cd.col)
       case (r: T, cd: ChildDef) => tr(r, cd.exp)
       case (r: T, fd: FunDef[_]) => tr(r, fd.exp)
