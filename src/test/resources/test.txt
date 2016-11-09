@@ -161,7 +161,7 @@ dept d[(emp e[e.deptno = d.deptno])]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"
 
 //from clause select
 dept[deptno in ((dept[:id]){deptno})]{deptno}#(1) --> id=10 --> [[10]]
-(dummy)[](dummy {dummy} ++ dummy {dummy})[](dummy) --> [[0, 0, 0], [0, 0, 0]]
+(dummy) d1[](dummy {dummy} ++ dummy {dummy}) d2[](dummy) d3 {d1.dummy, d2.dummy, d3.dummy} --> [[0, 0, 0], [0, 0, 0]]
 
 //array binding
 emp [empno in ?]{empno, ename, job}#(empno) --> [] --> []

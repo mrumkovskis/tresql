@@ -199,9 +199,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
             case td @ TableDef(_, o @ Obj(TableObj(Ident(List(alias))), _,
               Join(_, _, true), _, _)) => //check if alias exists
               if (td1.view(0, idx).exists(_._1.name == alias))
-                transformer {
-                  case TableObj(obj) => TableAlias(obj)
-                }(td).asInstanceOf[TableDef]
+                td.copy(exp = o.copy(obj = TableAlias(Ident(List(alias)))))
               else sys.error(s"No join table not defined: $alias")
             case TableDef(_, Obj(x, _, Join(_, _, true), _, _)) =>
               sys.error(s"Unsupported no join table: $x")
@@ -209,15 +207,19 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
           }
         }
         //add table alias to foreign key alias joins with unqualified names
-        td2.tail.scanLeft(td2.head) { case (left, right) =>
-          lazy val tr: Transformer = transformer {
-            case o: Obj => o.copy(join = tr(o.join).asInstanceOf[Join]) //transform only join
-            //add left table alias to foreign key alias join ident
-            case j @ Join(_, o @ Obj(Ident(List(fkAlias)), _, _, _, _), false) =>
-              j.copy(expr = o.copy(obj = Ident(List(left.name, fkAlias))))
-            case null => null
-          }
-          tr(right).asInstanceOf[TableDef]
+        td2.tail.scanLeft(td2.head) {
+          case (left,
+            right @ TableDef(_,
+              exp @ Obj(_: TableObj, _,
+                join @ Join(_,
+                  expr @ Obj(Ident(List(fkAlias)), _, _, _, _), false), _, _))) =>
+                //add left table alias to foreign key alias join ident
+                right.copy(exp =
+                  exp.copy(join =
+                    join.copy(expr =
+                      expr.copy(obj =
+                        Ident(List(left.name, fkAlias))))))
+          case (left, right) => right
         }
       } finally ctx.pop
     }
@@ -390,7 +392,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
               List(cd.copy(col = resolver(chd)))
             case cd => List(cd)
           }
-        })
+        }, exp = resolver(nsd.exp).asInstanceOf[Query])
     }
     resolver(exp)
   }
