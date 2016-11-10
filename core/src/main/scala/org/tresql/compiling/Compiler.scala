@@ -47,6 +47,14 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       s"Function '$name' has wrong number of parameters: ${exp.parameters.size}"
     )
   }
+  case class RecursiveDef(exp: Exp, scope: Scope) extends TypedExp[RecursiveDef]
+  with Scope {
+    val typ: Manifest[RecursiveDef] = ManifestFactory.classType(this.getClass)
+    override def parent = scope.parent
+    override def table(table: String) = scope.table(table)
+    override def column(col: String) = scope.column(col)
+    override def procedure(procedure: String) = scope.procedure(procedure)
+  }
 
   //is superclass of sql query and array
   trait RowDefBase extends TypedExp[RowDefBase] {
@@ -340,7 +348,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     }
     builder(exp)
   }
-  
+
   def resolveColAsterisks(exp: Exp) = {
     def createCol(col: String): Col = try {
       intermediateResults.get.clear
