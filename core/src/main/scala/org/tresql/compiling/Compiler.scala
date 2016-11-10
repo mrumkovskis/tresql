@@ -47,7 +47,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       s"Function '$name' has wrong number of parameters: ${exp.parameters.size}"
     )
   }
-  case class RecursiveDef(exp: Exp, scope: Scope) extends TypedExp[RecursiveDef]
+  case class RecursiveDef(exp: Exp, scope: Scope = null) extends TypedExp[RecursiveDef]
   with Scope {
     val typ: Manifest[RecursiveDef] = ManifestFactory.classType(this.getClass)
     override def parent = scope.parent
@@ -251,7 +251,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       finally ctx.pop
     }
     lazy val builder: Transformer = transformer {
-      case f: Fun => procedure(f.name).map { p =>
+      case f: Fun => procedure(s"${f.name}#${f.parameters.size}").map { p =>
         val retType = if (p.returnTypeParIndex == -1) p.scalaReturnType else ManifestFactory.Nothing
         FunDef(p.name, f.copy(parameters = f.parameters map tr), retType, p)
       }.getOrElse(sys.error(s"Unknown function: ${f.name}"))
@@ -300,9 +300,15 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
           case (lop, rop) => b.copy(lop = lop, rop = rop)
         }
       case UnOp("|", o: Exp @unchecked) if ctx.head == ColsCtx =>
-        ctx push QueryCtx
-        val exp = builder(o)
-        ctx.pop
+        val exp = try o match {
+          //recursive expression
+          case a: Arr =>
+            ctx push BodyCtx
+            try RecursiveDef(builder(a))
+          case e => //ordinary child
+            ctx push QueryCtx
+            builder(o)
+        } finally ctx.pop
         ChildDef(exp)
       case Braces(exp: Exp) if ctx.head == TablesCtx => builder(exp) //remove braces around table expression, so it can be accessed directly
       case a: Arr if ctx.head == QueryCtx => ArrayDef(
@@ -405,6 +411,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         val ndml = scoper(dml)
         scope_stack.pop
         ndml
+      case rd: RecursiveDef => rd.copy(scope = scope_stack.head)
     }
     scoper(exp)
   }
@@ -557,6 +564,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         val d = transform_traverse(dd.exp).asInstanceOf[Delete]
         DeleteDef(t, d)
       case ad: ArrayDef => ad.copy(cols = (ad.cols map transform_traverse).asInstanceOf[List[ColDef[_]]])
+      case rd: RecursiveDef => rd.copy(exp = transform_traverse(rd.exp))
     }
     transform_traverse
   }
@@ -584,6 +592,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case (r: T, ud: UpdateDef) => tr(tr(tr(r, ud.tables), ud.cols), ud.exp)
       case (r: T, dd: DeleteDef) => tr(tr(tr(r, dd.tables), dd.cols), dd.exp)
       case (r: T, ad: ArrayDef) => tr(r, ad.cols)
+      case (r: T, rd: RecursiveDef) => tr(r, rd.exp)
     }
     extract_traverse
   }

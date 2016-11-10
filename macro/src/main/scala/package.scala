@@ -85,6 +85,9 @@ package object tresql extends CoreTypes {
       )
       def resultClassTree(exp: Exp): Ctx = {
         lazy val generator: PartialFunction[(Ctx, Exp), Ctx] = extractorAndTraverser {
+          //function
+          case (ctx, fun: FunDef[_]) =>
+            (ctx.copy(className = fun.typ.toString), false)
           //inserts updates deletes
           case (ctx, dml: DMLDefBase) =>
             (ctx.copy(className = "DMLResult"), false)
@@ -194,8 +197,9 @@ package object tresql extends CoreTypes {
       log(s"Compiling: $tresqlString")
       val compiledExp = compile(tresqlString)
       val resultClassCtx = resultClassTree(compiledExp)
-      val (classType, classDefs, convRegister) = (TypeName(resultClassCtx.className),
-        resultClassCtx.tree, resultClassCtx.convRegister)
+      val resultClassName = resultClassCtx.className
+      val q"typeOf[$classType]" = c.parse(s"typeOf[$resultClassName]")
+      val (classDefs, convRegister) = (resultClassCtx.tree, resultClassCtx.convRegister)
       log("------------Class:------------\n")
       log(classDefs) //showCode does not work
       log("------------Converter register:----------\n")

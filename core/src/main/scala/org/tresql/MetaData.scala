@@ -113,7 +113,7 @@ package metadata {
     hasRepeatedPar: Boolean = false) {
     /**Returns parameter index return type depends on during runtime or -1 if return type does not
     depend on any parameter type. */
-    def returnTypeParIndex: Int = {
+    def returnTypeParIndex: Int = if (scalaReturnType == null) -1 else {
       import java.lang.reflect._
       val c = scalaReturnType.runtimeClass
       if (classOf[TypeVariable[_ <: GenericDeclaration]].isAssignableFrom(c)) {

@@ -10,9 +10,12 @@ trait CompilerFunctions extends org.tresql.MetaData {
 
   def compilerFunctions: Class[_]
 
-  private val procedures: Map[String, Procedure[_]] = compilerFunctions
+  private val procedures: Map[String, List[Procedure[_]]] = compilerFunctions
     .getMethods.map { method => method.getName -> proc_from_meth(method) }
-    .toList.asInstanceOf[List[(String, Procedure[_])]].toMap //strange cast is needed???
+    .toList.asInstanceOf[List[(String, Procedure[_])]] //strange cast is needed???
+    .groupBy(_._1)
+    .map { case (name, procs) => name -> procs.map(_._2) }
+    .toMap
 
   private def proc_from_meth(m: Method): Procedure[_] = {
     var repeatedPars = false
@@ -41,6 +44,19 @@ trait CompilerFunctions extends org.tresql.MetaData {
 
   override def procedure(name: String): Procedure[_] =
     procedureOption(name).getOrElse(sys.error(s"Procedure not found: $name"))
-  override def procedureOption(name: String): Option[Procedure[_]] =
-    procedures.get(name) orElse super.procedureOption(name)
+  /** Function name must be in format {{{<function_name>#<parameter_count>}}} i.e. {{{to_date#2}}} */
+  override def procedureOption(name: String): Option[Procedure[_]] = {
+    val idx = name.lastIndexOf("#")
+    val pname = name.substring(0, idx)
+    val pcount = name.substring(idx + 1, name.length).toInt
+    procedures.get(pname)
+      .flatMap {
+        case List(p) => Option(p)
+        case p @ List(_*) =>
+          //return procedure where parameter count match
+          p.find(_.pars.size == pcount)
+           .orElse(p.find(_.pars.size - 1 == pcount))
+           .orElse(Option(p.maxBy(_.pars.size)))
+      } orElse super.procedureOption(pname)
+  }
 }
