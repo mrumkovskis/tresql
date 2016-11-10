@@ -161,7 +161,7 @@ dept d[(emp e[e.deptno = d.deptno])]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"
 
 //from clause select
 dept[deptno in ((dept[:id]){deptno})]{deptno}#(1) --> id=10 --> [[10]]
-(dummy) d1[](dummy {dummy} ++ dummy {dummy}) d2[](dummy) d3 {d1.dummy, d2.dummy, d3.dummy} --> [[0, 0, 0], [0, 0, 0]]
+(dummy) d1[](dummy {dummy} ++ dummy {dummy}) d2[](dummy) d3 {d1.*, d2.*, d3.*} --> [[0, 0, 0], [0, 0, 0]]
 
 //array binding
 emp [empno in ?]{empno, ename, job}#(empno) --> [] --> []
@@ -233,10 +233,10 @@ dept[?]{deptno} ++ emp[?]{empno} ++ salgrade[?]{grade} --> 10;7839;1 --> [[10], 
 
 //intersect
 dept{deptno} && emp{empno} --> []
-dept d[d.deptno = d1.deptno](dept{deptno} && emp[sal >= ?]{deptno}) d1 {deptno, dname} --> 5000 --> [[10, "ACCOUNTING"]]
+dept d[d.deptno = d1.deptno](dept{deptno} && emp[sal >= ?]{deptno}) d1 {d.deptno, dname} --> 5000 --> [[10, "ACCOUNTING"]]
 
 //except
-dept{deptno} - dept/emp?[ename != null]{deptno} --> [[40]]
+dept{deptno} - dept/emp?[ename != null]{dept.deptno} --> [[40]]
 
 //product, multiple col sorting
 dept[]salgrade{dname, grade}#(1, loc, ~2) --> [["ACCOUNTING", 5], ["ACCOUNTING", 4], ["ACCOUNTING", 3], ["ACCOUNTING", 2], ["ACCOUNTING", 1], ["OPERATIONS", 5], ["OPERATIONS", 4], ["OPERATIONS", 3], ["OPERATIONS", 2], ["OPERATIONS", 1], ["RESEARCH", 5], ["RESEARCH", 4], ["RESEARCH", 3], ["RESEARCH", 2], ["RESEARCH", 1], ["SALES", 5], ["SALES", 4], ["SALES", 3], ["SALES", 2], ["SALES", 1]]
@@ -258,9 +258,9 @@ dept[10]{*, |[deptno = :1(1)]emp{ename}} --> [[10, "ACCOUNTING", "NEW YORK", [["
 dept[?]{|[]emp[?]{ename}, *} --> 10;7839 --> [[[["KING"]], 10, "ACCOUNTING", "NEW YORK"]]
 
 //all cols from one table
-emp/dept[10] {deptno, dname, emp.*, |[deptno = :1(deptno)]emp{ename}#(ename)}#(empno) --> [[10, "ACCOUNTING", 7782, "CLARK", "MANAGER", 7839, "1981-06-09", 2450.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7839, "KING", "PRESIDENT", null, "1981-11-17", 5000.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7934, "MILLER", "CLERK", 7782, "1982-01-23", 1300.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]]]
+emp/dept[10] {dept.deptno, dname, emp.*, |[deptno = :1(deptno)]emp{ename}#(ename)}#(empno) --> [[10, "ACCOUNTING", 7782, "CLARK", "MANAGER", 7839, "1981-06-09", 2450.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7839, "KING", "PRESIDENT", null, "1981-11-17", 5000.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7934, "MILLER", "CLERK", 7782, "1982-01-23", 1300.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]]]
 //NOTE: child query allways stays last in result when all cols from one table is used
-emp/dept[10] {|[]emp[deptno = :1(deptno)]{ename}#(ename), deptno, dname, emp.*}#(empno) --> [[10, "ACCOUNTING", 7782, "CLARK", "MANAGER", 7839, "1981-06-09", 2450.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7839, "KING", "PRESIDENT", null, "1981-11-17", 5000.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7934, "MILLER", "CLERK", 7782, "1982-01-23", 1300.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]]]
+emp/dept[10] {|[]emp[deptno = :1(deptno)]{ename}#(ename), dept.deptno, dname, emp.*}#(empno) --> [[10, "ACCOUNTING", 7782, "CLARK", "MANAGER", 7839, "1981-06-09", 2450.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7839, "KING", "PRESIDENT", null, "1981-11-17", 5000.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]], [10, "ACCOUNTING", 7934, "MILLER", "CLERK", 7782, "1982-01-23", 1300.00, null, 10, [["CLARK"], ["KING"], ["MILLER"]]]]
 
 //bind variables in columns
 dept{?} --> 1 --> [["1"], ["1"], ["1"], ["1"]]

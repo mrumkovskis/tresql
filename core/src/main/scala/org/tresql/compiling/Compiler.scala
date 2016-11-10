@@ -57,6 +57,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   //superclass of select and dml statements (insert, update, delete)
   trait SQLDefBase extends RowDefBase with Scope {
     def tables: List[TableDef]
+    override def parent: Scope = thisCompiler
 
     protected def this_table(table: String) = tables.find(_.name == table).flatMap {
       case TableDef(_, Obj(TableObj(Ident(name)), _, _, _, _)) => parent.table(name mkString ".")
@@ -99,7 +100,6 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   //is superclass of insert, update, delete
   trait DMLDefBase extends SQLDefBase {
     override def exp: DMLExp
-    override def parent = thisCompiler
   }
 
   //is superclass of select, union, intersect etc.
@@ -109,7 +109,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     cols: List[ColDef[_]],
     tables: List[TableDef],
     exp: Query,
-    parent: Scope) extends SelectDefBase {
+    override val parent: Scope = thisCompiler) extends SelectDefBase {
     //check for duplicating tables
     {
       val duplicates = tables.filter { //filter out aliases
@@ -136,7 +136,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       s"Column count do not match ${leftOperand.cols.size} != ${rightOperand.cols.size}")
     val cols = leftOperand.cols
     val tables = leftOperand.tables
-    val parent = leftOperand.parent
+    override val parent = leftOperand.parent
   }
 
   case class InsertDef(
@@ -284,8 +284,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
             group = grp,
             order = ord,
             limit = limit,
-            offset = offset),
-          null)
+            offset = offset))
       case b: BinOp =>
         (tr(b.lop), tr(b.rop)) match {
           case (lop: SelectDefBase, rop: SelectDefBase) =>
@@ -341,27 +340,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     }
     builder(exp)
   }
-
-  def resolveScopes(exp: Exp) = {
-    val scope_stack = scala.collection.mutable.Stack[Scope](thisCompiler)
-    lazy val scoper: Transformer = transformer {
-      case sd: SelectDef =>
-        val nsd = sd.copy(parent = scope_stack.head)
-        val t = (nsd.tables map scoper).asInstanceOf[List[TableDef]]
-        scope_stack push nsd
-        val c = (nsd.cols map scoper).asInstanceOf[List[ColDef[_]]]
-        val q = scoper(nsd.exp).asInstanceOf[Query]
-        scope_stack.pop
-        nsd.copy(cols = c, tables = t, exp = q)
-      case dml: DMLDefBase if !dml.isInstanceOf[InsertDef] && scope_stack.head != dml =>
-        scope_stack push dml
-        val ndml = scoper(dml)
-        scope_stack.pop
-        ndml
-    }
-    scoper(exp)
-  }
-
+  
   def resolveColAsterisks(exp: Exp) = {
     def createCol(col: String): Col = try {
       intermediateResults.get.clear
@@ -382,12 +361,17 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
             case ColDef(_, All, _) =>
               nsd.tables.flatMap { td =>
                 val table = nsd.table(td.name).getOrElse(sys.error(s"Cannot find table: $td"))
-                table.cols.map { c => ColDef(c.name, createCol(c.name).col, c.scalaType) }
+                table.cols.map { c =>
+                  ColDef(c.name, createCol(s"${td.name}.${c.name}").col, c.scalaType)
+                }
               }
             case ColDef(_, IdentAll(Ident(ident)), _) =>
-              nsd.table(ident mkString ".")
-                .map(_.cols.map { c => ColDef(c.name, createCol(c.name).col, c.scalaType) })
-                .getOrElse(sys.error(s"Cannot find table: ${ident mkString "."}"))
+              val alias = ident mkString "."
+              nsd.table(alias)
+                .map(_.cols.map { c =>
+                  ColDef(c.name, createCol(s"$alias.${c.name}").col, c.scalaType)
+                })
+                .getOrElse(sys.error(s"Cannot find table: $alias"))
             case cd @ ColDef(_, chd: ChildDef, _) =>
               List(cd.copy(col = resolver(chd)))
             case cd => List(cd)
@@ -395,6 +379,26 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         }, exp = resolver(nsd.exp).asInstanceOf[Query])
     }
     resolver(exp)
+  }
+
+  def resolveScopes(exp: Exp) = {
+    val scope_stack = scala.collection.mutable.Stack[Scope](thisCompiler)
+    lazy val scoper: Transformer = transformer {
+      case sd: SelectDef =>
+        val nsd = sd.copy(parent = scope_stack.head)
+        val t = (nsd.tables map scoper).asInstanceOf[List[TableDef]]
+        scope_stack push nsd
+        val c = (nsd.cols map scoper).asInstanceOf[List[ColDef[_]]]
+        val q = scoper(nsd.exp).asInstanceOf[Query]
+        scope_stack.pop
+        nsd.copy(cols = c, tables = t, exp = q)
+      case dml: DMLDefBase if !dml.isInstanceOf[InsertDef] && scope_stack.head != dml =>
+        scope_stack push dml
+        val ndml = scoper(dml)
+        scope_stack.pop
+        ndml
+    }
+    scoper(exp)
   }
 
   def resolveNames(exp: Exp) = {
@@ -505,8 +509,8 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   def compile(exp: Exp) = {
     resolveColTypes(
       resolveNames(
-        resolveColAsterisks(
-          resolveScopes(
+        resolveScopes(
+          resolveColAsterisks(
             buildTypedDef(
               exp)))))
   }
