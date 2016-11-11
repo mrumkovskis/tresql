@@ -330,6 +330,8 @@ trait CompiledRow extends RowLike with Typed {
   def typed[T:Manifest](name: String) = ???
 }
 
+case class SingleValueRow[T](value: T) extends CompiledRow
+
 /**
   {{{CompiledResult}}} is retured from {{{Query.apply[T]}}} method.
   Is used from tresql interpolator macro
@@ -363,17 +365,17 @@ trait CompiledResult[T <: RowLike] extends Result with Iterator[T] {
   } finally close
 }
 
-case class CompiledSingleValueResult[T <: RowLike](res: T) extends CompiledResult[T] {
+case class CompiledSingleValueResult[T <: RowLike](value: T) extends CompiledResult[T] {
   var n = true
   val col = Column(0, "value", null)
   def hasNext = if (n) {n = false; true} else false
-  def next = res
+  def next = value
   def columnCount = 1
   def column(idx: Int) = col
-  def apply(idx: Int) = res(idx)
-  def typed[T: Manifest](name: String) = res(name).asInstanceOf[T]
-  def apply(name: String) = if (name == "value") res(0) else sys.error("column not found: " + name)
-  override def toString = s"SingleValueResult = $res"
+  def apply(idx: Int) = value(idx)
+  def typed[T: Manifest](name: String) = value(name).asInstanceOf[T]
+  def apply(name: String) = if (name == "value") value(0) else sys.error("column not found: " + name)
+  override def toString = s"SingleValueResult = $value"
 }
 
 class CompiledSelectResult[T <: RowLike] private[tresql] (
