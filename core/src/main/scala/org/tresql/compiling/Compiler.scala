@@ -309,7 +309,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
           //recursive expression
           case a: Arr =>
             ctx push BodyCtx
-            try RecursiveDef(builder(a))
+            RecursiveDef(builder(a))
           case e => //ordinary child
             ctx push QueryCtx
             builder(o)
@@ -420,17 +420,34 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     scoper(exp)
   }
 
-  def resolveNames(exp: Exp) = {
+  def resolveNamesAndJoins(exp: Exp) = {
     trait Ctx
     object TableCtx extends Ctx
     object ColumnCtx extends Ctx
     case class Context(scope: Scope, ctx: Ctx)
+    def checkDefaultJoin(scope: Scope, table1: TableDef, table2: TableDef) = if (table1 != null) {
+      for {
+        t1 <- scope.table(table1.name)
+        t2 <- scope.table(table2.name)
+      } yield try metadata.join(t1.name, t2.name) catch {
+        case e: Exception => throw CompilerException(e.getMessage)
+      }
+    }
     lazy val namer: Extractor[Context] = extractorAndTraverser {
       case (ctx, sd: SelectDef) =>
         val nctx = ctx.copy(scope = sd) //create context with this select as a scope
+        var prevTable: TableDef = null
         sd.tables foreach { t =>
           namer(ctx -> t.exp.obj) //table definition check goes within parent scope
-          Option(t.exp.join).map(j => namer(nctx -> j)) //join definition check goes within this select scope
+          Option(t.exp.join).map { j =>
+            //join definition check goes within this select scope
+            namer(nctx -> j)
+            j match {
+              case Join(true, _, _) => checkDefaultJoin(sd, prevTable, t)
+              case _ =>
+            }
+          }
+          prevTable = t
         }
         sd.cols foreach (c => namer(nctx -> c))
         namer(nctx -> sd.exp)
@@ -527,7 +544,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
 
   def compile(exp: Exp) = {
     resolveColTypes(
-      resolveNames(
+      resolveNamesAndJoins(
         resolveScopes(
           resolveColAsterisks(
             buildTypedDef(

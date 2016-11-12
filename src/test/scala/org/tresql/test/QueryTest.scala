@@ -750,9 +750,52 @@ class QueryTest extends Suite {
       QueryCompiler.compile(tresql)
     })
 
+    println("\n-------------- TEST compiler macro ----------------\n")
+
+    assertResult(("ACCOUNTING",
+      List(("CLARK",List()), ("KING",List(3, 4)), ("Lara",List()), ("Nicky",List()))))(
+        tresql"dept{dname, |emp {ename, |[empno]work {hours}#(1)}#(1)}#(1)"
+          .map(d => d.dname -> d._2
+            .map(e => e.ename -> e._2
+              .map(w => w.hours).toList).toList).toList.head)
+
+    assertResult("A B")(tresql"{concat('A', ' ', 'B')}".head._1)
+
+    assertResult(15)(tresql"{inc_val_5(10)}".head._1)
+
+    assertResult(List(1,1,1))(tresql"dummy + [10], dummy[dummy = 10] = [11], dummy - [dummy = 11]")
+
+    assertResult(Vector("AMY", "DEVELOPMENT", 2))(
+      tresql"work[empno]emp/dept{ename, dname, hours}#(1, 2, 3)".toListOfVectors.head)
+
+    assertResult(12)(tresql"work[empno]emp/dept{count(*) cnt}".head.cnt)
+
+    assertResult(2)(tresql"(dummy ++ dummy){count(# dummy)}".head._1)
+
+    assertResult((("A B", 15)))(tresql"{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}".head match {
+      case x => (x._1.head.concat, x._2.head.inc)
+    })
+
+    assertResult((("A B", 15)))(tresql"[{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}]".head match {
+      case x => (x._1.head.concat, x._2.head.inc)
+    })
+
+    assertResult((java.sql.Date.valueOf("1980-12-17"), java.sql.Date.valueOf("1983-01-12"),
+      800.00, 5000.00))(
+        tresql"emp{min(hiredate) minh, max(hiredate) maxh, min(sal) mins, max(sal) maxs}".map { r =>
+          import r._
+          (minh, maxh, mins, maxs)
+        }.toList.head)
+
+    assertResult((("ACCOUNTING", "CLARK, KING, Lara, Nicky")))(
+      tresql"dept {dname, |emp{ename}#(1) emps}#(1)"
+        .map {d => d.dname -> d.emps.map(_.ename).mkString(", ")}.toList.head
+    )
+
+    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("work/dept{*}"))
+
     println("\n-------------- CACHE -----------------\n")
     Env.cache map(c => println(s"Cache size: ${c.size}"))
-
   }
 
   def testTresqls(resource: String, testFunction: (String, String, String, Int) => Unit) = {
