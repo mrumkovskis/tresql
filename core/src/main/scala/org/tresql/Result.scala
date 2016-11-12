@@ -57,19 +57,6 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
 
 trait DynamicResult extends Result with DynamicRow with Iterator[DynamicRow]
 
-case class SingleValueResult[T](res: T) extends DynamicResult {
-  var n = true
-  val cols = List(Column(-1, "value", null))
-  def hasNext = if (n) {n = false; true} else false
-  def next = this
-  def columnCount = 1
-  def column(idx: Int) = cols(idx)
-  def apply(idx: Int) = res
-  def typed[T: Manifest](name: String) = this(name).asInstanceOf[T]
-  def apply(name: String) = if (name == "value") res else sys.error("column not found: " + name)
-  override def toString = s"SingleValueResult = $res"
-}
-
 trait SelectResult extends Result {
   private[tresql] def rs: ResultSet
   private[tresql] def cols: Vector[Column]
@@ -302,7 +289,8 @@ trait ArrayResult extends SingleRowResult {
   def column(idx: Int): org.tresql.Column = cols(idx)
   override def columns = cols
   def columnCount: Int = values.size
-  def typed[T](name: String)(implicit m: Manifest[T]) = typed[T](name)
+  override def typed[T: Manifest](idx: Int) = apply(idx).asInstanceOf[T]
+  override def typed[T: Manifest](name: String) = apply(name).asInstanceOf[T]
 
   override def hashCode = values.hashCode
   override def equals(obj: Any) = {
@@ -329,8 +317,6 @@ trait CompiledRow extends RowLike with Typed {
   def values: Seq[Any] = ???
   def typed[T:Manifest](name: String) = ???
 }
-
-case class SingleValueRow[T](value: T) extends CompiledRow
 
 /**
   {{{CompiledResult}}} is retured from {{{Query.apply[T]}}} method.
@@ -365,16 +351,16 @@ trait CompiledResult[T <: RowLike] extends Result with Iterator[T] {
   } finally close
 }
 
-case class CompiledSingleValueResult[T <: RowLike](value: T) extends CompiledResult[T] {
+case class SingleValueResult[T](value: T)
+  extends CompiledResult[SingleValueResult[T]] with DynamicResult with SingleRowResult {
   var n = true
   val col = Column(0, "value", null)
-  def hasNext = if (n) {n = false; true} else false
-  def next = value
+  def next = this
   def columnCount = 1
   def column(idx: Int) = col
-  def apply(idx: Int) = value(idx)
-  def typed[T: Manifest](name: String) = value(name).asInstanceOf[T]
-  def apply(name: String) = if (name == "value") value(0) else sys.error("column not found: " + name)
+  def apply(idx: Int) = value
+  def typed[T: Manifest](name: String) = value.asInstanceOf[T]
+  def apply(name: String) = if (name == "value") value else sys.error("column not found: " + name)
   override def toString = s"SingleValueResult = $value"
 }
 

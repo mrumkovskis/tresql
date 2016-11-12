@@ -23,11 +23,22 @@ trait Query extends QueryBuilder with TypedQuery {
     expr: String,
     params: Map[String, Any],
     resources: Resources
-  ): Result =
-    build(expr, params, false)(resources)() match {
-      case r: Result => r
+  ): Result = {
+    val builtExpr = build(expr, params, false)(resources)
+    builtExpr() match {
+      case r: CompiledResult[_] => r
+      case r: Result =>
+        val builder = builtExpr.builder
+        builder.env.rowConverter(builder.queryDepth, builder.childIdx).map { conv =>
+          /*Convert result if converter is found and wrap it into {{{SingleValueResult}}}.
+          For example this may happen when procedure is called directly (outside of select statement)
+          and returns {{{org.tresql.Result}}} where instead some single value is expected
+          (judging by function's signature)*/
+          SingleValueResult(conv(r))
+        } getOrElse (r)
       case x => SingleValueResult(x)
     }
+  }
 
   def build(
     expr: String,

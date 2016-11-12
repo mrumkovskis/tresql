@@ -87,7 +87,8 @@ package object tresql extends CoreTypes {
         lazy val generator: PartialFunction[(Ctx, Exp), Ctx] = extractorAndTraverser {
           //function
           case (ctx, fun: FunDef[_]) =>
-            (ctx.copy(className = fun.typ.toString), false)
+            //(ctx.copy(className = s"SingleValueResult[${fun.typ.toString}]"), false)
+            c.abort(c.enclosingPosition, s"Unsupported function call here. Try '{${fun.tresql}}'")
           //inserts updates deletes
           case (ctx, dml: DMLDefBase) =>
             (ctx.copy(className = "DMLResult"), false)
@@ -185,25 +186,26 @@ package object tresql extends CoreTypes {
         generator((Ctx(null, Nil, 0, 0, 0, Nil), exp))
       }
       val macroSettings = settings(c.settings)
-      val verbose = macroSettings.contains("verbose")
-      def log(msg: Any) = if (verbose) println(msg)
-      log(s"Macro compiler settings:\n$macroSettings")
+      def info(msg: Any) = c.info(c.enclosingPosition, String.valueOf(msg), false)
+      info(s"Macro compiler settings:\n$macroSettings")
       val q"org.tresql.`package`.Tresql(scala.StringContext.apply(..$parts)).tresql(..$pars)($res)" =
         c.macroApplication
       val tresqlString = parts.map { case Literal(Constant(x)) => x } match {
         case l => l.head + l.tail.zipWithIndex.map(t => ":_" + t._2 + t._1).mkString //replace placeholders with variable defs
       }
       Env.metaData = metadata(macroSettings)
-      log(s"Compiling: $tresqlString")
-      val compiledExp = compile(tresqlString)
+      info(s"Compiling: $tresqlString")
+      val compiledExp = try compile(tresqlString) catch {
+        case ce: CompilerException => c.abort(c.enclosingPosition, ce.getMessage)
+      }
       val resultClassCtx = resultClassTree(compiledExp)
       val resultClassName = resultClassCtx.className
       val q"typeOf[$classType]" = c.parse(s"typeOf[$resultClassName]")
       val (classDefs, convRegister) = (resultClassCtx.tree, resultClassCtx.convRegister)
-      log("------------Class:------------\n")
-      log(classDefs) //showCode does not work
-      log("------------Converter register:----------\n")
-      log(convRegister) //showCode does not work
+      info("------------Class:------------\n")
+      info(classDefs) //showCode does not work
+      info("------------Converter register:----------\n")
+      info(convRegister) //showCode does not work
       val tree = q"""
         ..$classDefs
         var optionalVars = Set[Int]()

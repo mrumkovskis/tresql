@@ -14,6 +14,11 @@ trait Scope {
 
 trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompiler =>
 
+  case class CompilerException(
+    message: String,
+    pos: scala.util.parsing.input.Position = scala.util.parsing.input.NoPosition
+  ) extends Exception(message)
+
   var nameIdx = 0
   val metadata = Env.metaData
 
@@ -41,11 +46,9 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   }
   case class FunDef[T](name: String, exp: Fun, typ: Manifest[T], procedure: Procedure[_])
     extends TypedExp[T] {
-    assert(
-      (procedure.hasRepeatedPar && exp.parameters.size >= procedure.pars.size - 1) ||
-      (!procedure.hasRepeatedPar && exp.parameters.size == procedure.pars.size),
-      s"Function '$name' has wrong number of parameters: ${exp.parameters.size}"
-    )
+    if((procedure.hasRepeatedPar && exp.parameters.size < procedure.pars.size - 1) ||
+      (!procedure.hasRepeatedPar && exp.parameters.size != procedure.pars.size))
+      throw CompilerException(s"Function '$name' has wrong number of parameters: ${exp.parameters.size}")
   }
   case class RecursiveDef(exp: Exp, scope: Scope = null) extends TypedExp[RecursiveDef]
   with Scope {
@@ -90,7 +93,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         } collect { case Some(col) => col } match {
           case List(col) => Some(col)
           case Nil => None
-          case x => sys.error(s"Ambiguous columns: $x")
+          case x => throw CompilerException(s"Ambiguous columns: $x")
         }
         case x =>
           declared_table(col.substring(0, x)).flatMap(_.colOption(col.substring(x + 1)))
@@ -124,7 +127,8 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         case TableDef(_, Obj(_: TableAlias, _, _, _, _)) => false
         case _ => true
       }.groupBy(_.name).filter(_._2.size > 1)
-      assert(duplicates.size == 0, s"Duplicate table names: ${duplicates.mkString(", ")}")
+      if(duplicates.size > 0) throw CompilerException(
+        s"Duplicate table names: ${duplicates.mkString(", ")}")
     }
   }
 
@@ -134,14 +138,15 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     rightOperand: SelectDefBase,
     exp: BinOp) extends SelectDefBase {
 
-    assert (leftOperand.cols.exists {
+    if (!(leftOperand.cols.exists {
         case ColDef(_, All | _: IdentAll, _) => true
         case _ => false
       } || rightOperand.cols.exists {
         case ColDef(_, All | _: IdentAll, _) => true
         case _ => false
-      } || leftOperand.cols.size == rightOperand.cols.size,
-      s"Column count do not match ${leftOperand.cols.size} != ${rightOperand.cols.size}")
+      }) && leftOperand.cols.size != rightOperand.cols.size)
+      throw CompilerException(
+        s"Column count do not match ${leftOperand.cols.size} != ${rightOperand.cols.size}")
     val cols = leftOperand.cols
     val tables = leftOperand.tables
     override val parent = leftOperand.parent
@@ -208,9 +213,9 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
               Join(_, _, true), _, _)) => //check if alias exists
               if (td1.view(0, idx).exists(_._1.name == alias))
                 td.copy(exp = o.copy(obj = TableAlias(Ident(List(alias)))))
-              else sys.error(s"No join table not defined: $alias")
+              else throw CompilerException(s"No join table not defined: $alias")
             case TableDef(_, Obj(x, _, Join(_, _, true), _, _)) =>
-              sys.error(s"Unsupported no join table: $x")
+              throw CompilerException(s"Unsupported no join table: $x")
             case x => x //ordinary table def
           }
         }
@@ -254,7 +259,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case f: Fun => procedure(s"${f.name}#${f.parameters.size}").map { p =>
         val retType = if (p.returnTypeParIndex == -1) p.scalaReturnType else ManifestFactory.Nothing
         FunDef(p.name, f.copy(parameters = f.parameters map tr), retType, p)
-      }.getOrElse(sys.error(s"Unknown function: ${f.name}"))
+      }.getOrElse(throw CompilerException(s"Unknown function: ${f.name}"))
       case c: Col =>
         val alias = if (c.alias != null) c.alias else c.col match {
           case Obj(Ident(name), _, _, _, _) => name.last //use last part of qualified ident as name
@@ -262,7 +267,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         }
         ColDef(
           alias,
-          tr(c.col) match { case x if ctx.head == ColsCtx => x case x: Exp => ChildDef(x) case x => sys.error(s"Exp $x unsupported at this place")},
+          tr(c.col) match { case x if ctx.head == ColsCtx => x case x: Exp => ChildDef(x) case x => throw CompilerException(s"Exp $x unsupported at this place")},
           if(c.typ != null) metadata.xsd_scala_type_map(c.typ) else ManifestFactory.Nothing
         )
       case Obj(b: Braces, _, _, _, _) if ctx.head == QueryCtx =>
@@ -316,8 +321,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
           ColDef[Nothing](
             s"_${idx + 1}",
             tr(el) match {
-              case s: SQLDefBase => ChildDef(s)
-              case a: ArrayDef => ChildDef(a)
+              case r: RowDefBase => ChildDef(r)
               case e => e
             },
             ManifestFactory.Nothing)
@@ -374,7 +378,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
           nsd.cols.flatMap {
             case ColDef(_, All, _) =>
               nsd.tables.flatMap { td =>
-                val table = nsd.table(td.name).getOrElse(sys.error(s"Cannot find table: $td"))
+                val table = nsd.table(td.name).getOrElse(throw CompilerException(s"Cannot find table: $td"))
                 table.cols.map { c =>
                   ColDef(c.name, createCol(s"${td.name}.${c.name}").col, c.scalaType)
                 }
@@ -385,7 +389,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
                 .map(_.cols.map { c =>
                   ColDef(c.name, createCol(s"$alias.${c.name}").col, c.scalaType)
                 })
-                .getOrElse(sys.error(s"Cannot find table: $alias"))
+                .getOrElse(throw CompilerException(s"Cannot find table: $alias"))
             case cd @ ColDef(_, chd: ChildDef, _) =>
               List(cd.copy(col = resolver(chd)))
             case cd => List(cd)
@@ -445,11 +449,11 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case (ctx, _: Obj) => (ctx.copy(ctx = ColumnCtx), true) //set column context
       case (ctx @ Context(scope, TableCtx), Ident(ident)) => //check table
         val tn = ident mkString "."
-        scope.table(tn).orElse(sys.error(s"Unknown table: $tn"))
+        scope.table(tn).orElse(throw CompilerException(s"Unknown table: $tn"))
         (ctx, true)
       case (ctx @ Context(scope, ColumnCtx), Ident(ident)) => //check column
         val cn = ident mkString "."
-        scope.column(cn).orElse(sys.error(s"Unknown column: $cn"))
+        scope.column(cn).orElse(throw CompilerException(s"Unknown column: $cn"))
         (ctx, true)
     }
     namer(Context(thisCompiler, ColumnCtx) -> exp)
@@ -479,7 +483,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case (_, _: TerOp) => (Manifest.Boolean, false)
       case (_, s: SelectDef) =>
         if (s.cols.size > 1)
-          sys.error(s"Select must contain only one column, instead:${s.cols.map(_.tresql).mkString(", ")}")
+          throw CompilerException(s"Select must contain only one column, instead:${s.cols.map(_.tresql).mkString(", ")}")
         else {
           scopes.push(s)
           val ret = (type_from_any(s.cols.head), false)
@@ -601,7 +605,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     intermediateResults.get.clear
     phrase(exprList)(new scala.util.parsing.input.CharSequenceReader(expr)) match {
       case Success(r, _) => r
-      case x => sys.error(x.toString)
+      case x => throw CompilerException(x.toString, x.next.pos)
     }
   } finally intermediateResults.get.clear
 }
