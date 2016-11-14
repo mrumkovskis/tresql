@@ -1,6 +1,6 @@
 package org.tresql.test
 
-import org.scalatest.Suite
+import org.scalatest.FunSuite
 import java.sql._
 import org.tresql._
 import org.tresql.implicits._
@@ -9,7 +9,7 @@ import scala.util.parsing.json._
 
 import sys._
 
-class QueryTest extends Suite {
+class QueryTest extends FunSuite {
   //initialize environment
   Class.forName("org.hsqldb.jdbc.JDBCDriver")
   val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
@@ -64,13 +64,7 @@ class QueryTest extends Suite {
     sql => val st = conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
   }
 
-  def test {
-    execStatements
-    if (util.Properties.versionString contains "2.10")
-      Class.forName("org.tresql.test.TresqlJavaApiTest").newInstance.asInstanceOf[Runnable].run
-  }
-
-  private def execStatements {
+  test("tresql statements") {
     def parsePars(pars: String, sep:String = ";"): Map[String, Any] = {
       val DF = new java.text.SimpleDateFormat("yyyy-MM-dd")
       val TF = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
@@ -103,13 +97,21 @@ class QueryTest extends Suite {
         } toMap
       } else pl.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
     }
-    println("\n------------------------ Test TreSQL statements ----------------------\n")
+    println("\n---------------- Test TreSQL statements ----------------------\n")
     testTresqls("/test.txt", (st, params, patternRes, nr) => {
       println(s"Executing test #$nr:")
       val testRes = jsonize(if (params == null) Query(st) else Query(st, parsePars(params)), Arrays)
       println("Result: " + testRes)
       assert(JSON.parseFull(testRes).get === JSON.parseFull(patternRes).get)
     })
+  }
+
+  //typed objects tests
+  trait Poha
+  case class Car(nr: Int, brand: String) extends Poha
+  case class Tyre(carNr: Int, brand: String) extends Poha
+
+  test("API") {
     println("\n---------------- Test API ----------------------\n")
     assertResult(10)(Query.head[Int]("dept{deptno}#(deptno)"))
     assertResult(10)(Query.unique[Int]("dept[10]{deptno}#(deptno)"))
@@ -193,10 +195,7 @@ class QueryTest extends Suite {
       r.close
       (id1, id2)
     }
-    //typed objects tests
-    trait Poha
-    case class Car(nr: Int, brand: String) extends Poha
-    case class Tyre(carNr: Int, brand: String) extends Poha
+
     implicit def convertRowLiketoPoha[T <: Poha](r: RowLike, m: Manifest[T]): T = m.toString match {
       case s if s.contains("Car") => Car(r.i("nr"), r.s("name")).asInstanceOf[T]
       case s if s.contains("Tyre") => Tyre(r.i("nr"), r.s("brand")).asInstanceOf[T]
@@ -326,9 +325,10 @@ class QueryTest extends Suite {
     assertResult((555, 333)) {(e2.maxResultSize, e2.queryTimeout)}
     Env.maxResultSize = mr
     Env.queryTimeout = qt
+  }
 
+  test("ORT") {
     println("\n----------- ORT tests ------------\n")
-
     println("\n--- INSERT ---\n")
 
     var obj:Map[String, Any] = Map("deptno" -> null, "dname" -> "LAW2", "loc" -> "DALLAS",
@@ -733,7 +733,9 @@ class QueryTest extends Suite {
     println("\n--- Delete all children with save options specified ---\n")
     obj = Map("nr" -> 10035, "tyres[+-=]" -> Nil)
     assertResult(List(1, List()))(ORT.update("car", obj))
+  }
 
+  test("tresql methods") {
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
     testTresqls("/test.txt", (tresql, _, _, nr) => {
       println(s"$nr. Testing tresql method of:\n$tresql")
@@ -741,6 +743,9 @@ class QueryTest extends Suite {
         case e: QueryParser.Exp => assert(e === QueryParser.parseExp(e.tresql))
       }
     })
+  }
+
+  test("compiler") {
     println("\n-------------- TEST compiler ----------------\n")
     //set new metadata
     Env.metaData = new metadata.JDBCMetaData with compiling.CompilerFunctions {
@@ -750,7 +755,9 @@ class QueryTest extends Suite {
       println(s"$nr. Compiling tresql:\n$tresql")
       QueryCompiler.compile(tresql)
     })
+  }
 
+  test("compiler macro") {
     println("\n-------------- TEST compiler macro ----------------\n")
 
     assertResult(("ACCOUNTING",
@@ -794,9 +801,15 @@ class QueryTest extends Suite {
     )
 
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("work/dept{*}"))
+  }
 
-    println("\n-------------- CACHE -----------------\n")
-    Env.cache map(c => println(s"Cache size: ${c.size}"))
+  test("Test Java API") {
+    if (util.Properties.versionString contains "2.10")
+      Class.forName("org.tresql.test.TresqlJavaApiTest").newInstance.asInstanceOf[Runnable].run
+  }
+
+  test("cache") {
+    Env.cache map(c => println(s"\nCache size: ${c.size}\n"))
   }
 
   def testTresqls(resource: String, testFunction: (String, String, String, Int) => Unit) = {

@@ -1,8 +1,8 @@
 lazy val commonSettings = Seq(
   organization := "org.tresql",
-  scalaVersion := "2.11.8",
+  scalaVersion := "2.12.0",
   crossScalaVersions := Seq(
-    //"2.12.0",
+    "2.12.0",
     "2.11.8"
   ),
   //coverageEnabled := true,
@@ -66,7 +66,7 @@ lazy val tresql = (project in file("."))
     unmanagedSources in Test <<= (scalaVersion, unmanagedSources in Test) map {
       (v, d) => (if (v.startsWith("2.10")) d else d filterNot (_.getPath endsWith ".java")).get
     },
-    libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "2.1.5" % "test",
+    libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "3.0.0" % "test",
                                 "org.hsqldb" % "hsqldb" % "2.3.1" % "test"),
     initialCommands in console := "import org.tresql._; import org.tresql.implicits._",
     publishArtifact in Test := false,
