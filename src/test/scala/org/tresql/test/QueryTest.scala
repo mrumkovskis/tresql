@@ -803,13 +803,12 @@ class QueryTest extends FunSuite {
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("work/dept{*}"))
   }
 
-  test("Test Java API") {
-    if (util.Properties.versionString contains "2.10")
-      Class.forName("org.tresql.test.TresqlJavaApiTest").newInstance.asInstanceOf[Runnable].run
-  }
-
   test("cache") {
     Env.cache map(c => println(s"\nCache size: ${c.size}\n"))
+  }
+
+  test("Test Java API") {
+    Class.forName("org.tresql.test.TresqlJavaApiTest").newInstance.asInstanceOf[Runnable].run
   }
 
   def testTresqls(resource: String, testFunction: (String, String, String, Int) => Unit) = {

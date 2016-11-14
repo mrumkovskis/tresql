@@ -26,16 +26,11 @@ lazy val commonSettings = Seq(
 lazy val core = (project in file("core"))
   .settings(
     name := "tresql-core",
-    libraryDependencies ++= Seq("org.scala-lang" % "scala-reflect" % scalaVersion.value),
-    libraryDependencies := {
-      CrossVersion.partialVersion(scalaVersion.value) match {
-        case Some((2, scalaMajor)) if scalaMajor >= 11 =>
-          libraryDependencies.value :+ "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.4"
-        case _ =>
-          libraryDependencies.value
-      }
-    })
-  .settings(commonSettings: _*)
+    libraryDependencies ++= Seq(
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
+      "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.4"
+    )
+  ).settings(commonSettings: _*)
 
 lazy val macros = (project in file("macro"))
   .dependsOn(core)
@@ -63,9 +58,6 @@ lazy val tresql = (project in file("."))
     sources in (Compile, doc) := (sources in (core, Compile)).value ++ (sources in (macros, Compile)).value,
 
     name := "tresql",
-    unmanagedSources in Test <<= (scalaVersion, unmanagedSources in Test) map {
-      (v, d) => (if (v.startsWith("2.10")) d else d filterNot (_.getPath endsWith ".java")).get
-    },
     libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "3.0.0" % "test",
                                 "org.hsqldb" % "hsqldb" % "2.3.1" % "test"),
     initialCommands in console := "import org.tresql._; import org.tresql.implicits._",
