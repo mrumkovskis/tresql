@@ -1,5 +1,3 @@
-val paradiseVersion = "2.1.0"
-
 lazy val commonSettings = Seq(
   organization := "org.tresql",
   scalaVersion := "2.11.8",
