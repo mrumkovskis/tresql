@@ -9,8 +9,6 @@ package object tresql extends CoreTypes {
    *  passed to Query.
    */
 
-  implicit val resources: Resources = Env
-
   //whitebox context is important (not blackbox) since return value of tresql function
   //must return type actually returned from Macro.impl i.e not CompiledResult[RowLike]
   import scala.reflect.macros.whitebox.Context

@@ -3,6 +3,7 @@ package org.tresql.test
 import org.scalatest.Suite
 import java.sql._
 import org.tresql._
+import org.tresql.implicits._
 import org.tresql.result.Jsonizer._
 import scala.util.parsing.json._
 
