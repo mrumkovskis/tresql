@@ -5,19 +5,22 @@ import org.tresql.{Env, MetaData}
 import org.tresql.metadata.JDBCMetaData
 
 /** Implementation must have empty constructor so can be instantiated with {{{Class.newInstance}}} */
-trait CompilerMetaData {
+trait CompilerMetaDataFactory {
   def create(conf: Map[String, String]): MetaData
 }
 
 private[tresql] object MetadataCache {
-  def create(conf: Map[String, String], factory: CompilerMetaData): MetaData = {
+  def create(
+    conf: Map[String, String],
+    factory: CompilerMetaDataFactory
+  ): MetaData = {
     if (md == null) md = factory.create(conf)
     md
   }
   private[this] var md: MetaData = null
 }
 
-class CompilerJDBCMetaData extends CompilerMetaData {
+class CompilerJDBCMetaData extends CompilerMetaDataFactory {
   override def create(conf: Map[String, String]) = {
     val driverClassName = conf.getOrElse("driverClass", null)
     val url = conf.getOrElse("url", null)

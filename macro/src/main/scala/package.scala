@@ -231,7 +231,7 @@ package object tresql extends CoreTypes {
     def metadata(conf: Map[String, String]) = conf.get("metadataFactoryClass").map { factory =>
       compiling.MetadataCache.create(
         conf,
-        Class.forName(factory).newInstance.asInstanceOf[compiling.CompilerMetaData]
+        Class.forName(factory).newInstance.asInstanceOf[compiling.CompilerMetaDataFactory]
       )
     }.getOrElse(
       sys.error(s"metadataFactoryClass macro compiler setting missing. Try to set -Xmacro-settings: scala compiler option.")
