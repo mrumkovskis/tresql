@@ -1,6 +1,10 @@
 lazy val commonSettings = Seq(
   organization := "org.tresql",
   scalaVersion := "2.11.8",
+  crossScalaVersions := Seq(
+    //"2.12.0",
+    "2.11.8"
+  ),
   //coverageEnabled := true,
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",
     "-language:postfixOps", "-language:implicitConversions", "-language:reflectiveCalls",
