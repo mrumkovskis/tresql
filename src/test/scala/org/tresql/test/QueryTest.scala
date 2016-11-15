@@ -755,6 +755,10 @@ class QueryTest extends FunSuite {
       println(s"$nr. Compiling tresql:\n$tresql")
       QueryCompiler.compile(tresql)
     })
+
+    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("work/dept{*}"))
+    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("works"))
+    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("emp{aa}"))
   }
 
   test("compiler macro") {
@@ -799,8 +803,6 @@ class QueryTest extends FunSuite {
       tresql"dept {dname, |emp{ename}#(1) emps}#(1)"
         .map {d => d.dname -> d.emps.map(_.ename).mkString(", ")}.toList.head
     )
-
-    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("work/dept{*}"))
   }
 
   test("cache") {
