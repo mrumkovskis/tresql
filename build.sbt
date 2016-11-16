@@ -60,7 +60,7 @@ lazy val tresql = (project in file("."))
     name := "tresql",
     libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "3.0.0" % "test",
                                 "org.hsqldb" % "hsqldb" % "2.3.1" % "test"),
-    initialCommands in console := "import org.tresql._; import org.tresql.implicits._",
+    initialCommands in console := "import org.tresql._; import org.tresql.implicits._; import org.scalatest.run",
     publishArtifact in Test := false,
     publishArtifact in Compile := true,
     pomIncludeRepository := { x => false },
