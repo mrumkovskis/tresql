@@ -229,16 +229,18 @@ trait Resources { self =>
     val _dialect: Option[CoreTypes.Dialect] = None,
     val _idExpr: Option[String => String] = None,
     val _queryTimeout: Option[Int] = None,
-    val _maxResultSize: Option[Int] = None) extends Resources {
+    val _maxResultSize: Option[Int] = None,
+    val _params: Option[Map[String, Any]] = None) extends Resources {
     override def conn: java.sql.Connection = _conn getOrElse self.conn
     override def metaData: MetaData = _metaData getOrElse self.metaData
     override def dialect: CoreTypes.Dialect = _dialect getOrElse self.dialect
     override def idExpr: String => String = _idExpr getOrElse self.idExpr
     override def queryTimeout: Int = _queryTimeout getOrElse self.queryTimeout
     override def maxResultSize: Int = _maxResultSize getOrElse self.maxResultSize
+    override def params: Map[String, Any] = _params getOrElse self.params
     override def toString = s"Resources_(conn = $conn, " +
       s"metaData = $metaData, dialect = $dialect, idExpr = $idExpr, " +
-      s"queryTimeout = $queryTimeout, maxResultSize = $maxResultSize)"
+      s"queryTimeout = $queryTimeout, maxResultSize = $maxResultSize, params = $params)"
   }
 
   private var _valueExprMap: Option[Map[(String, String), String]] = None
@@ -249,6 +251,7 @@ trait Resources { self =>
   def idExpr: String => String = s => "nextval('" + s + "')"
   def queryTimeout = 0
   def maxResultSize = 0
+  def params: Map[String, Any] = Map()
 
   /** Column value expression in tresql statement value clause.
    *  Default is named bind variable - {{{:columnName}}} */
@@ -268,6 +271,7 @@ trait Resources { self =>
   def withIdExpr(idExpr: String => String): Resources = Resources_(_idExpr = Option(idExpr))
   def withQueryTimeout(queryTimeout: Int): Resources = Resources_(_queryTimeout = Option(queryTimeout))
   def withMaxResultSize(maxResultSize: Int): Resources = Resources_(_maxResultSize = Option(maxResultSize))
+  def withParams(params: Map[String, Any]): Resources = Resources_(_params = Option(params))
 }
 
 trait EnvProvider {
