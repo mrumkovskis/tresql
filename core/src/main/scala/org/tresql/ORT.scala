@@ -73,7 +73,7 @@ trait ORT extends Query {
     }
     def extractId(result: Any) = result match {
       case i: InsertResult => i.id.get //insert expression
-      case a: ArrayResult => a.values.last match { case i: InsertResult => i.id.get } //array expression
+      case a: ArrayResult[_] => a.values.last match { case i: InsertResult => i.id.get } //array expression
       case x => error(s"Unable to extract id from expr result: $x, expr: $insertExpr")
     }
     def defaultSQL = s"LookupEditExpr($obj, $idName, $insertExpr, $updateExpr)"

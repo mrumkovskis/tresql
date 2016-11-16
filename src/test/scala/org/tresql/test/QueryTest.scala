@@ -138,9 +138,9 @@ class QueryTest extends FunSuite {
     //expression closing
     intercept[SQLException] {
       val ex = Query.build("emp")
-      ex().asInstanceOf[Result].toList
+      ex().asInstanceOf[Result[_]].toList
       ex.close
-      ex().asInstanceOf[Result].toList
+      ex().asInstanceOf[Result[_]].toList
     }
     //bind variables absence error message
     assert(intercept[MissingBindVariableException](Query("emp[?]")).name === "1")
@@ -325,6 +325,10 @@ class QueryTest extends FunSuite {
     assertResult((555, 333)) {(e2.maxResultSize, e2.queryTimeout)}
     Env.maxResultSize = mr
     Env.queryTimeout = qt
+
+    //exists method
+    assertResult(true)(tresql"emp".exists)
+    assertResult(false)(tresql"emp[ename = null]".exists)
   }
 
   test("ORT") {

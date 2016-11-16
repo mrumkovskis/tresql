@@ -27,7 +27,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   private var vars: Option[scala.collection.mutable.Map[String, Any]] = None
   private var _exprs: Option[Map[Expr, Int]] = None
   private val ids = scala.collection.mutable.Map[String, Any]()
-  private var _result: Result = null
+  private var _result: Result[_ <: RowLike] = null
   private var _statement: java.sql.PreparedStatement = null
   //stores row count returned by SelectResult and all subresults.
   //if resources.maxResultSize is greater than zero
@@ -66,7 +66,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
 
   private [tresql] def updateExprs(exprs: Map[Expr, Int]) = _exprs = Option(exprs)
 
-  def apply(rIdx: Int): Result = {
+  def apply(rIdx: Int): Result[_ <: RowLike] = {
     var i = 0
     var e: Env = this
     while (i < rIdx && e != null) {
@@ -84,7 +84,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   private[tresql] def statement_=(st: java.sql.PreparedStatement) = _statement = st
 
   private[tresql] def result = _result
-  private[tresql] def result_=(r: Result) = _result = r
+  private[tresql] def result_=(r: Result[_ <: RowLike]) = _result = r
 
   private[tresql] def closeStatement {
     root.providedEnvs foreach (e=> if (e.statement != null) e.statement.close)

@@ -23,7 +23,7 @@ object Query {
     def x = delegate
   }
 
-  private class ResultWrapper(x: org.tresql.Result) extends RowDelegate(x) with Result with RowWrapper {
+  private class ResultWrapper(x: org.tresql.Result[_]) extends RowDelegate(x) with Result with RowWrapper {
     override def close = x.close
     /* TODO
     override def toList = seqAsJavaList(x.toList.map(new RowWrapperImpl(_)))

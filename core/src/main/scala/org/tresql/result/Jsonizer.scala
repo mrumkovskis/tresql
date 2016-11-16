@@ -18,7 +18,7 @@ object Jsonizer {
 
   def jsonize(result: Any, buf: Writer, rType: ResultType = Objects) {
     result match {
-      case r: Result =>
+      case r: Result[RowLike] =>
         var done = false;
         try {
           jsonizeResult(r, buf, rType)
@@ -59,14 +59,14 @@ object Jsonizer {
       case x => buf.append("\"" + JSONFormat.quoteString(x.toString) + "\"")
     }
   }
-  
+
   def jsonize(result: Any, rType: ResultType): String = {
     val w = new java.io.StringWriter
     jsonize(result, w, rType)
     w.toString
   }
 
-  def jsonizeResult(result: Result, buf: Writer, rType: ResultType = Objects) {
+  def jsonizeResult(result: Result[RowLike], buf: Writer, rType: ResultType = Objects) {
     if (rType != Object) buf append '['
     var i = 0
     result foreach { r =>

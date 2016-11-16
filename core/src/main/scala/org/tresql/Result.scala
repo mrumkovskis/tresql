@@ -5,7 +5,7 @@ import java.sql.ResultSetMetaData
 import sys._
 import CoreTypes.RowConverter
 
-trait Result extends Iterator[RowLike] with RowLike with TypedResult {
+trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T] {
 
   def columns = (0 to (columnCount - 1)) map column
   def values = (0 to (columnCount - 1)).map(this(_))
@@ -14,7 +14,7 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
   def toListOfVectors: List[Vector[_]] = this.map(_ => rowToVector).toList
 
   def rowToMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
-    case r: Result => r.toListOfMaps
+    case r: Result[_] => r.toListOfMaps
     case x => x
   })).toMap
 
@@ -23,7 +23,7 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
     var i = 0
     while (i < columnCount) {
       b += (this(i) match {
-        case r: Result => r.toListOfVectors
+        case r: Result[_] => r.toListOfVectors
         case x => x
       })
       i += 1
@@ -41,7 +41,7 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
       var i = 0
       while (i < columnCount) {
         this(i) match {
-          case r: Result => r.execute
+          case r: Result[_] => r.execute
           case _ =>
         }
         i += 1
@@ -51,13 +51,39 @@ trait Result extends Iterator[RowLike] with RowLike with TypedResult {
 
   def close {}
 
+  def head: T = try hasNext match {
+    case true => next
+    case false => throw new NoSuchElementException("No rows in result")
+  } finally close
+
+  def headOption: Option[T] = try Some(head) catch {
+    case e: NoSuchElementException => None
+  }
+
+  def unique: T = try hasNext match {
+    case true =>
+      val v = next
+      if (hasNext) error("More than one row for unique result") else v
+    case false => error("No rows in result")
+  } finally close
+
+  def uniqueOption: Option[T] = try hasNext match {
+    case true =>
+      val v = next
+      if (hasNext) error("More than one row for unique result") else Some(v)
+    case false => None
+  } finally close
+
+  /** Shortcut method for {{{headOption != None}}}*/
+  def exists = headOption != None
+
   /** needs to be overriden since super class implementation calls hasNext method */
   override def toString = getClass.toString + ":" + (columns.mkString(","))
 }
 
-trait DynamicResult extends Result with DynamicRow with Iterator[DynamicRow]
+trait DynamicResult extends Result[DynamicRow] with DynamicRow
 
-trait SelectResult extends Result {
+trait SelectResult[T <: RowLike] extends Result[T] {
   private[tresql] def rs: ResultSet
   private[tresql] def cols: Vector[Column]
   private[tresql] def env: Env
@@ -88,13 +114,13 @@ trait SelectResult extends Result {
     }
     rsHasNext
   }
-  def next: RowLike = {
+  def next: T = {
     nextCalled = true
     if (maxSize > 0) {
       env.rowCount += 1
       maxSizeControl
     }
-    this
+    this.asInstanceOf[T]
   }
 
   private def maxSizeControl {
@@ -260,29 +286,24 @@ class DynamicSelectResult private[tresql] (
   private[tresql] val bindVariables: List[Expr],
   override private[tresql] val maxSize: Int = 0,
   override private[tresql] val _columnCount: Int = -1
-) extends SelectResult with DynamicResult {
+) extends SelectResult[DynamicRow] with DynamicResult
 
-  override def next: DynamicRow = super.next.asInstanceOf[DynamicRow]
+object ArrayResult {
+  def unapplySeq(ar: ArrayResult[_]) = Seq.unapplySeq(ar.values)
 }
 
-trait SingleRowResult extends Result {
+trait ArrayResult[T <: RowLike] extends Result[T] {
   private var _hasNext = true
   def hasNext = if (_hasNext) {
     _hasNext = false
     true
   } else false
-}
 
-object ArrayResult {
-  def unapplySeq(ar: ArrayResult) = Seq.unapplySeq(ar.values)
-}
-
-trait ArrayResult extends SingleRowResult {
-  private val cols = (0 until values.size) map { i =>
+  private lazy val cols = (0 until values.size) map { i =>
     Column(i, s"_${i + 1}", null)
   }
 
-  def next: RowLike = this
+  def next: T = this.asInstanceOf[T]
 
   def apply(name: String): Any = values(cols.indexWhere(_.name == name))
   def apply(idx: Int): Any = values(idx)
@@ -300,9 +321,8 @@ trait ArrayResult extends SingleRowResult {
   override def toString = values.mkString("ArrayResult(", ", ", ")")
 }
 
-class DynamicArrayResult(override val values: List[Any]) extends ArrayResult with DynamicResult {
-  override def next: DynamicRow = super.next.asInstanceOf[DynamicRow]
-}
+class DynamicArrayResult(override val values: List[Any])
+  extends ArrayResult[DynamicArrayResult] with DynamicResult
 
 /**
   {{{CompiledRow}}} is used as superclass for parameter type of {{{CompiledResult[T]}}}
@@ -322,45 +342,24 @@ trait CompiledRow extends RowLike with Typed {
   {{{CompiledResult}}} is retured from {{{Query.apply[T]}}} method.
   Is used from tresql interpolator macro
 */
-trait CompiledResult[T <: RowLike] extends Result with Iterator[T] {
+trait CompiledResult[T <: RowLike] extends Result[T] {
 
   //better not call super class to list since it creates other subclasses of RowLike
   override def toList: List[T] = foldLeft(List[T]()) {(l, e) => e :: l}.reverse
-
-  def head: T = try hasNext match {
-    case true => next
-    case false => throw new NoSuchElementException("No rows in result")
-  } finally close
-
-  def headOption: Option[T] = try Some(head) catch {
-    case e: NoSuchElementException => None
-  }
-
-  def unique: T = try hasNext match {
-    case true =>
-      val v = next
-      if (hasNext) error("More than one row for unique result") else v
-    case false => error("No rows in result")
-  } finally close
-
-  def uniqueOption: Option[T] = try hasNext match {
-    case true =>
-      val v = next
-      if (hasNext) error("More than one row for unique result") else Some(v)
-    case false => None
-  } finally close
 }
 
 case class SingleValueResult[T](value: T)
-  extends CompiledResult[SingleValueResult[T]] with DynamicResult with SingleRowResult {
-  var n = true
+  extends CompiledResult[SingleValueResult[T]]
+  with ArrayResult[SingleValueResult[T]]
+  with DynamicResult
+{
   val col = Column(0, "value", null)
-  def next = this
-  def columnCount = 1
-  def column(idx: Int) = col
-  def apply(idx: Int) = value
-  def typed[T: Manifest](name: String) = value.asInstanceOf[T]
-  def apply(name: String) = if (name == "value") value else sys.error("column not found: " + name)
+  override def next = this
+  override def columnCount = 1
+  override def column(idx: Int) = col
+  override def apply(idx: Int) = value
+  override def typed[T: Manifest](name: String) = value.asInstanceOf[T]
+  override def apply(name: String) = if (name == "value") value else sys.error("column not found: " + name)
   override def toString = s"SingleValueResult = $value"
 }
 
@@ -373,7 +372,7 @@ class CompiledSelectResult[T <: RowLike] private[tresql] (
   override private[tresql] val maxSize: Int = 0,
   override private[tresql] val _columnCount: Int = -1,
   private[tresql] val converter: RowConverter[T]
-) extends SelectResult with CompiledResult[T] {
+) extends SelectResult[T] with CompiledResult[T] {
 
   override def next: T = {
     converter(super.next)
@@ -382,33 +381,34 @@ class CompiledSelectResult[T <: RowLike] private[tresql] (
 
 class CompiledArrayResult[T <: RowLike] private[tresql](
   override val values: List[Any], converter: RowConverter[T])
-  extends ArrayResult with CompiledResult[T] {
+  extends ArrayResult[T] with CompiledResult[T] {
 
   override def next: T = {
     converter(super.next)
   }
 }
 
-trait DMLResult extends DynamicResult with CompiledResult[DMLResult] with SingleRowResult {
+trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
+  with DynamicResult {
   def count: Option[Int]
   def children: Map[String, Any]
   def id: Option[Any] = None
 
-  def next = this
+  override def next = this
   // Members declared in org.tresql.RowLike
-  def apply(name: String): Any = ???
-  def apply(idx: Int): Any = idx match {
+  override def apply(name: String): Any = ???
+  override def apply(idx: Int): Any = idx match {
     case 0 => count getOrElse children
     case 1 => if (children.isEmpty) id.get else children
     case 2 => id.get
   }
-  def column(idx: Int): org.tresql.Column = ???
-  def columnCount: Int = {
+  override def column(idx: Int): org.tresql.Column = ???
+  override def columnCount: Int = {
     //ATTENTION! if all three items to be added are put non separate lines expression gives wrong result
     count.map(_ => 1).getOrElse(0) + id.map(_ => 1).getOrElse(0) + (if (children.isEmpty) 0 else 1)
   }
   // Members declared in org.tresql.Typed
-  def typed[T](name: String)(implicit evidence$1: scala.reflect.Manifest[T]): T = ???
+  override def typed[T](name: String)(implicit evidence$1: scala.reflect.Manifest[T]): T = ???
 
   /* Compatibility with previous tresql versions
   Can be following combinations:
@@ -522,8 +522,8 @@ trait RowLike extends Typed {
   def reader(name: String) = typed[java.io.Reader](name)
   def clob(idx: Int) = typed[java.sql.Clob](idx)
   def clob(name: String) = typed[java.sql.Clob](name)
-  def result(idx: Int) = typed[Result](idx)
-  def result(name: String) = typed[Result](name)
+  def result(idx: Int) = typed[Result[_ <: RowLike]](idx)
+  def result(name: String) = typed[Result[_ <: RowLike]](name)
   def r(idx: Int) = result(idx)
   def r(name: String) = result(name)
   def jInt(idx: Int) = typed[java.lang.Integer](idx)

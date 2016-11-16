@@ -62,14 +62,14 @@ package object tresql extends CoreTypes {
   }}}
   */
   implicit class Tresql(val sc: StringContext) extends AnyVal {
-    def tresql(params: Any*)(implicit resources: Resources): Result = macro Macros.impl
+    def tresql(params: Any*)(implicit resources: Resources): Result[RowLike] = macro Macros.impl
   }
 
   object Macros {
     import scala.language.reflectiveCalls //supress warnings that class Ctx is defined in function resultClassTree and later returned
     import scala.language.existentials //supress warnings that class Ctx is defined in function resultClassTree and later returned
     import QueryCompiler._
-    def impl(c: Context)(params: c.Expr[Any]*)(resources: c.Expr[Resources]): c.Expr[Result] = {
+    def impl(c: Context)(params: c.Expr[Any]*)(resources: c.Expr[Resources]): c.Expr[Result[RowLike]] = {
       import c.universe._
       import CoreTypes.RowConverter
       case class Ctx(

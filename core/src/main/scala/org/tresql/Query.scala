@@ -23,11 +23,11 @@ trait Query extends QueryBuilder with TypedQuery {
     expr: String,
     params: Map[String, Any],
     resources: Resources
-  ): Result = {
+  ): Result[_] = {
     val builtExpr = build(expr, params, false)(resources)
     builtExpr() match {
       case r: CompiledResult[_] => r
-      case r: Result =>
+      case r: Result[_] =>
         val builder = builtExpr.builder
         builder.env.rowConverter(builder.queryDepth, builder.childIdx).map { conv =>
           /*Convert result if converter is found and wrap it into {{{SingleValueResult}}}.
@@ -72,7 +72,7 @@ trait Query extends QueryBuilder with TypedQuery {
     case l => l.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
   }
 
-  private[tresql] def sel(sql: String, cols: List[QueryBuilder#ColExpr]): Result = {
+  private[tresql] def sel(sql: String, cols: List[QueryBuilder#ColExpr]): Result[_ <: RowLike] = {
     val (rs, columns, visibleColCount) = sel_result(sql, cols)
     val result = env.rowConverter(queryDepth, childIdx).map { conv =>
       new CompiledSelectResult(rs, columns, env, sql,bindVariables,
@@ -178,8 +178,8 @@ trait Query extends QueryBuilder with TypedQuery {
     }
     result :: outs match {
       case null :: Nil => ()
-      case List(r: Result) => r
-      case l @ List(r: Result, x, _*) => l
+      case List(r: Result[_]) => r
+      case l @ List(r: Result[_], x, _*) => l
       case null :: l => l
       case x => error("Knipis: " + x)
     }
