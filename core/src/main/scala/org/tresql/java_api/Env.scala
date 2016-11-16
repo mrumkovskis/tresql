@@ -47,6 +47,10 @@ object Env {
       override def get = msg
     }, level)
   }
+  def getLogger: Logger = new Logger {
+    private[this] val logger = env.logger
+    override def log(msg: LogMessage, level: Int) = logger(msg.get, level)
+  }
   //def update(map: (Map[String, String], Map[String, Map[String, (String, String)]])): Unit
   //def valueExpr(objectName: String, propertyName: String): String
 }

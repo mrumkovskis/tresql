@@ -9,6 +9,7 @@ import scala.util.parsing.json._
 
 import sys._
 
+/** To run from console {{{org.scalatest.run(new test.QueryTest)}}} */
 class QueryTest extends FunSuite {
   //initialize environment
   Class.forName("org.hsqldb.jdbc.JDBCDriver")

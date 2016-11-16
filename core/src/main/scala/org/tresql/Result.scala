@@ -292,6 +292,7 @@ object ArrayResult {
   def unapplySeq(ar: ArrayResult[_]) = Seq.unapplySeq(ar.values)
 }
 
+/** Result with one row */
 trait ArrayResult[T <: RowLike] extends Result[T] {
   private var _hasNext = true
   def hasNext = if (_hasNext) {

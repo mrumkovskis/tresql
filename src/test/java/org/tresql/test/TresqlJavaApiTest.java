@@ -21,6 +21,7 @@ public class TresqlJavaApiTest implements Runnable {
     public void run() {
         println("");
         println("---- Testing Java API ----");
+        Logger logger = Env.getLogger();
         Env.setLogger(new Logger() {
             // TODO test msg laziness
             @Override
@@ -28,14 +29,15 @@ public class TresqlJavaApiTest implements Runnable {
                 println("Java API logger [" + level + "]: " + msg.get());
             }
         });
-        Env.getCache();
+        org.tresql.Cache cache = Env.getCache();
         Env.setCache(new SimpleCache(-1));
         Connection c = Env.getConnection();
         Env.setConnection(c);
-        Env.getDialect();
+        scala.PartialFunction dialect = Env.getDialect();
         Env.setDialect(Dialects.HSQL());
-        Env.getFunctions();
+        Object functions = Env.getFunctions();
         Env.setFunctions(new TresqlJavaApiTestFunctions());
+        IdExprFunc idExpr = Env.getIdExprFunc();
         println("id expr: " + Env.getIdExprFunc().getIdExpr("my_table"));
         Env.setIdExprFunc(new IdExprFunc() {
             @Override
@@ -44,7 +46,7 @@ public class TresqlJavaApiTest implements Runnable {
             }
         });
         println("id expr: " + Env.getIdExprFunc().getIdExpr("my_table[2]"));
-        Env.getMetadata();
+        org.tresql.MetaData metadata = Env.getMetadata();
         Env.setMetadata(Metadata.JDBC(null));
 
         println("");
@@ -111,6 +113,14 @@ public class TresqlJavaApiTest implements Runnable {
         }
         println("--------------------------");
         println("");
+
+        //set back previous env values
+        Env.setLogger(logger);
+        Env.setCache(cache);
+        Env.setDialect(dialect);
+        Env.setFunctions(functions);
+        Env.setIdExprFunc(idExpr);
+        Env.setMetadata(metadata);
     }
 
     private void println(String s) {
