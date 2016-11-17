@@ -808,6 +808,15 @@ class QueryTest extends FunSuite {
       tresql"dept {dname, |emp{ename}#(1) emps}#(1)"
         .map {d => d.dname -> d.emps.map(_.ename).mkString(", ")}.toList.head
     )
+
+    //resources with params
+    {
+      val dn = "acc"
+      val params = Map("ename" -> "cl%")
+      assertResult(List(Vector("ACCOUNTING", "CLARK")))(
+        tresql"emp/dept[dname ~~ $dn || '%' & ename ~~ :ename]{dname, ename}#(1, 2)"(
+          Env.withParams(params)).toListOfVectors)
+    }
   }
 
   test("cache") {

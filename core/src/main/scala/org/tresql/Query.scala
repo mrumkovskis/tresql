@@ -46,7 +46,10 @@ trait Query extends QueryBuilder with TypedQuery {
     reusableExpr: Boolean = true
   )(implicit resources: Resources = Env): Expr = {
     Env log expr
-    newInstance(new Env(params, resources, reusableExpr), 0, 0, 0).buildExpr(expr)
+    val pars =
+      if (resources.params.isEmpty) params
+      else if (params != null) resources.params ++ params else resources.params
+    newInstance(new Env(pars, resources, reusableExpr), 0, 0, 0).buildExpr(expr)
   }
 
   /** QueryBuilder methods **/
