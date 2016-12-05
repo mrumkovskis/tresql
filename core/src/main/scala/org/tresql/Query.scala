@@ -144,8 +144,26 @@ trait Query extends QueryBuilder with TypedQuery {
       if (st.execute) {
         val rs = st.getResultSet
         val md = rs.getMetaData
-        val res = new DynamicSelectResult(rs, Vector(1 to md.getColumnCount map
-          { i => Column(i, md.getColumnLabel(i), null) }: _*), env, sql, bindVariables, Env.maxResultSize)
+        val res = env.rowConverter(queryDepth, childIdx).map { conv =>
+          new CompiledSelectResult(
+            rs,
+            Vector(1 to md.getColumnCount map { i => Column(i, md.getColumnLabel(i), null) }: _*),
+            env,
+            sql,
+            bindVariables,
+            Env.maxResultSize,
+            -1,
+            conv)
+        }.getOrElse {
+          new DynamicSelectResult(
+            rs,
+            Vector(1 to md.getColumnCount map { i => Column(i, md.getColumnLabel(i), null) }: _*),
+            env,
+            sql,
+            bindVariables,
+            Env.maxResultSize
+          )
+        }
         env.result = res
         result = res
       }

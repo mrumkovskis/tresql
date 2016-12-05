@@ -85,8 +85,9 @@ package object tresql extends CoreTypes {
         lazy val generator: PartialFunction[(Ctx, Exp), Ctx] = extractorAndTraverser {
           //function
           case (ctx, fun: FunDef[_]) =>
-            //(ctx.copy(className = s"SingleValueResult[${fun.typ.toString}]"), false)
-            c.abort(c.enclosingPosition, s"Unsupported function call here. Try '{${fun.tresql}}'")
+            (ctx.copy(
+              convRegister = List(q"((${ctx.depth}, ${ctx.childIdx}), identity[RowLike] _)")),
+            false)
           //inserts updates deletes
           case (ctx, dml: DMLDefBase) =>
             (ctx.copy(className = "DMLResult"), false)
@@ -197,7 +198,8 @@ package object tresql extends CoreTypes {
         case ce: CompilerException => c.abort(c.enclosingPosition, ce.getMessage)
       }
       val resultClassCtx = resultClassTree(compiledExp)
-      val resultClassName = resultClassCtx.className
+      val resultClassName = resultClassCtx.className match {
+        case null => "org.tresql.RowLike" case n => n }
       val q"typeOf[$classType]" = c.parse(s"typeOf[$resultClassName]")
       val (classDefs, convRegister) = (resultClassCtx.tree, resultClassCtx.convRegister)
       info("------------Class:------------\n")

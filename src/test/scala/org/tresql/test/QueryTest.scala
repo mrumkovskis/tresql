@@ -817,6 +817,11 @@ class QueryTest extends FunSuite {
         tresql"emp/dept[dname ~~ $dn || '%' & ename ~~ :ename]{dname, ename}#(1, 2)"(
           Env.withParams(params)).toListOfVectors)
     }
+
+    //function calls
+    assertResult(12)(tresql"inc_val_5(7)".head[Integer])
+    assertResult((10, "ACCOUNTING", "NEW YORK"))(
+      tresql"sql_concat(sql('select * from dept where deptno = 10'))".head[Int, String, String])
   }
 
   test("cache") {
