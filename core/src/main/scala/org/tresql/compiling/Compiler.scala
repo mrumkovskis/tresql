@@ -98,7 +98,8 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         case x =>
           declared_table(col.substring(0, x)).flatMap(_.colOption(col.substring(x + 1)))
       }
-    }
+    } orElse procedure(s"$colName#0").map(p => //check for empty pars function declaration
+      org.tresql.metadata.Col(name = colName, true, -1, scalaType = p.scalaReturnType))
 
     def procedure(procedure: String) = parent.procedure(procedure)
 
