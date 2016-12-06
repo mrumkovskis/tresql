@@ -16,7 +16,7 @@ trait MetaData extends metadata.TypeMapper {
         if (r1.length + r2.length == 1)
           if (r1.length == 1) (fk(r1.head.cols), uk(r1.head.refCols)) else (uk(r2.head.refCols), fk(r2.head.cols))
         else if (r1.length == 1) (fk(r1.head.cols), uk(r1.head.refCols))
-        else error("Ambiguous relation. Too many found between tables " + table1 + ", " + table2)
+        else error(s"Ambiguous relation. Too many found between tables $table1, $table2: ($r1, $r2)")
       case (k1, k2) if (k1.length + k2.length == 0) => { //try to find two imported keys of the same primary key
         t1.rfs.filter(_._2.size == 1).foldLeft(List[(List[String], List[String])]()) {
           (res, t1refs) =>
@@ -25,8 +25,7 @@ trait MetaData extends metadata.TypeMapper {
         } match {
           case Nil => error("Relation not found between tables " + table1 + ", " + table2)
           case List((a, b)) => (fk(a), fk(b))
-          case b => error("Ambiguous relation. Too many found between tables " + table1 + ", " +
-            table2 + ". Relation columns: " + b)
+          case b => error(s"Ambiguous relation. Too many found between tables $table1, $table2. Relation columns: $b")
         }
       }
       case (k1, k2) =>

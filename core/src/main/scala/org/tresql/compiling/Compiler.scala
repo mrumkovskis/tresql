@@ -73,6 +73,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     protected def this_table(table: String) = tables.find(_.name == table).flatMap {
       case TableDef(_, Obj(TableObj(Ident(name)), _, _, _, _)) => parent.table(name mkString ".")
       case TableDef(n, Obj(TableObj(s: SelectDefBase), _, _, _, _)) => Option(table_from_selectdef(n, s))
+      case x => throw CompilerException(s"Unrecognized table clause: '${x.tresql}'. Try using Query(...)")
     }
     protected def declared_table(table: String): Option[Table] =
       this_table(table) orElse (parent match {
