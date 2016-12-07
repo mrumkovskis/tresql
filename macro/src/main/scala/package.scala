@@ -185,7 +185,8 @@ package object tresql extends CoreTypes {
         generator((Ctx(null, Nil, 0, 0, 0, Nil), exp))
       }
       val macroSettings = settings(c.settings)
-      def info(msg: Any) = c.info(c.enclosingPosition, String.valueOf(msg), false)
+      val verbose = macroSettings.contains("verbose")
+      def info(msg: Any) = if (verbose) c.info(c.enclosingPosition, String.valueOf(msg), false)
       info(s"Macro compiler settings:\n$macroSettings")
       val q"org.tresql.`package`.Tresql(scala.StringContext.apply(..$parts)).tresql(..$pars)($res)" =
         c.macroApplication
