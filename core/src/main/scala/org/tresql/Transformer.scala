@@ -17,6 +17,8 @@ trait Transformer { self: QueryBuilder =>
       case Group(e, h) => Group(e map cf, cf(h))
       case HiddenColRefExpr(e, typ) => HiddenColRefExpr(cf(e), typ)
       case InExpr(lop, rop, not) => InExpr(cf(lop), rop map cf, not)
+      case wi: WithInsertExpr => new WithInsertExpr(
+        wi.tables.map(cf(_).asInstanceOf[WithTableExpr]), cf(wi.query).asInstanceOf[InsertExpr])
       case i: InsertExpr => new InsertExpr(cf(i.table).asInstanceOf[IdentExpr], i.alias,
         i.cols map cf, cf(i.vals))
       case Order(exprs) => Order(exprs map (e => (cf(e._1), cf(e._2), cf(e._3))))
@@ -29,6 +31,11 @@ trait Transformer { self: QueryBuilder =>
         Table(cf(texpr), alias, cf(join).asInstanceOf[TableJoin], outerJoin, nullable)
       case TableJoin(default, expr, noJoin, defaultJoinCols) =>
         TableJoin(default, cf(expr), noJoin, defaultJoinCols)
+      case WithTableExpr(n, c, r, q) => WithTableExpr(n, c, r, cf(q))
+      case WithSelectExpr(tables, query) =>
+        WithSelectExpr(tables.map(cf(_).asInstanceOf[WithTableExpr]), cf(query).asInstanceOf[SelectExpr])
+      case WithBinExpr(tables, query) =>
+        WithBinExpr(tables.map(cf(_).asInstanceOf[WithTableExpr]), cf(query).asInstanceOf[BinExpr])
       case UnExpr(o, op) => UnExpr(o, cf(op))
       case u: UpdateExpr => new UpdateExpr(cf(u.table).asInstanceOf[IdentExpr], u.alias,
         u.filter map cf, u.cols map cf, cf(u.vals))

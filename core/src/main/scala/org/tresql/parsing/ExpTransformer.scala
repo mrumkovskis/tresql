@@ -33,6 +33,8 @@ trait ExpTransformer { this: QueryParsers =>
         Query(objs map (tr(_).asInstanceOf[Obj]), tr(filters).asInstanceOf[Filters],
             tr(cols).asInstanceOf[Cols], tr(gr).asInstanceOf[Grp], tr(ord).asInstanceOf[Ord],
             tr(off), tr(lim))
+      case WithTable(n, c, r, q) => WithTable(n, c, r, tr(q).asInstanceOf[Exp])
+      case With(ts, q) => With(tr(ts).asInstanceOf[List[WithTable]], tr(q).asInstanceOf[Exp])
       case Insert(t, a, cols, vals) => Insert(tr(t).asInstanceOf[Ident], a,
           tr(cols).asInstanceOf[List[Col]], tr(vals))
       case Update(t, a, filter, cols, vals) => Update(tr(t).asInstanceOf[Ident], a,
@@ -85,6 +87,8 @@ trait ExpTransformer { this: QueryParsers =>
       case Ord(cols) => tr(r, cols.map(_._2))
       case Query(objs, filters, cols, gr, ord, off, lim) =>
         tr(tr(tr(tr(tr(tr(tr(r, objs), filters), cols), gr), ord), off), lim)
+      case WithTable(_, _, _, q) => tr(r, q)
+      case With(ts, q) => tr(tr(r, ts), q)
       case Insert(_, _, cols, vals) => tr(tr(r, cols), vals)
       case Update(_, _, filter, cols, vals) => tr(tr(tr(r, filter), cols), vals)
       case Delete(_, _, filter) => tr(r, filter)

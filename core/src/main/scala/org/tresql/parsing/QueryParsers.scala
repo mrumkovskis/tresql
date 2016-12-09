@@ -133,6 +133,15 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       else if (offset != null) s"@(${any2tresql(offset)}, )"
       else "")
   }
+
+  case class WithTable(name: String, cols: List[String], recursive: Boolean, table: Exp)
+    extends Exp {
+    def tresql = s"$name (${cols mkString ", "}) { ${table.tresql} }"
+  }
+  case class With(tables: List[WithTable], query: Exp) extends Exp {
+    def tresql = tables.map(_.tresql).mkString(", ") + " " + query.tresql
+  }
+
   case class Insert(table: Ident, alias: String, cols: List[Col], vals: Any) extends DMLExp {
     override def filter = null
     def tresql = "+" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
@@ -202,13 +211,14 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
         })
     } named "result"
   def braces: MemParser[Braces] = "(" ~> expr <~ ")" ^^ Braces named "braces"
-  /* Important is that function parser is applied before query because of the longest token
+  /* Function parser must be applied before query because of the longest token
      * matching, otherwise qualifiedIdent of query will match earlier.
-     * Also important is that array parser is applied after query parser because it matches join parser
+     * withQuery parser must be applied before function parser
+     * array parser must be applied after query parser because it matches join parser
      * of the query.
-     * Also important is that variable parser is after query parser since ? mark matches variable
-     * Also important that insert, delete, update parsers are before query parser */
-  def operand: MemParser[Any] = (TRUE | FALSE | ALL | function | insert | update | query |
+     * variable parser must be applied after query parser since ? mark matches variable
+     * insert, delete, update parsers must be applied before query parser */
+  def operand: MemParser[Any] = (TRUE | FALSE | ALL | withQuery | function | insert | update | query |
     decimalNr | stringLiteral | variable | id | idref | result | array) named "operand"
   def function: MemParser[Fun] = (qualifiedIdent <~ "(") ~ opt("#") ~ repsep(expr, ",") <~ ")" ^^ {
     case Ident(a) ~ d ~ b => Fun(a.mkString("."), b, d.map(x=> true).getOrElse(false))
@@ -352,6 +362,26 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def queryWithCols: MemParser[Any] = query ^? ({
       case q @ Query(objs, _, cols, _, _, _, _) if cols != null => q
     }, {case x => "Query must contain column clause: " + x}) named "query-with-cols"
+
+  def withTable: MemParser[WithTable] = (function <~ "{") ~ (expr <~ "}") ^? ({
+    case f ~ (q: Exp) if f.parameters.forall {
+      case Obj(Ident(List(_)), _, _, _, _) => true
+      case x => false
+    } || f.parameters == List(All) =>
+      WithTable(
+        f.name,
+        f.parameters.flatMap { case Obj(Ident(l @ List(_)), _, _, _, _) => l case _ => Nil },
+        !f.distinct,
+        q
+      )
+  }, {
+    case x ~ q => s"with table definition must contain simple column names as strings, instead - ${x.tresql}"
+  }) named "with-table"
+  def withQuery: MemParser[With] = rep1sep(withTable, ",") ~ expr ^? ({
+    case wts ~ (q: Exp) => With(wts, q)
+  }, {
+    case wts ~ q => s"Unsupported with query: $q"
+  })
 
   def insert: MemParser[Insert] = (("+" ~> qualifiedIdent ~ opt(ident) ~ opt(columns) ~
     opt(queryWithCols | repsep(array, ","))) |

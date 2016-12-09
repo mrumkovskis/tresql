@@ -501,6 +501,31 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       (if (having != null) " having " + having.sql else "")
   }
 
+  case class WithTableExpr(name: String, cols: List[String], recursive: Boolean, query: Expr)
+    extends PrimitiveExpr {
+    def defaultSQL = name + (if (cols.isEmpty) "" else cols.mkString("(", ", ", ")")) +
+      " as (" + query.sql + ")"
+  }
+  trait WithExpr extends BaseExpr {
+    private val recursive = tables.head.recursive
+    def tables: List[WithTableExpr]
+    def query: Expr
+    override def defaultSQL = "with " + (if (recursive) "recursive " else "") +
+      tables.map(_.sql).mkString(", ") + " " + query.sql
+  }
+  case class WithSelectExpr(tables: List[WithTableExpr], query: SelectExpr)
+    extends WithExpr {
+    override def apply() = sel(sql, query.cols)
+  }
+  case class WithBinExpr(tables: List[WithTableExpr], query: BinExpr)
+    extends WithExpr {
+    override def apply() = sel(sql, query.cols)
+  }
+  class WithInsertExpr(val tables: List[WithTableExpr], val query: InsertExpr)
+    extends InsertExpr(query.table, query.alias, query.cols, query.vals)
+    with WithExpr
+
+
   class InsertExpr(table: IdentExpr, alias: String, val cols: List[Expr], val vals: Expr)
     extends DeleteExpr(table, alias, null) {
     override def apply() = {
@@ -548,7 +573,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     }
     protected def _sql = "delete from " + table.sql + (if (alias == null) "" else " " + alias) +
       (if (filter == null || filter.isEmpty) "" else " where " + where)
-    lazy val defaultSQL = _sql
+    override def defaultSQL = _sql
     def where = filter match {
       case (c @ ConstExpr(x)) :: Nil => Option(alias).getOrElse(table.sql) + "." +
         env.table(table.sql).key.cols(0) + " = " + c.sql
@@ -994,6 +1019,22 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
             if (recursiveQueryExp == null) recursiveQueryExp = q //set for potential use in RecursiveExpr
             buildSelect(q)
         }
+        case wq @ With(tables, query) => parseCtx match {
+          case ROOT_CTX => buildInternal(wq, QUERY_CTX)
+          case ARR_CTX => buildWithNew(_.buildInternal(wq, QUERY_CTX)) //may have other elements in array
+          case _ =>
+            val withTables = tables.map(buildInternal(_, parseCtx).asInstanceOf[WithTableExpr])
+            buildInternal(query, parseCtx) match {
+              case s: SelectExpr => WithSelectExpr(withTables, s)
+              case b: BinExpr if b.exprType == classOf[SelectExpr] => WithBinExpr(withTables, b)
+              //case i: InsertExpr => new WithInsertExpr(withTables, i) //built by another builder
+              //case u: UpdateExpr =>
+              //case d: DeleteExpr =>
+              case x => sys.error(s"Currently unsupported WITH query: ${query.tresql}")
+            }
+        }
+        case WithTable(name, cols, recursive, query) =>
+          WithTableExpr(name, cols, recursive, buildInternal(query, parseCtx))
         case UnOp(op, oper) =>
           val o = buildInternal(oper, parseCtx)
           if (o == null) null else UnExpr(op, o)
