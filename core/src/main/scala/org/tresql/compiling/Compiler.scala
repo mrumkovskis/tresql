@@ -164,10 +164,15 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     exp: SQLDefBase,
     override val parent: Scope = thisCompiler
   ) extends SelectDefBase {
-    if (recursive) exp match {
-      case _: BinSelectDef =>
-      case q => throw CompilerException(s"Recursive table definition must be union, instead found: ${q.tresql}")
+    if (recursive) {
+      exp match {
+        case _: BinSelectDef =>
+        case q => throw CompilerException(s"Recursive table definition must be union, instead found: ${q.tresql}")
+      }
+      if (cols.isEmpty) throw CompilerException(s"Recursive table definition must have at least one column")
     }
+    if (!cols.isEmpty && cols.size != exp.cols.size)
+      throw CompilerException(s"with table definition column count must equal corresponding query definition column count: ${exp.tresql}")
     override protected[compiling] def this_table(table: String) = tables.find(_.name == table).map {
       case _ => table_from_selectdef(table, this)
     }
