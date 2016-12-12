@@ -1,4 +1,5 @@
-package org.tresql.compiling
+package org.tresql
+package compiling
 
 import org.tresql.parsing._
 import org.tresql.metadata._
@@ -104,9 +105,9 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
 
     def procedure(procedure: String) = parent.procedure(procedure)
 
-    private def table_from_selectdef(name: String, sd: SelectDefBase) =
+    protected def table_from_selectdef(name: String, sd: SelectDefBase) =
       Table(name, sd.cols map col_from_coldef, null, Map())
-    private def col_from_coldef(cd: ColDef[_]) =
+    protected def col_from_coldef(cd: ColDef[_]) =
       org.tresql.metadata.Col(name = cd.name, true, -1, scalaType = cd.typ)
   }
 
@@ -116,7 +117,9 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   }
 
   //is superclass of select, union, intersect etc.
-  trait SelectDefBase extends SQLDefBase
+  trait SelectDefBase extends SQLDefBase {
+    def cols: List[ColDef[_]]
+  }
 
   case class SelectDef(
     cols: List[ColDef[_]],
@@ -149,9 +152,41 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       }) && leftOperand.cols.size != rightOperand.cols.size)
       throw CompilerException(
         s"Column count do not match ${leftOperand.cols.size} != ${rightOperand.cols.size}")
-    val cols = leftOperand.cols
-    val tables = leftOperand.tables
+    def cols = leftOperand.cols
+    def tables = leftOperand.tables
     override val parent = leftOperand.parent
+  }
+
+  case class WithTableDef(
+    cols: List[ColDef[_]],
+    tables: List[TableDef],
+    recursive: Boolean,
+    exp: SQLDefBase,
+    override val parent: Scope = thisCompiler
+  ) extends SelectDefBase {
+    if (recursive) exp match {
+      case _: BinSelectDef =>
+      case q => throw CompilerException(s"Recursive table definition must be union, instead found: ${q.tresql}")
+    }
+    override protected[compiling] def this_table(table: String) = tables.find(_.name == table).map {
+      case _ => table_from_selectdef(table, this)
+    }
+  }
+
+  case class WithSelectDef(
+    exp: SelectDefBase,
+    withTables: List[WithTableDef],
+    override val parent: Scope = thisCompiler
+  ) extends SelectDefBase {
+    def cols = exp.cols
+    def tables = exp.tables
+    override protected def this_table(table: String) = {
+      def t(wts: List[WithTableDef]): Option[Table] = wts match {
+        case Nil => parent.table(table)
+        case wt :: tail => wt.this_table(table) orElse t(tail)
+      }
+      t(withTables)
+    }
   }
 
   case class InsertDef(
@@ -356,6 +391,27 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
           case d: Delete =>
             DeleteDef(List(table), Delete(table = null, alias = null, filter = filter))
         }
+      case WithTable(name, wtCols, recursive, table) =>
+        ctx push QueryCtx
+          val tables: List[TableDef] = List(TableDef(name, Obj(Null, null, null, null, false)))
+          val cols: List[ColDef[_]] = wtCols.map { c =>
+            ColDef[Nothing](c, null, Manifest.Nothing)
+          }
+          val exp = builder(table) match {
+            case s: SQLDefBase => s
+            case x => throw CompilerException(s"Table in with clause must be query. Instead found: ${x.tresql}")
+          }
+        ctx.pop
+        WithTableDef(cols, tables, recursive, exp)
+      case With(tables, query) =>
+        val withTables = (tables map builder).asInstanceOf[List[WithTableDef]]
+        ctx push QueryCtx
+        val exp = builder(query) match {
+          case s: SelectDefBase => s
+          case x => throw CompilerException(s"with clause must be select query. Instead found: ${x.tresql}")
+        }
+        ctx.pop
+        WithSelectDef(exp, withTables)
       case null => null
     }
     builder(exp)
