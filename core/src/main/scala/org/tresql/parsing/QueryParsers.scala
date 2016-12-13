@@ -198,7 +198,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def variable: MemParser[Variable] = ((":" ~> ((ident | stringLiteral) ~
       rep("." ~> (ident | stringLiteral | wholeNumber)) ~ opt(":" ~> ident) ~ opt("?"))) | "?") ^^ {
     case "?" => Variable("?", null, null,  false)
-    case (i: String) ~ (m: List[String]) ~ (t: Option[String]) ~ o => Variable(i, m, t orNull, o != None)
+    case (i: String) ~ (m: List[String] @unchecked) ~ (t: Option[String] @unchecked) ~ o => Variable(i, m, t orNull, o != None)
   } named "variable"
   def id: MemParser[Id] = "#" ~> ident ^^ Id named "id"
   def idref: MemParser[IdRef] = ":#" ~> ident ^^ IdRef named "id-ref"
@@ -287,8 +287,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     (expr ~ opt(":" ~> ident) ~ opt(stringLiteral | qualifiedIdent))) ^^ {
       case i: IdentAll => Col(i, null, null)
       //move object alias to column alias
-      case (o @ Obj(_, a, _, _, _)) ~ (typ: Option[String]) ~ None => Col(o.copy(alias = null), a, typ orNull)
-      case e ~ (typ: Option[String]) ~ (a: Option[_]) => Col(e, a map {
+      case (o @ Obj(_, a, _, _, _)) ~ (typ: Option[String] @unchecked) ~ None => Col(o.copy(alias = null), a, typ orNull)
+      case e ~ (typ: Option[String] @unchecked) ~ (a: Option[_]) => Col(e, a map {
         case Ident(i) => i.mkString; case s => "\"" + s + "\""
       } orNull, typ orNull)
     } ^^ { pr =>
@@ -338,9 +338,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     opt(offsetLimit) | (columns ~ filters)) ^^ {
       case Null ~ Filters(Nil) ~ None ~ None ~ None ~ None => Null //null literal
       case List(t) ~ Filters(Nil) ~ None ~ None ~ None ~ None => t
-      case t ~ (f: Filters) ~ (c: Option[Cols]) ~ (g: Option[Grp]) ~ (o: Option[Ord]) ~
-        (l: Option[(Any, Any)]) => Query(t match {
-          case tables: List[Obj] => tables
+      case t ~ (f: Filters) ~ (c: Option[Cols] @unchecked) ~ (g: Option[Grp] @unchecked) ~ (o: Option[Ord] @unchecked) ~
+        (l: Option[(Any, Any)] @unchecked) => Query(t match {
+          case tables: List[Obj] @unchecked => tables
           case Null => List(Obj(Null, null, null, null))
         }, f, c.orNull, g.orNull, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
       case (c: Cols) ~ (f: Filters) => Query(List(Obj(Null, null, null, null)), f, c,
