@@ -62,7 +62,7 @@ trait ORT extends Query {
     updateExpr: Expr)
   extends BaseExpr {
     override def apply() = env(obj) match {
-      case m: Map[String, Any] =>
+      case m: Map[String, Any] @unchecked =>
         if (idName != null && (m contains idName) && m(idName) != null) {
           val lookupObjId = m(idName)
           updateExpr(m)
@@ -93,11 +93,11 @@ trait ORT extends Query {
     val idName = env.table(table).key.cols.headOption.orNull
     override def apply() = {
       env(obj) match {
-        case s: Seq[Map[String, _]] =>
+        case s: Seq[Map[String, _]] @unchecked =>
           expr(
             if (idName != null) Map("ids" -> s.map(_(idName)).filter(_ != null))
             else Map[String, Any]())
-        case m: Map[String, _] => expr(
+        case m: Map[String, _] @unchecked => expr(
           if (idName != null) Map("ids" -> m.get(idName).filter(_ != null).toList)
           else Map[String, Any]())
       }
@@ -216,19 +216,19 @@ trait ORT extends Query {
       lm.tail.foldLeft(tresql_structure(lm.head))((l, m) => {
         val x = tresql_structure(m)
         l map (t => (t._1, (t._2, x.getOrElse(t._1, null)))) map {
-          case (k, (v1: Map[String, _], v2: Map[String, _])) if !v1.isEmpty && !v2.isEmpty =>
+          case (k, (v1: Map[String, _] @unchecked, v2: Map[String, _] @unchecked)) if !v1.isEmpty && !v2.isEmpty =>
             (k, merge(List(v1, v2)))
-          case (k, (v1: Map[String, _], _)) if !v1.isEmpty => (k, v1)
-          case (k, (_, v2: Map[String, _])) if !v2.isEmpty => (k, v2)
+          case (k, (v1: Map[String, _] @unchecked, _)) if !v1.isEmpty => (k, v1)
+          case (k, (_, v2: Map[String, _] @unchecked)) if !v2.isEmpty => (k, v2)
           case (k, (v1, _)) => (k, v1)
         }
       })
     obj.map { kv =>
       (kv._1, kv._2 match {
         case Seq() | Array() => Map()
-        case l: Seq[Map[String, _]] => merge(l)
-        case l: Array[Map[String, _]] => merge(l)
-        case m: Map[String, Any] => tresql_structure(m)
+        case l: Seq[Map[String, _]] @unchecked => merge(l)
+        case l: Array[Map[String, _]] @unchecked => merge(l)
+        case m: Map[String, Any] @unchecked => tresql_structure(m)
         case x => x
       })
     }(bf.asInstanceOf[scala.collection.generic.CanBuildFrom[Map[String, Any], (String, Any), M]]) //somehow cast is needed
@@ -406,7 +406,7 @@ trait ORT extends Query {
       tresqlColAlias: String) = struct.flatMap {
       case (n, v) => v match {
         //children
-        case o: Map[String, Any] => table.refTable.get(List(n)).map(lookupTable =>
+        case o: Map[String, Any] @unchecked => table.refTable.get(List(n)).map(lookupTable =>
           lookup_tresql(n, lookupTable, o)).getOrElse {
           List(children_save_tresql(n, o,
             ParentRef(table.name, refToParent) :: parents) -> null)
@@ -417,7 +417,7 @@ trait ORT extends Query {
         case _ => List(table.colOption(n).map(_.name).orNull -> resources.valueExpr(table.name, n))
       }
     }.groupBy { case _: String => "l" case _ => "b"} match {
-      case m: Map[String, List[_]] =>
+      case m: Map[String, List[_]] @unchecked =>
         val tableName = table.name
         //lookup edit tresql
         val lookupTresql = m.get("l").map(_.asInstanceOf[List[String]].map(_ + ", ").mkString).orNull
