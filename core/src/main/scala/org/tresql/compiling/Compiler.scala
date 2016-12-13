@@ -649,6 +649,15 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         DeleteDef(t, d)
       case ad: ArrayDef => ad.copy(cols = (ad.cols map transform_traverse).asInstanceOf[List[ColDef[_]]])
       case rd: RecursiveDef => rd.copy(exp = transform_traverse(rd.exp))
+      case wtd: WithTableDef => wtd.copy(
+        cols = (wtd.cols map transform_traverse).asInstanceOf[List[ColDef[_]]],
+        tables = (wtd.tables map transform_traverse).asInstanceOf[List[TableDef]],
+        exp = transform_traverse(wtd.exp).asInstanceOf[SQLDefBase]
+      )
+      case wsd: WithSelectDef => wsd.copy(
+        exp = transform_traverse(wsd.exp).asInstanceOf[SelectDefBase],
+        withTables = (wsd.tables map transform_traverse).asInstanceOf[List[WithTableDef]]
+      )
     }
     transform_traverse
   }
