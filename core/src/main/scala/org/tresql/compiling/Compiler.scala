@@ -664,19 +664,19 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     lazy val extract_traverse: Extractor[T] =
       super.extractorAndTraverser(fun, traverser orElse local_extract_traverse)
     lazy val local_extract_traverse: Extractor[T] = {
-      case (r: T, cd: ColDef[_]) => tr(r, cd.col)
-      case (r: T, cd: ChildDef) => tr(r, cd.exp)
-      case (r: T, fd: FunDef[_]) => tr(r, fd.exp)
-      case (r: T, td: TableDef) => tr(r, td.exp)
-      case (r: T, to: TableObj) => tr(r, to.obj)
-      case (r: T, ta: TableAlias) => tr(r, ta.obj)
-      case (r: T, sd: SelectDef) => tr(tr(tr(r, sd.tables), sd.cols), sd.exp)
-      case (r: T, bd: BinSelectDef) => tr(tr(r, bd.leftOperand), bd.rightOperand)
-      case (r: T, id: InsertDef) => tr(tr(tr(r, id.tables), id.cols), id.exp)
-      case (r: T, ud: UpdateDef) => tr(tr(tr(r, ud.tables), ud.cols), ud.exp)
-      case (r: T, dd: DeleteDef) => tr(tr(tr(r, dd.tables), dd.cols), dd.exp)
-      case (r: T, ad: ArrayDef) => tr(r, ad.cols)
-      case (r: T, rd: RecursiveDef) => tr(r, rd.exp)
+      case (r: T @unchecked, cd: ColDef[_]) => tr(r, cd.col)
+      case (r: T @unchecked, cd: ChildDef) => tr(r, cd.exp)
+      case (r: T @unchecked, fd: FunDef[_]) => tr(r, fd.exp)
+      case (r: T @unchecked, td: TableDef) => tr(r, td.exp)
+      case (r: T @unchecked, to: TableObj) => tr(r, to.obj)
+      case (r: T @unchecked, ta: TableAlias) => tr(r, ta.obj)
+      case (r: T @unchecked, sd: SelectDef) => tr(tr(tr(r, sd.tables), sd.cols), sd.exp)
+      case (r: T @unchecked, bd: BinSelectDef) => tr(tr(r, bd.leftOperand), bd.rightOperand)
+      case (r: T @unchecked, id: InsertDef) => tr(tr(tr(r, id.tables), id.cols), id.exp)
+      case (r: T @unchecked, ud: UpdateDef) => tr(tr(tr(r, ud.tables), ud.cols), ud.exp)
+      case (r: T @unchecked, dd: DeleteDef) => tr(tr(tr(r, dd.tables), dd.cols), dd.exp)
+      case (r: T @unchecked, ad: ArrayDef) => tr(r, ad.cols)
+      case (r: T @unchecked, rd: RecursiveDef) => tr(r, rd.exp)
     }
     extract_traverse
   }
