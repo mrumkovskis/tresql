@@ -71,7 +71,7 @@ trait Query extends QueryBuilder with TypedQuery {
   def parse(expr: String) = QueryParser.parseExp(expr)
 
   private[tresql] def normalizePars(pars: Any*): Map[String, Any] = pars match {
-    case Seq(m: Map[String, Any]) => m
+    case Seq(m: Map[String, Any] @unchecked) => m
     case l => l.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
   }
 
