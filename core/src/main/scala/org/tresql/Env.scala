@@ -212,8 +212,8 @@ object Env extends Resources {
   def logLevel = threadLogLevel.get
   def logLevel_=(level: Any) = level match {
     case l: Int => threadLogLevel.set(Some(l))
-    case None | null => threadLogLevel.set(None)
-    case l: Option[Int] => threadLogLevel.set(l)
+    case Some(l: Int) => threadLogLevel.set(Some(l))
+    case _ => threadLogLevel.set(None)
   }
 
   def log(msg: => String, level: Int = 0): Unit = if (_logger != null) _logger(msg,

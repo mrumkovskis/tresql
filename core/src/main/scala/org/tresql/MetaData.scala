@@ -83,7 +83,7 @@ package metadata {
   object Table {
     def apply(t: Map[String, Any]): Table = {
       Table(t("name").toString.toLowerCase, t("cols") match {
-        case l: List[Map[String, String]] => l map { c =>
+        case l: List[Map[String, String]] @unchecked => l map { c =>
           Col(
             c("name").toString.toLowerCase,
             c("nullable").asInstanceOf[Boolean],
@@ -91,11 +91,11 @@ package metadata {
             c("scala-type").asInstanceOf[Manifest[_]]
           )
         }
-      }, t("key") match { case l: List[String] => Key(l map (_.toLowerCase)) }, t("refs") match {
-        case l: List[Map[String, Any]] => (l map { r =>
+      }, t("key") match { case l: List[String] @unchecked => Key(l map (_.toLowerCase)) }, t("refs") match {
+        case l: List[Map[String, Any]] @unchecked => (l map { r =>
           (r("table").asInstanceOf[String].toLowerCase,
             r("refs") match {
-              case l: List[List[(String, String)]] => l map (rc => {
+              case l: List[List[(String, String)]] @unchecked => l map (rc => {
                   val t = rc.unzip
                   Ref(t._1 map (_.toLowerCase), t._2 map (_.toLowerCase))
               })

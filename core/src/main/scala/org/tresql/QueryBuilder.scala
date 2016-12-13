@@ -99,7 +99,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       def accessProduct(p: Product, idx: String) = Try(idx.toInt).toOption.map(i =>
           p.productElement(i - 1)).getOrElse(error(s"Variable member '$idx' should be number to access product $p"))
       members.foldLeft (env(name))((v, mem) => v match {
-        case m: Map[String, _] => m.getOrElse(mem, error(s"Variable not found: $fullName"))
+        case m: Map[String, _] @unchecked => m.getOrElse(mem, error(s"Variable not found: $fullName"))
         case p: Product => accessProduct(p, mem)
         case x => error(s"At the moment cannot evaluate variable member '$mem' from structure $x")
       })
@@ -642,9 +642,9 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     childUpdates.map {
       case (ex, n) if (!env.contains(n)) => (n, ex())
       case (ex, n) => (n, env(n) match {
-        case m: Map[String, _] => ex(m)
-        case t: scala.collection.Traversable[Map[String, _]] => t.map(ex(_))
-        case a: Array[Map[String, _]] => (a map { ex(_) }).toList
+        case m: Map[String, _] @unchecked => ex(m)
+        case t: scala.collection.Traversable[Map[String, _]] @unchecked => t.map(ex(_))
+        case a: Array[Map[String, _]] @unchecked => (a map { ex(_) }).toList
         case x => ex()
       })
     }.foldLeft(scala.collection.immutable.ListMap[String, Any]()) {_ + _} //use list map to preserve children order
@@ -907,7 +907,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
               hiddenColPars.map(ColExpr(_, uniqueAlias(uid), null, Some(ce.separateQuery), true))
           case e => List(e)
         }).groupBy(_.hidden) match { //put hidden columns at the end
-          case m: Map[Boolean, ColExpr] => m(false) ++ m.getOrElse(true, Nil)
+          case m: Map[Boolean, ColExpr] @unchecked => m(false) ++ m.getOrElse(true, Nil)
         }
         else colExprs) ++
           //for top level queries add hidden columns used in filters of descendant queries

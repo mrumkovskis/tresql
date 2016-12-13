@@ -110,7 +110,7 @@ object Query {
       deepMapToJavaMap(x.rowToMap).asInstanceOf[java.util.Map[String, Object]]
     def deepMapToJavaMap(m: Map[String, Any]): java.util.Map[String, Any] =
       mapAsJavaMap(m map {
-        case (k, v: List[Map[String, _]]) => (k, seqAsJavaList(v map deepMapToJavaMap))
+        case (k, v: List[Map[String, _]] @unchecked) => (k, seqAsJavaList(v map deepMapToJavaMap))
         case (k, v) => (k, v)
       })
   }

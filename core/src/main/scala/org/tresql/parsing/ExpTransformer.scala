@@ -99,7 +99,7 @@ trait ExpTransformer { this: QueryParsers =>
       case x: Exp => sys.error("Unknown expression: " + x)
     }
     lazy val extract_traverse: Extractor[T] = wrapper andThen (traverser orElse {
-      case (r: T, e) => traverse_rest(r, e)
+      case (r: T @unchecked, e) => traverse_rest(r, e)
       case (null, e) => traverse_rest(null.asInstanceOf[T], e) //previous case does not match null!
     })
     extract_traverse
