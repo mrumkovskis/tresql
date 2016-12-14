@@ -281,7 +281,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     def buildCols(cols: Cols): List[ColDef[_]] = {
       ctx push ColsCtx
       try if (cols != null) (cols.cols map {
-          case c @ Col(_: DMLExp, _, _) => //child dml statement in select
+          case c @ Col(_: DMLExp @unchecked, _, _) => //child dml statement in select
             ctx push QueryCtx
             val nc = builder(c)
             ctx.pop
@@ -309,7 +309,11 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         }
         ColDef(
           alias,
-          tr(c.col) match { case x if ctx.head == ColsCtx => x case x: Exp => ChildDef(x) case x => throw CompilerException(s"Exp $x unsupported at this place")},
+          tr(c.col) match {
+            case x if ctx.head == ColsCtx => x
+            case x: Exp @unchecked => ChildDef(x)
+            case x => throw CompilerException(s"Exp $x unsupported at this place")
+          },
           if(c.typ != null) metadata.xsd_scala_type_map(c.typ) else ManifestFactory.Nothing
         )
       case Obj(b: Braces, _, _, _, _) if ctx.head == QueryCtx =>
@@ -342,7 +346,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
             offset = offset))
       case b: BinOp =>
         (tr(b.lop), tr(b.rop)) match {
-          case (lop: SelectDefBase, rop: SelectDefBase) =>
+          case (lop: SelectDefBase @unchecked, rop: SelectDefBase @unchecked) =>
             BinSelectDef(lop, rop, b.copy(lop = lop, rop = rop))
           case (lop, rop) => b.copy(lop = lop, rop = rop)
         }
@@ -357,7 +361,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
             builder(o)
         } finally ctx.pop
         ChildDef(exp)
-      case Braces(exp: Exp) if ctx.head == TablesCtx => builder(exp) //remove braces around table expression, so it can be accessed directly
+      case Braces(exp: Exp @unchecked) if ctx.head == TablesCtx => builder(exp) //remove braces around table expression, so it can be accessed directly
       case a: Arr if ctx.head == QueryCtx => ArrayDef(
         a.elements.zipWithIndex.map { case (el, idx) =>
           ColDef[Nothing](
@@ -546,7 +550,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case n: java.lang.Number => ManifestFactory.classType(n.getClass)
       case b: Boolean => ManifestFactory.Boolean
       case s: String => ManifestFactory.classType(s.getClass)
-      case e: Exp => typer((ManifestFactory.Nothing, e)) /*null cannot be used since partial function does not match it as type T - Manifest*/
+      case e: Exp @unchecked => typer((ManifestFactory.Nothing, e)) /*null cannot be used since partial function does not match it as type T - Manifest*/
       case x => ManifestFactory.classType(x.getClass)
     }
     lazy val typer: Extractor[Manifest[_]] = extractorAndTraverser {
@@ -666,7 +670,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     fun: ExtractorAndTraverser[T],
     traverser: Extractor[T] = PartialFunction.empty): Extractor[T] = {
     def tr(r: T, x: Any): T = x match {
-      case e: Exp => extract_traverse((r, e))
+      case e: Exp @unchecked => extract_traverse((r, e))
       case l: List[_] => l.foldLeft(r) { (fr, el) => tr(fr, el) }
       case _ => r
     }

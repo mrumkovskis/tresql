@@ -8,7 +8,11 @@ trait ExpTransformer { this: QueryParsers =>
 
   def transformer(fun: Transformer): Transformer = {
     lazy val transform_traverse = fun orElse traverse
-    def tr(x: Any): Any = x match {case e: Exp => transform_traverse(e) case l: List[_] => l map tr case _ => x}
+    def tr(x: Any): Any = x match {
+      case e: Exp @unchecked => transform_traverse(e)
+      case l: List[_] => l map tr
+      case _ => x
+    }
     lazy val traverse: Transformer = {
       case e: Ident => e
       case e: Id => e
@@ -68,7 +72,7 @@ trait ExpTransformer { this: QueryParsers =>
       }
     }
     def tr(r: T, x: Any): T = x match {
-      case e: Exp => extract_traverse((r, e))
+      case e: Exp @unchecked => extract_traverse((r, e))
       case l: List[_] => l.foldLeft(r) { (fr, el) => tr(fr, el) }
       case _ => r
     }

@@ -79,6 +79,7 @@ package object dialects {
                   "select * from (select w.*, rownum rnum from (" + ns.sql +
                     ") w where rownum <= " + l.sql + ") where rnum > " + o.sql
               }
+            case x => sys.error(s"Unexpected case: $x")
           }
         case e: QueryBuilder#SelectExpr if e.cols.headOption.map {
           _.col match {

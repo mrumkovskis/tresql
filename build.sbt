@@ -2,8 +2,8 @@ lazy val commonSettings = Seq(
   organization := "org.tresql",
   scalaVersion := "2.12.1",
   crossScalaVersions := Seq(
-    "2.12.1",
-    "2.11.8"
+    "2.12.1"
+    //,"2.11.8" macro causes compiler to crash, java conversions not supported
   ),
   //coverageEnabled := true,
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",

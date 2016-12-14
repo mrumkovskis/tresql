@@ -18,7 +18,7 @@ object QueryParser extends parsing.QueryParsers with parsing.ExpTransformer {
 
   def transformTresql(tresql: String, transformer: PartialFunction[Exp, Exp]): String =
     parseExp(tresql) match {
-      case exp: Exp => this.transformer(transformer)(exp) tresql
+      case exp: Exp @unchecked => this.transformer(transformer)(exp) tresql
       case _ => tresql
     }
 

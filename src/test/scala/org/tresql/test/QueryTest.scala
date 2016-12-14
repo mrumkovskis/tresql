@@ -745,7 +745,7 @@ class QueryTest extends FunSuite {
     testTresqls("/test.txt", (tresql, _, _, nr) => {
       println(s"$nr. Testing tresql method of:\n$tresql")
       QueryParser.parseExp(tresql) match {
-        case e: QueryParser.Exp => assert(e === QueryParser.parseExp(e.tresql))
+        case e: QueryParser.Exp @unchecked => assert(e === QueryParser.parseExp(e.tresql))
       }
     })
   }

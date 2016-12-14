@@ -2,7 +2,7 @@ package org.tresql
 
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.mutable.WeakHashMap
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 /** Cache for parsed expressions */
 trait Cache {
@@ -32,7 +32,7 @@ class SimpleCache(maxSize: Int) extends Cache {
 
 /** Cache based on scala WeakHashMap */
 class WeakHashCache extends Cache {
-  private val cache = java.util.Collections.synchronizedMap(new WeakHashMap[String, Any])
+  private val cache = java.util.Collections.synchronizedMap(new WeakHashMap[String, Any] asJava)
 
   def get(tresql: String) = Option(cache.get(tresql))
   def put(tresql: String, expr: Any) = cache.put(tresql, expr)

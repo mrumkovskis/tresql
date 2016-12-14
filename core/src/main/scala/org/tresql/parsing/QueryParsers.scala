@@ -91,7 +91,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     def tresql = this match {
       case Join(_, _, true) => ";"
       case Join(false, a: Arr, false) => a.tresql
-      case Join(false, e: Exp, false) => "[" + e.tresql + "]"
+      case Join(false, e: Exp @unchecked, false) => "[" + e.tresql + "]"
       case Join(true, null, false) => "/"
       case Join(true, e, false) => "/[" + any2tresql(e) + "]"
       case _ => sys.error("Unexpected Join case")
@@ -182,7 +182,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
 
   def any2tresql(any: Any): String = any match {
     case a: String => if (a.contains("'")) "\"" + a + "\"" else "'" + a + "'"
-    case e: Exp => e.tresql
+    case e: Exp @unchecked => e.tresql
     case null => "null"
     case l: List[_] => l map any2tresql mkString ", "
     case x => x.toString
@@ -365,7 +365,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     }, {case x => "Query must contain column clause: " + x}) named "query-with-cols"
 
   def withTable: MemParser[WithTable] = (function <~ "{") ~ (expr <~ "}") ^? ({
-    case f ~ (q: Exp) if f.parameters.forall {
+    case f ~ (q: Exp @unchecked) if f.parameters.forall {
       case Obj(Ident(List(_)), _, _, _, _) => true
       case x => false
     } || f.parameters == List(All) =>
@@ -379,7 +379,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     case x ~ q => s"with table definition must contain simple column names as strings, instead - ${x.tresql}"
   }) named "with-table"
   def withQuery: MemParser[With] = rep1sep(withTable, ",") ~ expr ^? ({
-    case wts ~ (q: Exp) => With(wts, q)
+    case wts ~ (q: Exp @unchecked) => With(wts, q)
   }, {
     case wts ~ q => s"Unsupported with query: $q"
   })
