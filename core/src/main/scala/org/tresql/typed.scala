@@ -3,6 +3,7 @@ package org.tresql
 import sys._
 import scala.reflect.Manifest
 import scala.collection.generic.CanBuildFrom
+import scala.language.higherKinds
 
 trait Typed { this: RowLike =>
   def typed[T](columnIndex: Int)(implicit m: Manifest[T]): T = m.toString match {

@@ -28,7 +28,7 @@ object JSONMetaData {
   private def build(md: Option[Any]) = {
     val hm = scala.collection.mutable.HashMap[String, Table]()
     md match {
-      case Some(db: Map[String, Any]) => (db("name").asInstanceOf[String],
+      case Some(db: Map[String @unchecked, Any @unchecked]) => (db("name").asInstanceOf[String],
               {db("tables").asInstanceOf[List[Map[String, Any]]] foreach {lt =>
               val t = Table(lt); hm += (t.name -> t)}; hm.toMap})
       case x => error("error parsing meta data: " + md)

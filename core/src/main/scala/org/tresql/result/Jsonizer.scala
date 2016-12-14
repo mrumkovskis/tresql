@@ -39,7 +39,7 @@ object Jsonizer {
       case a: Seq[_] => jsonizeArray(a, buf, rType)
       case a: Array[_] => jsonizeArray(a, buf, rType)
       case p: Product => jsonizeArray(p productIterator, buf, rType)
-      case m: Map[String, _] => jsonizeMap(m, buf, rType)
+      case m: Map[String @unchecked, _] => jsonizeMap(m, buf, rType)
       case b: Boolean => buf append b.toString
       case n: Byte => buf append n.toString
       case n: Short => buf append n.toString

@@ -2,17 +2,18 @@ package org.tresql.metadata
 
 import org.tresql.MetaData
 import org.tresql._
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import java.sql.{ Connection => C }
 import java.sql.ResultSet
 import java.sql.DatabaseMetaData
+import java.util.concurrent.ConcurrentHashMap
 
 //TODO all names perhaps should be stored in upper case?
 //This class is thread safe i.e. instance can be used across multiple threads
 trait JDBCMetaData extends MetaData {
 
-  private val tableCache = new java.util.concurrent.ConcurrentHashMap[String, Table]
-  private val procedureCache = new java.util.concurrent.ConcurrentHashMap[String, Procedure[_]]
+  private val tableCache = new ConcurrentHashMap[String, Table]
+  private val procedureCache = new ConcurrentHashMap[String, Procedure[_]]
 
   def defaultSchema: String = null
   def resources: Resources = Env
@@ -40,7 +41,7 @@ trait JDBCMetaData extends MetaData {
       val tableName = rs.getString("TABLE_NAME")
       m += Option(schema).getOrElse("<null>") -> tableName
       if (m.size > 1) {
-        tableCache -= name
+        tableCache remove name
         rs.close
         throw new RuntimeException(
           "Ambiguous table name: " + name + "." + " Both " +
@@ -82,7 +83,7 @@ trait JDBCMetaData extends MetaData {
       val procedureName = rs.getString("PROCEDURE_NAME")
       m += Option(schema).getOrElse("<null>") -> procedureName
       if (m.size > 1) {
-        procedureCache -= name
+        procedureCache remove name
         rs.close
         throw new RuntimeException(
           "Ambiguous procedure name: " + name + "." + " Both " +
@@ -106,7 +107,7 @@ trait JDBCMetaData extends MetaData {
         case par::Nil => (par.sqlType, par.typeName, par.scalaType)
         case _ => (-1, null, null)
       }
-      procedureCache += (name -> Procedure(procedureName.toLowerCase, remarks, procedureType,
+      procedureCache.put(name, Procedure(procedureName.toLowerCase, remarks, procedureType,
           pars.reverse, returnPar._1, returnPar._2, returnPar._3))
     }
     rs.close
