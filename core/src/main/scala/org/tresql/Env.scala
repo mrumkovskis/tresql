@@ -214,7 +214,7 @@ object Env extends Resources {
     case l: Int => threadLogLevel.set(Some(l))
     case Some(l: Int) => threadLogLevel.set(Some(l))
     case None | null => threadLogLevel.set(None)
-    case _ => sys.error("Unrecognized logLevel type")
+    case _ => sys.error(s"Unrecognized logLevel type: $level")
   }
 
   def log(msg: => String, level: Int = 0): Unit = if (_logger != null) _logger(msg,
