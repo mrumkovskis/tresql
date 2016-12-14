@@ -99,7 +99,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       def accessProduct(p: Product, idx: String) = Try(idx.toInt).toOption.map(i =>
           p.productElement(i - 1)).getOrElse(error(s"Variable member '$idx' should be number to access product $p"))
       members.foldLeft (env(name))((v, mem) => v match {
-        case m: Map[String, _] => m.getOrElse(mem, error(s"Variable not found: $fullName"))
+        case m: Map[String @unchecked, _] => m.getOrElse(mem, error(s"Variable not found: $fullName"))
         case p: Product => accessProduct(p, mem)
         case x => error(s"At the moment cannot evaluate variable member '$mem' from structure $x")
       })
@@ -204,6 +204,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case e: SelectExpr => e.cols
         case e: BinExpr => c(e.lop)
         case e: BracesExpr => c(e.expr)
+        case _ => sys.error("Unexpected ColExpr type")
       }
       c(lop)
     }
@@ -642,9 +643,9 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     childUpdates.map {
       case (ex, n) if (!env.contains(n)) => (n, ex())
       case (ex, n) => (n, env(n) match {
-        case m: Map[String, _] => ex(m)
-        case t: scala.collection.Traversable[Map[String, _]] => t.map(ex(_))
-        case a: Array[Map[String, _]] => (a map { ex(_) }).toList
+        case m: Map[String @unchecked, _] => ex(m)
+        case t: scala.collection.Traversable[Map[String, _] @unchecked] => t.map(ex(_))
+        case a: Array[Map[String, _] @unchecked] => (a map { ex(_) }).toList
         case x => ex()
       })
     }.foldLeft(scala.collection.immutable.ListMap[String, Any]()) {_ + _} //use list map to preserve children order
@@ -696,6 +697,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     new InsertExpr(IdentExpr(table.ident), alias, Option(cols) map (_ map (buildInternal(_, COL_CTX)) filter {
       case x @ ColExpr(IdentExpr(_), _, _, _, _) => true
       case e: ColExpr => registerChildUpdate(e.col, e.name); false
+      case _ => sys.error("Unexpected InsertExpr type")
     }) getOrElse this.table(table).cols.map(c => IdentExpr(List(c.name))), vals match {
       case arr: List[_] => ValuesExpr(arr map {
         buildInternal(_, VALUES_CTX) match {
@@ -716,6 +718,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       Option(cols) map (_ map (buildInternal(_, COL_CTX)) filter {
         case ColExpr(IdentExpr(_), _, _, _, _) => true
         case e: ColExpr => registerChildUpdate(e.col, e.name); false
+        case _ => sys.error("Unexpected UpdateExpr type")
       }) getOrElse this.table(table).cols.map(c => IdentExpr(List(c.name))),
       buildInternal(vals, VALUES_CTX) match {
         case v: ArrExpr => ValuesExpr(patchVals(table, cols, v.elements))
@@ -774,6 +777,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
             def exps(cols: List[(String, String)]): Expr = cols match {
               case c :: Nil => exp(c._1, c._2)
               case c :: l => BinExpr("&", exp(c._1, c._2), exps(l))
+              case _ => sys.error("Unexpected cols type")
             }
             joinWithParent(qname mkString ".", refCol).map(t => exps(t._1 zip t._2))
           }
@@ -907,7 +911,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
               hiddenColPars.map(ColExpr(_, uniqueAlias(uid), null, Some(ce.separateQuery), true))
           case e => List(e)
         }).groupBy(_.hidden) match { //put hidden columns at the end
-          case m: Map[Boolean, ColExpr] => m(false) ++ m.getOrElse(true, Nil)
+          case m: Map[Boolean @unchecked, ColExpr @unchecked] => m(false) ++ m.getOrElse(true, Nil)
         }
         else colExprs) ++
           //for top level queries add hidden columns used in filters of descendant queries
@@ -954,6 +958,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
             Env.macroMethod(macroName).invoke(Env.macros.get, this, binExpr.lop, binExpr.rop).asInstanceOf[Expr]
           else binExpr
         } else binExpr
+      case _ => sys.error("Unexpected exp type")
     }
 
     def buildWithNew(buildFunc: QueryBuilder => Expr) = {
