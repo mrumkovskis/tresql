@@ -483,6 +483,19 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         scope_stack.pop
         ndml
       case rd: RecursiveDef => rd.copy(scope = scope_stack.head)
+      case wsd: WithSelectDef =>
+        val nwsd = wsd.copy(
+          withTables = nwsd.withTables.map
+          parent = scope_stack.head
+        )
+      case wtd: WithTableDef =>
+        val nwtd = wtd.copy(parent = scope_stack.head)
+        if (nwtd.isRecursive) {
+          scope_stack push nwtd
+          val exp = scoper(wtd.exp).asInstanceOf[SQLDefBase]
+          scope_stack.pop
+          nwtd.copy(exp = exp)
+        } else nwtd.copy(exp = scoper(wtd.exp).asInstanceOf[SQLDefBase])
     }
     scoper(exp)
   }
@@ -690,6 +703,8 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case (r: T @unchecked, dd: DeleteDef) => tr(tr(tr(r, dd.tables), dd.cols), dd.exp)
       case (r: T @unchecked, ad: ArrayDef) => tr(r, ad.cols)
       case (r: T @unchecked, rd: RecursiveDef) => tr(r, rd.exp)
+      case (r: T @unchecked, wtd: WithTableDef) => tr(r, wtd.exp)
+      case (r: T @unchecked, wsd: WithSelectDef) => tr(tr(r, wsd.withTables), wsd.exp)
     }
     extract_traverse
   }
