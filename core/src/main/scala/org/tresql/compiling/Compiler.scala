@@ -404,7 +404,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         ctx push QueryCtx
           val tables: List[TableDef] = List(TableDef(name, Obj(Null, null, null, null, false)))
           val cols: List[ColDef[_]] = wtCols.map { c =>
-            ColDef[Nothing](c, null, Manifest.Nothing)
+            ColDef[Nothing](c, Ident(List(c)), Manifest.Nothing)
           }
           val exp = builder(table) match {
             case s: SQLDefBase => s
@@ -479,18 +479,19 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         nsd.copy(cols = c, tables = t, exp = q)
       case dml: DMLDefBase if !dml.isInstanceOf[InsertDef] && scope_stack.head != dml =>
         scope_stack push dml
-        val ndml = scoper(dml)
-        scope_stack.pop
-        ndml
+        try scoper(dml) finally scope_stack.pop
       case rd: RecursiveDef => rd.copy(scope = scope_stack.head)
       case wsd: WithSelectDef =>
         val nwsd = wsd.copy(
-          withTables = nwsd.withTables.map
+          withTables = (wsd.withTables map scoper).asInstanceOf[List[WithTableDef]],
           parent = scope_stack.head
         )
+        scope_stack push nwsd
+        try nwsd.copy(exp = scoper(nwsd.exp).asInstanceOf[SelectDefBase])
+        finally scope_stack.pop
       case wtd: WithTableDef =>
         val nwtd = wtd.copy(parent = scope_stack.head)
-        if (nwtd.isRecursive) {
+        if (nwtd.recursive) {
           scope_stack push nwtd
           val exp = scoper(wtd.exp).asInstanceOf[SQLDefBase]
           scope_stack.pop
@@ -532,6 +533,15 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         sd.cols foreach (c => namer(nctx -> c))
         namer(nctx -> sd.exp)
         (ctx, false) //return old scope and stop traversing
+      case (ctx, wtd: WithTableDef) if wtd.recursive =>
+        val nctx = ctx.copy(scope = wtd)
+        namer(nctx -> wtd.exp)
+        (ctx, false)
+      case (ctx, wsd: WithSelectDef) =>
+        val nctx = ctx.copy(scope = wsd)
+        wsd.withTables foreach { t => namer(nctx -> t) }
+        namer(nctx -> wsd.exp)
+        (ctx, false)
       case (ctx, dml: DMLDefBase) =>
         dml.tables foreach (t => namer(ctx -> t.exp.obj))
         val nctx = ctx.copy(scope = dml)
@@ -597,10 +607,26 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       case s: SelectDef =>
         //resolve column types for potential from clause select definitions
         val nsd = s.copy(tables = (s.tables map type_resolver).asInstanceOf[List[TableDef]])
-        scopes.push(nsd)
+        scopes push nsd
         val ncols = (nsd.cols map type_resolver).asInstanceOf[List[ColDef[_]]] //resolve types for column defs
         scopes.pop
         nsd.copy(cols = ncols)
+      case wtd: WithTableDef =>
+        if (wtd.recursive) scopes push wtd
+        try {
+          val exp = type_resolver(wtd.exp).asInstanceOf[SQLDefBase]
+          val cols = wtd.cols zip exp.cols map { case (col, ecol) => col.copy(typ = ecol.typ) }
+          wtd.copy(cols = cols, exp = exp)
+        } finally if (wtd.recursive) scopes.pop
+      case wsd: WithSelectDef =>
+        try {
+          val wt = (wsd.withTables map type_resolver).asInstanceOf[List[WithTableDef]]
+          //recalculate scope
+          val nwsd = resolveScopes(wsd.copy(withTables = wt)).asInstanceOf[WithSelectDef]
+          scopes push nwsd
+          val exp: SelectDefBase = type_resolver(nwsd.exp).asInstanceOf[SelectDefBase]
+          nwsd.copy(exp = exp)
+        } finally scopes.pop
       case dml: DMLDefBase =>
         scopes.push(dml)
         val ncols = (dml.cols map type_resolver).asInstanceOf[List[ColDef[_]]]
@@ -673,7 +699,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
       )
       case wsd: WithSelectDef => wsd.copy(
         exp = transform_traverse(wsd.exp).asInstanceOf[SelectDefBase],
-        withTables = (wsd.tables map transform_traverse).asInstanceOf[List[WithTableDef]]
+        withTables = (wsd.withTables map transform_traverse).asInstanceOf[List[WithTableDef]]
       )
     }
     transform_traverse
