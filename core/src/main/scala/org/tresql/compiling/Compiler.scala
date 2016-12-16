@@ -402,14 +402,18 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         }
       case WithTable(name, wtCols, recursive, table) =>
         ctx push QueryCtx
-          val tables: List[TableDef] = List(TableDef(name, Obj(Null, null, null, null, false)))
-          val cols: List[ColDef[_]] = wtCols.map { c =>
-            ColDef[Nothing](c, Ident(List(c)), Manifest.Nothing)
-          }
           val exp = builder(table) match {
             case s: SQLDefBase => s
             case x => throw CompilerException(s"Table in with clause must be query. Instead found: ${x.tresql}")
           }
+          val tables: List[TableDef] = List(TableDef(name, Obj(Null, null, null, null, false)))
+          val cols: List[ColDef[_]] =
+            if (wtCols.isEmpty) exp match {
+              case sd: SelectDefBase => sd.cols
+              case x => throw CompilerException(s"Unsupported with table definition: ${x.tresql}")
+            } else wtCols.map { c =>
+              ColDef[Nothing](c, Ident(List(c)), Manifest.Nothing)
+            }
         ctx.pop
         WithTableDef(cols, tables, recursive, exp)
       case With(tables, query) =>
