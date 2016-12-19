@@ -470,8 +470,8 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     resolver(exp)
   }
 
-  def resolveScopes(exp: Exp) = {
-    val scope_stack = scala.collection.mutable.Stack[Scope](thisCompiler)
+  def resolveScopes(exp: Exp, initialScope: Scope = thisCompiler) = {
+    val scope_stack = scala.collection.mutable.Stack[Scope](initialScope)
     lazy val scoper: Transformer = transformer {
       case sd: SelectDef =>
         val nsd = sd.copy(parent = scope_stack.head)
@@ -626,7 +626,7 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
         try {
           val wt = (wsd.withTables map type_resolver).asInstanceOf[List[WithTableDef]]
           //recalculate scope
-          val nwsd = resolveScopes(wsd.copy(withTables = wt)).asInstanceOf[WithSelectDef]
+          val nwsd = resolveScopes(wsd.copy(withTables = wt), scopes.head).asInstanceOf[WithSelectDef]
           scopes push nwsd
           val exp: SelectDefBase = type_resolver(nwsd.exp).asInstanceOf[SelectDefBase]
           nwsd.copy(exp = exp)
