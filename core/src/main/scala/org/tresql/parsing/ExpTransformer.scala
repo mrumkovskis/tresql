@@ -3,6 +3,7 @@ package org.tresql.parsing
 trait ExpTransformer { this: QueryParsers =>
 
   type Transformer = PartialFunction[Exp, Exp]
+  type TransformerWithState[T] = (T) => PartialFunction[Exp, Exp]
   type Extractor[T] = PartialFunction[(T, Exp), T]
   type ExtractorAndTraverser[T] = PartialFunction[(T, Exp), (T, Boolean)]
 
@@ -51,6 +52,59 @@ trait ExpTransformer { this: QueryParsers =>
       case x: Exp => sys.error("Unknown expression: " + x)
     }
     transform_traverse
+  }
+
+  def transformerWithState[T](fun: TransformerWithState[T]): TransformerWithState[T] = {
+    def transform_traverse(state: T): Transformer = fun(state) orElse traverse(state)
+    def tr(s: T, x: Any): Any = x match {
+      case e: Exp @unchecked => transform_traverse(s)(e)
+      case l: List[_] => l.map(tr(s, _))
+      case _ => x
+    }
+    def traverse(state: T): Transformer = {
+      case e: Ident => e
+      case e: Id => e
+      case e: IdRef => e
+      case e: Res => e
+      case All => All
+      case e: IdentAll => e
+      case e: Variable => e
+      case Null => Null
+      case Fun(n, pars, d) => Fun(n, pars.map(tr(state, _)), d)
+      case UnOp(o, op) => UnOp(o, tr(state, op))
+      case BinOp(o, lop, rop) => BinOp(o, tr(state, lop), tr(state, rop))
+      case TerOp(lop, op1, mop, op2, rop) => TerOp(tr(state, lop), op1, tr(state, mop), op2, tr(state, rop))
+      case In(lop, rop, not) => In(tr(state, lop), rop.map(tr(state, _)), not)
+      case Obj(t, a, j, o, n) => Obj(transform_traverse(state)(t), a, tr(state, j).asInstanceOf[Join], o, n)
+      case Join(d, j, n) => Join(d, tr(state, j), n)
+      case Col(c, a, t) => Col(tr(state, c), a, t)
+      case Cols(d, cols) => Cols(d, cols map (tr(state, _).asInstanceOf[Col]))
+      case Grp(cols, hv) => Grp(cols.map(tr(state, _)), tr(state, hv))
+      case Ord(cols) => Ord(cols map (c=> (c._1, tr(state, c._2), c._3)))
+      case Query(objs, filters, cols, gr, ord, off, lim) =>
+        Query(
+          objs map (tr(state, _).asInstanceOf[Obj]),
+          tr(state, filters).asInstanceOf[Filters],
+          tr(state, cols).asInstanceOf[Cols],
+          tr(state, gr).asInstanceOf[Grp],
+          tr(state, ord).asInstanceOf[Ord],
+          tr(state, off),
+          tr(state, lim)
+        )
+      case WithTable(n, c, r, q) => WithTable(n, c, r, tr(state, q).asInstanceOf[Exp])
+      case With(ts, q) => With(tr(state, ts).asInstanceOf[List[WithTable]], tr(state, q).asInstanceOf[Exp])
+      case Insert(t, a, cols, vals) => Insert(tr(state, t).asInstanceOf[Ident], a,
+          tr(state, cols).asInstanceOf[List[Col]], tr(state, vals))
+      case Update(t, a, filter, cols, vals) => Update(tr(state, t).asInstanceOf[Ident], a,
+          tr(state, filter).asInstanceOf[Arr], tr(state, cols).asInstanceOf[List[Col]], tr(state, vals))
+      case Delete(t, a, filter) => Delete(tr(state, t).asInstanceOf[Ident], a, tr(state, filter).asInstanceOf[Arr])
+      case Arr(els) => Arr(els.map(tr(state, _)))
+      case Filters(f) => Filters(f map (tr(state, _).asInstanceOf[Arr]))
+      case Braces(expr) => Braces(tr(state, expr))
+      //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
+      case x: Exp => sys.error("Unknown expression: " + x)
+    }
+    transform_traverse _
   }
 
   def extractor[T](
