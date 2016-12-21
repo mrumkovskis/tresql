@@ -822,6 +822,32 @@ class QueryTest extends FunSuite {
     assertResult(12)(tresql"inc_val_5(7)".head[Integer])
     assertResult((10, "ACCOUNTING", "NEW YORK"))(
       tresql"sql_concat(sql('select * from dept where deptno = 10'))".head[Int, String, String])
+
+    //recursive queries
+    assertResult((7839, "KING", -1, null, 1))(
+      tresql"""kings_descendants(nr, name, mgrnr, mgrname, level) {
+          emp [ename ~~ 'kin%']{empno, ename, -1, null: string, 1} +
+          emp[emp.mgr = kings_descendants.nr]kings_descendants;emp/emp mgr{
+            emp.empno, emp.ename, emp.mgr, mgr.ename, level + 1}
+        } kings_descendants{ nr, name, mgrnr, mgrname, level}#(level, mgrnr, nr)""".map(h =>
+        (h.nr, h.name, h.mgrnr, h.mgrname, h.level)).toList.head)
+    assertResult((10, "ACCOUNTING"))(tresql"""dept[deptno in (emps(enr, mgr, dnr) {
+        emp[ename ~~ 'kin%']{empno, mgr, deptno} + emps[enr = emp.mgr]emp {empno, emp.mgr, deptno}
+      } emps{dnr})]{deptno, dname}#(1)""".map(h => (h.deptno, h.dname)).toList.head)
+    assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} + t[t.empno = e.mgr]emp e{e.empno}}
+      t{empno}#(1)""".map(_.empno).toList.head)
+    assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      t[t.empno = e.mgr]emp e{e.empno}} t#(1)""".map(_.empno).toList.head)
+    assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      t[t.empno = e.mgr]emp e{e.empno}} t {*}#(1)""".map(_.empno).toList.head)
+    assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      t[t.empno = e.mgr]emp e{e.empno}} t {t.*}#(1)""".map(_.empno).toList.head)
+    assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      t[t.empno = e.mgr]emp e{e.empno}} t a#(1)""".map(_.empno).toList.head)
+    assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      t[t.empno = e.mgr]emp e{e.empno}} t a{*}#(1)""".map(_.empno).toList.head)
+    assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      t[t.empno = e.mgr]emp e{e.empno}} t a{a.*}#(1)""".map(_.empno).toList.head)
   }
 
   test("cache") {

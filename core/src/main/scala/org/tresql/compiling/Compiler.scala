@@ -427,7 +427,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
               nsd.tables.flatMap { td =>
                 table(nscopes)(td.name).map(_.cols.map { c =>
                   ColDef(c.name, createCol(s"${td.name}.${c.name}").col, c.scalaType)
-                }).getOrElse(throw CompilerException(s"Cannot find table: $td"))
+                }).getOrElse(throw CompilerException(s"Cannot find table: ${td.tresql}"))
               }
             case ColDef(_, IdentAll(Ident(ident)), _) =>
               val alias = ident mkString "."
@@ -439,6 +439,8 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
             case cd => List(cd)
           }
         }, exp = resolver(nscopes)(nsd.exp).asInstanceOf[Query])
+      case wsd: WithSelectDef if scopes.isEmpty || scopes.head != wsd => resolver(wsd :: scopes)(wsd)
+      case wtd: WithTableDef if scopes.isEmpty || scopes.head != wtd => resolver(wtd :: scopes)(wtd)
     })
     resolver(Nil)(exp)
   }
@@ -557,7 +559,9 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         wtd.copy(cols = cols, exp = exp)
       case wsd: WithSelectDef =>
         val wt = (wsd.withTables map(type_resolver(scopes)(_))).asInstanceOf[List[WithTableDef]]
-        wsd.copy(withTables = wt, exp = type_resolver(wsd :: scopes)(wsd.exp).asInstanceOf[SelectDefBase])
+        val nwsd = wsd.copy(withTables = wt)
+        //'with' expression - wsd.exp must be resolved after 'as' clause - wsd.withTables
+        nwsd.copy(exp = type_resolver(nwsd :: scopes)(wsd.exp).asInstanceOf[SelectDefBase])
       case dml: DMLDefBase =>
         val nscopes = dml :: scopes
         val ncols = (dml.cols map(type_resolver(nscopes)(_))).asInstanceOf[List[ColDef[_]]]
