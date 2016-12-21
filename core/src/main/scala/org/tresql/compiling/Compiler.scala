@@ -7,13 +7,11 @@ import org.tresql.Env
 import scala.reflect.ManifestFactory
 
 trait Scope {
-  def parent: Scope
+  def tableNames: List[String]
   def table(table: String): Option[Table]
-  def column(col: String): Option[Col[_]]
-  def procedure(procedure: String): Option[Procedure[_]]
 }
 
-trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompiler =>
+trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
 
   case class CompilerException(
     message: String,
@@ -54,10 +52,8 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   case class RecursiveDef(exp: Exp, scope: Scope = null) extends TypedExp[RecursiveDef]
   with Scope {
     val typ: Manifest[RecursiveDef] = ManifestFactory.classType(this.getClass)
-    override def parent = scope.parent
+    override def tableNames = scope.tableNames
     override def table(table: String) = scope.table(table)
-    override def column(col: String) = scope.column(col)
-    override def procedure(procedure: String) = scope.procedure(procedure)
   }
 
   //is superclass of sql query and array
@@ -69,47 +65,23 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
   //superclass of select and dml statements (insert, update, delete)
   trait SQLDefBase extends RowDefBase with Scope {
     def tables: List[TableDef]
-    override def parent: Scope = thisCompiler
 
-    /** Table declared in this scope's from clause (if select) or table of the dml statement */
-    protected def this_table(table: String) = tables.find(_.name == table).flatMap {
-      case TableDef(_, Obj(TableObj(Ident(name)), _, _, _, _)) => parent.table(name mkString ".")
-      case TableDef(n, Obj(TableObj(s: SelectDefBase), _, _, _, _)) => Option(table_from_selectdef(n, s))
-      case x => throw CompilerException(s"Unrecognized table clause: '${x.tresql}'. Try using Query(...)")
+    def tableNames = tables.collect {
+      //collect table names in this sql (i.e. exclude tresql no join aliases)
+      case TableDef(t, Obj(_: TableObj, _, _, _, _)) => t
     }
-    /** Used to in {{{column(name: String)}}} method,
-        i.e. columns are searched only if table is present in from clause */
-    protected def declared_table(table: String): Option[Table] =
-      this_table(table) orElse (parent match {
-        case p: SQLDefBase => p.declared_table(table)
-        case _ => None
-      })
-    def table(tableName: String) = {
-      val table = tableName.toLowerCase
-      this_table(table) orElse parent.table(table)
+    def table(table: String) = tables.find(_.name == table).flatMap {
+      case TableDef(_, Obj(TableObj(Ident(name)), _, _, _, _)) =>
+        Option(table_alias(name mkString "."))
+      case TableDef(n, Obj(TableObj(s: SelectDefBase), _, _, _, _)) =>
+        Option(table_from_selectdef(n, s))
+      case x => throw CompilerException(
+        s"Unrecognized table clause: '${x.tresql}'. Try using Query(...)")
     }
-    def column(colName: String) = {
-      val col = colName.toLowerCase
-      col.lastIndexOf('.') match {
-        case -1 => tables.collect {
-          //collect columns only from tables (not aliases)
-          case TableDef(t, Obj(_: TableObj, _, _, _, _)) =>
-            declared_table(t).flatMap(_.colOption(col))
-        } collect { case Some(col) => col } match {
-          case List(col) => Some(col)
-          case Nil => None
-          case x => throw CompilerException(s"Ambiguous columns: $x")
-        }
-        case x =>
-          declared_table(col.substring(0, x)).flatMap(_.colOption(col.substring(x + 1)))
-      }
-    } orElse procedure(s"$colName#0").map(p => //check for empty pars function declaration
-      org.tresql.metadata.Col(name = colName, true, -1, scalaType = p.scalaReturnType))
-
-    def procedure(procedure: String) = parent.procedure(procedure)
 
     protected def table_from_selectdef(name: String, sd: SelectDefBase) =
       Table(name, sd.cols map col_from_coldef, null, Map())
+    protected def table_alias(name: String) = Table(name, Nil, null, Map())
     protected def col_from_coldef(cd: ColDef[_]) =
       org.tresql.metadata.Col(name = cd.name, true, -1, scalaType = cd.typ)
   }
@@ -221,11 +193,41 @@ trait Compiler extends QueryParsers with ExpTransformer with Scope { thisCompile
     override def tresql = cols.map(c => any2tresql(c.col)).mkString("[", ", ", "]")
   }
 
-  //root scope implementation
-  def table(table: String) = metadata.tableOption(table)
-  def column(col: String) = metadata.colOption(col)
+  //metadata
+  def declaredTable(scopes: List[Scope])(tableName: String): Option[Table] = {
+    val table = tableName.toLowerCase
+    scopes match {
+      case Nil => None
+      case s => s.head.table(table).flatMap {
+        case Table(n, c, _, _) if c.isEmpty => table(s.tail)(n) //alias is decoded ask parent scope
+        case t => t
+      } orElse table(s.tail)(table)
+    }
+  }
+  def table(scopes: List[Scope])(tableName: String): Option[Table] = {
+    val table = tableName.toLowerCase
+    declaredTable(scopes)(table) orElse metadata.tableOption(table)
+  }
+  def column(scopes: List[Scope])(colName: String): Option[Col[_]] = {
+    val col = colName.toLowerCase
+    (scopes match {
+      case Nil => None
+      case s => col.lastIndexOf('.') match {
+        case -1 =>
+          s.head.tableNames
+            .map(declaredTable(s)(_)
+            .flatMap(_.colOption(col)))
+            .collect { case col @ Some(_) => col } match {
+              case List(col) => col
+              case Nil => column(s.tail)(col)
+              case x => throw CompilerException(s"Ambiguous columns: $x")
+            }
+        case x => declaredTable(s)(col.substring(0, x)).flatMap(_.colOption(col.substring(x + 1)))
+      }
+    }).orElse(procedure(s"$colName#0").map(p => //check for empty pars function declaration
+      org.tresql.metadata.Col(name = colName, true, -1, scalaType = p.scalaReturnType)))
+  }
   def procedure(procedure: String) = metadata.procedureOption(procedure)
-  def parent = null
 
   //expression def build
   def buildTypedDef(exp: Exp) = {

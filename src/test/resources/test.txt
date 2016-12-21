@@ -473,3 +473,7 @@ null[false]{1, 'x', true, null} --> []
 kings_descendants(nr, name, mgrnr, mgrname, level) { emp [ename ~~ 'kin%']{empno, ename, -1, null, 1} + emp[emp.mgr = kings_descendants.nr]kings_descendants;emp/emp mgr{emp.empno, emp.ename, emp.mgr, mgr.ename, level + 1} } kings_descendants{ nr, name, mgrnr, mgrname, level}#(level, mgrnr, nr) --> [[7839, "KING", -1, null, 1], [7566, "JONES", 7839, "KING", 2], [7698, "BLAKE", 7839, "KING", 2], [7782, "CLARK", 7839, "KING", 2], [7788, "SCOTT", 7566, "JONES", 3], [7902, "FORD", 7566, "JONES", 3], [7499, "ALLEN", 7698, "BLAKE", 3], [7521, "WARD", 7698, "BLAKE", 3], [7654, "MARTIN", 7698, "BLAKE", 3], [7844, "TURNER", 7698, "BLAKE", 3], [7900, "JAMES", 7698, "BLAKE", 3], [7934, "MILLER", 7782, "CLARK", 3], [7876, "ADAMS", 7788, "SCOTT", 4], [9999, "MĀRTIŅŠ ŽVŪKŠĶIS", 7788, "SCOTT", 4], [7369, "SMITH", 7902, "FORD", 4]]
 dept[deptno in (emps(enr, mgr, dnr) { emp[ename ~~ 'kin%']{empno, mgr, deptno} + emps[enr = emp.mgr]emp {empno, emp.mgr, deptno} } emps{dnr})]{deptno, dname}#(1) --> [[10, "ACCOUNTING"], [20, "RESEARCH"], [30, "SALES"]]
 t(*) {emp[ename ~~ 'kin%']{empno} + t[t.empno = e.mgr]emp e{e.empno}} t{empno}#(1) --> [[7369], [7499], [7521], [7566], [7654], [7698], [7782], [7788], [7839], [7844], [7876], [7900], [7902], [7934], [9999]]
+
+//test for compiler - where clause select references parent select column
+dept[(dept_addr[deptnr = deptno]{deptnr})]{dname}#(1) --> []
+dept[(dept_addr[deptnr = dept.deptno]{deptnr})]{dname}#(1) --> []
