@@ -47,6 +47,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     def vals: Any
   }
 
+  case class Const(value: Any) extends Exp {
+    def tresql = any2tresql(value)
+  }
   case class Ident(ident: List[String]) extends Exp {
     def tresql = ident.mkString(".")
   }
@@ -193,6 +196,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def FALSE: MemParser[Boolean] = ("\\bfalse\\b"r) ^^^ false named "false"
   def NULL: MemParser[Null.type] = ("\\bnull\\b"r) ^^^ Null named "null"
   def ALL: MemParser[All.type] = "*" ^^^ All named "all"
+
+
 
   def qualifiedIdent: MemParser[Ident] = rep1sep(ident, ".") ^^ Ident named "qualified-ident"
   def qualifiedIdentAll: MemParser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
