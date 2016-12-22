@@ -6,11 +6,6 @@ import org.tresql.metadata._
 import org.tresql.Env
 import scala.reflect.ManifestFactory
 
-trait Scope {
-  def tableNames: List[String]
-  def table(table: String): Option[Table]
-}
-
 trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
 
   case class CompilerException(
@@ -20,6 +15,11 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
 
   var nameIdx = 0
   val metadata = Env.metaData
+
+  trait Scope {
+    def tableNames: List[String]
+    def table(table: String): Option[Table]
+  }
 
   trait TypedExp[T] extends Exp {
     def exp: Exp
