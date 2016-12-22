@@ -831,6 +831,13 @@ class QueryTest extends FunSuite {
             emp.empno, emp.ename, emp.mgr, mgr.ename, level + 1}
         } kings_descendants{ nr, name, mgrnr, mgrname, level}#(level, mgrnr, nr)""".map(h =>
         (h.nr, h.name, h.mgrnr, h.mgrname, h.level)).toList.head)
+      assertResult((7566, "JONES", 7839, "KING", 2))(
+        tresql"""kings_descendants(nr, name, mgrnr, mgrname, level) {
+            emp [ename ~~ 'kin%']{empno, ename, -1, null, 1} +
+            emp[emp.mgr = kings_descendants.nr]kings_descendants;emp/emp mgr{
+              emp.empno, emp.ename, emp.mgr, mgr.ename, level + 1}
+          } kings_descendants{ nr, name, mgrnr, mgrname, level}#(level, mgrnr, nr)""".map(h =>
+          (h.nr, h.name, h.mgrnr, h.mgrname, h.level)).toList.tail.head)
     assertResult((10, "ACCOUNTING"))(tresql"""dept[deptno in (emps(enr, mgr, dnr) {
         emp[ename ~~ 'kin%']{empno, mgr, deptno} + emps[enr = emp.mgr]emp {empno, emp.mgr, deptno}
       } emps{dnr})]{deptno, dname}#(1)""".map(h => (h.deptno, h.dname)).toList.head)

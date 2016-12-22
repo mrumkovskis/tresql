@@ -523,6 +523,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     lazy val typer: Extractor[Ctx] = extractorAndTraverser {
       case (Ctx(scopes, _), Ident(ident)) =>
         (Ctx(null, column(scopes)(ident mkString ".").map(_.scalaType).get), false)
+      case (Ctx(scopes, _), Null) => (Ctx(null, Manifest.Any), false)
       case (Ctx(scopes, _), UnOp(op, operand)) => (type_from_any(scopes, operand), false)
       case (Ctx(scopes, _), BinOp(op, lop, rop)) =>
         comp_op.findAllIn(op).toList match {
