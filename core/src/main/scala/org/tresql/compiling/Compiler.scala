@@ -36,7 +36,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
   case class TableAlias(obj: Exp) extends Exp {
     def tresql = obj.tresql
   }
-  case class ColDef[T](name: String, col: Any, typ: Manifest[T]) extends TypedExp[T] {
+  case class ColDef[T](name: String, col: Exp, typ: Manifest[T]) extends TypedExp[T] {
     def exp = this
     override def tresql = any2tresql(col)
   }
@@ -235,7 +235,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     object BodyCtx extends Ctx //where, group by, having, order, limit clauses
 
     //helper function
-    def tr(ctx: Ctx, x: Any): Any = x match {case e: Exp @unchecked => builder(ctx)(e) case _ => x}
+    def tr(ctx: Ctx, x: Exp): Exp = builder(ctx)(x)
     def buildTables(tables: List[Obj]): List[TableDef] = {
       val td1 = tables.zipWithIndex map { case (table, idx) =>
         val newTable = builder(TablesCtx)(table.obj)
@@ -593,106 +593,100 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
 
   override def transformer(fun: Transformer): Transformer = {
     lazy val local_transformer = fun orElse traverse
-    lazy val transform_traverse = local_transformer orElse super.transformer(local_transformer)
-    def tr(x: Any): Any = x match {case e: Exp @unchecked => transform_traverse(e) case _ => x} //helper function
+    lazy val tt = local_transformer orElse super.transformer(local_transformer)
     lazy val traverse: Transformer = {
-      case cd: ColDef[_] => cd.copy(col = tr(cd.col))
-      case cd: ChildDef => cd.copy(exp = transform_traverse(cd.exp))
-      case fd: FunDef[_] => fd.copy(exp = transform_traverse(fd.exp).asInstanceOf[Fun])
-      case td: TableDef => td.copy(exp = transform_traverse(td.exp).asInstanceOf[Obj])
-      case to: TableObj => to.copy(obj = transform_traverse(to.obj))
-      case ta: TableAlias => ta.copy(obj = transform_traverse(ta.obj))
+      case cd: ColDef[_] => cd.copy(col = tt(cd.col))
+      case cd: ChildDef => cd.copy(exp = tt(cd.exp))
+      case fd: FunDef[_] => fd.copy(exp = tt(fd.exp).asInstanceOf[Fun])
+      case td: TableDef => td.copy(exp = tt(td.exp).asInstanceOf[Obj])
+      case to: TableObj => to.copy(obj = tt(to.obj))
+      case ta: TableAlias => ta.copy(obj = tt(ta.obj))
       case sd: SelectDef =>
-        val t = (sd.tables map transform_traverse).asInstanceOf[List[TableDef]]
-        val c = (sd.cols map transform_traverse).asInstanceOf[List[ColDef[_]]]
-        val q = transform_traverse(sd.exp).asInstanceOf[Query]
+        val t = (sd.tables map tt).asInstanceOf[List[TableDef]]
+        val c = (sd.cols map tt).asInstanceOf[List[ColDef[_]]]
+        val q = tt(sd.exp).asInstanceOf[Query]
         sd.copy(cols = c, tables = t, exp = q)
       case bd: BinSelectDef => bd.copy(
-        leftOperand = transform_traverse(bd.leftOperand).asInstanceOf[SelectDefBase],
-        rightOperand = transform_traverse(bd.rightOperand).asInstanceOf[SelectDefBase])
+        leftOperand = tt(bd.leftOperand).asInstanceOf[SelectDefBase],
+        rightOperand = tt(bd.rightOperand).asInstanceOf[SelectDefBase])
       case id: InsertDef =>
-        val t = (id.tables map transform_traverse).asInstanceOf[List[TableDef]]
-        val c = (id.cols map transform_traverse).asInstanceOf[List[ColDef[_]]]
-        val i = transform_traverse(id.exp).asInstanceOf[Insert]
+        val t = (id.tables map tt).asInstanceOf[List[TableDef]]
+        val c = (id.cols map tt).asInstanceOf[List[ColDef[_]]]
+        val i = tt(id.exp).asInstanceOf[Insert]
         InsertDef(c, t, i)
       case ud: UpdateDef =>
-        val t = (ud.tables map transform_traverse).asInstanceOf[List[TableDef]]
-        val c = (ud.cols map transform_traverse).asInstanceOf[List[ColDef[_]]]
-        val u = transform_traverse(ud.exp).asInstanceOf[Update]
+        val t = (ud.tables map tt).asInstanceOf[List[TableDef]]
+        val c = (ud.cols map tt).asInstanceOf[List[ColDef[_]]]
+        val u = tt(ud.exp).asInstanceOf[Update]
         UpdateDef(c, t, u)
       case dd: DeleteDef =>
-        val t = (dd.tables map transform_traverse).asInstanceOf[List[TableDef]]
-        val d = transform_traverse(dd.exp).asInstanceOf[Delete]
+        val t = (dd.tables map tt).asInstanceOf[List[TableDef]]
+        val d = tt(dd.exp).asInstanceOf[Delete]
         DeleteDef(t, d)
-      case ad: ArrayDef => ad.copy(cols = (ad.cols map transform_traverse).asInstanceOf[List[ColDef[_]]])
-      case rd: RecursiveDef => rd.copy(exp = transform_traverse(rd.exp))
+      case ad: ArrayDef => ad.copy(cols = (ad.cols map tt).asInstanceOf[List[ColDef[_]]])
+      case rd: RecursiveDef => rd.copy(exp = tt(rd.exp))
       case wtd: WithTableDef => wtd.copy(
-        cols = (wtd.cols map transform_traverse).asInstanceOf[List[ColDef[_]]],
-        tables = (wtd.tables map transform_traverse).asInstanceOf[List[TableDef]],
-        exp = transform_traverse(wtd.exp).asInstanceOf[SQLDefBase]
+        cols = (wtd.cols map tt).asInstanceOf[List[ColDef[_]]],
+        tables = (wtd.tables map tt).asInstanceOf[List[TableDef]],
+        exp = tt(wtd.exp).asInstanceOf[SQLDefBase]
       )
       case wsd: WithSelectDef => wsd.copy(
-        exp = transform_traverse(wsd.exp).asInstanceOf[SelectDefBase],
-        withTables = (wsd.withTables map transform_traverse).asInstanceOf[List[WithTableDef]]
+        exp = tt(wsd.exp).asInstanceOf[SelectDefBase],
+        withTables = (wsd.withTables map tt).asInstanceOf[List[WithTableDef]]
       )
     }
-    transform_traverse
+    tt
   }
 
   override def transformerWithState[T](fun: TransformerWithState[T]): TransformerWithState[T] = {
     def local_transformer(state: T): Transformer = fun(state) orElse traverse(state)
-    def transform_traverse(state: T): Transformer = {
+    def tt(state: T): Transformer = {
       val lt = local_transformer(state)
       lt orElse super.transformer(lt)
     }
-    //helper function
-    def tr(state: T, x: Any): Any = x match {
-      case e: Exp @unchecked => transform_traverse(state)(e)
-      case _ => x
-    }
     def traverse(state: T): Transformer = {
-      case cd: ColDef[_] => cd.copy(col = tr(state, cd.col))
-      case cd: ChildDef => cd.copy(exp = transform_traverse(state)(cd.exp))
-      case fd: FunDef[_] => fd.copy(exp = transform_traverse(state)(fd.exp).asInstanceOf[Fun])
-      case td: TableDef => td.copy(exp = transform_traverse(state)(td.exp).asInstanceOf[Obj])
-      case to: TableObj => to.copy(obj = transform_traverse(state)(to.obj))
-      case ta: TableAlias => ta.copy(obj = transform_traverse(state)(ta.obj))
+      case cd: ColDef[_] => cd.copy(col = tt(state)(cd.col))
+      case cd: ChildDef => cd.copy(exp = tt(state)(cd.exp))
+      case fd: FunDef[_] => fd.copy(exp = tt(state)(fd.exp).asInstanceOf[Fun])
+      case td: TableDef => td.copy(exp = tt(state)(td.exp).asInstanceOf[Obj])
+      case to: TableObj => to.copy(obj = tt(state)(to.obj))
+      case ta: TableAlias => ta.copy(obj = tt(state)(ta.obj))
       case sd: SelectDef =>
-        val t = (sd.tables map(transform_traverse(state)(_))).asInstanceOf[List[TableDef]]
-        val c = (sd.cols map(transform_traverse(state)(_))).asInstanceOf[List[ColDef[_]]]
-        val q = transform_traverse(state)(sd.exp).asInstanceOf[Query]
+        val t = (sd.tables map(tt(state)(_))).asInstanceOf[List[TableDef]]
+        val c = (sd.cols map(tt(state)(_))).asInstanceOf[List[ColDef[_]]]
+        val q = tt(state)(sd.exp).asInstanceOf[Query]
         sd.copy(cols = c, tables = t, exp = q)
       case bd: BinSelectDef => bd.copy(
-        leftOperand = transform_traverse(state)(bd.leftOperand).asInstanceOf[SelectDefBase],
-        rightOperand = transform_traverse(state)(bd.rightOperand).asInstanceOf[SelectDefBase])
+        leftOperand = tt(state)(bd.leftOperand).asInstanceOf[SelectDefBase],
+        rightOperand = tt(state)(bd.rightOperand).asInstanceOf[SelectDefBase])
       case id: InsertDef =>
-        val t = (id.tables map(transform_traverse(state)(_))).asInstanceOf[List[TableDef]]
-        val c = (id.cols map(transform_traverse(state)(_))).asInstanceOf[List[ColDef[_]]]
-        val i = transform_traverse(state)(id.exp).asInstanceOf[Insert]
+        val t = (id.tables map(tt(state)(_))).asInstanceOf[List[TableDef]]
+        val c = (id.cols map(tt(state)(_))).asInstanceOf[List[ColDef[_]]]
+        val i = tt(state)(id.exp).asInstanceOf[Insert]
         InsertDef(c, t, i)
       case ud: UpdateDef =>
-        val t = (ud.tables map(transform_traverse(state)(_))).asInstanceOf[List[TableDef]]
-        val c = (ud.cols map(transform_traverse(state)(_))).asInstanceOf[List[ColDef[_]]]
-        val u = transform_traverse(state)(ud.exp).asInstanceOf[Update]
+        val t = (ud.tables map(tt(state)(_))).asInstanceOf[List[TableDef]]
+        val c = (ud.cols map(tt(state)(_))).asInstanceOf[List[ColDef[_]]]
+        val u = tt(state)(ud.exp).asInstanceOf[Update]
         UpdateDef(c, t, u)
       case dd: DeleteDef =>
-        val t = (dd.tables map(transform_traverse(state)(_))).asInstanceOf[List[TableDef]]
-        val d = transform_traverse(state)(dd.exp).asInstanceOf[Delete]
+        val t = (dd.tables map(tt(state)(_))).asInstanceOf[List[TableDef]]
+        val d = tt(state)(dd.exp).asInstanceOf[Delete]
         DeleteDef(t, d)
       case ad: ArrayDef => ad.copy(
-        cols = (ad.cols map(transform_traverse(state)(_))).asInstanceOf[List[ColDef[_]]])
-      case rd: RecursiveDef => rd.copy(exp = transform_traverse(state)(rd.exp))
+        cols = (ad.cols map(tt(state)(_))).asInstanceOf[List[ColDef[_]]])
+      case rd: RecursiveDef => rd.copy(exp = tt(state)(rd.exp))
       case wtd: WithTableDef => wtd.copy(
-        cols = (wtd.cols map(transform_traverse(state)(_))).asInstanceOf[List[ColDef[_]]],
-        tables = (wtd.tables map(transform_traverse(state)(_))).asInstanceOf[List[TableDef]],
-        exp = transform_traverse(state)(wtd.exp).asInstanceOf[SQLDefBase]
+        cols = (wtd.cols map(tt(state)(_))).asInstanceOf[List[ColDef[_]]],
+        tables = (wtd.tables map(tt(state)(_))).asInstanceOf[List[TableDef]],
+        exp = tt(state)(wtd.exp).asInstanceOf[SQLDefBase]
       )
       case wsd: WithSelectDef => wsd.copy(
-        exp = transform_traverse(state)(wsd.exp).asInstanceOf[SelectDefBase],
-        withTables = (wsd.withTables map(transform_traverse(state)(_))).asInstanceOf[List[WithTableDef]]
+        exp = tt(state)(wsd.exp).asInstanceOf[SelectDefBase],
+        withTables = (wsd.withTables map(tt(state)(_))).asInstanceOf[List[WithTableDef]]
       )
     }
-    transform_traverse _
+    tt _
   }
 
   override def extractorAndTraverser[T](

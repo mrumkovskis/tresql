@@ -2,7 +2,7 @@ package org.tresql
 
 object QueryParser extends parsing.QueryParsers with parsing.ExpTransformer {
 
-  def parseExp(expr: String): Any = {
+  def parseExp(expr: String): Exp = {
     Env.cache.flatMap(_.get(expr)).getOrElse {
       try {
         intermediateResults.get.clear
@@ -17,10 +17,7 @@ object QueryParser extends parsing.QueryParsers with parsing.ExpTransformer {
   }
 
   def transformTresql(tresql: String, transformer: PartialFunction[Exp, Exp]): String =
-    parseExp(tresql) match {
-      case exp: Exp @unchecked => this.transformer(transformer)(exp) tresql
-      case _ => tresql
-    }
+    this.transformer(transformer)(parseExp(tresql)) tresql
 
   def extractVariables(exp: String) =
     extractor(variableExtractor)(Nil -> parseExp(exp).asInstanceOf[Exp]).reverse

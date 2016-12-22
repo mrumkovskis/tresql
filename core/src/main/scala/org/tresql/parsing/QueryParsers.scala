@@ -44,7 +44,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     def alias: String
     def cols: List[Col]
     def filter: Arr
-    def vals: Any
+    def vals: Exp
   }
 
   case class Const(value: Any) extends Exp {
@@ -71,32 +71,32 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   case class Res(rNr: Int, col: Any) extends Exp {
     def tresql = ":" + rNr + "(" + any2tresql(col) + ")"
   }
-  case class UnOp(operation: String, operand: Any) extends Exp {
-    def tresql = operation + any2tresql(operand)
+  case class UnOp(operation: String, operand: Exp) extends Exp {
+    def tresql = operation + operand.tresql
   }
-  case class Fun(name: String, parameters: List[Any], distinct: Boolean) extends Exp {
+  case class Fun(name: String, parameters: List[Exp], distinct: Boolean) extends Exp {
     def tresql = name + "(" + (if (distinct) "# " else "") +
       ((parameters map any2tresql) mkString ", ") + ")"
   }
-  case class In(lop: Any, rop: List[Any], not: Boolean) extends Exp {
+  case class In(lop: Exp, rop: List[Exp], not: Boolean) extends Exp {
     def tresql = any2tresql(lop) + (if (not) " !" else " ") + rop.map(any2tresql).mkString(
       "in(", ", ", ")")
   }
-  case class BinOp(op: String, lop: Any, rop: Any) extends Exp {
-    def tresql = any2tresql(lop) + " " + op + " " + any2tresql(rop)
+  case class BinOp(op: String, lop: Exp, rop: Exp) extends Exp {
+    def tresql = lop.tresql + " " + op + " " + rop.tresql
   }
-  case class TerOp(lop: Any, op1: String, mop: Any, op2: String, rop: Any) extends Exp {
+  case class TerOp(lop: Exp, op1: String, mop: Exp, op2: String, rop: Exp) extends Exp {
     def content = BinOp("&", BinOp(op1, lop, mop), BinOp(op2, mop, rop))
     def tresql = s"${any2tresql(lop)} $op1 ${any2tresql(mop)} $op2 ${any2tresql(rop)}"
   }
 
-  case class Join(default: Boolean, expr: Any, noJoin: Boolean) extends Exp {
+  case class Join(default: Boolean, expr: Exp, noJoin: Boolean) extends Exp {
     def tresql = this match {
       case Join(_, _, true) => ";"
       case Join(false, a: Arr, false) => a.tresql
-      case Join(false, e: Exp @unchecked, false) => "[" + e.tresql + "]"
+      case Join(false, e: Exp, false) => "[" + e.tresql + "]"
       case Join(true, null, false) => "/"
-      case Join(true, e, false) => "/[" + any2tresql(e) + "]"
+      case Join(true, e: Exp, false) => "/[" + e.tresql + "]"
       case _ => sys.error("Unexpected Join case")
     }
   }
@@ -109,24 +109,24 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       obj.tresql + (if (outerJoin == "l") "?" else if (outerJoin == "i") "!" else "") +
       (if (alias != null) " " + alias else "")
   }
-  case class Col(col: Any, alias: String, typ: String) extends Exp {
+  case class Col(col: Exp, alias: String, typ: String) extends Exp {
     def tresql = any2tresql(col) + (if (typ != null) " :" + typ else "") +
       (if (alias != null) " " + alias else "")
   }
   case class Cols(distinct: Boolean, cols: List[Col]) extends Exp {
     def tresql = (if (distinct) "#" else "") + cols.map(_.tresql).mkString("{", ",", "}")
   }
-  case class Grp(cols: List[Any], having: Any) extends Exp {
+  case class Grp(cols: List[Exp], having: Exp) extends Exp {
     def tresql = "(" + cols.map(any2tresql).mkString(",") + ")" +
       (if (having != null) "^(" + any2tresql(having) + ")" else "")
   }
   //cols expression is tuple in the form - ([<nulls first>], <order col list>, [<nulls last>])
-  case class Ord(cols: List[(Exp, Any, Exp)]) extends Exp {
+  case class Ord(cols: List[(Exp, Exp, Exp)]) extends Exp {
     def tresql = "#(" + cols.map(c => (if (c._1 == Null) "null " else "") +
       any2tresql(c._2) + (if (c._3 == Null) " null" else "")).mkString(",") + ")"
   }
   case class Query(tables: List[Obj], filter: Filters, cols: Cols,
-    group: Grp, order: Ord, offset: Any, limit: Any) extends Exp {
+    group: Grp, order: Ord, offset: Exp, limit: Exp) extends Exp {
     def tresql = tables.map(any2tresql).mkString +
       filter.tresql +
       (if (cols != null) cols.tresql else "") +
@@ -145,14 +145,16 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   case class With(tables: List[WithTable], query: Exp) extends Exp {
     def tresql = tables.map(_.tresql).mkString(", ") + " " + query.tresql
   }
-
-  case class Insert(table: Ident, alias: String, cols: List[Col], vals: Any) extends DMLExp {
+  case class Values(values: List[Arr]) extends Exp {
+    def tresql = values map (_.tresql) mkString ", "
+  }
+  case class Insert(table: Ident, alias: String, cols: List[Col], vals: Exp) extends DMLExp {
     override def filter = null
     def tresql = "+" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
       (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") +
       (if (vals != null) any2tresql(vals) else "")
   }
-  case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Any) extends DMLExp {
+  case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp) extends DMLExp {
     def tresql = "=" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
       (if (filter != null) filter.tresql else "") +
       (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") +
@@ -163,7 +165,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     override def vals = null
     def tresql = "-" + table.tresql + Option(alias).map(" " + _).getOrElse("") + filter.tresql
   }
-  case class Arr(elements: List[Any]) extends Exp {
+  case class Arr(elements: List[Exp]) extends Exp {
     def tresql = "[" + any2tresql(elements) + "]"
   }
   case class Filters(filters: List[Arr]) extends Exp {
@@ -179,7 +181,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     def tresql = "null"
   }
 
-  case class Braces(expr: Any) extends Exp {
+  case class Braces(expr: Exp) extends Exp {
     def tresql = "(" + any2tresql(expr) + ")"
   }
 
@@ -198,7 +200,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def ALL: MemParser[All.type] = "*" ^^^ All named "all"
 
 
-
+  def const: MemParser[Const] = (TRUE | FALSE | ALL | decimalNr | stringLiteral) ^^ Const named "const"
   def qualifiedIdent: MemParser[Ident] = rep1sep(ident, ".") ^^ Ident named "qualified-ident"
   def qualifiedIdentAll: MemParser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
   def variable: MemParser[Variable] = ((":" ~> ((ident | stringLiteral) ~
@@ -224,8 +226,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
      * of the query.
      * variable parser must be applied after query parser since ? mark matches variable
      * insert, delete, update parsers must be applied before query parser */
-  def operand: MemParser[Any] = (TRUE | FALSE | ALL | withQuery | function | insert | update | query |
-    decimalNr | stringLiteral | variable | id | idref | result | array) named "operand"
+  def operand: MemParser[Exp] = (const | withQuery | function | insert | update | query |
+    variable | id | idref | result | array) named "operand"
   def function: MemParser[Fun] = (qualifiedIdent <~ "(") ~ opt("#") ~ repsep(expr, ",") <~ ")" ^^ {
     case Ident(a) ~ d ~ b => Fun(a.mkString("."), b, d.map(x=> true).getOrElse(false))
   } named "function"
@@ -235,11 +237,11 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def join: MemParser[Join] = (("/" ~ opt("[" ~> expr <~ "]")) | (opt("[" ~> expr <~ "]") ~ "/") |
     ";" | array) ^^ {
       case ";" => NoJoin
-      case "/" ~ Some(e) => Join(true, e, false)
+      case "/" ~ Some(e: Exp @unchecked) => Join(true, e, false)
       case "/" ~ None => DefaultJoin
-      case Some(e) ~ "/" => Join(true, e, false)
+      case Some(e: Exp @unchecked) ~ "/" => Join(true, e, false)
       case None ~ "/" => DefaultJoin
-      case a => Join(false, a, false)
+      case a: Exp => Join(false, a, false)
     } named "join"
   def filter: MemParser[Arr] = array named "filter"
   def filters: MemParser[Filters] = rep(filter) ^^ Filters named "filters"
@@ -294,11 +296,11 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       case i: IdentAll => Col(i, null, null)
       //move object alias to column alias
       case (o @ Obj(_, a, _, _, _)) ~ (typ: Option[String @unchecked]) ~ None => Col(o.copy(alias = null), a, typ orNull)
-      case e ~ (typ: Option[String @unchecked]) ~ (a: Option[_]) => Col(e, a map {
+      case (e: Exp @unchecked) ~ (typ: Option[String @unchecked]) ~ (a: Option[_]) => Col(e, a map {
         case Ident(i) => i.mkString; case s => "\"" + s + "\""
       } orNull, typ orNull)
     } ^^ { pr =>
-      def extractAlias(expr: Any): (String, Any) = expr match {
+      def extractAlias(expr: Exp): (String, Exp) = expr match {
         case t: TerOp => extractAlias(t.content)
         case o@BinOp(_, lop, rop) =>
           val x = extractAlias(rop)
@@ -324,15 +326,15 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   } named "columns"
   def group: MemParser[Grp] = ("(" ~> rep1sep(expr, ",") <~ ")") ~
     opt(("^" ~ "(") ~> expr <~ ")") ^^ { case g ~ h => Grp(g, if (h == None) null else h.get) }  named "group"
-  def orderMember: MemParser[(Exp, Any, Exp)] = opt(NULL) ~ expr ~ opt(NULL) ^^ {
+  def orderMember: MemParser[(Exp, Exp, Exp)] = opt(NULL) ~ expr ~ opt(NULL) ^^ {
     case Some(nf) ~ e ~ Some(nl) => sys.error("Cannot be nulls first and nulls last at the same time")
     case nf ~ e ~ nl => (if (nf == None) null else nf.get, e, if (nl == None) null else nl.get)
   } named "order-member"
   def order: MemParser[Ord] = ("#" ~ "(") ~> rep1sep(orderMember, ",") <~ ")" ^^ Ord named "order"
-  def offsetLimit: MemParser[(Any, Any)] = ("@" ~ "(") ~> (wholeNumber | variable) ~ opt(",") ~
+  def offsetLimit: MemParser[(Exp, Exp)] = ("@" ~ "(") ~> (wholeNumber | variable) ~ opt(",") ~
     opt(wholeNumber | variable) <~ ")" ^^ { pr =>
       {
-        def c(x: Any) = x match { case v: Variable => v case s: String => BigDecimal(s) }
+        def c(x: Any) = x match { case v: Variable => v case s: String => Const(BigDecimal(s)) }
         pr match {
           case o ~ comma ~ Some(l) => (c(o), c(l))
           case o ~ Some(comma) ~ None => (c(o), null)
@@ -340,19 +342,19 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
         }
       }
     } named "offset-limit"
-  def query: MemParser[Any] = ((objs | NULL) ~ filters ~ opt(columns) ~ opt(group) ~ opt(order) ~
+  def query: MemParser[Exp] = ((objs | NULL) ~ filters ~ opt(columns) ~ opt(group) ~ opt(order) ~
     opt(offsetLimit) | (columns ~ filters)) ^^ {
       case Null ~ Filters(Nil) ~ None ~ None ~ None ~ None => Null //null literal
       case List(t) ~ Filters(Nil) ~ None ~ None ~ None ~ None => t
       case t ~ (f: Filters) ~ (c: Option[Cols @unchecked]) ~ (g: Option[Grp @unchecked]) ~ (o: Option[Ord @unchecked]) ~
-        (l: Option[(Any, Any) @unchecked]) => Query(t match {
+        (l: Option[(Exp, Exp) @unchecked]) => Query(t match {
           case tables: List[Obj @unchecked] => tables
           case Null => List(Obj(Null, null, null, null))
         }, f, c.orNull, g.orNull, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
       case (c: Cols) ~ (f: Filters) => Query(List(Obj(Null, null, null, null)), f, c,
         null, null, null, null)
     } ^^ { pr =>
-      def toDivChain(objs: List[Obj]): Any = objs match {
+      def toDivChain(objs: List[Obj]): Exp = objs match {
         case o :: Nil => o.obj
         case l => BinOp("/", l.head.obj, toDivChain(l.tail))
       }
@@ -361,11 +363,11 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
           case Obj(_, null, DefaultJoin, null, _) | Obj(_, null, null, null, _) => true
           case _ => false
         } => toDivChain(objs)
-        case q => q
+        case q: Exp @unchecked => q
       }
     } named "query"
 
-  def queryWithCols: MemParser[Any] = query ^? ({
+  def queryWithCols: MemParser[Exp] = query ^? ({
       case q @ Query(objs, _, cols, _, _, _, _) if cols != null => q
     }, {case x => "Query must contain column clause: " + x}) named "query-with-cols"
 
@@ -392,8 +394,10 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def insert: MemParser[Insert] = (("+" ~> qualifiedIdent ~ opt(ident) ~ opt(columns) ~
     opt(queryWithCols | repsep(array, ","))) |
     ((qualifiedIdent ~ opt(ident) ~ opt(columns) <~ "+") ~ rep1sep(array, ","))) ^^ {
-      case t ~ a ~ c ~ (v: Option[_]) => Insert(t, a.orNull, c.map(_.cols).orNull, v.orNull)
-      case t ~ a ~ c ~ v => Insert(t, a.orNull, c.map(_.cols).orNull, v)
+      case t ~ a ~ c ~ (v: Option[_]) => Insert(t, a.orNull, c.map(_.cols).orNull,
+        v.map { case v: List[Arr] @unchecked => Values(v) case s: Exp @unchecked => s } orNull)
+      case t ~ a ~ c ~ (v: List[Arr] @unchecked) => Insert(t, a.orNull, c.map(_.cols).orNull, Values(v))
+      case x => sys.error(s"Unexpected insert parse result: $x")
     } named "insert"
   def update: MemParser[Update] = (("=" ~> qualifiedIdent ~ opt(ident) ~
     opt(filter) ~ opt(columns) ~ opt(queryWithCols | array)) |
@@ -403,7 +407,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
         case None => null
       }, v match {
         case a: Arr => a
-        case Some(vals) => vals
+        case Some(vals: Exp @unchecked) => vals
         case None => null
       })
     } named "update"
@@ -414,13 +418,13 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   //operation parsers
   //delete must be before alternative since it can start with - sign and
   //so it is not translated into minus expression!
-  def unaryExpr: MemParser[Any] = delete | (opt("-" | "!" | "|" | "~") ~ operand) ^^ {
-      case a ~ b => a.map(UnOp(_, b)).getOrElse(b)
-      case x => x
+  def unaryExpr: MemParser[Exp] = delete | (opt("-" | "!" | "|" | "~") ~ operand) ^^ {
+      case a ~ (b: Exp) => a.map(UnOp(_, b)).getOrElse(b)
+      case x: Exp => x
     } named "unary-exp"
-  def mulDiv: MemParser[Any] = unaryExpr ~ rep("*" ~ unaryExpr | "/" ~ unaryExpr) ^^ binOp named "mul-div"
-  def plusMinus: MemParser[Any] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ binOp named "plus-minus"
-  def comp: MemParser[Any] = plusMinus ~ rep(comp_op ~ plusMinus) ^? (
+  def mulDiv: MemParser[Exp] = unaryExpr ~ rep("*" ~ unaryExpr | "/" ~ unaryExpr) ^^ binOp named "mul-div"
+  def plusMinus: MemParser[Exp] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ binOp named "plus-minus"
+  def comp: MemParser[Exp] = plusMinus ~ rep(comp_op ~ plusMinus) ^? (
       {
         case lop ~ Nil => lop
         case lop ~ ((o ~ rop) :: Nil) => BinOp(o, lop, rop)
@@ -435,14 +439,14 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     case lop ~ "!in" ~ "(" ~ rop => In(lop, rop, true)
   } named "in"
   //in parser should come before comp so that it is not taken for in function which is illegal
-  def logicalOp: MemParser[Any] = in | comp named "logical-op"
-  def expr: MemParser[Any] = logicalOp ~ rep("&" ~ logicalOp | "|" ~ logicalOp) ^^ binOp named "expr"
-  def exprList: MemParser[Any] = repsep(expr, ",") ^^ {
+  def logicalOp: MemParser[Exp] = in | comp named "logical-op"
+  def expr: MemParser[Exp] = logicalOp ~ rep("&" ~ logicalOp | "|" ~ logicalOp) ^^ binOp named "expr"
+  def exprList: MemParser[Exp] = repsep(expr, ",") ^^ {
     case e :: Nil => e
     case l => Arr(l)
   } named "expr-list"
 
-  private def binOp(p: ~[Any, List[~[String, Any]]]): Any = p match {
+  private def binOp(p: ~[Exp, List[~[String, Exp]]]): Exp = p match {
     case lop ~ Nil => lop
     case lop ~ ((o ~ rop) :: l) => BinOp(o, lop, binOp(this.~(rop, l)))
   }
