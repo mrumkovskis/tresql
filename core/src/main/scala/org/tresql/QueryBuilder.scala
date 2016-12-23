@@ -5,23 +5,28 @@ import scala.util.Try
 import QueryParser._
 import metadata.key_
 
+object QueryBuildCtx {
+  trait Ctx
+  object ROOT_CTX extends Ctx
+  object ARR_CTX extends Ctx
+  object QUERY_CTX extends Ctx
+  object FROM_CTX extends Ctx
+  object TABLE_CTX extends Ctx
+  object JOIN_CTX extends Ctx
+  object WHERE_CTX extends Ctx
+  object COL_CTX extends Ctx
+  object ORD_CTX extends Ctx
+  object GROUP_CTX extends Ctx
+  object HAVING_CTX extends Ctx
+  object VALUES_CTX extends Ctx
+  object LIMIT_CTX extends Ctx
+  object FUN_CTX extends Ctx
+  object EXTERNAL_FUN_CTX extends Ctx
+}
+
 trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.tresql.Query =>
 
-  val ROOT_CTX = "ROOT"
-  val ARR_CTX = "ARRAY"
-  val QUERY_CTX = "QUERY"
-  val FROM_CTX ="FROM_CTX"
-  val TABLE_CTX = "TABLE"
-  val JOIN_CTX = "JOIN"
-  val WHERE_CTX = "WHERE"
-  val COL_CTX = "COL"
-  val ORD_CTX = "ORD"
-  val GROUP_CTX = "GROUP"
-  val HAVING_CTX = "HAVING"
-  val VALUES_CTX = "VALUES"
-  val LIMIT_CTX = "LIMIT"
-  val FUN_CTX = "FUNCTION"
-  val EXTERNAL_FUN_CTX = "EXTERNAL_FUN_CTX"
+  import QueryBuildCtx._
 
   val STANDART_BIN_OPS = Set("<=", ">=", "<", ">", "!=", "=", "~", "!~", "in", "!in",
       "++", "+",  "-", "&&", "||", "*", "/", "&", "|")
@@ -47,7 +52,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   private lazy val childUpdates = _childUpdatesBuildTime.toList
 
   //context stack as buildInternal method is called
-  protected var ctxStack = List[String]()
+  protected var ctxStack = List[Ctx]()
 
   //used internally while building expression
   private var separateQueryFlag = false
@@ -693,13 +698,18 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     })
 
   //DML statements are defined outside of buildInternal method since they are called from other QueryBuilder
-  private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: Any) = {
-    new InsertExpr(IdentExpr(table.ident), alias, Option(cols) map (_ map (buildInternal(_, COL_CTX)) filter {
-      case x @ ColExpr(IdentExpr(_), _, _, _, _) => true
-      case e: ColExpr => registerChildUpdate(e.col, e.name); false
-      case _ => sys.error("Unexpected InsertExpr type")
-    }) getOrElse this.table(table).cols.map(c => IdentExpr(List(c.name))), vals match {
-      case arr: List[_] => ValuesExpr(arr map {
+  private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: Exp) = {
+    new InsertExpr(IdentExpr(table.ident), alias,
+      cols match {
+        //get column clause from metadata
+        case Nil => this.table(table).cols.map(c => IdentExpr(List(c.name)))
+        case c => c map (buildInternal(_, COL_CTX)) filter {
+          case x @ ColExpr(IdentExpr(_), _, _, _, _) => true
+          case e: ColExpr => registerChildUpdate(e.col, e.name); false
+          case _ => sys.error("Unexpected InsertExpr type")
+        }
+      }, vals match {
+      case Values(arr) => ValuesExpr(arr map {
         buildInternal(_, VALUES_CTX) match {
           case ArrExpr(l) => ArrExpr(patchVals(table, cols, l))
           case null => ArrExpr(patchVals(table, cols, Nil))
@@ -712,15 +722,17 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       case q => buildInternal(q, VALUES_CTX)
     })
   }
-  private def buildUpdate(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Any) = {
+  private def buildUpdate(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp) = {
     new UpdateExpr(IdentExpr(table.ident), alias, if (filter != null)
-      filter.elements map { buildInternal(_, WHERE_CTX) } else null,
-      Option(cols) map (_ map (buildInternal(_, COL_CTX)) filter {
-        case ColExpr(IdentExpr(_), _, _, _, _) => true
-        case e: ColExpr => registerChildUpdate(e.col, e.name); false
-        case _ => sys.error("Unexpected UpdateExpr type")
-      }) getOrElse this.table(table).cols.map(c => IdentExpr(List(c.name))),
-      buildInternal(vals, VALUES_CTX) match {
+      filter.elements map { buildInternal(_, WHERE_CTX) } else null, cols match {
+        //get column clause from metadata
+        case Nil => this.table(table).cols.map(c => IdentExpr(List(c.name)))
+        case c => c map (buildInternal(_, COL_CTX)) filter {
+          case ColExpr(IdentExpr(_), _, _, _, _) => true
+          case e: ColExpr => registerChildUpdate(e.col, e.name); false
+          case _ => sys.error("Unexpected UpdateExpr type")
+        }
+      }, buildInternal(vals, VALUES_CTX) match {
         case v: ArrExpr => ValuesExpr(patchVals(table, cols, v.elements))
         case q: SelectExpr => q
         case null => ValuesExpr(patchVals(table, cols, Nil))
@@ -734,7 +746,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   }
   private def table(t: Ident) = env.table(t.ident.mkString("."))
   private def patchVals(table: Ident, cols: List[Col], vals: List[Expr]) = {
-    val diff = Option(cols).getOrElse(this.table(table).cols).size - vals.size
+    val diff = (if (cols.isEmpty) this.table(table).cols else cols).size - vals.size
     val allExprIdx = vals.indexWhere(_.isInstanceOf[AllExpr])
     def v(i: Int) = buildInternal(Variable("?", null, null, false), VALUES_CTX)
     if (diff > 0 || allExprIdx != -1) allExprIdx match {
@@ -745,13 +757,13 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     else vals
   }
 
-  private def buildArray(a: Arr, ctx: String = ARR_CTX) = a.elements
+  private def buildArray(a: Arr, ctx: Ctx = ARR_CTX) = a.elements
     .map { buildInternal(_, ctx) } filter (_ != null) match {
       case al if !al.isEmpty => ArrExpr(al) case _ => null
     }
 
 
-  private[tresql] def buildInternal(parsedExpr: Any, parseCtx: String = ROOT_CTX): Expr = {
+  private[tresql] def buildInternal(parsedExpr: Exp, parseCtx: Ctx = ROOT_CTX): Expr = {
     def buildSelect(q: QueryParser.Query) = {
       val tablesAndAliases = buildTables(q.tables)
       if (ctxStack.head == QUERY_CTX && this.tableDefs == Nil) this.tableDefs = defs(tablesAndAliases._1)
@@ -975,9 +987,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     ctxStack ::= parseCtx
     try {
       parsedExpr match {
-        case x: Number => ConstExpr(x)
-        case x: String => ConstExpr(x)
-        case x: Boolean => ConstExpr(x)
+        case Const(x) => ConstExpr(x)
         case Null => ConstExpr(null)
         //insert
         case Insert(t, a, c, v) => buildWithNew(_.buildInsert(t, a, c, v))
@@ -1090,16 +1100,16 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case Ord(cols) => Order(cols map (c=> (buildInternal(c._1, parseCtx),
             buildInternal(c._2, parseCtx), buildInternal(c._3, parseCtx))))
         case All => AllExpr()
-        case null => null
         case Braces(expr) =>
           val e = buildInternal(expr, parseCtx)
           if (e == null) null else BracesExpr(e)
+        case null => null
         case x => ConstExpr(x)
       }
     } finally ctxStack = ctxStack.tail
   }
 
-  def buildExpr(ex: String): Expr = buildExpr(parseExp(ex).asInstanceOf[Exp])
+  def buildExpr(ex: String): Expr = buildExpr(parseExp(ex))
   def buildExpr(ex: Exp): Expr = buildInternal(ex,
     ctxStack.headOption.getOrElse(ROOT_CTX))
 

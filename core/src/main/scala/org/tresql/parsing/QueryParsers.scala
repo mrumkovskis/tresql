@@ -151,13 +151,13 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   case class Insert(table: Ident, alias: String, cols: List[Col], vals: Exp) extends DMLExp {
     override def filter = null
     def tresql = "+" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
-      (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") +
+      (if (!cols.isEmpty) cols.map(_.tresql).mkString("{", ",", "}") else "") +
       (if (vals != null) any2tresql(vals) else "")
   }
   case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp) extends DMLExp {
     def tresql = "=" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
       (if (filter != null) filter.tresql else "") +
-      (if (cols != null) cols.map(_.tresql).mkString("{", ",", "}") else "") +
+      (if (!cols.isEmpty) cols.map(_.tresql).mkString("{", ",", "}") else "") +
       (if (vals != null) any2tresql(vals) else "")
   }
   case class Delete(table: Ident, alias: String, filter: Arr) extends DMLExp {
@@ -200,7 +200,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def ALL: MemParser[All.type] = "*" ^^^ All named "all"
 
 
-  def const: MemParser[Const] = (TRUE | FALSE | ALL | decimalNr | stringLiteral) ^^ Const named "const"
+  def const: MemParser[Const] = (TRUE | FALSE | decimalNr | stringLiteral) ^^ Const named "const"
   def qualifiedIdent: MemParser[Ident] = rep1sep(ident, ".") ^^ Ident named "qualified-ident"
   def qualifiedIdentAll: MemParser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
   def variable: MemParser[Variable] = ((":" ~> ((ident | stringLiteral) ~
@@ -226,7 +226,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
      * of the query.
      * variable parser must be applied after query parser since ? mark matches variable
      * insert, delete, update parsers must be applied before query parser */
-  def operand: MemParser[Exp] = (const | withQuery | function | insert | update | query |
+  def operand: MemParser[Exp] = (const | ALL | withQuery | function | insert | update | query |
     variable | id | idref | result | array) named "operand"
   def function: MemParser[Fun] = (qualifiedIdent <~ "(") ~ opt("#") ~ repsep(expr, ",") <~ ")" ^^ {
     case Ident(a) ~ d ~ b => Fun(a.mkString("."), b, d.map(x=> true).getOrElse(false))
@@ -394,22 +394,23 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def insert: MemParser[Insert] = (("+" ~> qualifiedIdent ~ opt(ident) ~ opt(columns) ~
     opt(queryWithCols | repsep(array, ","))) |
     ((qualifiedIdent ~ opt(ident) ~ opt(columns) <~ "+") ~ rep1sep(array, ","))) ^^ {
-      case t ~ a ~ c ~ (v: Option[_]) => Insert(t, a.orNull, c.map(_.cols).orNull,
-        v.map { case v: List[Arr] @unchecked => Values(v) case s: Exp @unchecked => s } orNull)
-      case t ~ a ~ c ~ (v: List[Arr] @unchecked) => Insert(t, a.orNull, c.map(_.cols).orNull, Values(v))
+      case t ~ a ~ c ~ (v: Option[_]) =>
+        Insert(t, a.orNull, c.map(_.cols).getOrElse(Nil),
+          v.map { case v: List[Arr] @unchecked => Values(v) case s: Exp @unchecked => s } orNull)
+      case t ~ a ~ c ~ (v: List[Arr] @unchecked) =>
+        Insert(t, a.orNull, c.map(_.cols).getOrElse(Nil), Values(v))
       case x => sys.error(s"Unexpected insert parse result: $x")
     } named "insert"
   def update: MemParser[Update] = (("=" ~> qualifiedIdent ~ opt(ident) ~
     opt(filter) ~ opt(columns) ~ opt(queryWithCols | array)) |
     ((qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) <~ "=") ~ array)) ^^ {
-      case t ~ a ~ f ~ c ~ v => Update(t, a orNull, f orNull, c match {
-        case Some(Cols(_, c)) => c
-        case None => null
-      }, v match {
-        case a: Arr => a
-        case Some(vals: Exp @unchecked) => vals
-        case None => null
-      })
+      case t ~ a ~ f ~ c ~ v =>
+        Update(t, a orNull, f orNull, c.map(_.cols).getOrElse(Nil),
+          v match {
+            case a: Arr => a
+            case Some(vals: Exp @unchecked) => vals
+            case None => null
+          })
     } named "update"
   def delete: MemParser[Delete] = (("-" ~> qualifiedIdent ~ opt(ident) ~ filter) |
     (((qualifiedIdent ~ opt(ident)) <~ "-") ~ filter)) ^^ {

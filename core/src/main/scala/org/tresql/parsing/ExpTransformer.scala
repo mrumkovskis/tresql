@@ -11,14 +11,15 @@ trait ExpTransformer { this: QueryParsers =>
     //transform traverse function
     lazy val tt = fun orElse traverse
     lazy val traverse: Transformer = {
+      case All => All
+      case Null => Null
+      case c: Const => c
       case e: Ident => e
       case e: Id => e
       case e: IdRef => e
       case e: Res => e
-      case All => All
       case e: IdentAll => e
       case e: Variable => e
-      case Null => Null
       case Fun(n, pars, d) => Fun(n, pars map tt, d)
       case UnOp(o, op) => UnOp(o, tt(op))
       case BinOp(o, lop, rop) => BinOp(o, tt(lop), tt(rop))
@@ -34,8 +35,8 @@ trait ExpTransformer { this: QueryParsers =>
         Query((objs map tt).asInstanceOf[List[Obj]], tt(filters).asInstanceOf[Filters],
             tt(cols).asInstanceOf[Cols], tt(gr).asInstanceOf[Grp], tt(ord).asInstanceOf[Ord],
             tt(off), tt(lim))
-      case WithTable(n, c, r, q) => WithTable(n, c, r, tt(q).asInstanceOf[Exp])
-      case With(ts, q) => With((ts map tt).asInstanceOf[List[WithTable]], tt(q).asInstanceOf[Exp])
+      case WithTable(n, c, r, q) => WithTable(n, c, r, tt(q))
+      case With(ts, q) => With((ts map tt).asInstanceOf[List[WithTable]], tt(q))
       case Insert(t, a, cols, vals) => Insert(tt(t).asInstanceOf[Ident], a,
         (cols map tt).asInstanceOf[List[Col]], tt(vals))
       case Update(t, a, filter, cols, vals) => Update(tt(t).asInstanceOf[Ident], a,
@@ -44,6 +45,7 @@ trait ExpTransformer { this: QueryParsers =>
       case Arr(els) => Arr(els map tt)
       case Filters(f) => Filters((f map tt).asInstanceOf[List[Arr]])
       case Braces(expr) => Braces(tt(expr))
+      case null => null
       //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
       case x: Exp => sys.error("Unknown expression: " + x)
     }
@@ -54,14 +56,15 @@ trait ExpTransformer { this: QueryParsers =>
     //transform traverse
     def tt(state: T): Transformer = fun(state) orElse traverse(state)
     def traverse(state: T): Transformer = {
+      case All => All
+      case Null => Null
+      case c: Const => c
       case e: Ident => e
       case e: Id => e
       case e: IdRef => e
       case e: Res => e
-      case All => All
       case e: IdentAll => e
       case e: Variable => e
-      case Null => Null
       case Fun(n, pars, d) => Fun(n, pars.map(tt(state)(_)), d)
       case UnOp(o, op) => UnOp(o, tt(state)(op))
       case BinOp(o, lop, rop) => BinOp(o, tt(state)(lop), tt(state)(rop))
@@ -83,9 +86,9 @@ trait ExpTransformer { this: QueryParsers =>
           tt(state)(off),
           tt(state)(lim)
         )
-      case WithTable(n, c, r, q) => WithTable(n, c, r, tt(state)(q).asInstanceOf[Exp])
+      case WithTable(n, c, r, q) => WithTable(n, c, r, tt(state)(q))
       case With(ts, q) => With((ts map {wt => tt(state)(wt) }).asInstanceOf[List[WithTable]],
-        tt(state)(q).asInstanceOf[Exp])
+        tt(state)(q))
       case Insert(t, a, cols, vals) => Insert(tt(state)(t).asInstanceOf[Ident], a,
           (cols map { c => tt(state)(c) }).asInstanceOf[List[Col]], tt(state)(vals))
       case Update(t, a, filter, cols, vals) =>
@@ -96,10 +99,13 @@ trait ExpTransformer { this: QueryParsers =>
           (cols map { c => tt(state)(c) }).asInstanceOf[List[Col]],
           tt(state)(vals)
         )
-      case Delete(t, a, filter) => Delete(tt(state)(t).asInstanceOf[Ident], a, tt(state)(filter).asInstanceOf[Arr])
+      case Delete(t, a, filter) =>
+        Delete(tt(state)(t).asInstanceOf[Ident], a, tt(state)(filter).asInstanceOf[Arr])
       case Arr(els) => Arr(els.map(tt(state)(_)))
       case Filters(f) => Filters(f map (tt(state)(_).asInstanceOf[Arr]))
+      case Values(v) => Values(v map (tt(state)(_).asInstanceOf[Arr]))
       case Braces(expr) => Braces(tt(state)(expr))
+      case null => null
       //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
       case x: Exp => sys.error("Unknown expression: " + x)
     }
@@ -128,7 +134,7 @@ trait ExpTransformer { this: QueryParsers =>
     def tr(r: T, e: Exp): T = extract_traverse((r, e))
     def trl(r: T, l: List[Exp]) = l.foldLeft(r) { (fr, el) => tr(fr, el) }
     def traverse_rest(r: T, e: Exp) = e match {
-      case _: Ident | _: Id | _: IdRef | _: Res | All | _: IdentAll | _: Variable | Null | null => r
+      case _: Ident | _: Id | _: IdRef | _: Res | All | _: IdentAll | _: Variable | Null | _: Const | null => r
       case Fun(_, pars, _) => trl(r, pars)
       case UnOp(_, operand) => tr(r, operand)
       case BinOp(_, lop, rop) => tr(tr(r, lop), rop)
@@ -149,6 +155,7 @@ trait ExpTransformer { this: QueryParsers =>
       case Delete(_, _, filter) => tr(r, filter)
       case Arr(els) => trl(r, els)
       case Filters(f) => trl(r, f)
+      case Values(v) => trl(r, v)
       case Braces(expr) => tr(r, expr)
       //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
       case x: Exp => sys.error("Unknown expression: " + x)

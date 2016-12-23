@@ -372,10 +372,10 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         val vals = if (dml.vals != null) tr(BodyCtx, dml.vals) else null
         dml match {
           case i: Insert =>
-            InsertDef(cols, List(table), Insert(table = null, alias = null, cols = null, vals = vals))
+            InsertDef(cols, List(table), Insert(table = null, alias = null, cols = Nil, vals = vals))
           case u: Update =>
             UpdateDef(cols, List(table), Update(
-              table = null, alias = null, cols = null, filter = filter, vals = vals))
+              table = null, alias = null, cols = Nil, filter = filter, vals = vals))
           case d: Delete =>
             DeleteDef(List(table), Delete(table = null, alias = null, filter = filter))
         }
@@ -413,6 +413,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
 
     lazy val resolver: TransformerWithState[List[Scope]] = transformerWithState(scopes => {
       case sd: SelectDef =>
+
         val nsd = sd.copy(tables = {
           sd.tables.map {
             case td @ TableDef(_, Obj(TableObj(_: SelectDefBase), _, _, _, _)) =>
@@ -512,39 +513,42 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
 
   def resolveColTypes(exp: Exp) = {
     case class Ctx(scopes: List[Scope], mf: Manifest[_])
-    def type_from_any(scopes: List[Scope], exp: Any) = Ctx(Nil, mf = exp match {
+    def type_from_const(const: Any): (Ctx, Boolean) = (Ctx(Nil, const match {
       case n: java.lang.Number => ManifestFactory.classType(n.getClass)
       case b: Boolean => ManifestFactory.Boolean
       case s: String => ManifestFactory.classType(s.getClass)
-      /*null cannot be used since partial function does not match it as type T - Manifest*/
-      case e: Exp @unchecked => typer((Ctx(scopes, Manifest.Nothing), e)).mf
+      case m: Manifest[_] => m
+      case null => Manifest.Any
       case x => ManifestFactory.classType(x.getClass)
-    })
+    }), false)
+    def type_from_exp(ctx: Ctx, exp: Exp) = (typer((ctx, exp)), false)
     lazy val typer: Extractor[Ctx] = extractorAndTraverser {
+      case (_, Const(const)) => type_from_const(const)
+      case (_, Null) => type_from_const(null)
       case (Ctx(scopes, _), Ident(ident)) =>
         (Ctx(null, column(scopes)(ident mkString ".").map(_.scalaType).get), false)
-      case (Ctx(scopes, _), Null) => (Ctx(null, Manifest.Any), false)
-      case (Ctx(scopes, _), UnOp(op, operand)) => (type_from_any(scopes, operand), false)
-      case (Ctx(scopes, _), BinOp(op, lop, rop)) =>
+      case (ctx, UnOp(_, operand)) => type_from_exp(ctx, operand)
+      case (ctx, BinOp(op, lop, rop)) =>
         comp_op.findAllIn(op).toList match {
           case Nil =>
-            val (lt, rt) = (type_from_any(scopes, lop).mf, type_from_any(scopes, rop).mf)
+            val (lt, rt) = (type_from_exp(ctx, lop)._1.mf, type_from_exp(ctx, rop)._1.mf)
             val mf =
               if (lt.toString == "java.lang.String") lt else if (rt == "java.lang.String") rt
               else if (lt.toString == "java.lang.Boolean") lt else if (rt == "java.lang.Boolean") rt
               else if (lt <:< rt) rt else if (rt <:< lt) lt else lt
             (Ctx(null, mf), false)
-          case _ => (Ctx(null, Manifest.Boolean), false)
+          case _ => type_from_const(true)
         }
-      case (_, _: TerOp) => (Ctx(null, Manifest.Boolean), false)
-      case (Ctx(scopes, _), s: SelectDef) =>
+      case (_, _: TerOp) => type_from_const(true)
+      case (ctx, s: SelectDef) =>
         if (s.cols.size > 1)
-          throw CompilerException(s"Select must contain only one column, instead:${s.cols.map(_.tresql).mkString(", ")}")
-        else (type_from_any(s :: scopes, s.cols.head), false)
-      case (Ctx(scopes, _), f: FunDef[_]) =>
-        (if (f.typ != null && f.typ != Manifest.Nothing) Ctx(null, f.typ)
-        else if (f.procedure.returnTypeParIndex == -1) Ctx(null, Manifest.Any)
-        else type_from_any(scopes, f.exp.parameters(f.procedure.returnTypeParIndex))) -> false
+          throw CompilerException(s"Select must contain only one column, instead:${
+            s.cols.map(_.tresql).mkString(", ")}")
+        else type_from_exp(ctx.copy(scopes = s :: ctx.scopes), s.cols.head)
+      case (ctx, f: FunDef[_]) =>
+        if (f.typ != null && f.typ != Manifest.Nothing) type_from_const(f.typ)
+        else if (f.procedure.returnTypeParIndex == -1) type_from_const(Manifest.Any)
+        else type_from_exp(ctx, f.exp.parameters(f.procedure.returnTypeParIndex))
     }
     lazy val type_resolver: TransformerWithState[List[Scope]] = transformerWithState(scopes => {
       case s: SelectDef =>
@@ -573,10 +577,10 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         }
       case ColDef(n, ChildDef(ch), t) => ColDef(n, ChildDef(type_resolver(scopes)(ch)), t)
       case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
-        ColDef(n, exp, type_from_any(scopes, exp).mf)
+        ColDef(n, exp, typer((Ctx(scopes, null), exp)).mf)
       case fd @ FunDef(n, f, typ, p) if typ == null || typ == Manifest.Nothing =>
         val t = if (p.returnTypeParIndex == -1) Manifest.Any else {
-          type_from_any(scopes, f.parameters(p.returnTypeParIndex)).mf
+          typer((Ctx(scopes, null), f.parameters(p.returnTypeParIndex))).mf
         }
         fd.copy(typ = t)
     })
@@ -639,11 +643,9 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
   }
 
   override def transformerWithState[T](fun: TransformerWithState[T]): TransformerWithState[T] = {
-    def local_transformer(state: T): Transformer = fun(state) orElse traverse(state)
-    def tt(state: T): Transformer = {
-      val lt = local_transformer(state)
-      lt orElse super.transformer(lt)
-    }
+    lazy val local_transformer: TransformerWithState[T] = (state: T) => fun(state) orElse traverse(state)
+    def tt(state: T): Transformer =
+      local_transformer(state) orElse super.transformerWithState(local_transformer)(state)
     def traverse(state: T): Transformer = {
       case cd: ColDef[_] => cd.copy(col = tt(state)(cd.col))
       case cd: ChildDef => cd.copy(exp = tt(state)(cd.exp))
@@ -717,7 +719,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     extract_traverse
   }
 
-  def parseExp(expr: String): Any = try {
+  def parseExp(expr: String): Exp = try {
     intermediateResults.get.clear
     phrase(exprList)(new scala.util.parsing.input.CharSequenceReader(expr)) match {
       case Success(r, _) => r
