@@ -692,11 +692,9 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
   override def extractorAndTraverser[T](
     fun: ExtractorAndTraverser[T],
     traverser: Extractor[T] = PartialFunction.empty): Extractor[T] = {
-    def tr(r: T, x: Any): T = x match {
-      case e: Exp @unchecked => extract_traverse((r, e))
-      case l: List[_] => l.foldLeft(r) { (fr, el) => tr(fr, el) }
-      case _ => r
-    }
+    //shortcut
+    def tr(r: T, e: Exp): T = extract_traverse((r, e))
+    def trl(r: T, l: List[Exp]) = l.foldLeft(r) { (fr, el) => tr(fr, el) }
     lazy val extract_traverse: Extractor[T] =
       super.extractorAndTraverser(fun, traverser orElse local_extract_traverse)
     lazy val local_extract_traverse: Extractor[T] = {
@@ -706,15 +704,15 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case (r: T @unchecked, td: TableDef) => tr(r, td.exp)
       case (r: T @unchecked, to: TableObj) => tr(r, to.obj)
       case (r: T @unchecked, ta: TableAlias) => tr(r, ta.obj)
-      case (r: T @unchecked, sd: SelectDef) => tr(tr(tr(r, sd.tables), sd.cols), sd.exp)
+      case (r: T @unchecked, sd: SelectDef) => tr(trl(trl(r, sd.tables), sd.cols), sd.exp)
       case (r: T @unchecked, bd: BinSelectDef) => tr(tr(r, bd.leftOperand), bd.rightOperand)
-      case (r: T @unchecked, id: InsertDef) => tr(tr(tr(r, id.tables), id.cols), id.exp)
-      case (r: T @unchecked, ud: UpdateDef) => tr(tr(tr(r, ud.tables), ud.cols), ud.exp)
-      case (r: T @unchecked, dd: DeleteDef) => tr(tr(tr(r, dd.tables), dd.cols), dd.exp)
-      case (r: T @unchecked, ad: ArrayDef) => tr(r, ad.cols)
+      case (r: T @unchecked, id: InsertDef) => tr(trl(trl(r, id.tables), id.cols), id.exp)
+      case (r: T @unchecked, ud: UpdateDef) => tr(trl(trl(r, ud.tables), ud.cols), ud.exp)
+      case (r: T @unchecked, dd: DeleteDef) => tr(trl(trl(r, dd.tables), dd.cols), dd.exp)
+      case (r: T @unchecked, ad: ArrayDef) => trl(r, ad.cols)
       case (r: T @unchecked, rd: RecursiveDef) => tr(r, rd.exp)
       case (r: T @unchecked, wtd: WithTableDef) => tr(r, wtd.exp)
-      case (r: T @unchecked, wsd: WithSelectDef) => tr(tr(r, wsd.withTables), wsd.exp)
+      case (r: T @unchecked, wsd: WithSelectDef) => tr(trl(r, wsd.withTables), wsd.exp)
     }
     extract_traverse
   }
