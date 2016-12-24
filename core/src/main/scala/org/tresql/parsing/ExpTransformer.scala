@@ -8,8 +8,9 @@ trait ExpTransformer { this: QueryParsers =>
   type ExtractorAndTraverser[T] = PartialFunction[(T, Exp), (T, Boolean)]
 
   def transformer(fun: Transformer): Transformer = {
-    //transform traverse function
-    lazy val tt = fun orElse traverse
+    lazy val transform_traverse = fun orElse traverse
+    //helper function
+    def tt[A <: Exp](exp: A) = transform_traverse(exp).asInstanceOf[A]
     lazy val traverse: Transformer = {
       case All => All
       case Null => Null
@@ -25,36 +26,33 @@ trait ExpTransformer { this: QueryParsers =>
       case BinOp(o, lop, rop) => BinOp(o, tt(lop), tt(rop))
       case TerOp(lop, op1, mop, op2, rop) => TerOp(tt(lop), op1, tt(mop), op2, tt(rop))
       case In(lop, rop, not) => In(tt(lop), rop map tt, not)
-      case Obj(t, a, j, o, n) => Obj(tt(t), a, tt(j).asInstanceOf[Join], o, n)
+      case Obj(t, a, j, o, n) => Obj(tt(t), a, tt(j), o, n)
       case Join(d, j, n) => Join(d, tt(j), n)
       case Col(c, a, t) => Col(tt(c), a, t)
-      case Cols(d, cols) => Cols(d, (cols map tt).asInstanceOf[List[Col]])
+      case Cols(d, cols) => Cols(d, (cols map tt))
       case Grp(cols, hv) => Grp(cols map tt, tt(hv))
       case Ord(cols) => Ord(cols map (c=> (c._1, tt(c._2), c._3)))
       case Query(objs, filters, cols, gr, ord, off, lim) =>
-        Query((objs map tt).asInstanceOf[List[Obj]], tt(filters).asInstanceOf[Filters],
-            tt(cols).asInstanceOf[Cols], tt(gr).asInstanceOf[Grp], tt(ord).asInstanceOf[Ord],
-            tt(off), tt(lim))
+        Query((objs map tt), tt(filters), tt(cols), tt(gr), tt(ord), tt(off), tt(lim))
       case WithTable(n, c, r, q) => WithTable(n, c, r, tt(q))
-      case With(ts, q) => With((ts map tt).asInstanceOf[List[WithTable]], tt(q))
-      case Insert(t, a, cols, vals) => Insert(tt(t).asInstanceOf[Ident], a,
-        (cols map tt).asInstanceOf[List[Col]], tt(vals))
-      case Update(t, a, filter, cols, vals) => Update(tt(t).asInstanceOf[Ident], a,
-          tt(filter).asInstanceOf[Arr], (cols map tt).asInstanceOf[List[Col]], tt(vals))
-      case Delete(t, a, filter) => Delete(tt(t).asInstanceOf[Ident], a, tt(filter).asInstanceOf[Arr])
+      case With(ts, q) => With((ts map tt), tt(q))
+      case Insert(t, a, cols, vals) => Insert(tt(t), a, (cols map tt), tt(vals))
+      case Update(t, a, filter, cols, vals) => Update(tt(t), a, tt(filter), (cols map tt), tt(vals))
+      case Delete(t, a, filter) => Delete(tt(t), a, tt(filter))
       case Arr(els) => Arr(els map tt)
-      case Filters(f) => Filters((f map tt).asInstanceOf[List[Arr]])
+      case Filters(f) => Filters((f map tt))
       case Braces(expr) => Braces(tt(expr))
       case null => null
       //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
       case x: Exp => sys.error("Unknown expression: " + x)
     }
-    tt
+    transform_traverse
   }
 
   def transformerWithState[T](fun: TransformerWithState[T]): TransformerWithState[T] = {
-    //transform traverse
-    def tt(state: T): Transformer = fun(state) orElse traverse(state)
+    def transform_traverse(state: T): Transformer = fun(state) orElse traverse(state)
+    //helper function
+    def tt[A <: Exp](state: T)(exp: A) = transform_traverse(state)(exp).asInstanceOf[A]
     def traverse(state: T): Transformer = {
       case All => All
       case Null => Null
@@ -70,46 +68,44 @@ trait ExpTransformer { this: QueryParsers =>
       case BinOp(o, lop, rop) => BinOp(o, tt(state)(lop), tt(state)(rop))
       case TerOp(lop, op1, mop, op2, rop) => TerOp(tt(state)(lop), op1, tt(state)(mop), op2, tt(state)(rop))
       case In(lop, rop, not) => In(tt(state)(lop), rop.map(tt(state)(_)), not)
-      case Obj(t, a, j, o, n) => Obj(tt(state)(t), a, tt(state)(j).asInstanceOf[Join], o, n)
+      case Obj(t, a, j, o, n) => Obj(tt(state)(t), a, tt(state)(j), o, n)
       case Join(d, j, n) => Join(d, tt(state)(j), n)
       case Col(c, a, t) => Col(tt(state)(c), a, t)
-      case Cols(d, cols) => Cols(d, cols map (tt(state)(_).asInstanceOf[Col]))
+      case Cols(d, cols) => Cols(d, cols map (tt(state)(_)))
       case Grp(cols, hv) => Grp(cols.map(tt(state)(_)), tt(state)(hv))
       case Ord(cols) => Ord(cols map (c=> (c._1, tt(state)(c._2), c._3)))
       case Query(objs, filters, cols, gr, ord, off, lim) =>
         Query(
-          objs map (tt(state)(_).asInstanceOf[Obj]),
-          tt(state)(filters).asInstanceOf[Filters],
-          tt(state)(cols).asInstanceOf[Cols],
-          tt(state)(gr).asInstanceOf[Grp],
-          tt(state)(ord).asInstanceOf[Ord],
+          objs map (tt(state)(_)),
+          tt(state)(filters),
+          tt(state)(cols),
+          tt(state)(gr),
+          tt(state)(ord),
           tt(state)(off),
           tt(state)(lim)
         )
       case WithTable(n, c, r, q) => WithTable(n, c, r, tt(state)(q))
-      case With(ts, q) => With((ts map {wt => tt(state)(wt) }).asInstanceOf[List[WithTable]],
-        tt(state)(q))
-      case Insert(t, a, cols, vals) => Insert(tt(state)(t).asInstanceOf[Ident], a,
-          (cols map { c => tt(state)(c) }).asInstanceOf[List[Col]], tt(state)(vals))
-      case Update(t, a, filter, cols, vals) =>
+      case With(ts, q) => With((ts map {wt => tt(state)(wt) }), tt(state)(q))
+      case Insert(t, a, cols, vals) => Insert(tt(state)(t), a,
+          (cols map { c => tt(state)(c) }), tt(state)(vals))
+      case Update(table, alias, filter, cols, vals) =>
         Update(
-          tt(state)(t).asInstanceOf[Ident],
-          a,
-          tt(state)(filter).asInstanceOf[Arr],
-          (cols map { c => tt(state)(c) }).asInstanceOf[List[Col]],
+          tt(state)(table),
+          alias,
+          tt(state)(filter),
+          (cols map { c => tt(state)(c) }),
           tt(state)(vals)
         )
-      case Delete(t, a, filter) =>
-        Delete(tt(state)(t).asInstanceOf[Ident], a, tt(state)(filter).asInstanceOf[Arr])
+      case Delete(table, alias, filter) => Delete(tt(state)(table), alias, tt(state)(filter))
       case Arr(els) => Arr(els.map(tt(state)(_)))
-      case Filters(f) => Filters(f map (tt(state)(_).asInstanceOf[Arr]))
-      case Values(v) => Values(v map (tt(state)(_).asInstanceOf[Arr]))
+      case Filters(f) => Filters(f map (tt(state)(_)))
+      case Values(v) => Values(v map (tt(state)(_)))
       case Braces(expr) => Braces(tt(state)(expr))
       case null => null
       //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
       case x: Exp => sys.error("Unknown expression: " + x)
     }
-    tt _
+    transform_traverse _
   }
 
   def extractor[T](
