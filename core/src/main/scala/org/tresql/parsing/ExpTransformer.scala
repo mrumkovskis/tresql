@@ -3,9 +3,10 @@ package org.tresql.parsing
 trait ExpTransformer { this: QueryParsers =>
 
   type Transformer = PartialFunction[Exp, Exp]
-  type TransformerWithState[T] = (T) => PartialFunction[Exp, Exp]
+  type TransformerWithState[T] = T => PartialFunction[Exp, Exp]
   type Extractor[T] = PartialFunction[(T, Exp), T]
   type ExtractorAndTraverser[T] = PartialFunction[(T, Exp), (T, Boolean)]
+  type Traverser[T] = T => PartialFunction[Exp, T]
 
   def transformer(fun: Transformer): Transformer = {
     lazy val transform_traverse = fun orElse traverse
@@ -106,6 +107,40 @@ trait ExpTransformer { this: QueryParsers =>
       case x: Exp => sys.error("Unknown expression: " + x)
     }
     transform_traverse _
+  }
+
+  def traverser[T](fun: Traverser[T]): Traverser[T] = {
+    def fun_traverse(state: T) = fun(state) orElse traverse(state)
+    def tr(r: T, e: Exp): T = fun_traverse(r)(e)
+    def trl(r: T, l: List[Exp]) = l.foldLeft(r) { (fr, el) => tr(fr, el) }
+    def traverse(state: T): PartialFunction[Exp, T] = {
+      case _: Ident | _: Id | _: IdRef | _: Res | All | _: IdentAll | _: Variable | Null | _: Const | null => state
+      case Fun(_, pars, _) => trl(state, pars)
+      case UnOp(_, operand) => tr(state, operand)
+      case BinOp(_, lop, rop) => tr(tr(state, lop), rop)
+      case In(lop, rop, _) => trl(tr(state, lop), rop)
+      case TerOp(lop, op1, mop, op2, rop) => tr(tr(tr(state, lop), mop), rop)
+      case Obj(t, _, j, _, _) => tr(tr(state, j), t) //call tr method in order of writing tresql statement
+      case Join(_, j, _) => tr(state, j)
+      case Col(c, _, _) => tr(state, c)
+      case Cols(_, cols) => trl(state, cols)
+      case Grp(cols, hv) => tr(trl(state, cols), hv)
+      case Ord(cols) => trl(state, cols.map(_._2))
+      case Query(objs, filters, cols, gr, ord, off, lim) =>
+        tr(tr(tr(tr(tr(tr(trl(state, objs), filters), cols), gr), ord), off), lim)
+      case WithTable(_, _, _, q) => tr(state, q)
+      case With(ts, q) => tr(trl(state, ts), q)
+      case Insert(_, _, cols, vals) => tr(trl(state, cols), vals)
+      case Update(_, _, filter, cols, vals) => tr(trl(tr(state, filter), cols), vals)
+      case Delete(_, _, filter) => tr(state, filter)
+      case Arr(els) => trl(state, els)
+      case Filters(f) => trl(state, f)
+      case Values(v) => trl(state, v)
+      case Braces(expr) => tr(state, expr)
+      //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
+      case x: Exp => sys.error("Unknown expression: " + x)
+    }
+    fun_traverse _
   }
 
   def extractor[T](

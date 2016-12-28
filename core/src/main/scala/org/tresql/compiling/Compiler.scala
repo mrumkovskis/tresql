@@ -686,6 +686,31 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     transform_traverse _
   }
 
+  override def traverser[T](fun: Traverser[T]): Traverser[T] = {
+    lazy val local_traverse: Traverser[T] = (state: T) => fun(state) orElse traverse(state)
+    def fun_traverse(state: T) = local_traverse(state) orElse super.traverser(local_traverse)(state)
+    def tr(state: T, e: Exp): T = fun_traverse(state)(e)
+    def trl(state: T, l: List[Exp]) = l.foldLeft(state) { (fr, el) => tr(fr, el) }
+    def traverse(state: T): PartialFunction[Exp, T] = {
+      case cd: ColDef[_] => tr(state, cd.col)
+      case cd: ChildDef => tr(state, cd.exp)
+      case fd: FunDef[_] => tr(state, fd.exp)
+      case td: TableDef => tr(state, td.exp)
+      case to: TableObj => tr(state, to.obj)
+      case ta: TableAlias => tr(state, ta.obj)
+      case sd: SelectDef => tr(trl(trl(state, sd.tables), sd.cols), sd.exp)
+      case bd: BinSelectDef => tr(tr(state, bd.leftOperand), bd.rightOperand)
+      case id: InsertDef => tr(trl(trl(state, id.tables), id.cols), id.exp)
+      case ud: UpdateDef => tr(trl(trl(state, ud.tables), ud.cols), ud.exp)
+      case dd: DeleteDef => tr(trl(trl(state, dd.tables), dd.cols), dd.exp)
+      case ad: ArrayDef => trl(state, ad.cols)
+      case rd: RecursiveDef => tr(state, rd.exp)
+      case wtd: WithTableDef => tr(state, wtd.exp)
+      case wsd: WithSelectDef => tr(trl(state, wsd.withTables), wsd.exp)
+    }
+    fun_traverse _
+  }
+
   override def extractorAndTraverser[T](
     fun: ExtractorAndTraverser[T],
     traverser: Extractor[T] = PartialFunction.empty): Extractor[T] = {
