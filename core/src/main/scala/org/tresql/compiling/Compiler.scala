@@ -459,15 +459,15 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         case e: Exception => throw CompilerException(e.getMessage)
       }
     }
-    lazy val namer: Extractor[Context] = extractorAndTraverser {
-      case (ctx, sd: SelectDef) =>
+    lazy val namer: Traverser[Context] = traverser(ctx => {
+      case sd: SelectDef =>
         val nctx = ctx.copy(scopes = sd :: ctx.scopes)
         var prevTable: TableDef = null
         sd.tables foreach { t =>
-          namer(ctx -> t.exp.obj) //table definition check goes within parent scope
+          namer(ctx)(t.exp.obj) //table definition check goes within parent scope
           Option(t.exp.join).map { j =>
             //join definition check goes within this select scope
-            namer(nctx -> j)
+            namer(nctx)(j)
             j match {
               case Join(true, _, _) => checkDefaultJoin(nctx.scopes, prevTable, t)
               case _ =>
@@ -475,81 +475,83 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           }
           prevTable = t
         }
-        sd.cols foreach (c => namer(nctx -> c))
-        namer(nctx -> sd.exp)
-        (ctx, false) //return old scope and stop traversing
-      case (ctx, wtd: WithTableDef) if wtd.recursive =>
-        namer(ctx.copy(scopes = wtd :: ctx.scopes) -> wtd.exp)
-        (ctx, false)
-      case (ctx, wsd: WithSelectDef) =>
+        sd.cols foreach (namer(nctx)(_))
+        namer(nctx)(sd.exp)
+        //return old scope
+        ctx
+      case wtd: WithTableDef if wtd.recursive =>
+        namer(ctx.copy(scopes = wtd :: ctx.scopes))(wtd.exp)
+        ctx
+      case wsd: WithSelectDef =>
         val nctx = ctx.copy(scopes = wsd :: ctx.scopes)
-        wsd.withTables foreach { t => namer(nctx -> t) }
-        namer(nctx -> wsd.exp)
-        (ctx, false)
-      case (ctx, dml: DMLDefBase) =>
-        dml.tables foreach (t => namer(ctx -> t.exp.obj))
+        wsd.withTables foreach (namer(nctx)(_))
+        namer(nctx)(wsd.exp)
+        ctx
+      case dml: DMLDefBase =>
+        dml.tables foreach (t => namer(ctx)(t.exp.obj))
         val nctx = ctx.copy(scopes = dml :: ctx.scopes)
-        dml.cols foreach (c => namer(nctx -> c))
+        dml.cols foreach (namer(nctx)(_))
         dml match {
-          case ins: InsertDef => namer(ctx -> ins.exp) //do not change scope for insert value clause name resolving
-          case upd_del => namer(nctx -> upd_del.exp) //change scope for update delete filter and values name resolving
+          case ins: InsertDef => namer(ctx)(ins.exp) //do not change scope for insert value clause name resolving
+          case upd_del => namer(nctx)(upd_del.exp) //change scope for update delete filter and values name resolving
         }
-        (ctx, false) //return old scope and stop traversing
-      case (ctx, _: TableObj) => (ctx.copy(ctx = TableCtx), true) //set table context
-      case (ctx, _: TableAlias) => (ctx, false) //do not check table alias is already checked
-      case (ctx, _: Obj) => (ctx.copy(ctx = ColumnCtx), true) //set column context
-      case (ctx @ Context(scopes, TableCtx), Ident(ident)) => //check table
+        //return old scope
+        ctx
+      case t: TableObj => namer(ctx.copy(ctx = TableCtx))(t.obj) //set table context
+      case _: TableAlias => ctx //do not check table alias is already checked
+      case o: Obj => namer(namer(ctx.copy(ctx = ColumnCtx))(o.join))(o.obj) //set column context
+      case Ident(ident) if ctx.ctx == TableCtx => //check table
         val tn = ident mkString "."
-        table(scopes)(tn).orElse(throw CompilerException(s"Unknown table: $tn"))
-        (ctx, true)
-      case (ctx @ Context(scopes, ColumnCtx), Ident(ident)) => //check column
+        table(ctx.scopes)(tn).orElse(throw CompilerException(s"Unknown table: $tn"))
+        ctx
+      case Ident(ident) if ctx.ctx == ColumnCtx => //check column
         val cn = ident mkString "."
-        column(scopes)(cn).orElse(throw CompilerException(s"Unknown column: $cn"))
-        (ctx, true)
-    }
-    namer(Context(Nil, ColumnCtx) -> exp)
+        column(ctx.scopes)(cn).orElse(throw CompilerException(s"Unknown column: $cn"))
+        ctx
+    })
+    namer(Context(Nil, ColumnCtx))(exp)
     exp
   }
 
   def resolveColTypes(exp: Exp) = {
     case class Ctx(scopes: List[Scope], mf: Manifest[_])
-    def type_from_const(const: Any): (Ctx, Boolean) = (Ctx(Nil, const match {
+    def type_from_const(const: Any): Ctx = Ctx(Nil, const match {
       case n: java.lang.Number => ManifestFactory.classType(n.getClass)
       case b: Boolean => ManifestFactory.Boolean
       case s: String => ManifestFactory.classType(s.getClass)
       case m: Manifest[_] => m
       case null => Manifest.Any
       case x => ManifestFactory.classType(x.getClass)
-    }), false)
-    def type_from_exp(ctx: Ctx, exp: Exp) = (typer((ctx, exp)), false)
-    lazy val typer: Extractor[Ctx] = extractorAndTraverser {
-      case (_, Const(const)) => type_from_const(const)
-      case (_, Null) => type_from_const(null)
-      case (Ctx(scopes, _), Ident(ident)) =>
-        (Ctx(null, column(scopes)(ident mkString ".").map(_.scalaType).get), false)
-      case (ctx, UnOp(_, operand)) => type_from_exp(ctx, operand)
-      case (ctx, BinOp(op, lop, rop)) =>
+    })
+    def type_from_exp(ctx: Ctx, exp: Exp) = typer(ctx)(exp)
+    lazy val typer: Traverser[Ctx] = traverser(ctx => {
+      case Const(const) => type_from_const(const)
+      case Null => type_from_const(null)
+      case Ident(ident) =>
+        Ctx(null, column(ctx.scopes)(ident mkString ".").map(_.scalaType).get)
+      case UnOp(_, operand) => type_from_exp(ctx, operand)
+      case BinOp(op, lop, rop) =>
         comp_op.findAllIn(op).toList match {
           case Nil =>
-            val (lt, rt) = (type_from_exp(ctx, lop)._1.mf, type_from_exp(ctx, rop)._1.mf)
+            val (lt, rt) = (type_from_exp(ctx, lop).mf, type_from_exp(ctx, rop).mf)
             val mf =
               if (lt.toString == "java.lang.String") lt else if (rt == "java.lang.String") rt
               else if (lt.toString == "java.lang.Boolean") lt else if (rt == "java.lang.Boolean") rt
               else if (lt <:< rt) rt else if (rt <:< lt) lt else lt
-            (Ctx(null, mf), false)
+            Ctx(null, mf)
           case _ => type_from_const(true)
         }
-      case (_, _: TerOp) => type_from_const(true)
-      case (ctx, s: SelectDef) =>
+      case _: TerOp => type_from_const(true)
+      case s: SelectDef =>
         if (s.cols.size > 1)
           throw CompilerException(s"Select must contain only one column, instead:${
             s.cols.map(_.tresql).mkString(", ")}")
         else type_from_exp(ctx.copy(scopes = s :: ctx.scopes), s.cols.head)
-      case (ctx, f: FunDef[_]) =>
+      case f: FunDef[_] =>
         if (f.typ != null && f.typ != Manifest.Nothing) type_from_const(f.typ)
         else if (f.procedure.returnTypeParIndex == -1) type_from_const(Manifest.Any)
         else type_from_exp(ctx, f.exp.parameters(f.procedure.returnTypeParIndex))
-    }
+    })
     lazy val type_resolver: TransformerWithState[List[Scope]] = transformerWithState(scopes => {
       case s: SelectDef =>
         //resolve column types for potential from clause select definitions
@@ -577,10 +579,10 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         }
       case ColDef(n, ChildDef(ch), t) => ColDef(n, ChildDef(type_resolver(scopes)(ch)), t)
       case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
-        ColDef(n, exp, typer((Ctx(scopes, null), exp)).mf)
+        ColDef(n, exp, typer(Ctx(scopes, null))(exp).mf)
       case fd @ FunDef(n, f, typ, p) if typ == null || typ == Manifest.Nothing =>
         val t = if (p.returnTypeParIndex == -1) Manifest.Any else {
-          typer((Ctx(scopes, null), f.parameters(p.returnTypeParIndex))).mf
+          typer(Ctx(scopes, null))(f.parameters(p.returnTypeParIndex)).mf
         }
         fd.copy(typ = t)
     })
@@ -689,6 +691,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
   override def traverser[T](fun: Traverser[T]): Traverser[T] = {
     lazy val local_traverse: Traverser[T] = (state: T) => fun(state) orElse traverse(state)
     def fun_traverse(state: T) = local_traverse(state) orElse super.traverser(local_traverse)(state)
+    //helper functions
     def tr(state: T, e: Exp): T = fun_traverse(state)(e)
     def trl(state: T, l: List[Exp]) = l.foldLeft(state) { (fr, el) => tr(fr, el) }
     def traverse(state: T): PartialFunction[Exp, T] = {
@@ -709,34 +712,6 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case wsd: WithSelectDef => tr(trl(state, wsd.withTables), wsd.exp)
     }
     fun_traverse _
-  }
-
-  override def extractorAndTraverser[T](
-    fun: ExtractorAndTraverser[T],
-    traverser: Extractor[T] = PartialFunction.empty): Extractor[T] = {
-    //shortcut
-    def tr(r: T, e: Exp): T = extract_traverse((r, e))
-    def trl(r: T, l: List[Exp]) = l.foldLeft(r) { (fr, el) => tr(fr, el) }
-    lazy val extract_traverse: Extractor[T] =
-      super.extractorAndTraverser(fun, traverser orElse local_extract_traverse)
-    lazy val local_extract_traverse: Extractor[T] = {
-      case (r: T @unchecked, cd: ColDef[_]) => tr(r, cd.col)
-      case (r: T @unchecked, cd: ChildDef) => tr(r, cd.exp)
-      case (r: T @unchecked, fd: FunDef[_]) => tr(r, fd.exp)
-      case (r: T @unchecked, td: TableDef) => tr(r, td.exp)
-      case (r: T @unchecked, to: TableObj) => tr(r, to.obj)
-      case (r: T @unchecked, ta: TableAlias) => tr(r, ta.obj)
-      case (r: T @unchecked, sd: SelectDef) => tr(trl(trl(r, sd.tables), sd.cols), sd.exp)
-      case (r: T @unchecked, bd: BinSelectDef) => tr(tr(r, bd.leftOperand), bd.rightOperand)
-      case (r: T @unchecked, id: InsertDef) => tr(trl(trl(r, id.tables), id.cols), id.exp)
-      case (r: T @unchecked, ud: UpdateDef) => tr(trl(trl(r, ud.tables), ud.cols), ud.exp)
-      case (r: T @unchecked, dd: DeleteDef) => tr(trl(trl(r, dd.tables), dd.cols), dd.exp)
-      case (r: T @unchecked, ad: ArrayDef) => trl(r, ad.cols)
-      case (r: T @unchecked, rd: RecursiveDef) => tr(r, rd.exp)
-      case (r: T @unchecked, wtd: WithTableDef) => tr(r, wtd.exp)
-      case (r: T @unchecked, wsd: WithSelectDef) => tr(trl(r, wsd.withTables), wsd.exp)
-    }
-    extract_traverse
   }
 
   def parseExp(expr: String): Exp = try {

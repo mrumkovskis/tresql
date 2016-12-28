@@ -16,9 +16,9 @@ object QueryParser extends parsing.QueryParsers with parsing.ExpTransformer {
     }
   }
 
-  def transformTresql(tresql: String, transformer: PartialFunction[Exp, Exp]): String =
+  def transformTresql(tresql: String, transformer: Transformer): String =
     this.transformer(transformer)(parseExp(tresql)) tresql
 
   def extractVariables(exp: String) =
-    extractor(variableExtractor)(Nil -> parseExp(exp)).reverse
+    traverser(variableExtractor)(Nil)(parseExp(exp)).reverse
 }
