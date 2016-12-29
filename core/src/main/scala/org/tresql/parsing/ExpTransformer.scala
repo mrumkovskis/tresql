@@ -141,7 +141,7 @@ trait ExpTransformer { this: QueryParsers =>
     fun_traverse _
   }
 
-  //extract variables in reverse order
+  /** Extract variables in reverse order. Variable names '?' are replaced with index starting with 1 */
   def variableExtractor: Traverser[List[Variable]] = {
     var bindIdx = 0
     vars => {

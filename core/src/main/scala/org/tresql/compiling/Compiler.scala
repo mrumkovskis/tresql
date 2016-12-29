@@ -28,11 +28,11 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
   }
 
   case class TableDef(name: String, exp: Obj) extends Exp { def tresql = exp.tresql }
-  //helper class for namer to distinguish table references from column references
+  /** helper class for namer to distinguish table references from column references */
   case class TableObj(obj: Exp) extends Exp {
     def tresql = obj.tresql
   }
-  //helper class for namer to distinguish table with NoJoin, i.e. must be defined it tables clause earlier
+  /** helper class for namer to distinguish table with NoJoin, i.e. must be defined in tables clause earlier */
   case class TableAlias(obj: Exp) extends Exp {
     def tresql = obj.tresql
   }
@@ -129,6 +129,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     def tables = leftOperand.tables
   }
 
+  // table definition in with [recursive] statement
   case class WithTableDef(
     cols: List[ColDef[_]],
     tables: List[TableDef],
@@ -149,6 +150,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     }
   }
 
+  // with [recursive] ...
   case class WithSelectDef(
     exp: SelectDefBase,
     withTables: List[WithTableDef]
@@ -200,11 +202,12 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       } orElse declaredTable(tail)(tn)
     }
   }
-  /** Table from metadata or defined in from clause of any scope in {{{scopes}}} list */
+  /** Table from metadata or defined in from clause or dml table of any scope in {{{scopes}}} list */
   def table(scopes: List[Scope])(tableName: String): Option[Table] = {
     val table = tableName.toLowerCase
     declaredTable(scopes)(table) orElse metadata.tableOption(table)
   }
+  /** Column declared in any scope in {{{scopes}}} list */
   def column(scopes: List[Scope])(colName: String): Option[org.tresql.metadata.Col[_]] = {
     val col = colName.toLowerCase
     (scopes match {
@@ -226,7 +229,6 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
   }
   def procedure(procedure: String) = metadata.procedureOption(procedure)
 
-  //expression def build
   def buildTypedDef(exp: Exp) = {
     trait Ctx
     object QueryCtx extends Ctx //root context
