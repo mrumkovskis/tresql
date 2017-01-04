@@ -50,6 +50,7 @@ class QueryTest extends FunSuite {
       else b.SQLExpr(sqlSnippet, vars)
     }
     def null_macros(b: QueryBuilder) = null
+    def dummy(b: QueryBuilder) = b.buildExpr("dummy")
   }
   Env.functions = new TestFunctions
   Env.macros = Macros
@@ -764,6 +765,7 @@ class QueryTest extends FunSuite {
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("work/dept{*}"))
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("works"))
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("emp{aa}"))
+    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("(dummy() ++ dummy()){dummy}"))
   }
 
   test("compiler macro") {

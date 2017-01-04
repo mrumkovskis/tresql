@@ -115,18 +115,20 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     leftOperand: SelectDefBase,
     rightOperand: SelectDefBase,
     exp: BinOp) extends SelectDefBase {
-
+    private val op = if (rightOperand.isInstanceOf[FunSelectDef]) leftOperand else rightOperand
     if (!(leftOperand.cols.exists {
         case ColDef(_, All | _: IdentAll, _) => true
         case _ => false
       } || rightOperand.cols.exists {
         case ColDef(_, All | _: IdentAll, _) => true
         case _ => false
-      }) && leftOperand.cols.size != rightOperand.cols.size)
+      } || leftOperand.isInstanceOf[FunSelectDef]
+        || rightOperand.isInstanceOf[FunSelectDef]
+    ) && leftOperand.cols.size != rightOperand.cols.size)
       throw CompilerException(
         s"Column count do not match ${leftOperand.cols.size} != ${rightOperand.cols.size}")
-    def cols = leftOperand.cols
-    def tables = leftOperand.tables
+    def cols = op.cols
+    def tables = op.tables
   }
 
   // table definition in with [recursive] statement
@@ -165,6 +167,13 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       t(withTables)
     }
   }
+
+  /** select definition returned from macro or db function */
+  case class FunSelectDef(
+    cols: List[ColDef[_]],
+    tables: List[TableDef],
+    exp: FunDef[_]
+  ) extends SelectDefBase
 
   case class InsertDef(
     cols: List[ColDef[_]],
@@ -312,7 +321,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case Obj(b: Braces, _, _, _, _) if ctx == QueryCtx =>
         builder(ctx)(b) //unwrap braces top level expression
       case o: Obj if ctx == QueryCtx | ctx == TablesCtx => //obj as query
-        builder(ctx)(Query(List(o), null, null, null, null, null, null))
+        builder(ctx)(Query(List(o), Filters(Nil), null, null, null, null, null))
       case o: Obj if ctx == BodyCtx =>
         o.copy(obj = builder(ctx)(o.obj), join = builder(ctx)(o.join).asInstanceOf[Join])
       case q: Query =>
@@ -338,7 +347,13 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case b: BinOp =>
         (tr(ctx, b.lop), tr(ctx, b.rop)) match {
           case (lop: SelectDefBase @unchecked, rop: SelectDefBase @unchecked) =>
-            BinSelectDef(lop, rop, b.copy(lop = lop, rop = rop))
+            BinSelectDef(lop, rop, b)
+          //asume left operand select definition is provided by db function or macro
+          case (lop: FunDef[_] @unchecked, rop: SelectDefBase @unchecked) =>
+            BinSelectDef(FunSelectDef(Nil, Nil, lop), rop, b)
+          //asume right operand select definition is provided by db function or macro
+          case (lop: SelectDefBase @unchecked, rop: FunDef[_] @unchecked) =>
+            BinSelectDef(lop, FunSelectDef(Nil, Nil, rop), b)
           case (lop, rop) => b.copy(lop = lop, rop = rop)
         }
       case UnOp("|", o: Exp @unchecked) if ctx == ColsCtx =>
@@ -637,8 +652,8 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         tables = wtd.tables map tt,
         exp = tt(wtd.exp)
       )
-      case wsd: WithSelectDef => wsd.copy(exp = tt(wsd.exp), withTables = (wsd.withTables map tt)
-      )
+      case wsd: WithSelectDef => wsd.copy(exp = tt(wsd.exp), withTables = (wsd.withTables map tt))
+      case fsd: FunSelectDef => fsd.copy(exp = tt(fsd.exp))
     }
     transform_traverse
   }
@@ -686,6 +701,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         exp = tt(state)(wsd.exp),
         withTables = wsd.withTables map(tt(state)(_))
       )
+      case fsd: FunSelectDef => fsd.copy(exp = tt(state)(fsd.exp))
     }
     transform_traverse _
   }
@@ -712,6 +728,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case rd: RecursiveDef => tr(state, rd.exp)
       case wtd: WithTableDef => tr(state, wtd.exp)
       case wsd: WithSelectDef => tr(trl(state, wsd.withTables), wsd.exp)
+      case fsd: FunSelectDef => tr(state, fsd.exp)
     }
     fun_traverse _
   }

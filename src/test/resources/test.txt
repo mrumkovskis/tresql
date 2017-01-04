@@ -483,3 +483,10 @@ t(*) {emp[ename ~~ 'kin%']{empno} + t[t.empno = e.mgr]emp e{e.empno}} t a{a.*}#(
 //test for compiler - where clause select references parent select column
 dept[(dept_addr[deptnr = deptno]{deptnr})]{dname}#(1) --> []
 dept[(dept_addr[deptnr = dept.deptno]{deptnr})]{dname}#(1) --> []
+
+//table as function in from clause
+(dummy() ++ dummy){dummy} --> [[0], [0]]
+(dummy ++ dummy()){dummy} --> [[0], [0]]
+(dummy() ++ dummy) --> [[0], [0]]
+(dummy() ++ dummy){*} --> [[0], [0]]
+(dummy() ++ dummy) d {d.*} --> [[0], [0]]
