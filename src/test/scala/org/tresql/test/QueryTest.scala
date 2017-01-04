@@ -818,6 +818,13 @@ class QueryTest extends FunSuite {
           Env.withParams(params)).toListOfVectors)
     }
 
+    //column type checking
+    {
+      val prefix = "Dept: "
+      assertResult("ACCOUNTING")(tresql"dept{$prefix || dname}#(1)".head._1.substring(6))
+      assertResult("ACCOUNTING")(tresql"dept{dname || $prefix}#(1)".head._1.substring(0, 10))
+    }
+
     //function calls
     assertResult(12)(tresql"inc_val_5(7)".head[Integer])
     assertResult((10, "ACCOUNTING", "NEW YORK"))(

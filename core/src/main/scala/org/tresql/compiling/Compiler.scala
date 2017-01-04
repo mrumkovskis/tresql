@@ -537,8 +537,8 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           case Nil =>
             val (lt, rt) = (type_from_exp(ctx, lop).mf, type_from_exp(ctx, rop).mf)
             val mf =
-              if (lt.toString == "java.lang.String") lt else if (rt == "java.lang.String") rt
-              else if (lt.toString == "java.lang.Boolean") lt else if (rt == "java.lang.Boolean") rt
+              if (lt.toString == "java.lang.String") lt else if (rt.toString == "java.lang.String") rt
+              else if (lt.toString == "java.lang.Boolean") lt else if (rt.toString == "java.lang.Boolean") rt
               else if (lt <:< rt) rt else if (rt <:< lt) lt else lt
             Ctx(null, mf)
           case _ => type_from_const(true)
@@ -581,10 +581,10 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         }
       case ColDef(n, ChildDef(ch), t) => ColDef(n, ChildDef(type_resolver(scopes)(ch)), t)
       case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
-        ColDef(n, exp, typer(Ctx(scopes, null))(exp).mf)
+        ColDef(n, exp, typer(Ctx(scopes, Manifest.Any))(exp).mf)
       case fd @ FunDef(n, f, typ, p) if typ == null || typ == Manifest.Nothing =>
         val t = if (p.returnTypeParIndex == -1) Manifest.Any else {
-          typer(Ctx(scopes, null))(f.parameters(p.returnTypeParIndex)).mf
+          typer(Ctx(scopes, Manifest.Any))(f.parameters(p.returnTypeParIndex)).mf
         }
         fd.copy(typ = t)
     })
