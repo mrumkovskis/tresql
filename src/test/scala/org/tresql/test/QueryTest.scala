@@ -766,6 +766,8 @@ class QueryTest extends FunSuite {
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("works"))
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("emp{aa}"))
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("(dummy() ++ dummy()){dummy}"))
+    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("(dummy ++ dummiz())"))
+    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("(dummiz() ++ dummy){dummy}"))
   }
 
   test("compiler macro") {
