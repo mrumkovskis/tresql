@@ -1,7 +1,7 @@
 package org.tresql.java_api
 
 import java.util.{ Map => JMap }
-import scala.collection.JavaConverters._
+import scala.collection.JavaConversions._
 import org.tresql.RowLike
 
 object Query {
