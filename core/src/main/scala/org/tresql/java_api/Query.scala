@@ -1,19 +1,19 @@
 package org.tresql.java_api
 
 import java.util.{ Map => JMap }
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import org.tresql.RowLike
 
 object Query {
   private val q = org.tresql.Query
   def execute(expr: String, params: JMap[String, Object]): Object = {
-    q(expr, mapAsScalaMap(params).toMap).asInstanceOf[Object]
+    q(expr, params.asScala.toMap).asInstanceOf[Object]
   }
   @annotation.varargs
   def execute(expr: String, params: Object*): Object =
     q(expr, params: _*).asInstanceOf[Object]
   def select(expr: String, params: JMap[String, Object]): Result = {
-    new ResultWrapper(q(expr, mapAsScalaMap(params).toMap))
+    new ResultWrapper(q(expr, params.asScala.toMap))
   }
   @annotation.varargs
   def select(expr: String, params: Object*): Result =
@@ -28,9 +28,10 @@ object Query {
     /* TODO
     override def toList = seqAsJavaList(x.toList.map(new RowWrapperImpl(_)))
     */
-    override def toListOfMaps = seqAsJavaList(x.toListOfMaps
+    override def toListOfMaps = x.toListOfMaps
       .map(deepMapToJavaMap)
-      .map(_.asInstanceOf[java.util.Map[String, Object]]))
+      .map(_.asInstanceOf[java.util.Map[String, Object]])
+      .asJava
     override def execute = x.execute
 
     // iterable
@@ -102,16 +103,16 @@ object Query {
     override def columnCount: Int = x.columnCount
     override def column(idx: Int) = new Column(x.column(idx).idx, x.column(idx).name)
     override def columns: java.util.List[Column] =
-      seqAsJavaList(x.columns.map(c => new Column(c.idx, c.name)))
+      x.columns.map(c => new Column(c.idx, c.name)).asJava
     /* TODO
     override def values = deepRowToValues(x)
     */
     override def rowToMap =
       deepMapToJavaMap(x.rowToMap).asInstanceOf[java.util.Map[String, Object]]
     def deepMapToJavaMap(m: Map[String, Any]): java.util.Map[String, Any] =
-      mapAsJavaMap(m map {
-        case (k, v: List[Map[String, _] @unchecked]) => (k, seqAsJavaList(v map deepMapToJavaMap))
+      (m map {
+        case (k, v: List[Map[String, _] @unchecked]) => (k, (v map deepMapToJavaMap).asJava)
         case (k, v) => (k, v)
-      })
+      }).asJava
   }
 }
