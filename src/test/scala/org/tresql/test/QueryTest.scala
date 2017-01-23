@@ -759,7 +759,10 @@ class QueryTest extends FunSuite {
     }
     testTresqls("/test.txt", (tresql, _, _, nr) => {
       println(s"$nr. Compiling tresql:\n$tresql")
-      QueryCompiler.compile(tresql)
+      try QueryCompiler.compile(tresql)
+      catch {
+        case e: Exception => throw new RuntimeException(s"Error compiling statement #$nr:\n$tresql", e)
+      }
     })
 
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("work/dept{*}"))
