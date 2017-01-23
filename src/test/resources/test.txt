@@ -137,6 +137,8 @@ dept/emp[sal >= losal & sal <= hisal]salgrade {dept.deptno, grade, empno, sal}#(
 dept/emp{ename, dname}#(if_defined(:dname, ename), empno) --> dname='aaa --> [[null, "OPERATIONS"], ["ADAMS", "RESEARCH"], ["ALLEN", "SALES"], ["BLAKE", "SALES"], ["CLARK", "ACCOUNTING"], ["FORD", "RESEARCH"], ["JAMES", "SALES"], ["JONES", "RESEARCH"], ["KING", "ACCOUNTING"], ["MARTIN", "SALES"], ["MILLER", "ACCOUNTING"], ["SCOTT", "RESEARCH"], ["SMITH", "RESEARCH"], ["TURNER", "SALES"], ["WARD", "SALES"]]
 dept/emp{ename, dname}#(if_defined(:dname, ename), empno) --> [[null, "OPERATIONS"], ["SMITH", "RESEARCH"], ["ALLEN", "SALES"], ["WARD", "SALES"], ["JONES", "RESEARCH"], ["MARTIN", "SALES"], ["BLAKE", "SALES"], ["CLARK", "ACCOUNTING"], ["SCOTT", "RESEARCH"], ["KING", "ACCOUNTING"], ["TURNER", "SALES"], ["ADAMS", "RESEARCH"], ["JAMES", "SALES"], ["FORD", "RESEARCH"], ["MILLER", "ACCOUNTING"]]
 dept[dname = '<none>']#(if_defined(:dname, dname)) --> []
+//dept/emp{loc l}#(l) --> [["BOSTON"], ["CHICAGO"], ["CHICAGO"], ["CHICAGO"], ["CHICAGO"], ["CHICAGO"], ["CHICAGO"], ["DALLAS"], ["DALLAS"], ["DALLAS"], ["DALLAS"], ["DALLAS"], ["NEW YORK"], ["NEW YORK"], ["NEW YORK"]]
+dept d{deptno dn, dname || ' ' || loc}#(~(dept[deptno = d.deptno]{deptno})) --> [[40, "OPERATIONS BOSTON"], [30, "SALES CHICAGO"], [20, "RESEARCH DALLAS"], [10, "ACCOUNTING NEW YORK"]]
 
 //in operator
 dept[deptno in(10)]{deptno}#(1) --> [[10]]
@@ -190,6 +192,8 @@ emp/dept[dname ~~ 'SAL%' & ? <= sal < ? & comm != null ]{ename, sal, dname} #(en
 //group by, having
 emp[sal >= losal & sal <= hisal]salgrade {grade, losal, hisal, count(empno)} (grade, losal, hisal) #(1) --> [[1, 700, 1200, 3], [2, 1201, 1400, 3], [3, 1401, 2000, 2], [4, 2001, 3000, 5], [5, 3001, 9999, 1]]
 emp[sal >= losal & sal <= hisal]salgrade {grade, losal, hisal, count(*)} (grade, losal, hisal)^(count(*) > ?)#(1) --> 1 --> [[1, 700, 1200, 3], [2, 1201, 1400, 3], [3, 1401, 2000, 2], [4, 2001, 3000, 5]]
+//dept/emp{loc l}(loc)^(count(loc) > 1)#(l) --> [["CHICAGO"], ["DALLAS"], ["NEW YORK"]]
+//dept/emp{loc l}(l)^(count(loc) > 1)#(l || 'x') --> [["CHICAGO"], ["DALLAS"], ["NEW YORK"]]
 
 //two level hierarchical query: salgrade -> emp
 salgrade[?] {grade, losal, hisal, |[sal >= :1(2) & sal <= :1(3)]emp{ename, sal}} --> 5 --> [[5, 3001, 9999, [["KING", 5000.00]]]]
