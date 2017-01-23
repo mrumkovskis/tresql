@@ -98,8 +98,15 @@ package object dialects {
     }
   }
 
+  val PostgresqlRawDialect: CoreTypes.Dialect = {
+    case c: QueryBuilder#ColExpr if c.alias != null => c.col.sql + " as " + c.alias
+    case v: QueryBuilder#VarExpr if v.typ != null => s"cast(${v.defaultSQL} as ${v.typ})"
+  }
+
   def HSQLDialect = HSQLRawDialect orElse ANSISQLDialect
 
   def OracleDialect = OracleRawDialect orElse ANSISQLDialect
+
+  def PostgresqlDialect = PostgresqlRawDialect orElse ANSISQLDialect
 
 }
