@@ -474,7 +474,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     object TableCtx extends Ctx
     object ColumnCtx extends Ctx
     //isGrpOrd indicates group, order clauses where column clause column aliases can be referenced
-    case class Context(scopes: List[Scope], ctx: Ctx, isGrpOrd: Boolean)
+    case class Context(scopes: List[Scope], tblScopes: List[Scope], ctx: Ctx, isGrpOrd: Boolean)
     def checkDefaultJoin(scopes: List[Scope], table1: TableDef, table2: TableDef) = if (table1 != null) {
       for {
         t1 <- table(scopes)(table1.name)
@@ -512,10 +512,10 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         //return old scope
         ctx
       case wtd: WithTableDef if wtd.recursive =>
-        namer(ctx.copy(scopes = wtd :: ctx.scopes))(wtd.exp)
+        namer(ctx.copy(scopes = wtd :: ctx.scopes, tblScopes = wtd :: ctx.tblScopes))(wtd.exp)
         ctx
       case wsd: WithSelectDef =>
-        val nctx = ctx.copy(scopes = wsd :: ctx.scopes)
+        val nctx = ctx.copy(scopes = wsd :: ctx.scopes, tblScopes = wsd :: ctx.tblScopes)
         wsd.withTables foreach (namer(nctx)(_))
         namer(nctx)(wsd.exp)
         ctx
@@ -534,7 +534,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case o: Obj => namer(namer(ctx.copy(ctx = ColumnCtx))(o.join))(o.obj) //set column context
       case Ident(ident) if ctx.ctx == TableCtx => //check table
         val tn = ident mkString "."
-        table(ctx.scopes)(tn).orElse(throw CompilerException(s"Unknown table: $tn"))
+        table(ctx.tblScopes)(tn).orElse(throw CompilerException(s"Unknown table: $tn"))
         ctx
       case Ident(ident) if ctx.ctx == ColumnCtx => //check column
         val cn = ident mkString "."
@@ -542,7 +542,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           .orElse(throw CompilerException(s"Unknown column: $cn"))
         ctx
     })
-    namer(Context(Nil, ColumnCtx, false))(exp)
+    namer(Context(Nil, Nil, ColumnCtx, false))(exp)
     exp
   }
 
