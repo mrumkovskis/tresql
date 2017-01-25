@@ -474,7 +474,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     object TableCtx extends Ctx
     object ColumnCtx extends Ctx
     //isGrpOrd indicates group, order clauses where column clause column aliases can be referenced
-    case class Context(scopes: List[Scope], tblScopes: List[Scope], ctx: Ctx, isGrpOrd: Boolean)
+    case class Context(colScopes: List[Scope], tblScopes: List[Scope], ctx: Ctx, isGrpOrd: Boolean)
     def checkDefaultJoin(scopes: List[Scope], table1: TableDef, table2: TableDef) = if (table1 != null) {
       for {
         t1 <- table(scopes)(table1.name)
@@ -485,7 +485,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     }
     lazy val namer: Traverser[Context] = traverser(ctx => {
       case sd: SelectDef =>
-        val nctx = ctx.copy(scopes = sd :: ctx.scopes, isGrpOrd = false)
+        val nctx = ctx.copy(colScopes = sd :: ctx.colScopes, isGrpOrd = false)
         var prevTable: TableDef = null
         sd.tables foreach { t =>
           namer(ctx)(t.exp.obj) //table definition check goes within parent scope
@@ -493,15 +493,15 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
             //join definition check goes within this select scope
             namer(nctx)(j)
             j match {
-              case Join(true, _, _) => checkDefaultJoin(nctx.scopes, prevTable, t)
+              case Join(true, _, _) => checkDefaultJoin(nctx.tblScopes, prevTable, t)
               case _ =>
             }
           }
           prevTable = t
         }
         sd.cols foreach (namer(nctx)(_))
-        val grpOrdCtx = nctx.copy(isGrpOrd = true)
         namer(nctx)(sd.exp.filter)
+        val grpOrdCtx = nctx.copy(isGrpOrd = true)
         Option(sd.exp.group).foreach { g =>
           g.cols.foreach(namer(grpOrdCtx))
           namer(nctx)(g.having)
@@ -512,16 +512,16 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         //return old scope
         ctx
       case wtd: WithTableDef if wtd.recursive =>
-        namer(ctx.copy(scopes = wtd :: ctx.scopes, tblScopes = wtd :: ctx.tblScopes))(wtd.exp)
+        namer(ctx.copy(colScopes = wtd :: ctx.colScopes, tblScopes = wtd :: ctx.tblScopes))(wtd.exp)
         ctx
       case wsd: WithSelectDef =>
-        val nctx = ctx.copy(scopes = wsd :: ctx.scopes, tblScopes = wsd :: ctx.tblScopes)
+        val nctx = ctx.copy(colScopes = wsd :: ctx.colScopes, tblScopes = wsd :: ctx.tblScopes)
         wsd.withTables foreach (namer(nctx)(_))
         namer(nctx)(wsd.exp)
         ctx
       case dml: DMLDefBase =>
         dml.tables foreach (t => namer(ctx)(t.exp.obj))
-        val nctx = ctx.copy(scopes = dml :: ctx.scopes)
+        val nctx = ctx.copy(colScopes = dml :: ctx.colScopes)
         dml.cols foreach (namer(nctx)(_))
         dml match {
           case ins: InsertDef => namer(ctx)(ins.exp) //do not change scope for insert value clause name resolving
@@ -538,7 +538,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         ctx
       case Ident(ident) if ctx.ctx == ColumnCtx => //check column
         val cn = ident mkString "."
-        (if (ctx.isGrpOrd) declaredColumn(ctx.scopes)(cn) else column(ctx.scopes)(cn))
+        (if (ctx.isGrpOrd) declaredColumn(ctx.colScopes)(cn) else column(ctx.colScopes)(cn))
           .orElse(throw CompilerException(s"Unknown column: $cn"))
         ctx
     })
