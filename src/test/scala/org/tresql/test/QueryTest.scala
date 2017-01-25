@@ -773,6 +773,7 @@ class QueryTest extends FunSuite {
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("(dummiz() ++ dummy){dummy}"))
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("dept/emp[l = 'x']{loc l}(l)^(count(loc) > 1)#(l || 'x')"))
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("dept/emp{loc l}(l)^(count(l) > 1)#(l || 'x')"))
+    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("dept d{deptno dn, dname || ' ' || loc}#(~(dept[dname = dn]{deptno}))"))
   }
 
   test("compiler macro") {
