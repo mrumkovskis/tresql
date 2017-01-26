@@ -95,7 +95,7 @@ trait ORT extends Query {
       env(obj) match {
         case s: Seq[Map[String, _] @unchecked] =>
           expr(
-            if (idName != null) Map("ids" -> s.map(_(idName)).filter(_ != null))
+            if (idName != null) Map("ids" -> s.map(_.getOrElse(idName, null)).filter(_ != null))
             else Map[String, Any]())
         case m: Map[String @unchecked, _] => expr(
           if (idName != null) Map("ids" -> m.get(idName).filter(_ != null).toList)

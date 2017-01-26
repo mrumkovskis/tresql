@@ -420,7 +420,7 @@ trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
     case dml: DMLResult => compatibilityObj.equals(dml.compatibilityObj)
     case x => compatibilityObj.equals(x)
   }
-  private def compatibilityObj: Any = {
+  def compatibilityObj: Any = {
     val x = (count, children, id) match {
       case (Some(c), ch, None) if ch.isEmpty => c
       case (Some(c), ch, None) if !ch.isEmpty => c -> compatibilityChildren
@@ -440,35 +440,30 @@ trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
     case x => x
   }).toList
 
-  override def toString = s"""${getClass.getSimpleName}(Row count = ${
-    count.getOrElse(0)}$childrenToString$idToString)"""
+  override def toString = s"""${getClass.getSimpleName}($countToString$childrenToString$idToString)"""
+  private def countToString = count.map(c => s"Row count = $c").getOrElse("None")
   private def childrenToString = if (children.isEmpty) "" else s", children = ${children}"
   private def idToString = id.map(id => s", id = $id").getOrElse("")
 
 }
 
-class DeleteResult private[tresql](
-  _count: Int,
+class DeleteResult(
+  override val count: Option[Int],
+  override val children: Map[String, Any] = Map()
+) extends DMLResult
+
+class UpdateResult(
+  override val count: Option[Int] = None,
   override val children: Map[String, Any] = Map()
 ) extends DMLResult {
-  override val count = Option(_count)
+  private[tresql] def this(r: DMLResult) = this(r.count, r.children)
 }
 
-class UpdateResult private[tresql](
-  _count: Int = -1,
-  override val children: Map[String, Any] = Map()
-) extends DMLResult {
-  private[tresql] def this(r: DMLResult) = this(r.count.getOrElse(-1), r.children)
-  override val count = if (_count < 0) None else Option(_count)
-}
-
-class InsertResult private[tresql](
-  _count: Int,
+class InsertResult(
+  override val count: Option[Int],
   override val children: Map[String, Any] = Map(),
   override val id: Option[Any] = None
-) extends DMLResult {
-  override val count = Option(_count)
-}
+) extends DMLResult
 
 case class Column(idx: Int, name: String, private[tresql] val expr: Expr)
 

@@ -8,7 +8,7 @@ CREATE TABLE WORK
 //
 COMMENT ON TABLE work IS 'work'
 COMMENT ON COLUMN work.wdate IS 'work date'
-      
+
 CREATE TABLE EMP
  (EMPNO INTEGER NOT NULL,
   ENAME VARCHAR(50),
@@ -100,7 +100,7 @@ alter table dept_addr add primary key (deptnr)
 //
 alter table dept_addr add foreign key (deptnr) references dept(deptno)
 //
-alter table dept_sub_addr add foreign key (deptno) references dept_addr(deptnr) 
+alter table dept_sub_addr add foreign key (deptno) references dept_addr(deptnr)
 //
 alter table address add primary key (nr)
 //
@@ -122,7 +122,7 @@ alter table car add foreign key (tyres_nr) references tyres(nr)
 //
 alter table tyres add unique (nr, carnr)
 //
-alter table tyres_usage add foreign key (tunr) references tyres(nr)
+alter table tyres_usage add foreign key (tunr) references tyres(nr) on delete cascade
 //
 alter table tyres_usage add foreign key (tunr, carnr) references tyres(nr, carnr)
 //
@@ -132,7 +132,7 @@ alter table tyres_usage add foreign key (carnr) references car(nr)
 CREATE FUNCTION inc_val_5 (x INTEGER)
   RETURNS INTEGER
   RETURN x + 5
-//  
+//
 CREATE PROCEDURE in_out(INOUT newid INTEGER, OUT outstring VARCHAR(100), IN instring VARCHAR(100))
 BEGIN ATOMIC
   SET newid = newid + 5;

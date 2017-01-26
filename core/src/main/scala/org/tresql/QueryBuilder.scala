@@ -538,7 +538,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       val r = super.apply().asInstanceOf[DMLResult]
       //include in result id value of the inserted record if it's obtained from IdExpr
       val id = env.currIdOption(table.defaultSQL)
-      new InsertResult(r.count.getOrElse(-1), r.children, id)
+      new InsertResult(r.count, r.children, id)
     }
     override protected def _sql = "insert into " + table.sql + (if (alias == null) "" else " " + alias) +
       " (" + cols.map(_.sql).mkString(", ") + ")" + " " + vals.sql
@@ -570,12 +570,12 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       val r = update(sql)
       //execute children only if this expression has affected some rows
       if (r > 0)
-        if (childUpdates.isEmpty) new DeleteResult(r)
+        if (childUpdates.isEmpty) new DeleteResult(Some(r))
         else executeChildren match {
-          case x if x.isEmpty => new DeleteResult(r)
-          case x => new DeleteResult(r, x)
+          case x if x.isEmpty => new DeleteResult(Some(r))
+          case x => new DeleteResult(Some(r), x)
         }
-      else new DeleteResult(r)
+      else new DeleteResult(Some(r))
     }
     protected def _sql = "delete from " + table.sql + (if (alias == null) "" else " " + alias) +
       (if (filter == null || filter.isEmpty) "" else " where " + where)
