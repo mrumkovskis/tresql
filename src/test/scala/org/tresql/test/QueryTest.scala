@@ -733,6 +733,28 @@ class QueryTest extends FunSuite {
               new InsertResult(Some(1), Map(), Some(10065)))))
           ))))(ORT.update("dept", obj))
 
+      obj = Map("deptno" -> 10056, "car[+-=]" -> List(
+        Map("nr" -> 10060, "tyres[+-=]" -> List(
+          Map("nr" -> 10064, "brand" -> "BRIDGESTONE", "season" -> "S")
+        )),
+        Map("nr" -> 10057, "tyres[+-=]" -> List(
+          Map("nr" -> 10063, "brand" -> "HANKOOK", "season" -> "W"),
+          Map("nr" -> 10059, "brand" -> "FIRESTONE", "season" -> "S"),
+          Map("nr" -> 10065, "brand" -> "YOKOHAMA", "season" -> "W")
+        ))
+      ))
+      assertResult(new UpdateResult(None, scala.collection.immutable.ListMap(
+        "_1" -> new DeleteResult(Some(0)), "car[+-=]" -> List(
+          new UpdateResult(None, scala.collection.immutable.ListMap(
+            "_1" -> new DeleteResult(Some(0)), "tyres[+-=]" -> List(
+              new UpdateResult(Some(1))))),
+          new UpdateResult(None, scala.collection.immutable.ListMap(
+            "_1" -> new DeleteResult(Some(0)), "tyres[+-=]" -> List(
+              new UpdateResult(Some(1)),
+              new UpdateResult(Some(1)),
+              new UpdateResult(Some(1)))))
+        ))))(ORT.update("dept", obj))
+
     println("\n-------- SAVE - extended cases - multiple children --------\n")
 
     obj = Map("dname" -> "Service", "emp#work:empno" ->
