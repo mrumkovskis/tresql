@@ -112,16 +112,14 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     override def defaultSQL = {
       if (!binded) QueryBuilder.this._bindVariables += this
       val s = (if (!env.reusableExpr && (env contains name) && (members == null | members == Nil)) {
-        env(name) match {
+        apply() match {
           case l: scala.collection.Traversable[_] =>
             if (!l.isEmpty) ("?," * (l size) dropRight 1) + s"/*$name*/" else {
-              if (!binded) QueryBuilder.this._bindVariables.trimEnd(1)
               //return null for empty collection (not to fail in 'in' operator)
               s"null/*$name*/"
             }
           case _: Array[Byte] => s"?/*$name*/"
           case a: Array[_] => if (a.length > 0) "?," * (a length) dropRight 1 else {
-            if (!binded) QueryBuilder.this._bindVariables.trimEnd(1)
             //return null for empty array (not to fail in 'in' operator)
             "null"
           }
@@ -357,7 +355,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       offset: Expr, limit: Expr, aliases: Map[String, Table], parentJoin: Option[Expr]) extends BaseExpr {
     private val rowConverter = env.rowConverter(QueryBuilder.this.queryDepth, QueryBuilder.this.childIdx)
     override def apply() = sel(sql, cols)
-    lazy val defaultSQL = "select " + (if (distinct) "distinct " else "") +
+    def defaultSQL = "select " + (if (distinct) "distinct " else "") +
       (if (cols == null) "*" else sqlCols) + (
         tables match {
           case List(Table(ConstExpr(null), _, _, _, _)) => ""
