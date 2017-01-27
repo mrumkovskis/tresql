@@ -440,10 +440,10 @@ trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
     case x => x
   }).toList
 
-  override def toString = s"""${getClass.getSimpleName}($countToString$childrenToString$idToString)"""
-  private def countToString = count.map(c => s"Row count = $c").getOrElse("None")
+  override def toString = s"""new ${getClass.getSimpleName}($countToString$childrenToString$idToString)"""
+  private def countToString = count.map(c => s"Row count = Some($c)").getOrElse("None")
   private def childrenToString = if (children.isEmpty) "" else s", children = ${children}"
-  private def idToString = id.map(id => s", id = $id").getOrElse("")
+  private def idToString = id.map(id => s", id = Some($id)").getOrElse("")
 
 }
 

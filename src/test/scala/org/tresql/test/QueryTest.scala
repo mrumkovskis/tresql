@@ -756,38 +756,47 @@ class QueryTest extends FunSuite {
       ))))(ORT.update("dept", obj))
 
     obj = Map("deptno" -> 10056, "car[+-=]" -> List(
-      Map("nr" -> 10060, "tyres[+-=]" -> List(
-        Map("nr" -> 10064, "brand" -> "BRIDGESTONE", "season" -> "S")
-      )),
       Map("nr" -> 10057, "tyres[+-=]" -> List(
-        Map("nr" -> 10063, "brand" -> "HANKOOK", "season" -> "W"),
-        Map("nr" -> 10059, "brand" -> "FIRESTONE", "season" -> "S"),
-        Map("nr" -> 10065, "brand" -> "YOKOHAMA", "season" -> "W")
+        Map("nr" -> 10063, "brand" -> "HANKOOK", "season" -> "S"),
+        Map("nr" -> 10059, "brand" -> "FIRESTONE", "season" -> "W"),
+        Map("nr" -> 10065, "brand" -> "YOKOHAMA", "season" -> "S")
+      )),
+      Map("nr" -> 10060, "tyres[+-=]" -> List(
+        Map("brand" -> "BRIDGESTONE", "season" -> "S"),
+        Map("brand" -> "BRIDGESTONE", "season" -> "W")
       ))
     ))
+    assertResult(new UpdateResult(None, Map("_1" -> new DeleteResult(Some(0)), "car[+-=]" -> List(
+      new UpdateResult(None, Map("_1" -> new DeleteResult(Some(0)), "tyres[+-=]" -> List(
+        new UpdateResult(Some(1)), new UpdateResult(Some(1)), new UpdateResult(Some(1))))),
+      new UpdateResult(None, Map("_1" -> new DeleteResult(Some(1)), "tyres[+-=]" -> List(
+        new InsertResult(Some(1), Map(), Some(10066)),
+        new InsertResult(Some(1), Map(), Some(10067)))))))))(
+    ORT.update("dept", obj))
+
     println("\n-------- SAVE - extended cases - multiple children --------\n")
 
     obj = Map("dname" -> "Service", "emp#work:empno" ->
       Map("ename" -> "Sophia", "wdate" -> "2015-10-30", "hours" -> 2))
-    assertResult(((1,List(((1,List((1,10067))),10067))),10066))(ORT.insert("dept", obj))
+    assertResult(((1,List(((1,List((1,10069))),10069))),10068))(ORT.insert("dept", obj))
 
-    obj = Map("deptno" -> 10066, "dname" -> "Services", "emp#work:empno[+-=]" ->
-      Map("empno" -> 10067, "wdate" -> "2015-10-30", "hours" -> 8))
+    obj = Map("deptno" -> 10068, "dname" -> "Services", "emp#work:empno[+-=]" ->
+      Map("empno" -> 10069, "wdate" -> "2015-10-30", "hours" -> 8))
     assertResult((1,List(0, List(1))))(ORT.update("dept", obj))
 
-    obj = Map("deptno" -> 10066, "emp#work:empno[=]" ->
-      Map("empno" -> 10067, "empno_mgr" -> Map("ename" -> "Jean", "deptno" -> 10066)))
-    assertResult(List(List(List(10068, 1))))(ORT.update("dept", obj))
+    obj = Map("deptno" -> 10068, "emp#work:empno[=]" ->
+      Map("empno" -> 10069, "empno_mgr" -> Map("ename" -> "Jean", "deptno" -> 10068)))
+    assertResult(List(List(List(10070, 1))))(ORT.update("dept", obj))
 
     obj = Map("nr" -> 10057, "is_active" -> true, "emp#car_usage" ->
       Map("ename" -> "Peter", "date_from" -> "2015-11-02",
         "deptno" -> Map("dname" -> "Supervision")))
-    assertResult((1,List(0, List(10069, ((1,List((1,10070))),10070)))))(ORT.update("car", obj))
+    assertResult((1,List(0, List(10071, ((1,List((1,10072))),10072)))))(ORT.update("car", obj))
 
     println("\n--- LOOKUP extended case - separate lookup expression from previous insert expr values ---\n")
     obj = Map("dname" -> "Design", "name" -> "Tesla", "date_from" -> "2015-11-20",
-      "empno" -> Map("ename" -> "Inna", "deptno" -> 10066))
-    assertResult(((1,List((1,10071), List(10072, (1,10071)))),10071))(
+      "empno" -> Map("ename" -> "Inna", "deptno" -> 10068))
+    assertResult(((1,List((1,10073), List(10074, (1,10073)))),10073))(
       ORT.insertMultiple(obj, "dept", "car", "car_usage")())
 
     println("\n--- Delete all children with save options specified ---\n")
