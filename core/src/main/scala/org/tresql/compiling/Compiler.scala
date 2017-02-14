@@ -117,7 +117,10 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     leftOperand: SelectDefBase,
     rightOperand: SelectDefBase,
     exp: BinOp) extends SelectDefBase {
-    private val op = if (rightOperand.isInstanceOf[FunSelectDef]) leftOperand else rightOperand
+    private val op =
+      if (rightOperand.isInstanceOf[FunSelectDef]) leftOperand
+      else if (leftOperand.isInstanceOf[FunSelectDef]) rightOperand
+      else leftOperand
     if (!(leftOperand.cols.exists {
         case ColDef(_, All | _: IdentAll, _) => true
         case _ => false
