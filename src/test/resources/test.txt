@@ -49,6 +49,7 @@ dummy --> [[0]]
 (dummy ++ dummy){count(dummy)} --> [[2]]
 //distinct count
 (dummy ++ dummy){count(# dummy)} --> [[1]]
+(dummy{dummy d} + dummy{dummy}) d{d} --> [[0]]
 
 //alias
 dummy {1 int} --> [[1]]
