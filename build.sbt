@@ -27,7 +27,7 @@ lazy val core = (project in file("core"))
     name := "tresql-core",
     libraryDependencies ++= Seq(
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-      "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.4"
+      "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.5"
     )
   ).settings(commonSettings: _*)
 
