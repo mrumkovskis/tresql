@@ -218,11 +218,9 @@ class QueryTest extends FunSuite {
       Query("emp/dept[10] {(sal + -sal) salary}#(1)") map (_.salary) toList
     }
 
-    //transformer test
-    implicit val transformer: PartialFunction[(String, Any), Any] = {case ("dname", v) => "!" + v}
-    assertResult(List(Map("dname" -> "!ACCOUNTING", "emps" -> List(Map("ename" -> "CLARK"),
+    assertResult(List(Map("dname" -> "ACCOUNTING", "emps" -> List(Map("ename" -> "CLARK"),
         Map("ename" -> "KING"), Map("ename" -> "MILLER"))))) {
-      Query.toListOfMaps[Map]("dept[10]{dname, |emp{ename}#(1) emps}")
+      Query.toListOfMaps("dept[10]{dname, |emp{ename}#(1) emps}")
     }
 
     //bind variables test
@@ -314,6 +312,16 @@ class QueryTest extends FunSuite {
       tresql"emp [ename ~ $name? & sal < $salary?] {ename}#(1)".toListOfVectors
     }
     assertResult(List(Vector(0)))(tresql"dummy" toListOfVectors)
+
+    assertResult((10, "ACCOUNTING",(7782, "CLARK", "1981-06-09")))(
+      tresql"dept{deptno, dname, |emp{empno, ename, hiredate}#(1) emps}#(1)"
+        .head match {case d => (d.deptno, d.dname, d.emps
+          .head match {case e => (e.empno, e.ename, String.valueOf(e.hiredate))})})
+    assertResult(Map("deptno" -> 10, "dname" -> "ACCOUNTING", "loc" -> "NEW YORK"))(
+      tresql"dept".head.toMap)
+    assertResult((10, "ACCOUNTING"))(tresql"dept{deptno, dname}#(1)".head[Int, String])
+    assertResult(List((10, "ACCOUNTING"), (20, "RESEARCH")))(
+      tresql"dept{deptno, dname}#(1)@(2)".list[Int, String])
 
     //Resources convenience methods test
     val mr = Env.maxResultSize

@@ -77,5 +77,5 @@ trait Row {
   /* TODO
   def values: java.util.List[Object]
   */
-  def rowToMap: java.util.Map[String, Object]
+  def toMap: java.util.Map[String, Object]
 }

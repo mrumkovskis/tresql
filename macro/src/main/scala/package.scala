@@ -28,6 +28,11 @@ package object tresql extends CoreTypes {
         case 2 => emps
       }
       override def columnCount = 3
+      override val columns = Vector(
+        org.tresql.Column(-1, "deptno", null),
+        org.tresql.Column(-1, "dname", null),
+        org.tresql.Column(-1, "emps", null)
+      )
     }
     //RowConverter definition
     object Dept extends RowConverter[Dept] {
@@ -38,7 +43,6 @@ package object tresql extends CoreTypes {
         obj.emps = row.typed[org.tresql.CompiledResult[Emp]](2)
         obj
       }
-      override def columnCount = 3
     }
     class Emp extends CompiledRow {
       var empno: java.lang.Integer = _
@@ -49,6 +53,12 @@ package object tresql extends CoreTypes {
         case 1 => ename
         case 2 => hiredate
       }
+      override def columnCount = 3
+      override val columns = Vector(
+        org.tresql.Column(-1, "empno", null),
+        org.tresql.Column(-1, "ename", null),
+        org.tresql.Column(-1, "hiredate", null)
+      )
     }
     object Emp extends RowConverter[Emp] {
       def apply(row: RowLike): Emp = {
@@ -122,6 +132,7 @@ package object tresql extends CoreTypes {
                   (f :: fs, cv :: cvs, ft :: fts, chs ++ ch)
               }
             val colsByIdx = fieldTerms.zipWithIndex.map {case (t, i) => cq"$i => $t"}
+            val colDefs = fieldTerms.map { cn => q"org.tresql.Column(-1, ${cn.toString}, null)" }
             val typeName = TypeName(className)
             val classDef = q"""
               class $typeName extends org.tresql.CompiledRow {
@@ -130,6 +141,7 @@ package object tresql extends CoreTypes {
                   case ..$colsByIdx
                 }
                 override def columnCount = ${colsByIdx.size}
+                override val columns = Vector(..$colDefs)
               }
             """
             val converterName = TermName(className)

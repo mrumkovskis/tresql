@@ -69,62 +69,6 @@ trait TypedResult[+R <: RowLike] { this: Result[R] =>
     case false => None
   } finally close
 
-  def toListOfMaps[M[String, Any] <: scala.collection.Map[String, Any]](
-    implicit transformer: PartialFunction[(String, Any), Any] = null,
-    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): List[M[String, Any]] =
-    this.map(r => rowAsMap[M]).toList
-
-  def rowAsMap[M[String, Any] <: scala.collection.Map[String, Any]](
-    implicit transformer: PartialFunction[(String, Any), Any] = null,
-    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] = {
-    val defaultTransform: PartialFunction[(String, Any), Any] = { case (x, y) => y }
-    val tr = if (transformer == null) defaultTransform else transformer orElse defaultTransform
-    (bf() ++= (0 to (columnCount - 1)).map(i => {
-      val name = column(i).name
-      name -> (this(i) match {
-        case r: Result[_] => tr(name, r.toListOfMaps[M])
-        case x => tr(name, x)
-      })
-    })).result
-  }
-
-  def headAsMap[M[String, Any] <: scala.collection.Map[String, Any]](
-    implicit transformer: PartialFunction[(String, Any), Any] = null,
-    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] = try
-    hasNext match {
-      case true =>
-        next
-        rowAsMap[M]
-      case false => throw new NoSuchElementException("No rows in result")
-    } finally close
-
-  def headOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](
-    implicit transformer: PartialFunction[(String, Any), Any] = null,
-    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
-    try Some(headAsMap[M]) catch { case e: NoSuchElementException => None }
-
-  def uniqueAsMap[M[String, Any] <: scala.collection.Map[String, Any]](
-    implicit transformer: PartialFunction[(String, Any), Any] = null,
-    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] = try
-    hasNext match {
-      case true =>
-        next
-        val v = rowAsMap[M]
-        if (hasNext) error("More than one row for unique result") else v
-      case false => error("No rows in result")
-    } finally close
-
-  def uniqueOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](
-    implicit transformer: PartialFunction[(String, Any), Any] = null,
-    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] = try
-    hasNext match {
-      case true =>
-        next
-        val v = rowAsMap[M]
-        if (hasNext) error("More than one row for unique result") else Some(v)
-      case false => None
-    } finally close
-
   def list[T](implicit converter: CoreTypes.Converter[T],
       m: Manifest[T]) = this.map(r => this.asInstanceOf[RowLike].typed[T]).toList
 
@@ -257,30 +201,8 @@ trait TypedQuery {this: Query =>
     apply(expr, params: _*).uniqueOption[T]
   }
 
-  def toListOfMaps[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
-    implicit transformer: PartialFunction[(String, Any), Any] = null, r: Resources = Env,
-    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): List[M[String, Any]] =
-    apply(expr, params: _*).toListOfMaps[M]
-
-  def headAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
-    implicit transformer: PartialFunction[(String, Any), Any] = null, r: Resources = Env,
-    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
-    apply(expr, params: _*).headAsMap[M]
-
-  def headOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
-    implicit transformer: PartialFunction[(String, Any), Any] = null, r: Resources = Env,
-    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
-    apply(expr, params: _*).headOptionAsMap[M]
-
-  def uniqueAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
-    implicit transformer: PartialFunction[(String, Any), Any] = null, r: Resources = Env,
-    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): M[String, Any] =
-    apply(expr, params: _*).uniqueAsMap[M]
-
-  def uniqueOptionAsMap[M[String, Any] <: scala.collection.Map[String, Any]](expr: String, params: Any*)(
-    implicit transformer: PartialFunction[(String, Any), Any] = null, r: Resources = Env,
-    bf: CanBuildFrom[M[String, Any], (String, Any), M[String, Any]]): Option[M[String, Any]] =
-    apply(expr, params: _*).uniqueOptionAsMap[M]
+  def toListOfMaps(expr: String, params: Any*)(implicit r: Resources = Env): List[Map[String, Any]] =
+    apply(expr, params: _*).toListOfMaps
 
   def list[T](expr: String, params: Any*)(implicit converter: CoreTypes.Converter[T],
       m: scala.reflect.Manifest[T], r: Resources = Env) = apply(expr, params: _*).list[T](converter, m)

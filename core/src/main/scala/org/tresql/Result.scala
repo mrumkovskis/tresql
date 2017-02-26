@@ -10,26 +10,8 @@ trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T]
   def columns = (0 to (columnCount - 1)) map column
   def values = (0 to (columnCount - 1)).map(this(_))
 
-  def toListOfMaps: List[Map[String, _]] = this.map(_ => rowToMap).toList
-  def toListOfVectors: List[Vector[_]] = this.map(_ => rowToVector).toList
-
-  def rowToMap = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
-    case r: Result[_] => r.toListOfMaps
-    case x => x
-  })).toMap
-
-  def rowToVector = {
-    val b = new scala.collection.mutable.ListBuffer[Any]
-    var i = 0
-    while (i < columnCount) {
-      b += (this(i) match {
-        case r: Result[_] => r.toListOfVectors
-        case x => x
-      })
-      i += 1
-    }
-    Vector(b: _*)
-  }
+  def toListOfVectors: List[Vector[Any]] = this.map(_.rowToVector).toList
+  def toListOfMaps: List[Map[String, Any]] = this.map(_.toMap).toList
 
   /**
    * iterates through this result rows as well as these of descendant result
@@ -329,12 +311,8 @@ class DynamicArrayResult(override val values: List[Any])
   {{{CompiledRow}}} is used as superclass for parameter type of {{{CompiledResult[T]}}}
 */
 trait CompiledRow extends RowLike with Typed {
+  def column(idx: Int): org.tresql.Column = columns(idx)
   def apply(name: String): Any = ???
-  def apply(idx: Int): Any = ???
-  def column(idx: Int): org.tresql.Column = ???
-  def columnCount: Int = ???
-  def columns: Seq[org.tresql.Column] = ???
-  def rowToMap: Map[String,Any] = ???
   def values: Seq[Any] = ???
   def typed[T:Manifest](name: String) = ???
 }
@@ -544,8 +522,24 @@ trait RowLike extends Typed {
   def jbd(name: String) = jBigDecimal(name)
   def listOfRows(idx: Int): List[this.type] = this(idx).asInstanceOf[List[this.type]]
   def listOfRows(name: String) = this(name).asInstanceOf[List[this.type]]
+  def toMap: Map[String, Any] = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
+    case r: Result[_] => r.toListOfMaps
+    case x => x
+  })).toMap
+  /** name {{{toVector}}} is defined in {{{trait TranversableOnce}}} */
+  def rowToVector: Vector[Any] = {
+    val b = new scala.collection.mutable.ListBuffer[Any]
+    var i = 0
+    while (i < columnCount) {
+      b += (this(i) match {
+        case r: Result[_] => r.toListOfVectors
+        case x => x
+      })
+      i += 1
+    }
+    Vector(b: _*)
+  }
   def columnCount: Int
-  def rowToMap: Map[String, Any]
   def column(idx: Int): Column
   def columns: Seq[Column]
   def values: Seq[Any]

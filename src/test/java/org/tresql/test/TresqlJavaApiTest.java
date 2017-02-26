@@ -93,8 +93,8 @@ public class TresqlJavaApiTest implements Runnable {
 
         println("");
         for (Row r : Query.select("dept[60]{deptno, dname}")) {
-            java.util.Map<String, Object> map = r.rowToMap();
-            println("rowToMap() - " + map.get("deptno") + ": "
+            java.util.Map<String, Object> map = r.toMap();
+            println("toMap() - " + map.get("deptno") + ": "
                     + map.get("dname"));
         }
 

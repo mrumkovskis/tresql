@@ -107,8 +107,8 @@ object Query {
     /* TODO
     override def values = deepRowToValues(x)
     */
-    override def rowToMap =
-      deepMapToJavaMap(x.rowToMap).asInstanceOf[java.util.Map[String, Object]]
+    override def toMap =
+      deepMapToJavaMap(x.toMap).asInstanceOf[java.util.Map[String, Object]]
     def deepMapToJavaMap(m: Map[String, Any]): java.util.Map[String, Any] =
       (m map {
         case (k, v: List[Map[String, _] @unchecked]) => (k, (v map deepMapToJavaMap).asJava)
