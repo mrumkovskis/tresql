@@ -5,11 +5,20 @@ import sys._
 /** Object Relational Transformations - ORT */
 trait ORT extends Query {
 
-  /* table[:ref]*[#table[:ref]*]*[[options]] [alias]
+  /**
+  *  Children property format:
+  *  table[:ref]*[#table[:ref]*]*[[options]] [alias]
   *  Options are to be specified in such order: insert, delete, update, i.e. '+-='
   *  Examples:
   *    dept#car:deptnr:nr#tyres:carnr:nr
   *    dept[+=] alias
+  *
+  *  Resolvable property format:
+  *  name_field>foreign_key_field>resolve_tresql
+  *  Resolve tresqls where clause must contain bind variable ':name' or ':name_field', in first
+  *  case bind variable ':name' will be replaced with bind variable ':name_field'
+  *  Example:
+  *    dept_name>dept_id>dept[dname = :name]{id}
   */
   val PROP_PATTERN = {
     val ident = """[^:\[\]\s#]+"""
@@ -19,6 +28,7 @@ trait ORT extends Query {
     val alias = """(?:\s+(\w+))?"""
     (tables + options + alias)r
   }
+  val RESOLVE_PROP_PATTERN = "([^>]+)>([^>]+)>(.*)"r
 
   type ObjToMapConverter[T] = (T) => (String, Map[String, _])
 
@@ -400,6 +410,14 @@ trait ORT extends Query {
             if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
           refColName -> resources.valueExpr(name, refColName))
     }.orNull
+    def resolve_tresql(property: String) = {
+      import QueryParser._
+      val RESOLVE_PROP_PATTERN(name, fk, rt) = property
+      val resolveTresql = transformer {
+        case v@Variable("name", _, _, _) => v.copy(variable = name)
+      } (parseExp(rt)).tresql
+      List(fk -> resolveTresql)
+    }
     import ctx._
     def tresql_string(table: metadata.Table,
       alias: String,
@@ -416,6 +434,8 @@ trait ORT extends Query {
         }
         //pk or ref to parent
         case _ if refsAndPk.exists(_._1 == n) => Nil
+        //resolvable field
+        case _ if n.indexOf('>') != -1 => resolve_tresql(n)
         //ordinary field
         case _ => List(table.colOption(n).map(_.name).orNull -> resources.valueExpr(table.name, n))
       }
