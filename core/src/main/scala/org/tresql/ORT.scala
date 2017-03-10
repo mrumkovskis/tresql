@@ -415,7 +415,7 @@ trait ORT extends Query {
       val RESOLVE_PROP_PATTERN(name, fk, rt) = property
       val resolveTresql = transformer {
         case v@Variable("name", _, _, _) => v.copy(variable = name)
-      } (parseExp(rt)).tresql
+      } (parseExp(if (rt startsWith "(" ) rt else s"($rt)")).tresql
       List(fk -> resolveTresql)
     }
     import ctx._

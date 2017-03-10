@@ -810,6 +810,13 @@ class QueryTest extends FunSuite {
     println("\n--- Delete all children with save options specified ---\n")
     obj = Map("nr" -> 10035, "tyres[+-=]" -> Nil)
     assertResult(List(1, List()))(ORT.update("car", obj))
+
+    println("\n--- Name resolving ---\n")
+    obj = Map("wdate" -> "2017-03-10", "hours" -> 8, "emp" -> "SCOTT", "emp_mgr" -> "KING",
+      "emp>empno>emp[ename = :name] {empno}" -> "SCOTT",
+      "emp_mgr>empno_mgr>emp[ename = :emp_mgr] {empno}" -> "KING")
+    assertResult(new InsertResult(Some(1), Map(), None))(ORT.insert("work", obj))
+
   }
 
   test("tresql methods") {
@@ -868,7 +875,7 @@ class QueryTest extends FunSuite {
     assertResult(Vector("AMY", "DEVELOPMENT", 2))(
       tresql"work[empno]emp/dept{ename, dname, hours}#(1, 2, 3)".toListOfVectors.head)
 
-    assertResult(12)(tresql"work[empno]emp/dept{count(*) cnt}".head.cnt)
+    assertResult(13)(tresql"work[empno]emp/dept{count(*) cnt}".head.cnt)
 
     assertResult(2)(tresql"(dummy ++ dummy){count(# dummy)}".head._1)
 
