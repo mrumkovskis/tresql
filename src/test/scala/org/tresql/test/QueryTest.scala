@@ -817,6 +817,10 @@ class QueryTest extends FunSuite {
       "emp_mgr>empno_mgr>emp[ename = :emp_mgr] {empno}" -> "KING")
     assertResult(new InsertResult(Some(1), Map(), None))(ORT.insert("work", obj))
 
+    obj = Map("empno" -> 7369, "sal" -> 850, "dept-name" -> "SALES",
+      "dept-name>deptno>dept[dname = :name]{deptno}" -> null)
+    assertResult(new UpdateResult(Some(1)))(ORT.update("emp", obj))
+
   }
 
   test("tresql methods") {
@@ -888,7 +892,7 @@ class QueryTest extends FunSuite {
     })
 
     assertResult((java.sql.Date.valueOf("1980-12-17"), java.sql.Date.valueOf("1983-01-12"),
-      800.00, 5000.00))(
+      850.00, 5000.00))(
         tresql"emp{min(hiredate) minh, max(hiredate) maxh, min(sal) mins, max(sal) maxs}".map { r =>
           import r._
           (minh, maxh, mins, maxs)
