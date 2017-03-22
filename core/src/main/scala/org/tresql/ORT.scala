@@ -18,7 +18,7 @@ trait ORT extends Query {
   *  Resolver tresqls where clause must contain identifier _ or variable ':name_field', in first
   *  case identifier _ will be replaced with bind variable ':name_field'
   *  Example:
-  *    dept_name>dept_id>dept[dname = :name]{id}
+  *    dept_name>dept_id>dept[dname = _]{id}
   */
   val PROP_PATTERN = {
     val ident = """[^:\[\]\s#]+"""
