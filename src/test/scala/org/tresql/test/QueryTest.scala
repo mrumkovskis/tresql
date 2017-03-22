@@ -813,12 +813,12 @@ class QueryTest extends FunSuite {
 
     println("\n--- Name resolving ---\n")
     obj = Map("wdate" -> "2017-03-10", "hours" -> 8, "emp" -> "SCOTT", "emp_mgr" -> "KING",
-      "emp>empno>emp[ename = :name] {empno}" -> "SCOTT",
+      "emp>empno>emp[ename = _] {empno}" -> "SCOTT",
       "emp_mgr>empno_mgr>emp[ename = :emp_mgr] {empno}" -> "KING")
     assertResult(new InsertResult(Some(1), Map(), None))(ORT.insert("work", obj))
 
     obj = Map("empno" -> 7369, "sal" -> 850, "dept-name" -> "SALES",
-      "dept-name>deptno>dept[dname = :name]{deptno}" -> null)
+      "dept-name>deptno>dept[dname = _]{deptno}" -> null)
     assertResult(new UpdateResult(Some(1)))(ORT.update("emp", obj))
 
   }

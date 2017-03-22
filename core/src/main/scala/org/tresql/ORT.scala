@@ -14,9 +14,9 @@ trait ORT extends Query {
   *    dept[+=] alias
   *
   *  Resolvable property format:
-  *  name_field>foreign_key_field>resolve_tresql
-  *  Resolve tresqls where clause must contain bind variable ':name' or ':name_field', in first
-  *  case bind variable ':name' will be replaced with bind variable ':name_field'
+  *  name_field>foreign_key_field>resolver_tresql
+  *  Resolver tresqls where clause must contain identifier _ or variable ':name_field', in first
+  *  case identifier _ will be replaced with bind variable ':name_field'
   *  Example:
   *    dept_name>dept_id>dept[dname = :name]{id}
   */
@@ -28,7 +28,7 @@ trait ORT extends Query {
     val alias = """(?:\s+(\w+))?"""
     (tables + options + alias)r
   }
-  val RESOLVE_PROP_PATTERN = "([^>]+)>([^>]+)>(.*)"r
+  val RESOLVER_PROP_PATTERN = "([^>]+)>([^>]+)>(.*)"r
 
   type ObjToMapConverter[T] = (T) => (String, Map[String, _])
 
@@ -410,13 +410,13 @@ trait ORT extends Query {
             if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
           refColName -> resources.valueExpr(name, refColName))
     }.orNull
-    def resolve_tresql(property: String) = {
+    def resolver_tresql(property: String) = {
       import QueryParser._
-      val RESOLVE_PROP_PATTERN(name, fk, rt) = property
-      val resolveTresql = transformer {
-        case v@Variable("name", _, _, _) => v.copy(variable = name)
+      val RESOLVER_PROP_PATTERN(name, fk, rt) = property
+      val resolverTresql = transformer {
+        case Ident(List("_")) => Variable(name, Nil, null, false)
       } (parseExp(if (rt startsWith "(" ) rt else s"($rt)")).tresql
-      List(fk -> resolveTresql)
+      List(fk -> resolverTresql)
     }
     import ctx._
     def tresql_string(table: metadata.Table,
@@ -435,7 +435,7 @@ trait ORT extends Query {
         //pk or ref to parent
         case _ if refsAndPk.exists(_._1 == n) => Nil
         //resolvable field
-        case _ if n.indexOf('>') != -1 => resolve_tresql(n)
+        case _ if n.indexOf('>') != -1 => resolver_tresql(n)
         //ordinary field
         case _ => List(table.colOption(n).map(_.name).orNull -> resources.valueExpr(table.name, n))
       }
