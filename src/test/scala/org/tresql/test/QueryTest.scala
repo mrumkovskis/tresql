@@ -825,7 +825,6 @@ class QueryTest extends FunSuite {
       "address-city" -> "Riga, LV", "address-city>addr_nr>address[addr = _]{nr}" -> null)
     assertResult(new UpdateResult(Some(1), Map("_1" -> new UpdateResult(Some(1)))))(
       ORT.updateMultiple(obj, "dept", "dept_addr")())
-
   }
 
   test("tresql methods") {

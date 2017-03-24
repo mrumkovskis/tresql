@@ -415,11 +415,9 @@ trait ORT extends Query {
     def resolver_tresql(table: metadata.Table, property: String) = {
       import QueryParser._
       val RESOLVER_PROP_PATTERN(name, fk, rt) = property
-      table.colOption(fk).map(_.name).map { col =>
-        val resolverTresql = transformer {
+      table.colOption(fk).map(_.name).map { _ -> transformer {
           case Ident(List("_")) => Variable(name, Nil, null, false)
         } (parseExp(if (rt startsWith "(" ) rt else s"($rt)")).tresql
-        col -> resolverTresql
       }.toList
     }
     import ctx._
