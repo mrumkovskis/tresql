@@ -28,9 +28,9 @@ trait ORT extends Query {
   *  which will be replaced with bind variable ':name_field'.
   *  Statement must return no more than one row.
   *  Example:
-  *    dept_name>dept_id>dept[dname = _]{id}
+  *    dept_name->dept_id=dept[dname = _]{id}
   */
-  val RESOLVER_PROP_PATTERN = "([^>]+)>([^>]+)>(.*)"r
+  val RESOLVER_PROP_PATTERN = "(.*?)->([^=]+)=(.*)"r
 
   type ObjToMapConverter[T] = (T) => (String, Map[String, _])
 
@@ -416,7 +416,7 @@ trait ORT extends Query {
       import QueryParser._
       val RESOLVER_PROP_PATTERN(name, fk, rt) = property
       table.colOption(fk).map(_.name).map { _ -> transformer {
-          case Ident(List("_")) => Variable(name, Nil, null, false)
+          case Ident(List("_")) => Variable(name + "->", Nil, null, false)
         } (parseExp(if (rt startsWith "(" ) rt else s"($rt)")).tresql
       }.toList
     }
@@ -436,8 +436,8 @@ trait ORT extends Query {
         }
         //pk or ref to parent
         case _ if refsAndPk.exists(_._1 == n) => Nil
-        //resolvable field
-        case _ if n.indexOf('>') != -1 => resolver_tresql(table, n)
+        //resolvable field check for equals sign, since '->' sign must be added to name bind variable
+        case _ if n.indexOf('=') != -1 => resolver_tresql(table, n)
         //ordinary field
         case _ => List(table.colOption(n).map(_.name).orNull -> resources.valueExpr(table.name, n))
       }

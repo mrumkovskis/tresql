@@ -813,16 +813,18 @@ class QueryTest extends FunSuite {
 
     println("\n--- Name resolving ---\n")
     obj = Map("wdate" -> "2017-03-10", "hours" -> 8, "emp" -> "SCOTT", "emp_mgr" -> "KING",
-      "emp>empno>emp[ename = _] {empno}" -> "SCOTT",
-      "emp_mgr>empno_mgr>emp[ename = :emp_mgr] {empno}" -> "KING")
+      "emp->" -> "SCOTT", "emp_mgr->" -> "KING",
+      "emp_mgr->" -> "KING", "emp->empno=emp[ename = _] {empno}" -> "SCOTT",
+      "emp_mgr->empno_mgr=emp[ename = :emp_mgr] {empno}" -> "KING")
     assertResult(new InsertResult(Some(1), Map(), None))(ORT.insert("work", obj))
 
     obj = Map("empno" -> 7369, "sal" -> 850, "dept-name" -> "SALES",
-      "dept-name>deptno>dept[dname = _]{deptno}" -> null)
+      "dept-name->" -> "SALES", "dept-name->deptno=dept[dname = _]{deptno}" -> null)
     assertResult(new UpdateResult(Some(1)))(ORT.update("emp", obj))
 
     obj = Map("deptno" -> 10037, "loc" -> "Latvia", "zip_code" -> "LV-1005", "addr" -> "Tvaika iela 48",
-      "address-city" -> "Riga, LV", "address-city>addr_nr>address[addr = _]{nr}" -> null)
+      "address-city" -> "Riga, LV",
+      "address-city->" -> "Riga, LV", "address-city->addr_nr=address[addr = _]{nr}" -> null)
     assertResult(new UpdateResult(Some(1), Map("_1" -> new UpdateResult(Some(1)))))(
       ORT.updateMultiple(obj, "dept", "dept_addr")())
   }
