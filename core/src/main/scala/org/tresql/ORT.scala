@@ -436,8 +436,8 @@ trait ORT extends Query {
         }
         //pk or ref to parent
         case _ if refsAndPk.exists(_._1 == n) => Nil
-        //resolvable field check for equals sign, since '->' sign must be added to name bind variable
-        case _ if n.indexOf('=') != -1 => resolver_tresql(table, n)
+        //resolvable field check
+        case _ if n.indexOf("->") != -1 && n.indexOf('=') != -1 => resolver_tresql(table, n)
         //ordinary field
         case _ => List(table.colOption(n).map(_.name).orNull -> resources.valueExpr(table.name, n))
       }
