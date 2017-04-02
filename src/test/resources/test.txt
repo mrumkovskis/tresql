@@ -117,6 +117,10 @@ dept d/emp? e[e.deptno != null]#{d.deptno}#(d.deptno) --> [[10], [20], [30]]
 //right outer join
 emp e/?dept d[e.deptno != null]#{d.deptno}#(d.deptno) --> [[10], [20], [30]]
 
+//query in join clause
+emp e[e.deptno = (dept dj[dj.deptno = d.deptno] {dj.deptno})]dept d[d.dname = 'ACCOUNTING']{dname, ename}#(1, 2) --> [["ACCOUNTING", "CLARK"], ["ACCOUNTING", "KING"], ["ACCOUNTING", "MILLER"]]
+emp e[e.deptno = coalesce(d.deptno, (dept dj[dj.deptno = d.deptno] {dj.deptno}))]dept d[d.dname = 'SALES']{d.dname, e.ename}#(1, 2) --> [["SALES", "ALLEN"], ["SALES", "BLAKE"], ["SALES", "JAMES"], ["SALES", "MARTIN"], ["SALES", "TURNER"], ["SALES", "WARD"]]
+
 //column aliases
 emp{ename n}#(1) --> [["ADAMS"], ["ALLEN"], ["BLAKE"], ["CLARK"], ["FORD"], ["JAMES"], ["JONES"], ["KING"], ["MARTIN"], ["MILLER"], ["SCOTT"], ["SMITH"], ["TURNER"], ["WARD"]]
 emp{ename 'n'}#(1) --> [["ADAMS"], ["ALLEN"], ["BLAKE"], ["CLARK"], ["FORD"], ["JAMES"], ["JONES"], ["KING"], ["MARTIN"], ["MILLER"], ["SCOTT"], ["SMITH"], ["TURNER"], ["WARD"]]

@@ -588,37 +588,30 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         else if (f.procedure.returnTypeParIndex == -1) type_from_const(Manifest.Any)
         else type_from_exp(ctx, f.exp.parameters(f.procedure.returnTypeParIndex))
     })
-    lazy val type_resolver: TransformerWithState[List[Scope]] = transformerWithState(scopes => {
+    lazy val type_resolver: TransformerWithState[List[Scope]] = transformerWithState(ctx => {
       case s: SelectDef =>
         //resolve column types for potential from clause select definitions
-        val nsd = s.copy(tables = (s.tables map(type_resolver(scopes)(_))).asInstanceOf[List[TableDef]])
+        val nsd = s.copy(tables = (s.tables map(type_resolver(s :: ctx)(_))).asInstanceOf[List[TableDef]])
         //resolve types for column defs
-        val nscopes = nsd :: scopes
-        nsd.copy(cols = (nsd.cols map(type_resolver(nscopes)(_))).asInstanceOf[List[ColDef[_]]])
+        nsd.copy(cols = (nsd.cols map(type_resolver(nsd :: ctx)(_))).asInstanceOf[List[ColDef[_]]])
       case wtd: WithTableDef =>
-        val nscopes = if (wtd.recursive) wtd :: scopes else scopes
-        val exp = type_resolver(nscopes)(wtd.exp).asInstanceOf[SQLDefBase]
+        val nctx = if (wtd.recursive) wtd :: ctx else ctx
+        val exp = type_resolver(nctx)(wtd.exp).asInstanceOf[SQLDefBase]
         val cols = wtd.cols zip exp.cols map { case (col, ecol) => col.copy(typ = ecol.typ) }
         wtd.copy(cols = cols, exp = exp)
       case wsd: WithSelectDef =>
-        val wt = (wsd.withTables map(type_resolver(scopes)(_))).asInstanceOf[List[WithTableDef]]
+        val wt = (wsd.withTables map(type_resolver(ctx)(_))).asInstanceOf[List[WithTableDef]]
         val nwsd = wsd.copy(withTables = wt)
         //'with' expression - wsd.exp must be resolved after 'as' clause - wsd.withTables
-        nwsd.copy(exp = type_resolver(nwsd :: scopes)(wsd.exp).asInstanceOf[SelectDefBase])
-      case dml: DMLDefBase =>
-        val nscopes = dml :: scopes
-        val ncols = (dml.cols map(type_resolver(nscopes)(_))).asInstanceOf[List[ColDef[_]]]
-        dml match {
-          case ins: InsertDef => ins.copy(cols = ncols)
-          case upd: UpdateDef => upd.copy(cols = ncols)
-          case del: DeleteDef => del
-        }
-      case ColDef(n, ChildDef(ch), t) => ColDef(n, ChildDef(type_resolver(scopes)(ch)), t)
+        nwsd.copy(exp = type_resolver(nwsd :: ctx)(wsd.exp).asInstanceOf[SelectDefBase])
+      case dml: DMLDefBase if ctx.isEmpty || ctx.head != dml => type_resolver(dml :: ctx)(dml)
+      case ColDef(n, ChildDef(ch), t) => ColDef(n, ChildDef(type_resolver(ctx)(ch)), t)
       case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
-        ColDef(n, exp, typer(Ctx(scopes, Manifest.Any))(exp).mf)
-      case fd @ FunDef(n, f, typ, p) if typ == null || typ == Manifest.Nothing =>
+        ColDef(n, exp, typer(Ctx(ctx, Manifest.Any))(exp).mf)
+      //resolve return type only for root level function
+      case fd @ FunDef(n, f, typ, p) if ctx.isEmpty && typ == null || typ == Manifest.Nothing =>
         val t = if (p.returnTypeParIndex == -1) Manifest.Any else {
-          typer(Ctx(scopes, Manifest.Any))(f.parameters(p.returnTypeParIndex)).mf
+          typer(Ctx(ctx, Manifest.Any))(f.parameters(p.returnTypeParIndex)).mf
         }
         fd.copy(typ = t)
     })
