@@ -75,7 +75,7 @@ package object tresql extends CoreTypes {
     def tresql(params: Any*)(implicit resources: Resources): Result[RowLike] = macro Macros.impl
   }
 
-  object Macros {
+  private object Macros {
     import scala.language.reflectiveCalls //supress warnings that class Ctx is defined in function resultClassTree and later returned
     import scala.language.existentials //supress warnings that class Ctx is defined in function resultClassTree and later returned
     import QueryCompiler._
