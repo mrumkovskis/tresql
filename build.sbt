@@ -1,10 +1,6 @@
 lazy val commonSettings = Seq(
   organization := "org.tresql",
   scalaVersion := "2.12.1",
-  crossScalaVersions := Seq(
-    "2.12.1"
-    ,"2.11.8"
-  ),
   //coverageEnabled := true,
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",
     "-language:postfixOps", "-language:implicitConversions", "-language:reflectiveCalls",
@@ -26,18 +22,24 @@ lazy val core = (project in file("core"))
   .settings(
     name := "tresql-core",
     libraryDependencies ++= Seq(
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-      "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.5"
-    )
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value
+    ) ++ (
+      if (scalaVersion.value.startsWith("2.10.")) Nil
+      else Seq("org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.5"))
   ).settings(commonSettings: _*)
 
 lazy val macros = (project in file("macro"))
   .dependsOn(core)
   .settings(
-    name := "macro"
+    name := "macro",
+    crossScalaVersions := Seq(
+      "2.12.1",
+      "2.11.8",
+      "2.10.6"
+    ),
+    excludeFilter in unmanagedSources := (if (scalaVersion.value.startsWith("2.10.")) "*.*" else "")
   )
   .settings(commonSettings: _*)
-
 val packageScopes = Seq(packageBin, packageSrc)
 
 val packageProjects = Seq(core, macros)
@@ -51,6 +53,13 @@ val packageMerges = for {
 lazy val tresql = (project in file("."))
   .dependsOn(core, macros)
   .aggregate(core, macros)
+  .settings(crossScalaVersions := Seq(
+      "2.12.1",
+      "2.11.8",
+      "2.10.6"
+    ),
+    excludeFilter in (Test, unmanagedSources) := (if (scalaVersion.value.startsWith("2.10.")) "CompilerMacroDependantTests.scala" else "")
+  )
   .settings(commonSettings: _*)
   .settings(packageMerges: _*)
   .settings(
