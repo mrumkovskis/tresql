@@ -1,6 +1,6 @@
 package org.tresql.test
 
-import org.scalatest.FunSuite
+import org.scalatest.{FunSuite, BeforeAndAfterAll}
 import java.sql._
 import org.tresql._
 import org.tresql.implicits._
@@ -10,21 +10,7 @@ import scala.util.parsing.json._
 import sys._
 
 /** To run from console {{{org.scalatest.run(new test.QueryTest)}}} */
-class QueryTest extends FunSuite {
-  //initialize environment
-  Class.forName("org.hsqldb.jdbc.JDBCDriver")
-  val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
-  Env.conn = conn
-  Env.dialect = dialects.HSQLDialect orElse {
-    case e: QueryBuilder#SelectExpr =>
-      val b = e.builder
-      e match {
-        case s @ b.SelectExpr(List(b.Table(b.ConstExpr(null), _, _, _, _)), _, _, _, _, _, _, _, _, _) =>
-          s.copy(tables = List(s.tables.head.copy(table = b.IdentExpr(List("dummy"))))).sql
-        case _ => e.defaultSQL
-      }
-  }
-  Env.idExpr = s => "nextval('seq')"
+class QueryTest extends FunSuite with BeforeAndAfterAll {
   class TestFunctions extends Functions {
     def echo(x: String) = x
     def plus(a: java.lang.Long, b: java.lang.Long) = a + b
@@ -52,18 +38,35 @@ class QueryTest extends FunSuite {
     def null_macros(b: QueryBuilder) = null
     def dummy(b: QueryBuilder) = b.buildExpr("dummy")
   }
-  Env.functions = new TestFunctions
-  Env.macros = Macros
-  Env.cache = new SimpleCache(-1)
-  Env.logger = ((msg, level) => println (msg))
-  Env updateValueExprs (
-    /*value expr*/
-    Map(("car_usage" -> "empno") -> "(emp[empno = :empno]{empno})",
-        ("car" -> "deptnr") -> "(case((dept[deptno = :deptnr] {count(deptno)}) = 1, (dept[deptno = :deptnr] {deptno}), -1))",
-        ("tyres_usage" -> "carnr") -> ":#car"))
-  //create test db script
-  new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
-    sql => val st = conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
+
+  override def beforeAll {
+    //initialize environment
+    Class.forName("org.hsqldb.jdbc.JDBCDriver")
+    val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
+    Env.conn = conn
+    Env.dialect = dialects.HSQLDialect orElse {
+      case e: QueryBuilder#SelectExpr =>
+        val b = e.builder
+        e match {
+          case s @ b.SelectExpr(List(b.Table(b.ConstExpr(null), _, _, _, _)), _, _, _, _, _, _, _, _, _) =>
+            s.copy(tables = List(s.tables.head.copy(table = b.IdentExpr(List("dummy"))))).sql
+          case _ => e.defaultSQL
+        }
+    }
+    Env.idExpr = s => "nextval('seq')"
+    Env.functions = new TestFunctions
+    Env.macros = Macros
+    Env.cache = new SimpleCache(-1)
+    Env.logger = ((msg, level) => println (msg))
+    Env updateValueExprs (
+      /*value expr*/
+      Map(("car_usage" -> "empno") -> "(emp[empno = :empno]{empno})",
+          ("car" -> "deptnr") -> "(case((dept[deptno = :deptnr] {count(deptno)}) = 1, (dept[deptno = :deptnr] {deptno}), -1))",
+          ("tyres_usage" -> "carnr") -> ":#car"))
+    //create test db script
+    new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
+      sql => val st = conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
+    }
   }
 
   test("tresql statements") {
