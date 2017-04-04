@@ -564,7 +564,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case Const(const) => type_from_const(const)
       case Null => type_from_const(null)
       case Ident(ident) =>
-        Ctx(null, column(ctx.scopes)(ident mkString ".").map(_.scalaType).get)
+        Ctx(ctx.scopes, column(ctx.scopes)(ident mkString ".").map(_.scalaType).get)
       case UnOp(_, operand) => type_from_exp(ctx, operand)
       case BinOp(op, lop, rop) =>
         comp_op.findAllIn(op).toList match {
@@ -574,10 +574,11 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
               if (lt.toString == "java.lang.String") lt else if (rt.toString == "java.lang.String") rt
               else if (lt.toString == "java.lang.Boolean") lt else if (rt.toString == "java.lang.Boolean") rt
               else if (lt <:< rt) rt else if (rt <:< lt) lt else lt
-            Ctx(null, mf)
+            Ctx(ctx.scopes, mf)
           case _ => type_from_const(true)
         }
       case _: TerOp => type_from_const(true)
+      case _: In => type_from_const(true)
       case s: SelectDef =>
         if (s.cols.size > 1)
           throw CompilerException(s"Select must contain only one column, instead:${
@@ -609,7 +610,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
         ColDef(n, exp, typer(Ctx(ctx, Manifest.Any))(exp).mf)
       //resolve return type only for root level function
-      case fd @ FunDef(n, f, typ, p) if ctx.isEmpty && typ == null || typ == Manifest.Nothing =>
+      case fd @ FunDef(n, f, typ, p) if ctx.isEmpty && (typ == null || typ == Manifest.Nothing) =>
         val t = if (p.returnTypeParIndex == -1) Manifest.Any else {
           typer(Ctx(ctx, Manifest.Any))(f.parameters(p.returnTypeParIndex)).mf
         }
