@@ -151,6 +151,10 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       }
     })
 
+    //with recursive compile with braces select def
+    QueryCompiler.compile("""t(*) {(emp[ename ~~ 'kin%']{empno}) +
+      (t[t.empno = e.mgr]emp e{e.empno})} t#(1)""")
+
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("work/dept{*}"))
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("works"))
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("emp{aa}"))

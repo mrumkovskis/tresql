@@ -742,6 +742,9 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
 
       assertResult(List(1,1,1))(tresql"dummy + [10], dummy[dummy = 10] = [11], dummy - [dummy = 11]")
 
+      //braces test
+      assertResult(List(0, 0, 2, 2))(tresql"((dummy) ++ ((dummy)))#(1)".map(_.dummy).toList)
+
       assertResult(Vector("AMY", "DEVELOPMENT", 2))(
         tresql"work[empno]emp/dept{ename, dname, hours}#(1, 2, 3)".toListOfVectors.head)
 
@@ -818,6 +821,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         t[t.empno = e.mgr]emp e{e.empno}} t {t.*}#(1)""".map(_.empno).toList.head)
       assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
         t[t.empno = e.mgr]emp e{e.empno}} t a#(1)""".map(_.empno).toList.head)
+      //test braces select def
       assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
         t[t.empno = e.mgr]emp e{e.empno}} t a{*}#(1)""".map(_.empno).toList.head)
       assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +

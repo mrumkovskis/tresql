@@ -136,6 +136,11 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     def tables = op.tables
   }
 
+  case class BracesSelectDef(exp: SelectDefBase) extends SelectDefBase {
+    override def cols = exp.cols
+    override def tables = exp.tables
+  }
+
   // table definition in with [recursive] statement
   case class WithTableDef(
     cols: List[ColDef[_]],
@@ -374,6 +379,10 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         }
         ChildDef(exp)
       case Braces(exp: Exp @unchecked) if ctx == TablesCtx => builder(ctx)(exp) //remove braces around table expression, so it can be accessed directly
+      case Braces(exp: Exp @unchecked) => builder(ctx)(exp) match {
+        case sdb: SelectDefBase => BracesSelectDef(sdb)
+        case e => Braces(e)
+      }
       case a: Arr if ctx == QueryCtx => ArrayDef(
         a.elements.zipWithIndex.map { case (el, idx) =>
           ColDef[Nothing](
@@ -666,6 +675,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         exp = tt(wtd.exp)
       )
       case wsd: WithSelectDef => wsd.copy(exp = tt(wsd.exp), withTables = (wsd.withTables map tt))
+      case BracesSelectDef(sdb) => BracesSelectDef(tt(sdb))
       case fsd: FunSelectDef => fsd.copy(exp = tt(fsd.exp))
     }
     transform_traverse
@@ -714,6 +724,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         exp = tt(state)(wsd.exp),
         withTables = wsd.withTables map(tt(state)(_))
       )
+      case BracesSelectDef(sdb) => BracesSelectDef(tt(state)(sdb))
       case fsd: FunSelectDef => fsd.copy(exp = tt(state)(fsd.exp))
     }
     transform_traverse _
@@ -741,6 +752,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case rd: RecursiveDef => tr(state, rd.exp)
       case wtd: WithTableDef => tr(state, wtd.exp)
       case wsd: WithSelectDef => tr(trl(state, wsd.withTables), wsd.exp)
+      case bsd: BracesSelectDef => tr(state, bsd.exp)
       case fsd: FunSelectDef => tr(state, fsd.exp)
     }
     fun_traverse _
