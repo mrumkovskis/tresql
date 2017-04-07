@@ -1047,7 +1047,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
             }
         }
         case WithTable(name, cols, recursive, query) =>
-          WithTableExpr(name, cols, recursive, buildInternal(query, parseCtx))
+          WithTableExpr(name, cols, recursive, buildInternal(query, QUERY_CTX))
         case UnOp(op, oper) =>
           val o = buildInternal(oper, parseCtx)
           if (o == null) null else UnExpr(op, o)

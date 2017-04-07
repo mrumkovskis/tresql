@@ -140,7 +140,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
 
   case class WithTable(name: String, cols: List[String], recursive: Boolean, table: Exp)
     extends Exp {
-    def tresql = s"$name (${cols mkString ", "}) { ${table.tresql} }"
+    def tresql = s"$name (${if (!recursive) "# " else ""}${cols mkString ", "}) { ${table.tresql} }"
   }
   case class With(tables: List[WithTable], query: Exp) extends Exp {
     def tresql = tables.map(_.tresql).mkString(", ") + " " + query.tresql
