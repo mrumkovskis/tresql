@@ -40,6 +40,7 @@ trait ExpTransformer { this: QueryParsers =>
       case Delete(t, a, filter) => Delete(tt(t), a, tt(filter))
       case Arr(els) => Arr(els map tt)
       case Filters(f) => Filters((f map tt))
+      case Values(v) => Values(v map tt)
       case Braces(expr) => Braces(tt(expr))
       case null => null
       //for debugging purposes throw an exception since all expressions must be matched above for complete traversal

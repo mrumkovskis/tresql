@@ -391,14 +391,16 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     case wts ~ q => s"Unsupported with query: $q"
   })
 
+  def values: MemParser[Values] = rep1sep(array, ",") ^^ Values named "values"
+
   def insert: MemParser[Insert] = (("+" ~> qualifiedIdent ~ opt(ident) ~ opt(columns) ~
     opt(queryWithCols | repsep(array, ","))) |
-    ((qualifiedIdent ~ opt(ident) ~ opt(columns) <~ "+") ~ rep1sep(array, ","))) ^^ {
+    ((qualifiedIdent ~ opt(ident) ~ opt(columns) <~ "+") ~ values)) ^^ {
       case t ~ a ~ c ~ (v: Option[_]) =>
         Insert(t, a.orNull, c.map(_.cols).getOrElse(Nil),
           v.map { case v: List[Arr] @unchecked => Values(v) case s: Exp @unchecked => s } orNull)
-      case t ~ a ~ c ~ (v: List[Arr] @unchecked) =>
-        Insert(t, a.orNull, c.map(_.cols).getOrElse(Nil), Values(v))
+      case t ~ a ~ c ~ (v: Values @unchecked) =>
+        Insert(t, a.orNull, c.map(_.cols).getOrElse(Nil), v)
       case x => sys.error(s"Unexpected insert parse result: $x")
     } named "insert"
   def update: MemParser[Update] = (("=" ~> qualifiedIdent ~ opt(ident) ~
