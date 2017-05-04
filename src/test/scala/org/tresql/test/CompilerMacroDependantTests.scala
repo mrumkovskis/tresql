@@ -825,5 +825,10 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         t[t.empno = e.mgr]emp e{e.empno}} t a{*}#(1)""".map(_.empno).toList.head)
       assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
         t[t.empno = e.mgr]emp e{e.empno}} t a{a.*}#(1)""".map(_.empno).toList.head)
+
+      //type resolving when column contains select with from clause select
+      assertResult(("KING", "ACCOUNTING"))(tresql"""emp[ename ~~ 'kin%'] {
+        ename, ((dept[emp.deptno = dept.deptno]{dname}) {dname}) dname}"""
+        .map(r => r.ename -> r.dname).toList.head)
   }
 }

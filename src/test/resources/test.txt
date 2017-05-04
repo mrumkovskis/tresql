@@ -137,6 +137,8 @@ dept[?] {dname, (emp [emp.deptno = dept.deptno] {count(*)}) emp_count, |emp {ena
 dept[?] {dname, |emp {ename}#(1), (emp [emp.deptno = dept.deptno] {count(*)}) emp_count} --> 10 --> [["ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]], 3]]
 //workaround for summing select values in column clause i.e. - {emp{count(*)} + dept{count(*)}}
 ({(emp{count(*)}) a, (dept{count(*)}) b}) f {f.a + f.b} --> [[18]]
+emp[ename ~~ 'kin%'] {ename, (dept[emp.deptno = dept.deptno]{dname}) dname} --> [["KING", "ACCOUNTING"]]
+emp[ename ~~ 'kin%'] {ename, ((dept[emp.deptno = dept.deptno]{dname}) {dname}) dname} --> [["KING", "ACCOUNTING"]]
 
 //order
 dept/emp[sal >= losal & sal <= hisal]salgrade {dept.deptno, grade, empno, sal}#(dept.deptno, grade, ~sal) --> [[10, 2, 7934, 1300.00], [10, 4, 7782, 2450.00], [10, 5, 7839, 5000.00], [20, 1, 7876, 1100.00], [20, 1, 7369, 800.00], [20, 4, 7788, 3000.00], [20, 4, 7902, 3000.00], [20, 4, 7566, 2975.00], [30, 1, 7900, 950.00], [30, 2, 7521, 1250.00], [30, 2, 7654, 1250.00], [30, 3, 7499, 1600.00], [30, 3, 7844, 1500.00], [30, 4, 7698, 2850.00]]
@@ -495,6 +497,7 @@ t(*) {emp[ename ~~ 'kin%']{empno} + t[t.empno = e.mgr]emp e{e.empno}} t a{a.*}#(
 t(# deptno) {emp[ename ~~'kin%']{deptno}} t[t.deptno = d.deptno]dept d {d.deptno} --> [[10]]
 (t(# deptno) {(emp[ename ~~'kin%']{deptno})} t[t.deptno = d.deptno]dept d {d.deptno}) a {*} --> [[10]]
 (t(# deptno) {(emp[ename ~~'kin%']{deptno}) + (emp[ename ~~'sco%']{deptno})} t[t.deptno = d.deptno]dept d {d.deptno}) a#(1) --> [[10], [20]]
+kd(nr, name) {emp[ename ~~ 'kin%']{empno, ename} + emp[mgr = nr]kd{empno, ename}} kd{nr, name}#(1) --> [[7369, "SMITH"], [7499, "ALLEN"], [7521, "WARD"], [7566, "JONES"], [7654, "MARTIN"], [7698, "BLAKE"], [7782, "CLARK"], [7788, "SCOTT"], [7839, "KING"], [7844, "TURNER"], [7876, "ADAMS"], [7900, "JAMES"], [7902, "FORD"], [7934, "MILLER"], [9999, "MĀRTIŅŠ ŽVŪKŠĶIS"]]
 
 //test for compiler - where clause select references parent select column
 dept[(dept_addr[deptnr = deptno]{deptnr})]{dname}#(1) --> []

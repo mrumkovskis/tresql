@@ -136,9 +136,13 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     def tables = op.tables
   }
 
+  //delegates all calls to inner expression
   case class BracesSelectDef(exp: SelectDefBase) extends SelectDefBase {
     override def cols = exp.cols
     override def tables = exp.tables
+    override def tableNames = exp.tableNames
+    override def table(table: String) = exp.table(table)
+    override def column(col: String) = exp.column(col)
   }
 
   // table definition in with [recursive] statement
@@ -588,7 +592,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         }
       case _: TerOp => type_from_const(true)
       case _: In => type_from_const(true)
-      case s: SelectDef =>
+      case s: SelectDefBase =>
         if (s.cols.size > 1)
           throw CompilerException(s"Select must contain only one column, instead:${
             s.cols.map(_.tresql).mkString(", ")}")
@@ -617,7 +621,8 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case dml: DMLDefBase if ctx.isEmpty || ctx.head != dml => type_resolver(dml :: ctx)(dml)
       case ColDef(n, ChildDef(ch), t) => ColDef(n, ChildDef(type_resolver(ctx)(ch)), t)
       case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
-        ColDef(n, exp, typer(Ctx(ctx, Manifest.Any))(exp).mf)
+        val nexp = type_resolver(ctx)(exp) //resolve expression in the case it contains select
+        ColDef(n, nexp, typer(Ctx(ctx, Manifest.Any))(nexp).mf)
       //resolve return type only for root level function
       case fd @ FunDef(n, f, typ, p) if ctx.isEmpty && (typ == null || typ == Manifest.Nothing) =>
         val t = if (p.returnTypeParIndex == -1) Manifest.Any else {
