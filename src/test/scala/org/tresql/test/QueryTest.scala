@@ -155,7 +155,6 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     QueryCompiler.compile("""t(*) {(emp[ename ~~ 'kin%']{empno}) +
       (t[t.empno = e.mgr]emp e{e.empno})} t#(1)""")
 
-    println("XXXXXXXXXXXXX")
     //with recursive in column clause compile
     QueryCompiler.compile("""dummy { (kd(nr, name) {
       emp[ename ~~ 'kin%']{empno, ename} + emp[mgr = nr]kd{empno, ename}
