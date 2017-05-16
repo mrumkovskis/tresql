@@ -209,16 +209,7 @@ object Env extends Resources {
 
   def maxResultSize_=(size: Int) = this._maxResultSize = size
 
-  def logLevel = threadLogLevel.get
-  def logLevel_=(level: Any) = level match {
-    case l: Int => threadLogLevel.set(Some(l))
-    case Some(l: Int) => threadLogLevel.set(Some(l))
-    case None | null => threadLogLevel.set(None)
-    case _ => sys.error(s"Unrecognized logLevel type: $level")
-  }
-
-  def log(msg: => String, level: Int = 0): Unit = if (_logger != null) _logger(msg,
-      level + logLevel.getOrElse(0))
+  def log(msg: => String, level: Int = 0): Unit = if (_logger != null) _logger(msg, level)
   def logger = _logger
   def logger_=(logger: (=> String, Int) => Unit) = this._logger = logger
 }
