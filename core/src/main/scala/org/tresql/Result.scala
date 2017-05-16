@@ -5,7 +5,7 @@ import java.sql.ResultSetMetaData
 import sys._
 import CoreTypes.RowConverter
 
-trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T] {
+trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T] with AutoCloseable {
 
   def columns = (0 to (columnCount - 1)) map column
   def values = (0 to (columnCount - 1)).map(this(_))
