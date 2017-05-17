@@ -21,6 +21,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     intercept[Exception](Query.head[Int]("dept[100]{deptno}#(deptno)"))
     assertResult(None)(Query.headOption[Int]("dept[100]{deptno}#(deptno)"))
     assertResult("ACCOUNTING")(Query.unique[String]("dept[10]{dname}#(deptno)"))
+    assertResult((10, "ACCOUNTING", "NEW YORK"))(
+      Query("dept{deptno, dname, loc}#(1)").toList.map(r => (r.l.deptno, r.s.dname, r.s.loc)).head)
     //option binding
     assertResult("ACCOUNTING")(Query.unique[String]("dept[?]{dname}#(deptno)", Some(10)))
     assertResult("1981-11-17")(Query.unique[java.sql.Date]("emp[sal = 5000]{hiredate}").toString)

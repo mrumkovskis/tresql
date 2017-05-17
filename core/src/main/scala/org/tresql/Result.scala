@@ -7,8 +7,8 @@ import CoreTypes.RowConverter
 
 trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T] with AutoCloseable {
 
-  def columns = (0 to (columnCount - 1)) map column
-  def values = (0 to (columnCount - 1)).map(this(_))
+  def columns = 0 until columnCount map column
+  def values = (0 until columnCount).map(this(_))
 
   def toListOfVectors: List[Vector[Any]] = this.map(_.rowToVector).toList
   def toListOfMaps: List[Map[String, Any]] = this.map(_.toMap).toList
@@ -73,16 +73,16 @@ trait SelectResult[T <: RowLike] extends Result[T] {
   private[tresql] def bindVariables: List[Expr]
   private[tresql] def maxSize: Int = 0
   private[tresql] def _columnCount: Int = -1
+  private[tresql] val (colMap, exprCols) = {
+    val cwi = cols.zipWithIndex
+    (cwi.filter(_._1.name != null).map(t => t._1.name -> t._2).toMap, cwi.filter(_._1.expr != null))
+  }
 
   private[this] val md = rs.getMetaData
   private[this] val st = rs.getStatement
   private[this] val children = new Array[Any](cols.length)
   private[this] var rsHasNext = true; private[this] var nextCalled = true
   private[this] var closed = false
-  private[this] val (colMap, exprCols) = {
-    val cwi = cols.zipWithIndex
-    (cwi.filter(_._1.name != null).map(t => t._1.name -> t._2).toMap, cwi.filter(_._1.expr != null))
-  }
   private[this] var rowCount = 0
 
   /** calls jdbc result set next method. after jdbc result set next method returns false closes this result */
@@ -268,7 +268,21 @@ class DynamicSelectResult private[tresql] (
   private[tresql] val bindVariables: List[Expr],
   override private[tresql] val maxSize: Int = 0,
   override private[tresql] val _columnCount: Int = -1
-) extends SelectResult[DynamicRow] with DynamicResult
+) extends SelectResult[DynamicRow] with DynamicResult {
+  case class DynamicRowImpl(override val values: Seq[Any]) extends DynamicRow {
+    override def columns = cols
+    override def apply(name: String) = values(colMap(name))
+    override def apply(idx: Int) = values(idx)
+    override def column(idx: Int) = columns(idx)
+    override def columnCount: Int = columns.size
+    override def typed[T: Manifest](idx: Int) = this(idx).asInstanceOf[T]
+    override def typed[T: Manifest](name: String) = typed[T](colMap(name))
+  }
+  override def toList = map(r => DynamicRowImpl(r.values.map {
+    case r: DynamicSelectResult => r.toList
+    case x => x
+  })).toList
+}
 
 object ArrayResult {
   def unapplySeq(ar: ArrayResult[_]) = Seq.unapplySeq(ar.values)
@@ -387,7 +401,7 @@ trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
     count.map(_ => 1).getOrElse(0) + id.map(_ => 1).getOrElse(0) + (if (children.isEmpty) 0 else 1)
   }
   // Members declared in org.tresql.Typed
-  override def typed[T](name: String)(implicit evidence$1: scala.reflect.Manifest[T]): T = ???
+  override def typed[T: Manifest](name: String): T = ???
 
   /* Compatibility with previous tresql versions
   Can be following combinations:
