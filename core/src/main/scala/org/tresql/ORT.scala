@@ -235,7 +235,7 @@ trait ORT extends Query {
             (k, merge(List(v1, v2)))
           case (k, (v1: Map[String @unchecked, _], _)) if !v1.isEmpty => (k, v1)
           case (k, (_, v2: Map[String @unchecked, _])) if !v2.isEmpty => (k, v2)
-          case (k, (v1, _)) => (k, v1)
+          case (k, (v1, _)) => (k, v1 match { case _: Map[_, _] | _: Seq[_] => v1 case _ => "***" })
         }
       })
     obj.map { kv =>
@@ -244,7 +244,7 @@ trait ORT extends Query {
         case l: Seq[Map[String, _] @unchecked] => merge(l)
         case l: Array[Map[String, _] @unchecked] => merge(l)
         case m: Map[String @unchecked, Any @unchecked] => tresql_structure(m)
-        case x => x
+        case x => "***"
       })
     }(bf.asInstanceOf[scala.collection.generic.CanBuildFrom[Map[String, Any], (String, Any), M]]) //somehow cast is needed
   }

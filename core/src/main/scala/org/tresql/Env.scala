@@ -168,6 +168,11 @@ object Env extends Resources {
   private var _cache: Option[Cache] = None
   //logger
   private var _logger: (=> String, Int) => Unit = null
+  //loggable bind variable filter
+  private var _bindVarLogFilter: Option[PartialFunction[Expr, String]] = Some({
+    case v: QueryBuilder#VarExpr if v.name == "password" => v.fullName + " = [FILTERED]"
+    case x => x.toString
+  })
   //recursive execution depth
   private var _recursive_stack_depth = 50
   private var _maxResultSize = 0
@@ -212,6 +217,8 @@ object Env extends Resources {
   def log(msg: => String, level: Int = 0): Unit = if (_logger != null) _logger(msg, level)
   def logger = _logger
   def logger_=(logger: (=> String, Int) => Unit) = this._logger = logger
+  def bindVarLogFilter = _bindVarLogFilter
+  def bindVarLogFilter_=(filter: PartialFunction[Expr, String]) = Option(filter)
 }
 
 trait Resources { self =>

@@ -228,7 +228,9 @@ trait Query extends QueryBuilder with TypedQuery {
   }
 
   private def bindVars(st: PreparedStatement, bindVariables: List[Expr]) {
-    Env.log(bindVariables.map(_.toString).mkString("Bind vars: ", ", ", ""), 3)
+    Env.log(bindVariables
+      .map(v => Env.bindVarLogFilter.map(_(v)).getOrElse(v.toString))
+      .mkString("Bind vars: ", ", ", ""), 3)
     var idx = 1
     def bindVar(p: Any) {
       try p match {
