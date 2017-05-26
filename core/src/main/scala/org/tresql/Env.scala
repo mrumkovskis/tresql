@@ -77,8 +77,8 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   }
 
   def apply(expr: Expr): Int = _exprs.map(_.getOrElse(expr,
-      error("Expression not found in env: " + this + ". Expr: " + expr))).getOrElse(
-          error("Hidden column expressions not set in evnvironment: " + this))
+      error(s"Expression not found in env: $this. Expr: $expr"))).getOrElse(
+          error(s"Expression '$expr' not found. Hidden column expressions not set in environment: $this"))
 
   private[tresql] def statement = _statement
   private[tresql] def statement_=(st: java.sql.PreparedStatement) = _statement = st
