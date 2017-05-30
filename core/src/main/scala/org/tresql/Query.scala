@@ -75,7 +75,7 @@ trait Query extends QueryBuilder with TypedQuery {
     case l => l.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
   }
 
-  private[tresql] def sel(sql: String, cols: List[QueryBuilder#ColExpr]): Result[_ <: RowLike] = {
+  private[tresql] def sel(sql: String, cols: QueryBuilder#ColsExpr): Result[_ <: RowLike] = {
     val (rs, columns, visibleColCount) = sel_result(sql, cols)
     val result = env.rowConverter(queryDepth, childIdx).map { conv =>
       new CompiledSelectResult(rs, columns, env, sql,bindVariables,
@@ -87,7 +87,7 @@ trait Query extends QueryBuilder with TypedQuery {
     result
   }
 
-  private[this] def sel_result(sql: String, cols: List[QueryBuilder#ColExpr]):
+  private[this] def sel_result(sql: String, cols: QueryBuilder#ColsExpr):
     (ResultSet, Vector[Column], Int) = { //jdbc result, columns, visible column count
     val st = statement(sql, env)
     bindVars(st, bindVariables)
@@ -101,20 +101,20 @@ trait Query extends QueryBuilder with TypedQuery {
     def rcol(c: QueryBuilder#ColExpr) = if (c.separateQuery) Column(-1, c.name, c.col) else {
       i += 1; Column(i, c.name, null)
     }
-    def rcols = if (hasHiddenCols /*cols.exists(_.hidden)*/) {
-      val res = cols.zipWithIndex.foldLeft((List[Column](), Map[Expr, Int](), 0)) {
+    def rcols = if (cols.hasHidden) {
+      val res = cols.cols.zipWithIndex.foldLeft((List[Column](), Map[Expr, Int](), 0)) {
         (r, c) => (rcol(c._1) :: r._1,
             if (c._1.hidden) r._2 + (c._1.col -> c._2) else r._2,
             if (!c._1.hidden) r._3 + 1 else r._3)
       }
       env.updateExprs(res._2)
       (res._1.reverse, res._3)
-    } else (cols map rcol, -1)
+    } else (cols.cols map rcol, -1)
     val columns =
-      if (allCols) Vector(cols.flatMap { c =>
+      if (cols.hasAll) Vector(cols.cols.flatMap { c =>
         if (c.col.isInstanceOf[QueryBuilder#AllExpr]) jdbcRcols else List(rcol(c))
       }: _*)
-      else if (identAll) Vector(jdbcRcols ++ (cols.filter(_.separateQuery) map rcol) :_*)
+      else if (cols.hasIdentAll) Vector(jdbcRcols ++ (cols.cols.filter(_.separateQuery) map rcol) :_*)
       else rcols match {
         case (c, -1) => Vector(c: _*)
         case (c, s) =>

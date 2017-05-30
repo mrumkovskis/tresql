@@ -140,7 +140,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
       getOrElse("\n" + offset + "<none>\n") +
       provider.map(_.env.printVars(offset + " ")).getOrElse("")
   override def toString: String = super.toString +
-    provider.map(p=> s":$p#${p.env.toString}").getOrElse("")
+    provider.map(p=> s":$p#${p.env.toString}").getOrElse("<no provider>")
 
 }
 

@@ -46,7 +46,7 @@ package object dialects {
       e match {
         case b.BinExpr("-", _, _) => true
         case e: QueryBuilder#SelectExpr if e.limit != null || e.offset != null => true
-        case e: QueryBuilder#SelectExpr if e.cols.headOption.map {
+        case e: QueryBuilder#SelectExpr if e.cols.cols.headOption.map {
           _.col match {
             case f: QueryBuilder#FunExpr if f.name == "optimizer_hint" && f.params.size == 1 &&
               f.params.head.isInstanceOf[QueryBuilder#ConstExpr] => true
@@ -81,7 +81,7 @@ package object dialects {
               }
             case x => sys.error(s"Unexpected case: $x")
           }
-        case e: QueryBuilder#SelectExpr if e.cols.headOption.map {
+        case e: QueryBuilder#SelectExpr if e.cols.cols.headOption.map {
           _.col match {
             case f: QueryBuilder#FunExpr if f.name == "optimizer_hint" && f.params.size == 1 &&
               f.params.head.isInstanceOf[QueryBuilder#ConstExpr] => true
@@ -91,8 +91,9 @@ package object dialects {
           val b = e.builder
           e match {
             case s @ b.SelectExpr(_, _,
-                b.ColExpr(b.FunExpr(_, List(b.ConstExpr(h)), _), _, _, _, _) :: t, _, _, _, _, _, _, _) =>
-                   "select " + String.valueOf(h) + (s.copy(cols = t).sql substring 6)
+              c @ b.ColsExpr(b.ColExpr(b.FunExpr(_, List(b.ConstExpr(h)), _), _, _, _, _) :: t, _, _, _),
+              _, _, _, _, _, _, _) =>
+                   "select " + String.valueOf(h) + (s.copy(cols = c.copy(cols = t)).sql substring 6)
           }
       }
     }

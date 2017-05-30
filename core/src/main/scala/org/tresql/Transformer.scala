@@ -12,6 +12,7 @@ trait Transformer { self: QueryBuilder =>
       case BinExpr(o, lop, rop) => BinExpr(o, cf(lop), cf(rop))
       case BracesExpr(b) => BracesExpr(cf(b))
       case ColExpr(col, alias, typ, sepQuery, hidden) => ColExpr(cf(col), alias, typ, sepQuery, hidden)
+      case cols: ColsExpr => cols.copy(cols = (cols.cols map cf).asInstanceOf[List[ColExpr]])
       case ExternalFunExpr(n, p, m) => ExternalFunExpr(n, p map cf, m)
       case FunExpr(n, p, d) => FunExpr(n, p map cf, d)
       case Group(e, h) => Group(e map cf, cf(h))
@@ -25,7 +26,7 @@ trait Transformer { self: QueryBuilder =>
       case SelectExpr(tables, filter, cols, distinct, group, order,
         offset, limit, aliases, parentJoin) =>
         SelectExpr(tables map (t => cf(t).asInstanceOf[Table]), cf(filter),
-          cols map (e => cf(e).asInstanceOf[ColExpr]), distinct, cf(group), cf(order),
+          cf(cols).asInstanceOf[ColsExpr], distinct, cf(group), cf(order),
           cf(offset), cf(limit), aliases, parentJoin map cf)
       case Table(texpr, alias, join, outerJoin, nullable) =>
         Table(cf(texpr), alias, cf(join).asInstanceOf[TableJoin], outerJoin, nullable)

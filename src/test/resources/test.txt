@@ -423,6 +423,7 @@ dept[10] {dname, nopars()} --> [["ACCOUNTING", "ok"]]
 dummy{concat('a', 'b', 'c')} --> [["abc"]]
 dummy{concat(1, 2, 3)} --> [["123"]]
 dummy {dummy, dummy t1, dummy t3, concat(dummy, ' ', dummy)} --> [[0, 0, 0, "0 0"]]
+salgrade s1 {exists(salgrade s2[s1.losal < s2.losal]) e, plus(losal, hisal) sum}#(losal, hisal) --> [[true, 1900], [true, 2601], [true, 3401], [true, 5001], [false, 21000]]
 
 //external function + column query +  child query
 dept d [?]{dept_desc(dname, (emp e[d.deptno = e.deptno] {count(*)})) desc, |emp{ename}#(1)} --> 10 --> [["ACCOUNTING (3)", [["CLARK"], ["KING"], ["MILLER"]]]]

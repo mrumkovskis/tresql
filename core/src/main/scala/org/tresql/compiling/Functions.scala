@@ -31,12 +31,14 @@ trait TresqlScalaFunctions {
 }
 
 trait BasicDBFunctions {
+  import org.tresql.QueryCompiler._
   def coalesce[T](pars: T*): T
   def upper(string: String): String
   def lower(string: String): String
   def insert (str1: String, offset: Int, length: Int, str2: String): String
   def to_date(date: String, format: String): java.sql.Date
   def trim(string: String): String
+  def exists(cond: SelectDefBase): Boolean
 }
 
 trait BasicDialectFunctions {
