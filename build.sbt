@@ -1,6 +1,8 @@
+val scalaV = "2.12.2"
+
 lazy val commonSettings = Seq(
   organization := "org.tresql",
-  scalaVersion := "2.12.1",
+  scalaVersion := scalaV,
   //coverageEnabled := true,
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",
     "-language:postfixOps", "-language:implicitConversions", "-language:reflectiveCalls",
@@ -33,7 +35,7 @@ lazy val macros = (project in file("macro"))
   .settings(
     name := "macro",
     crossScalaVersions := Seq(
-      "2.12.1",
+      scalaV,
       "2.11.8",
       "2.10.6"
     ),
