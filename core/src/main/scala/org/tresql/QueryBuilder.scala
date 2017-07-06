@@ -211,10 +211,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case "||" => lop + rop
         case "&&" => sel(sql, cols)
         case "++" => sel(sql, cols)
-        case "+" => if (exprType == classOf[SelectExpr]) sel(sql, cols)
-        else lop + rop
-        case "-" => if (exprType == classOf[SelectExpr]) sel(sql, cols)
-        else lop - rop
+        case "+" => if (exprType == classOf[SelectExpr]) sel(sql, cols) else lop + rop
+        case "-" => if (exprType == classOf[SelectExpr]) sel(sql, cols) else lop - rop
         case "=" => lop match {
           //assign expression
           case VarExpr(variable, _, _, _) =>
