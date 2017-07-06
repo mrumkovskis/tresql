@@ -389,7 +389,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     case wts ~ (q: Exp @unchecked) => With(wts, q)
   }, {
     case wts ~ q => s"Unsupported with query: $q"
-  })
+  }) named "with-query"
 
   def values: MemParser[Values] = rep1sep(array, ",") ^^ Values named "values"
 
