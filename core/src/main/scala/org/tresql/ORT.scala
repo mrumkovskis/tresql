@@ -7,11 +7,12 @@ trait ORT extends Query {
 
   /**
   *  Children property format:
-  *  table[:ref]*[#table[:ref]*]*[[options]] [alias]
+  *  table[:ref]*[#table[:ref]*]*[[options]] [alias][|insertFilterTresql, deleteFilterTresql, updateFilterTresql]
   *  Options are to be specified in such order: insert, delete, update, i.e. '+-='
   *  Examples:
   *    dept#car:deptnr:nr#tyres:carnr:nr
   *    dept[+=] alias
+  *    emp[+-=] e|:deptno in currentUserDept(:current_user), null /* no statement */, e.deptno in currentUserDept(:current_user)
   */
   val PROP_PATTERN = {
     val ident = """[^:\[\]\s#]+"""
