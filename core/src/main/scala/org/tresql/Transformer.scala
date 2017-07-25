@@ -13,7 +13,7 @@ trait Transformer { self: QueryBuilder =>
       case BracesExpr(b) => BracesExpr(cf(b))
       case ColExpr(col, alias, typ, sepQuery, hidden) => ColExpr(cf(col), alias, typ, sepQuery, hidden)
       case cols: ColsExpr => cols.copy(cols = (cols.cols map cf).asInstanceOf[List[ColExpr]])
-      case ExternalFunExpr(n, p, m) => ExternalFunExpr(n, p map cf, m)
+      case ExternalFunExpr(n, p, m, hrp) => ExternalFunExpr(n, p map cf, m, hrp)
       case FunExpr(n, p, d) => FunExpr(n, p map cf, d)
       case Group(e, h) => Group(e map cf, cf(h))
       case HiddenColRefExpr(e, typ) => HiddenColRefExpr(cf(e), typ)

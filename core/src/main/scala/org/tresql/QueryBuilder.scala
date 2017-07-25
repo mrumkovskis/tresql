@@ -152,7 +152,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
 
   case class ResExpr(nr: Int, col: Any) extends BaseVarExpr {
     override def apply() = env(nr) match {
-      case null => error("Ancestor result with number " + nr + " not found for expression " + this)
+      case null => error(s"Ancestor result with number $nr not found for column '$col'")
       case r => col match {
         case c: Ident => r(c.ident.mkString("."))
         case c: String => r(c)
@@ -301,14 +301,18 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   }
 
   case class ExternalFunExpr(name: String, params: List[Expr],
-    method: java.lang.reflect.Method) extends BaseExpr {
+    method: java.lang.reflect.Method, hasResourcesParam: Boolean) extends BaseExpr {
     override def apply() = {
       val p = params map (_())
       val parTypes = method.getParameterTypes
-      val varargs = parTypes.size == 1 && parTypes(0).isAssignableFrom(classOf[Seq[_]])
-      if (parTypes.size != params.size && !varargs) error("Wrong parameter count for method "
-        + method + " " + parTypes.size + " != " + params.size)
-      Env.functions.map(method.invoke(_, (if (varargs) List(p) else p).asInstanceOf[List[Object]]: _*))
+      val ps = parTypes.size - (if (hasResourcesParam) 1 else 0)
+      val varargs = ps == 1 && parTypes(0).isAssignableFrom(classOf[Seq[_]])
+      if (ps != params.size && !varargs) error("Wrong parameter count for method "
+        + method + " " + ps + " != " + params.size)
+      val invokePars =
+        if(hasResourcesParam) if(varargs) List(p, env) else p :+ env
+        else if (varargs) List(p) else p
+      Env.functions.map(method.invoke(_, invokePars.asInstanceOf[List[Object]]: _*))
         .getOrElse("Functions not defined in Env!")
     }
     def defaultSQL = ???
@@ -901,10 +905,16 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
             case _ => false
           }) (colExprs flatMap { //external function found
             case ce @ ColExpr(FunExpr(n, pars, false), a, t, _, _) if Env.isDefined(n) && !ce.separateQuery =>
+              //checks if last parameter is resources
+              def hasResourcesParam(pt: Array[Class[_]]) = pt
+                .lastOption
+                .map(_.isAssignableFrom(classOf[org.tresql.Resources]))
+                .getOrElse(false)
               val m = Env.functions.flatMap(_.getClass.getMethods.filter(m => m.getName == n && {
                 val pt = m.getParameterTypes
                 //parameter count must match or must be of variable count
-                pt.size == pars.size || (pt.size == 1 && pt(0).isAssignableFrom(classOf[Seq[_]]))
+                val ps = pt.size - (if (hasResourcesParam(pt)) 1 else 0)
+                ps == pars.size || (ps == 1 && pt(0).isAssignableFrom(classOf[Seq[_]]))
               }).headOption).getOrElse(
                 error("External function " + n + " with " + pars.size + " parameters not found"))
               val parameterTypes = (m.getParameterTypes match {
@@ -918,8 +928,10 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
               val hiddenColPars = parameterTypes.padTo(pars.size,
                   parameterTypes.headOption.orNull).zip(pars).map(tp => HiddenColRefExpr(tp._2, tp._1))
               hasHidden = hiddenColPars.size > 0
-              ColExpr(ExternalFunExpr(n, hiddenColPars, m), a, t, Some(true)) ::
-                hiddenColPars.map(ColExpr(_, uniqueAlias(uid), null, Some(ce.separateQuery), true))
+              ColExpr(
+                ExternalFunExpr(n, hiddenColPars, m, hasResourcesParam(m.getParameterTypes)), a, t,
+                Some(true)
+              ) :: hiddenColPars.map(ColExpr(_, uniqueAlias(uid), null, Some(ce.separateQuery), true))
             case e => List(e)
           }).groupBy(_.hidden) match { //put hidden columns at the end
             case m: Map[Boolean @unchecked, ColExpr @unchecked] => m(false) ++ m.getOrElse(true, Nil)

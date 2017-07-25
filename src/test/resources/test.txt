@@ -430,6 +430,11 @@ dept d [?]{dept_desc(dname, (emp e[d.deptno = e.deptno] {count(*)})) desc, |emp{
 dept d [?]{|emp{ename}#(1), dept_desc(dname, (emp e[d.deptno = e.deptno] {count(*)})) desc} --> 10 --> [[[["CLARK"], ["KING"], ["MILLER"]], "ACCOUNTING (3)"]]
 dept d [?]{|emp{ename}#(1), dept_desc(dname, (emp e[d.deptno = e.deptno] {count(*)})) desc, deptno} --> 10 --> [[[["CLARK"], ["KING"], ["MILLER"]], "ACCOUNTING (3)", 10]]
 
+//external function with resources
+dummy{dummy, dept_count() dc} --> [[0, 4]]
+dept{dname, dept_desc_with_empc(dname)}#(1) --> [["ACCOUNTING", "ACCOUNTING emp count - 3"], ["OPERATIONS", "OPERATIONS emp count - 0"], ["RESEARCH", "RESEARCH emp count - 6"], ["SALES", "SALES emp count - 6"]]
+dummy{vararg_with_resources(dummy, dummy, dummy)} --> [["0, 0, 0 - 1"]]
+
 //insert with select instead of values
 +dummy{dummy} dummy{dummy + 1} --> [[1]]
 +dummy{dummy} dummy[dummy = ?]{dummy + 1} --> 1 --> [[1]]

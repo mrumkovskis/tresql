@@ -65,4 +65,7 @@ trait Functions extends TresqlFunctions {
   def nopars(): String
   def inc_val_5(int: java.lang.Integer): java.lang.Integer
   def dummy(): Any
+  def dept_count(): java.lang.Integer
+  def dept_desc_with_empc(d: String): String
+  def vararg_with_resources(s: String*): String
 }
