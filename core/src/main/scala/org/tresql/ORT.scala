@@ -319,9 +319,10 @@ trait ORT extends Query {
   private def insert_tresql(ctx: SaveContext)
     (implicit resources: Resources): String = {
     def table_save_tresql(tableName: String, alias: String,
-      cols_vals: List[(String, String)], refsAndPk: Set[(String, String)],
-      filter: String) = (cols_vals ++ refsAndPk) match {
+      cols_vals: List[(String, String)],
+      refsAndPk: Set[(String, String)]) = (cols_vals ++ refsAndPk) match {
         case cols_vals =>
+          val filter = ctx.filter
           val (cols, vals) = cols_vals.unzip
           cols.mkString(s"+$tableName {", ", ", "}") +
           (vals.filter(_ != null) match {
@@ -340,9 +341,10 @@ trait ORT extends Query {
   private def update_tresql(ctx: SaveContext)
     (implicit resources: Resources): String = {
     def table_save_tresql(tableName: String, alias: String,
-      cols_vals: List[(String, String)], refsAndPk: Set[(String, String)],
-      filter: String) = cols_vals.unzip match {
+      cols_vals: List[(String, String)],
+      refsAndPk: Set[(String, String)]) = cols_vals.unzip match {
         case (cols: List[String], vals: List[String]) if !cols.isEmpty =>
+          val filter = ctx.filter
           val tn = tableName + (if (alias == null) "" else " " + alias)
           val updateFilter = refsAndPk.map(t=> s"${t._1} = ${t._2}")
             .mkString("[", " & ", s"${if (filter != null) s" & ($filter)" else ""}]")
@@ -390,8 +392,7 @@ trait ORT extends Query {
       String, //table name
       String, //alias
       List[(String, String)], //cols vals
-      Set[(String, String)], //refsPk & values
-      String //filter
+      Set[(String, String)] //refsPk & values
     ) => String,
     children_save_tresql: (
       String, //table property
@@ -426,7 +427,6 @@ trait ORT extends Query {
       alias: String,
       refsAndPk: Set[(String, String)],
       children: List[String],
-      filter: String,
       tresqlColAlias: String) = struct.flatMap {
       case (n, v) => v match {
         //children
@@ -454,8 +454,7 @@ trait ORT extends Query {
              children.map(_ -> null)/*add same level one to one children*/)
            match {
              case x if x.isEmpty && refsAndPk.isEmpty => null //no columns & refs found
-             case cols_vals => table_save_tresql(tableName, alias, cols_vals,
-               refsAndPk, filter)
+             case cols_vals => table_save_tresql(tableName, alias, cols_vals, refsAndPk)
            }
         (for {
           base <- Option(tresql)
@@ -484,10 +483,10 @@ trait ORT extends Query {
           .map(_ -> idRefId(headTable.table, tbl.name)))
     val linkedTresqls = for{ linkedTable <- linkedTables
       tableDef <- md.tableOption(linkedTable.table) } yield tresql_string(tableDef, alias,
-          refsAndPk(tableDef, linkedTable.refs), Nil, null, "") //no children & do not pass filter
+          refsAndPk(tableDef, linkedTable.refs), Nil, "") //no children
     md.tableOption(headTable.table).map {tableDef =>
       tresql_string(tableDef, alias, refsAndPk(tableDef, Set()),
-        linkedTresqls.filter(_ != null), filter, Option(parent)
+        linkedTresqls.filter(_ != null), Option(parent)
           .map(_ => s" '$name'").getOrElse(""))
     }.orNull
   }
