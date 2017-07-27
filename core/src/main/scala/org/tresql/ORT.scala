@@ -20,7 +20,8 @@ trait ORT extends Query {
     val tables = s"""($table(?:#$table)*)"""
     val options = """(?:\[(\+?-?=?)\])?"""
     val alias = """(?:\s+(\w+))?"""
-    (tables + options + alias)r
+    val filters = """(?:\|(.+))?"""
+    (tables + options + alias + filters)r
   }
   /**
   *  Resolvable property format:
@@ -46,17 +47,20 @@ trait ORT extends Query {
 
   case class TableLink(table: String, refs: Set[String])
   case class ParentRef(table: String, ref: String)
+  case class Filters(insert: Option[String], delete: Option[String], update: Option[String])
   case class Property(
     tables: List[TableLink],
     insert: Boolean,
     update: Boolean,
     delete: Boolean,
-    alias: String)
+    alias: String,
+    filters: Option[Filters]
+  )
   case class SaveContext(
     name: String,
     struct: Map[String, Any],
     parents: List[ParentRef],
-    filter: String,
+    filters: Option[Filters],
     tables: List[TableLink],
     insertOption: Boolean,
     updateOption: Boolean,
@@ -264,17 +268,32 @@ trait ORT extends Query {
           if (optionIdx != -1) multiSaveProp(name.substring(0, optionIdx)
             .split("#")) + name.substring(optionIdx) else multiSaveProp(name.split("#"))
         }
-      val PROP_PATTERN(tables, options, alias) = setLinks(name)
+      val PROP_PATTERN(tables, options, alias, filterStr) = setLinks(name)
       //insert update delete option
       val (i, u, d) = Option(options).map (_ =>
         (options contains "+", options contains "=", options contains "-")
       ).getOrElse {(true, false, true)}
+      val filters = Option(filter).map {
+        f => Filters(Option(f), Option(f), Option(f))
+      } orElse {
+        import QueryParser._
+        Option(filterStr).flatMap(parseExp(_) match {
+          case Arr(List(insert, delete, update)) => Some(ORT.this.Filters(
+            insert = Some(insert).filter(_ != Null).map(_.tresql),
+            delete = Some(delete).filter(_ != Null).map(_.tresql),
+            update = Some(update).filter(_ != Null).map(_.tresql)
+          ))
+          case x => error(s"""Unrecognized filter declaration '$filterStr'.
+            |Must consist of 3 comma separated tresql expressions: insertFilter, deleteFilter, updateFilter.
+            |In the case expression is not needed it must be set to 'null'.""".stripMargin)
+        })
+      }
       Property((tables split "#").map{ t =>
         val x = t split ":"
         TableLink(x.head, x.tail.toSet)
-      }.toList, i, u, d, alias)
+      }.toList, i, u, d, alias, filters)
     }
-    val Property(tables, insertOption, updateOption, deleteOption, alias) =
+    val Property(tables, insertOption, updateOption, deleteOption, alias, filters) =
       parseProperty(name)
     val parent = parents.headOption.map(_.table).orNull
     val md = resources.metaData
@@ -311,7 +330,7 @@ trait ORT extends Query {
     (for {
       (table, ref) <- importedKeyOption(tables)
       pk <- Some(table.key.cols).filter(_.size == 1).map(_.head) orElse Some(null)
-    } yield save_tresql_func(SaveContext(name, struct, parents, filter, tables,
+    } yield save_tresql_func(SaveContext(name, struct, parents, filters, tables,
       insertOption, updateOption, deleteOption, alias, parent, table, ref, pk))
     ).orNull
   }
@@ -322,20 +341,20 @@ trait ORT extends Query {
       cols_vals: List[(String, String)],
       refsAndPk: Set[(String, String)]) = (cols_vals ++ refsAndPk) match {
         case cols_vals =>
-          val filter = ctx.filter
           val (cols, vals) = cols_vals.unzip
           cols.mkString(s"+$tableName {", ", ", "}") +
-          (vals.filter(_ != null) match {
-            case vs if filter == null => vs.mkString(" [", ", ", "]")
-            case vs =>
+            (for {
+              filters <- ctx.filters
+              filter <- filters.insert
+            } yield {
               val toa = if (alias == null) tableName else alias
               val cv = cols_vals filter (_._2 != null)
               val sel = s"(null{${cv.map(c => c._2 + " " + c._1).mkString(", ")}} @(1)) $toa"
               cv.map(c => s"$toa.${c._1}").mkString(s" $sel [$filter] {", ", ", "}")
-          })
+            }).getOrElse(vals.filter(_ != null).mkString(" [", ", ", "]"))
       }
     save_tresql_internal(ctx, table_save_tresql,
-      save_tresql(_, _, _, null, insert_tresql))
+      save_tresql(_, _, _, null, insert_tresql)) //do not pass filter since it may come from child property
   }
 
   private def update_tresql(ctx: SaveContext)
@@ -344,27 +363,27 @@ trait ORT extends Query {
       cols_vals: List[(String, String)],
       refsAndPk: Set[(String, String)]) = cols_vals.unzip match {
         case (cols: List[String], vals: List[String]) if !cols.isEmpty =>
-          val filter = ctx.filter
+          val filter = ctx.filters.flatMap(_.update).map(f => s" & ($f)").getOrElse("")
           val tn = tableName + (if (alias == null) "" else " " + alias)
-          val updateFilter = refsAndPk.map(t=> s"${t._1} = ${t._2}")
-            .mkString("[", " & ", s"${if (filter != null) s" & ($filter)" else ""}]")
+          val updateFilter = refsAndPk.map(t=> s"${t._1} = ${t._2}").mkString("[", " & ", s"$filter]")
           cols.mkString(s"=$tn $updateFilter {", ", ", "}") +
           vals.filter(_ != null).mkString("[", ", ", "]")
         case _ => null
     }
     import ctx._
     val tableName = table.name
-    def upd: String = save_tresql_internal(ctx, table_save_tresql,
-      save_tresql(_, _, _, null, update_tresql))
+    def upd: String = save_tresql_internal(ctx, table_save_tresql, save_tresql(
+      _, _, _, null /* do not pass filter since it may come from child property */, update_tresql))
     def stripTrailingAlias(tresql: String, alias: String) =
       if (tresql != null && tresql.endsWith(alias))
         tresql.dropRight(alias.length) else tresql
-    def delAllChildren = s"-$tableName[$refToParent = :#$parent]"
+    val delFilter = ctx.filters.flatMap(_.delete).map(f => s" & ($f)").getOrElse("")
+    def delAllChildren = s"-$tableName[$refToParent = :#$parent$delFilter]"
     def delMissingChildren =
       s"""_delete_children('$name', '$tableName', -${table
-        .name}[$refToParent = :#$parent & _not_delete_ids($pk !in :ids)])"""
-    def ins = save_tresql(name, struct, parents, null /*do not pass filter*/,
-      insert_tresql)
+        .name}[$refToParent = :#$parent & _not_delete_ids($pk !in :ids)$delFilter])"""
+    val insFilter = ctx.filters.flatMap(_.insert).orNull
+    def ins = save_tresql(name, struct, parents, insFilter, insert_tresql)
     def insOrUpd = s"""|_insert_or_update('$tableName', ${
       stripTrailingAlias(ins, s" '$name'")}, ${
       stripTrailingAlias(upd, s" '$name'")}) '$name'"""
