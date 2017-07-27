@@ -549,7 +549,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       Map("empno" -> Map("empno" -> 10052, "ename" -> "Lara", "job" -> "MGR", "deptno" -> 10))))
     assertResult(((1,List(List(List(10055, 1), List(10052, 1)))),10054)) { ORT.insert("car", obj) }
 
-    println("\n-------- INSERT, UPDATE with additional filter --------\n")
+    println("\n-------- INSERT, UPDATE, DELETE with additional filter --------\n")
     //insert, update with additional filter
     assertResult(0){ORT.insert("dummy", Map("dummy" -> 2), "dummy = -1")}
     assertResult(1){ORT.insert("dummy d", Map("dummy" -> 2), "d.dummy = 2")}
@@ -727,6 +727,68 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       "address-city->" -> "Riga, LV", "address-city->addr_nr=address[addr = _]{nr}" -> null)
     assertResult(new UpdateResult(Some(1), Map("_1" -> new UpdateResult(Some(1)))))(
       ORT.updateMultiple(obj, "dept", "dept_addr")())
+
+    println("\n-------- SAVE with additional filter for children --------\n")
+
+    obj = Map("dname" -> "Temp", "addr" -> "Field", "zip_code" -> "none", "dept_sub_addr" ->
+      List(Map("addr" -> "Hill", "zip_code" -> "----"),
+           Map("addr" -> "Pot", "zip_code" -> "----")
+      )
+    )
+    assertResult(new InsertResult(Some(1),
+      Map("_1" -> new InsertResult(
+        Some(1),
+        Map("dept_sub_addr" -> List(new InsertResult(Some(1)), new InsertResult(Some(1)))),
+        Some(10075))
+      ), Some(10075)))(ORT.insertMultiple(obj, "dept", "dept_addr")())
+
+    obj = Map("dname" -> "Temp", "addr" -> "Field", "zip_code" -> "none", "dept_sub_addr" ->
+      List(Map("addr" -> "Hill", "zip_code" -> "----"),
+           Map("addr" -> "Pot", "zip_code" -> "----")
+      ), "filter_condition" -> false
+    )
+    assertResult(new InsertResult(Some(0), Map(), Some(10076)))(
+      ORT.insertMultiple(obj, "dept", "dept_addr")(":filter_condition = true"))
+
+    obj = Map("dname" -> "Temp1", "addr" -> "Field1", "zip_code" -> "none",
+      "dept_sub_addr|:filter_condition = true,:filter_condition = true,:filter_condition = true" ->
+      List(Map("addr" -> "Hill", "zip_code" -> "----"),
+           Map("addr" -> "Pot", "zip_code" -> "----")
+      ), "filter_condition" -> false
+    )
+    assertResult(new InsertResult(Some(1),
+      Map("_1" -> new InsertResult(
+        Some(1),
+        Map("dept_sub_addr" -> List(new InsertResult(Some(0)), new InsertResult(Some(0)))),
+        Some(10077))
+      ), Some(10077)))(ORT.insertMultiple(obj, "dept", "dept_addr")())
+
+    obj = Map("deptno" -> 10077, "dname" -> "Temp2", "addr" -> "Field2", "zip_code" -> "----",
+      "dept_sub_addr[+-=]|:filter_condition = true,:filter_condition = true,:filter_condition = true" ->
+      List(Map("addr" -> "Hill", "zip_code" -> "----"),
+           Map("addr" -> "Pot", "zip_code" -> "----")
+      ),
+      "emp[+-=]|:filter_condition = true,:filter_condition = true,:filter_condition = true" ->
+      List(Map("ename" -> "X"), Map("empno" -> 7369, "ename" -> "Y")),
+      "filter_condition" -> false
+    )
+    assertResult(
+      new UpdateResult(
+        Some(1),
+        Map(
+          "_1" -> new DeleteResult(Some(0)),
+          "emp[+-=]|:filter_condition = true,:filter_condition = true,:filter_condition = true" ->
+            List(new InsertResult(Some(0), Map(), Some(10078)), new UpdateResult(Some(0))),
+          "_3" -> new UpdateResult(
+            Some(1),
+            Map(
+              "_1" -> new DeleteResult(Some(0)),
+              "dept_sub_addr[+-=]|:filter_condition = true,:filter_condition = true,:filter_condition = true" ->
+                List(new InsertResult(Some(0)), new InsertResult(Some(0)))
+            ))
+        )
+      )
+    )(ORT.updateMultiple(obj, "dept", "dept_addr")())
   }
   override def compilerMacro {
       println("\n-------------- TEST compiler macro ----------------\n")
