@@ -53,4 +53,32 @@ object Env {
   }
   //def update(map: (Map[String, String], Map[String, Map[String, (String, String)]])): Unit
   //def valueExpr(objectName: String, propertyName: String): String
+  case class State(
+    cache: Option[Cache],
+    conn: Connection,
+    dialect: Dialect,
+    functions: Object,
+    idExpr: String => String,
+    metadata: MetaData,
+    logger: (=> String, Int) => Unit
+  )
+  def saveState = State(
+    cache = env.cache,
+    conn = env.conn,
+    dialect = env.dialect,
+    functions = env.functions,
+    idExpr = env.idExpr,
+    metadata = env.metaData,
+    logger = env.logger
+  )
+  def restoreState(state: State) = {
+    import state._
+    env.cache = cache.orNull
+    env.conn = conn
+    env.dialect = dialect
+    env.functions = functions
+    env.idExpr = idExpr
+    env.metaData = metadata
+    env.logger = logger
+  }
 }
