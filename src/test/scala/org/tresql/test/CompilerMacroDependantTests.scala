@@ -789,6 +789,48 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         )
       )
     )(ORT.updateMultiple(obj, "dept", "dept_addr")())
+
+    //should not delete dept_sub_addr children
+    obj = Map("deptno" -> 10075, "addr" -> "Field alone",
+      "dept_sub_addr[+-=]|:filter_condition = true, :filter_condition = true, :filter_condition = true" ->
+      List(Map("addr" -> "Hill", "zip_code" -> "----"),
+           Map("addr" -> "Pot", "zip_code" -> "----")
+      ), "filter_condition" -> false
+    )
+    assertResult(new UpdateResult(
+      None,
+      Map("_1" ->
+        new UpdateResult(
+          Some(1),
+          Map(
+            "_1" -> new DeleteResult(Some(0)),
+            "dept_sub_addr[+-=]|:filter_condition = true, :filter_condition = true, :filter_condition = true" ->
+              List(new InsertResult(Some(0)), new InsertResult(Some(0)))
+          )
+        )
+      )
+    ))(ORT.updateMultiple(obj, "dept", "dept_addr")())
+
+    //should delete dept_sub_addr children
+    obj = Map("deptno" -> 10075, "addr" -> "Field alone",
+      "dept_sub_addr[+-=]|:filter_condition = true, null, :filter_condition = true" ->
+      List(Map("addr" -> "Hill", "zip_code" -> "----"),
+           Map("addr" -> "Pot", "zip_code" -> "----")
+      ), "filter_condition" -> false
+    )
+    assertResult(new UpdateResult(
+      None,
+      Map("_1" ->
+        new UpdateResult(
+          Some(1),
+          Map(
+            "_1" -> new DeleteResult(Some(2)),
+            "dept_sub_addr[+-=]|:filter_condition = true, null, :filter_condition = true" ->
+              List(new InsertResult(Some(0)), new InsertResult(Some(0)))
+          )
+        )
+      )
+    ))(ORT.updateMultiple(obj, "dept", "dept_addr")())
   }
   override def compilerMacro {
       println("\n-------------- TEST compiler macro ----------------\n")
