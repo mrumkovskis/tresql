@@ -1,4 +1,4 @@
-val scalaV = "2.12.2"
+val scalaV = "2.12.3"
 
 lazy val commonSettings = Seq(
   organization := "org.tresql",
@@ -56,7 +56,7 @@ lazy val tresql = (project in file("."))
   .dependsOn(core, macros)
   .aggregate(core, macros)
   .settings(crossScalaVersions := Seq(
-      "2.12.1",
+      scalaV,
       "2.11.8",
       "2.10.6"
     ),
