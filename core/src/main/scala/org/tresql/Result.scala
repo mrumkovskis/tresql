@@ -251,7 +251,7 @@ trait SelectResult[T <: RowLike] extends Result[T] {
       }
       case BIT | BOOLEAN =>
         val v = rs.getBoolean(pos); if (rs.wasNull) null else v
-      case VARCHAR | CHAR | CLOB | LONGVARCHAR => rs.getString(pos)
+      case VARCHAR | CHAR | CLOB | LONGVARCHAR | NCHAR | NCLOB | NVARCHAR => rs.getString(pos)
       case DATE => rs.getDate(pos)
       case TIME | TIMESTAMP => rs.getTimestamp(pos)
       case DOUBLE | FLOAT | REAL => val v = rs.getDouble(pos); if (rs.wasNull) null else v
