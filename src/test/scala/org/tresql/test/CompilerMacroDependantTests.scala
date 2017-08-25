@@ -713,8 +713,9 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
 
     println("\n--- Name resolving ---\n")
     obj = Map("wdate" -> "2017-03-10", "hours" -> 8, "emp" -> "SCOTT", "emp_mgr" -> "KING",
-      "emp->" -> "SCOTT", "emp_mgr->" -> "KING",
-      "emp_mgr->" -> "KING", "emp->empno=emp[ename = _] {empno}" -> "SCOTT",
+      "emp->" -> "SCOTT",
+      "emp->empno=emp[ename = _] {empno}" -> "SCOTT",
+      "emp_mgr->" -> "KING",
       "emp_mgr->empno_mgr=emp[ename = :emp_mgr] {empno}" -> "KING")
     assertResult(new InsertResult(Some(1), Map(), None))(ORT.insert("work", obj))
 
