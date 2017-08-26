@@ -45,7 +45,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     def dummy(b: QueryBuilder) = b.buildExpr("dummy")
   }
 
-  val executeCompilerMacroDependantTests = !scala.util.Properties.versionNumberString.startsWith("2.10.")
+  val executeCompilerMacroDependantTests = scala.util.Properties.versionNumberString.startsWith("2.12.")
   val compilerMacroDependantTests =
     if (executeCompilerMacroDependantTests)
       Class.forName("org.tresql.test.CompilerMacroDependantTests").newInstance
