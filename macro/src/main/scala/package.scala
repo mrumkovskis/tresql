@@ -89,9 +89,13 @@ package object tresql extends CoreTypes {
         depth: Int, //select descendancy idx (i.e. QueryBuilder.queryDepth)
         colIdx: Int, //column idx - used in converter
         childIdx: Int, //child select index - used to get converter from env
-        convRegister: List[c.Tree] //Map of converters for Env in form of (Int, Int) -> RowConveter[_]
+        convRegister: List[c.Tree], //Map of converters for Env in form of (Int, Int) -> RowConveter[_]
+        colNames: Set[String] = Set() //field names (stored in order to avoid duplicates)
       )
       def resultClassTree(exp: Exp): Ctx = {
+        def uniqueName(prefix: String, names: Set[String]) = if (names(prefix)) {
+          prefix + Stream.from(1).filterNot(i => names(prefix + i)).head
+        } else prefix
         lazy val generator: QueryCompiler.Traverser[Ctx] = traverser(ctx => {
           //function
           case fun: FunDef[_] =>
@@ -105,23 +109,26 @@ package object tresql extends CoreTypes {
               colTrees: List[List[c.Tree]],
               colIdx: Int,
               childIdx: Int,
-              convRegister: List[c.Tree]
+              convRegister: List[c.Tree],
+              colNames: Set[String]
             )
             val colsCtx = sd.cols
-              .foldLeft(ColsCtx(Nil, 0, 0, ctx.convRegister)) { case (colCt, c) =>
+              .foldLeft(ColsCtx(Nil, 0, 0, ctx.convRegister, Set())) { case (colCt, c) =>
                 val ct = generator(Ctx(
                   className,
                   Nil,
                   ctx.depth,
                   colCt.colIdx,
                   colCt.childIdx,
-                  colCt.convRegister
+                  colCt.convRegister,
+                  colCt.colNames
                 ))(c)
                 ColsCtx(
                   ct.tree :: colCt.colTrees,
                   colCt.colIdx + 1,
                   ct.childIdx,
-                  ct.convRegister
+                  ct.convRegister,
+                  ct.colNames
                 )
               }
             val (fieldDefs, fieldConvs, fieldTerms, children) = colsCtx.colTrees
@@ -163,9 +170,10 @@ package object tresql extends CoreTypes {
               ctx.childIdx,
               converterRegister :: colsCtx.convRegister
             )
-          case ColDef(name, ChildDef(sd: RowDefBase), _) =>
+          case ColDef(colName, ChildDef(sd: RowDefBase), _) =>
             val selDefCtx = generator(Ctx(ctx.className, Nil, ctx.depth + 1,
               ctx.colIdx, ctx.childIdx, ctx.convRegister))(sd)
+            val name = uniqueName(colName, ctx.colNames)
             val fieldTerm = q"${TermName(name)}"
             val fieldDef =
               q"""var ${TermName(name)}: org.tresql.CompiledResult[${
@@ -177,9 +185,11 @@ package object tresql extends CoreTypes {
             ctx.copy(
               tree = fieldDef :: fieldConv :: fieldTerm :: selDefCtx.tree,
               childIdx = ctx.childIdx + 1,
-              convRegister = selDefCtx.convRegister
+              convRegister = selDefCtx.convRegister,
+              colNames = ctx.colNames + name
             )
-          case ColDef(name, _, typ) =>
+          case ColDef(colName, _, typ) =>
+            val name = uniqueName(colName, ctx.colNames)
             val fieldTerm = q"${TermName(name)}"
             //FIXME bizzare way of getting qualified type name, did not find another way...
             val q"typeOf[$colType]" = c.parse(s"typeOf[${typ.toString}]")
@@ -189,7 +199,7 @@ package object tresql extends CoreTypes {
               q"obj.${TermName(name)} = row.typed[$colType](${ctx.colIdx})",
               fieldTerm
             )
-            ctx.copy(tree = l)
+            ctx.copy(tree = l, colNames = ctx.colNames + name)
         })
         generator(Ctx(null, Nil, 0, 0, 0, Nil))(exp)
       }

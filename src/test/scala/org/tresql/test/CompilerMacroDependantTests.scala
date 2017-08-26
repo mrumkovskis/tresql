@@ -948,5 +948,9 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       assertResult(("KING", "ACCOUNTING"))(tresql"""emp[ename ~~ 'kin%'] {
         ename, ((dept[emp.deptno = dept.deptno]{dname}) {dname}) dname}"""
         .map(r => r.ename -> r.dname).toList.head)
+
+      //repeating column names
+      assertResult(List(3, 9))(tresql"dummy{dummy nr, dummy + 1 nr, dummy + 2 nr}"
+        .map(r => r.nr + r.nr1 + r.nr2).toList.sorted)
   }
 }
