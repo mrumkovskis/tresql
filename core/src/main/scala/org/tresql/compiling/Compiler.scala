@@ -182,7 +182,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     }
   }
 
-  /** select definition returned from macro or db function */
+  /** select definition returned from macro or db function, is used in {{{BinSelectDef}}} */
   case class FunSelectDef(
     cols: List[ColDef[_]],
     tables: List[TableDef],
