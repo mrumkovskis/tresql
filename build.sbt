@@ -3,6 +3,11 @@ val scalaV = "2.12.3"
 lazy val commonSettings = Seq(
   organization := "org.tresql",
   scalaVersion := scalaV,
+  crossScalaVersions := Seq(
+      scalaV,
+      "2.11.8",
+      "2.10.6"
+    ),
   //coverageEnabled := true,
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",
     "-language:postfixOps", "-language:implicitConversions", "-language:reflectiveCalls",
@@ -34,11 +39,6 @@ lazy val macros = (project in file("macro"))
   .dependsOn(core)
   .settings(
     name := "macro",
-    crossScalaVersions := Seq(
-      scalaV,
-      "2.11.8",
-      "2.10.6"
-    ),
     excludeFilter in unmanagedSources := (if (scalaVersion.value.startsWith("2.10.")) "*.*" else "")
   )
   .settings(commonSettings: _*)
@@ -55,11 +55,7 @@ val packageMerges = for {
 lazy val tresql = (project in file("."))
   .dependsOn(core, macros)
   .aggregate(core, macros)
-  .settings(crossScalaVersions := Seq(
-      scalaV,
-      "2.11.8",
-      "2.10.6"
-    ),
+  .settings(
     //compiler macro works only on scala 2.12.x
     excludeFilter in (Test, unmanagedSources) := (if (!scalaVersion.value.startsWith("2.12.")) "CompilerMacroDependantTests.scala" else "")
   )
