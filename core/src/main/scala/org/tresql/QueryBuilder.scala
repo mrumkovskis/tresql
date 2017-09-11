@@ -967,24 +967,45 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       }
       filterExpr(filterList)
     }
-    def maybeCallMacro(exp: Expr) = exp match {
-      case fun: FunExpr =>
-        if (Env isMacroDefined fun.name) {
-          val m = Env.macroMethod(fun.name)
-          val p = m.getParameterTypes()
-          if (p.length > 1 && p(1).isAssignableFrom(classOf[Seq[_]]))
-            //second parameter is list of expressions
-            m.invoke(Env.macros.get, this, fun.params).asInstanceOf[Expr]
-          else m.invoke(Env.macros.get, (this :: fun.params): _*).asInstanceOf[Expr]
-        } else if (fun.params.exists(_ == null)) null else fun
-      case binExpr: BinExpr =>
-        if (!(STANDART_BIN_OPS contains binExpr.op)) {
-          val macroName = scala.reflect.NameTransformer.encode(binExpr.op)
-          if (Env isMacroDefined macroName)
-            Env.macroMethod(macroName).invoke(Env.macros.get, this, binExpr.lop, binExpr.rop).asInstanceOf[Expr]
-          else binExpr
-        } else binExpr
-      case _ => sys.error("Unexpected exp type")
+    def maybeCallMacro(exp: Expr) = {
+      var varSet: Set[BaseVarExpr] = Set()
+      transform(
+        exp match {
+          case fun: FunExpr =>
+            if (Env isMacroDefined fun.name) {
+              val m = Env.macroMethod(fun.name)
+              val p = m.getParameterTypes()
+              if (p.length > 1 && p(1).isAssignableFrom(classOf[Seq[_]]))
+                //second parameter is list of expressions
+                m.invoke(Env.macros.get, this, fun.params).asInstanceOf[Expr]
+              else m.invoke(Env.macros.get, (this :: fun.params): _*).asInstanceOf[Expr]
+            } else if (fun.params.exists(_ == null)) null else fun
+          case binExpr: BinExpr =>
+            if (!(STANDART_BIN_OPS contains binExpr.op)) {
+              val macroName = scala.reflect.NameTransformer.encode(binExpr.op)
+              if (Env isMacroDefined macroName)
+                Env.macroMethod(macroName)
+                  .invoke(Env.macros.get, this, binExpr.lop, binExpr.rop)
+                  .asInstanceOf[Expr]
+              else binExpr
+            } else binExpr
+          case _ => sys.error("Unexpected exp type")
+        }, {
+          case v: BaseVarExpr =>
+            if (varSet(v)) {
+              v match {
+                case ve: VarExpr => ve.copy()
+                case ie: IdExpr => ie.copy()
+                case re: IdRefExpr => re.copy()
+                case res: ResExpr => res.copy()
+                case x => x
+              }
+            } else {
+              varSet += v
+              v
+            }
+        }
+      )
     }
 
     def buildWithNew(buildFunc: QueryBuilder => Expr) = {

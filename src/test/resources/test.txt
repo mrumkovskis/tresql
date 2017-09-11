@@ -477,6 +477,8 @@ dept[deptno in if_all_missing(:name, :job, emp[ename ~~ :name? || '%' & job = :j
 dept[deptno in if_all_missing(:name?, :job?, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
 dept[deptno in if_all_missing(:name, :job, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> job='ANALYST;name='sc --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
 dept[deptno in if_all_missing(:name, :job, emp[ename ~~ :name? || '%' & job = :job?]{deptno})]{dname}#(1) --> [["ACCOUNTING"], ["RESEARCH"], ["SALES"]]
+dept[in_twice(deptno, 10)] --> [[10, "ACCOUNTING", "NEW YORK"]]
+dept[in_twice(deptno, :deptno)] --> deptno = 10 -->[[10, "ACCOUNTING", "NEW YORK"]]
 
 //macro interpolator test
 {macro_interpolator_test1(1, 2)} --> [[3]]

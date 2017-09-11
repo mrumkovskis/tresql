@@ -42,6 +42,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
         b.SQLExpr("null", Nil)
       else b.SQLExpr(sqlSnippet, vars)
     }
+    def in_twice(implicit b: QueryBuilder, expr: Expr, in: Expr) = macro_"$expr in ($in, $in)"
     def null_macros(b: QueryBuilder) = null
     def dummy(b: QueryBuilder) = b.buildExpr("dummy")
     def macro_interpolator_test1(implicit b: QueryBuilder, e1: Expr, e2: Expr) = macro_"($e1 + $e2)"
@@ -149,6 +150,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     println("\n-------------- TEST compiler ----------------\n")
     trait TestFunctionSignatures extends compiling.Functions {
       def macro_interpolator_test1(exp1: Any, exp2: Any): Any
+      def in_twice(expr: Any, in: Any): Boolean
     }
     //set new metadata
     Env.metaData = new metadata.JDBCMetaData with compiling.CompilerFunctions {
