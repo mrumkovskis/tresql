@@ -13,7 +13,6 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     pos: scala.util.parsing.input.Position = scala.util.parsing.input.NoPosition
   ) extends Exception(message)
 
-  var nameIdx = 0
   val metadata = Env.metaData
 
   trait Scope {
