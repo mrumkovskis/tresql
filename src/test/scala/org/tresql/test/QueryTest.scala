@@ -25,6 +25,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       s.mkString("", ", ", " - ") + Query("dummy{count(dummy)}")(res).unique[String]
   }
   object Macros extends org.tresql.Macros {
+    import macro_._
     /**
      * Dumb regexp to find bind variables (tresql syntax) in sql string.
      * Expects whitespace, colon, identifier, optional question mark.
@@ -43,6 +44,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     }
     def null_macros(b: QueryBuilder) = null
     def dummy(b: QueryBuilder) = b.buildExpr("dummy")
+    def macro_interpolator_test1(implicit b: QueryBuilder, e1: Expr, e2: Expr) = macro_"($e1 + $e2)"
   }
 
   val executeCompilerMacroDependantTests = scala.util.Properties.versionNumberString.startsWith("2.12.")
@@ -145,9 +147,12 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
 
   test("compiler") {
     println("\n-------------- TEST compiler ----------------\n")
+    trait TestFunctionSignatures extends compiling.Functions {
+      def macro_interpolator_test1(exp1: Any, exp2: Any): Any
+    }
     //set new metadata
     Env.metaData = new metadata.JDBCMetaData with compiling.CompilerFunctions {
-      override def compilerFunctions = classOf[compiling.Functions]
+      override def compilerFunctions = classOf[TestFunctionSignatures]
     }
     testTresqls("/test.txt", (tresql, _, _, nr) => {
       println(s"$nr. Compiling tresql:\n$tresql")

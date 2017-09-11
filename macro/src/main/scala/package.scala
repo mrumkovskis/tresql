@@ -260,6 +260,7 @@ package object tresql extends CoreTypes {
     )
   }
 
+  /** Does not refer to scala compiler macro. Is placed here to be in the package object tresql */
   implicit def jdbcResultToTresqlResult(jdbcResult: java.sql.ResultSet) = {
     val md = jdbcResult.getMetaData
     new DynamicSelectResult(jdbcResult, Vector((1 to md.getColumnCount map {
