@@ -39,6 +39,7 @@ trait BasicDBFunctions {
   def to_date(date: String, format: String): java.sql.Date
   def trim(string: String): String
   def exists(cond: SelectDefBase): Boolean
+  def group_concat(what: Any): String
 }
 
 trait BasicDialectFunctions {

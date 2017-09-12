@@ -525,3 +525,12 @@ dept[(dept_addr[deptnr = dept.deptno]{deptnr})]{dname}#(1) --> []
 +dummy{dummy} {1} + {2} --> [[2]]
 dummy#(dummy) --> [[0], [1], [2]]
 -dummy[dummy != 0] --> [[2]]
+
+//aggregate expressions
+dept{group_concat(dname)#(dname)} --> [["ACCOUNTING,OPERATIONS,RESEARCH,SALES"]]
+dept{group_concat(dname)#(dname)[deptno < 30]} --> [["ACCOUNTING,RESEARCH"]]
+(dept{dname} ++ dept{dname}){group_concat(dname)#(dname)} --> [["ACCOUNTING,ACCOUNTING,OPERATIONS,OPERATIONS,RESEARCH,RESEARCH,SALES,SALES"]]
+(dept{dname} ++ dept{dname}){group_concat(# dname)#(dname)} --> [["ACCOUNTING,OPERATIONS,RESEARCH,SALES"]]
+dept{group_concat(dname)[deptno = 10]} --> [["ACCOUNTING"]]
+(dept ++ dept){group_concat(dname)[deptno = 10]} --> [["ACCOUNTING,ACCOUNTING"]]
+(dept ++ dept){group_concat(# dname)[deptno = 10]} --> [["ACCOUNTING"]]

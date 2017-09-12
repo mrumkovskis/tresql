@@ -20,7 +20,7 @@ trait ExpTransformer { this: QueryParsers =>
       case e: Res => e
       case e: IdentAll => e
       case e: Variable => e
-      case Fun(n, pars, d) => Fun(n, pars map tt, d)
+      case Fun(n, pars, d, o, f) => Fun(n, pars map tt, d, o map tt, f map tt)
       case UnOp(o, op) => UnOp(o, tt(op))
       case BinOp(o, lop, rop) => BinOp(o, tt(lop), tt(rop))
       case TerOp(lop, op1, mop, op2, rop) => TerOp(tt(lop), op1, tt(mop), op2, tt(rop))
@@ -63,7 +63,8 @@ trait ExpTransformer { this: QueryParsers =>
       case e: Res => e
       case e: IdentAll => e
       case e: Variable => e
-      case Fun(n, pars, d) => Fun(n, pars.map(tt(state)(_)), d)
+      case Fun(n, pars, d, o, f) =>
+        Fun(n, pars.map(tt(state)(_)), d, o.map(tt(state)(_)), f.map(tt(state)(_)))
       case UnOp(o, op) => UnOp(o, tt(state)(op))
       case BinOp(o, lop, rop) => BinOp(o, tt(state)(lop), tt(state)(rop))
       case TerOp(lop, op1, mop, op2, rop) => TerOp(tt(state)(lop), op1, tt(state)(mop), op2, tt(state)(rop))
@@ -114,7 +115,10 @@ trait ExpTransformer { this: QueryParsers =>
     def trl(r: T, l: List[Exp]) = l.foldLeft(r) { (fr, el) => tr(fr, el) }
     def traverse(state: T): PartialFunction[Exp, T] = {
       case _: Ident | _: Id | _: IdRef | _: Res | All | _: IdentAll | _: Variable | Null | _: Const | null => state
-      case Fun(_, pars, _) => trl(state, pars)
+      case Fun(_, pars, _, o, f) =>
+        val ps = trl(state, pars)
+        val os = o.map(tr(ps, _)).getOrElse(ps)
+        f.map(tr(os, _)).getOrElse(os)
       case UnOp(_, operand) => tr(state, operand)
       case BinOp(_, lop, rop) => tr(tr(state, lop), rop)
       case In(lop, rop, _) => trl(tr(state, lop), rop)

@@ -271,7 +271,13 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     } else classOf[ConstExpr]
   }
 
-  case class FunExpr(name: String, params: List[Expr], distinct: Boolean = false) extends BaseExpr {
+  case class FunExpr(
+    name: String,
+    params: List[Expr],
+    distinct: Boolean = false,
+    aggregateOrder: Option[Expr] = None,
+    aggregateWhere: Option[Expr] = None
+  ) extends BaseExpr {
     override def apply() = {
       val p = params map (_())
       val ts = p map {
@@ -295,8 +301,14 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         }
       } else call("{call " + sql + "}")
     }
-    def defaultSQL = name + (params map (_.sql))
-      .mkString("(" + (if (distinct) "distinct " else ""), ",", ")")
+    def defaultSQL = {
+      val order = aggregateOrder.map(_.sql).map(" order by " + _).mkString
+      val filter = aggregateWhere.map(_.sql).map(w => s" filter (where $w)").mkString
+      name + (params map (_.sql)).mkString(
+        "(" + (if (distinct) "distinct " else ""),
+        ",",
+        s"$order)$filter")
+    }
     override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
   }
 
@@ -901,10 +913,10 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         }
         val colWithHiddenExprs =
           (if (colExprs.exists {
-            case ColExpr(FunExpr(n, _, false), _, _, _, _) => Env.isDefined(n)
+            case ColExpr(FunExpr(n, _, false, _, _), _, _, _, _) => Env.isDefined(n)
             case _ => false
           }) (colExprs flatMap { //external function found
-            case ce @ ColExpr(FunExpr(n, pars, false), a, t, _, _) if Env.isDefined(n) && !ce.separateQuery =>
+            case ce @ ColExpr(FunExpr(n, pars, false, _, _), a, t, _, _) if Env.isDefined(n) && !ce.separateQuery =>
               //checks if last parameter is resources
               def hasResourcesParam(pt: Array[Class[_]]) = pt
                 .lastOption
@@ -1108,9 +1120,11 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
             val r = rop.map(buildInternal(_, parseCtx)).filter(_ != null)
             if (r.isEmpty) null else InExpr(l, r, not)
           }
-        case Fun(n, pl: List[_], d) =>
+        case Fun(n, pl: List[_], d, o, f) =>
           val pars = pl map { buildInternal(_, FUN_CTX) }
-          maybeCallMacro(FunExpr(n, pars, d))
+          val order = o.map(buildInternal(_, FUN_CTX))
+          val filter = f.map(buildInternal(_, FUN_CTX))
+          maybeCallMacro(FunExpr(n, pars, d, order, filter))
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => IdentAllExpr(i.ident)
         case a: Arr => parseCtx match {

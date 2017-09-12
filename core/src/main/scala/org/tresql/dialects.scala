@@ -8,7 +8,7 @@ package object dialects {
     private def exec(e: Expr) = {
       val b = e.builder
       e match {
-        case b.FunExpr("case", pars, false) if pars.size > 1 => (true, pars.grouped(2).map(l =>
+        case b.FunExpr("case", pars, false, None, None) if pars.size > 1 => (true, pars.grouped(2).map(l =>
           if (l.size == 1) "else " + l(0).sql else "when " + l(0).sql + " then " + l(1).sql)
           .mkString("case ", " ", " end"))
         case _ => (false, "<none>")
@@ -20,22 +20,22 @@ package object dialects {
     def isDefinedAt(e: Expr) = {
       val b = e.builder
       e match {
-        case b.FunExpr("lower", _: List[_], false) => true
+        case b.FunExpr("lower", _: List[_], false, None, None) => true
         case b.FunExpr("translate", List(_, b.ConstExpr(from: String),
-          b.ConstExpr(to: String)), false) if (from.length == to.length) => true
-        case b.FunExpr("nextval", List(b.ConstExpr(_)), false) => true
+          b.ConstExpr(to: String)), false, None, None) if (from.length == to.length) => true
+        case b.FunExpr("nextval", List(b.ConstExpr(_)), false, None, None) => true
         case _ => false
       }
     }
     def apply(e: Expr) = {
       val b = e.builder
       (e: @unchecked) match {
-        case b.FunExpr("lower", List(p), false) => "lcase(" + p.sql + ")"
+        case b.FunExpr("lower", List(p), false, None, None) => "lcase(" + p.sql + ")"
         case b.FunExpr("translate", List(col, b.ConstExpr(from: String),
-          b.ConstExpr(to: String)), false) if (from.length == to.length) => {
+          b.ConstExpr(to: String)), false, None, None) if (from.length == to.length) => {
           (from zip to).foldLeft(col.sql)((s, a) => "replace(" + s + ", '" + a._1 + "', '" + a._2 + "')")
         }
-        case b.FunExpr("nextval", List(b.ConstExpr(seq)), false) => "next value for " + seq
+        case b.FunExpr("nextval", List(b.ConstExpr(seq)), false, None, None) => "next value for " + seq
       }
     }
   }
@@ -61,7 +61,7 @@ package object dialects {
       e match {
         case b.ConstExpr(true) => "'Y'"
         case b.ConstExpr(false) => "'N'"
-        case b.FunExpr("optimizer_hint", List(b.ConstExpr(s: String)), false) => s
+        case b.FunExpr("optimizer_hint", List(b.ConstExpr(s: String)), false, None, None) => s
         case b.BinExpr("-", lop, rop) =>
           lop.sql + (if (e.exprType.getSimpleName == "SelectExpr") " minus " else " - ") + rop.sql
         case e: QueryBuilder#SelectExpr if e.limit != null || e.offset != null =>
@@ -91,7 +91,7 @@ package object dialects {
           val b = e.builder
           e match {
             case s @ b.SelectExpr(_, _,
-              c @ b.ColsExpr(b.ColExpr(b.FunExpr(_, List(b.ConstExpr(h)), _), _, _, _, _) :: t, _, _, _),
+              c @ b.ColsExpr(b.ColExpr(b.FunExpr(_, List(b.ConstExpr(h)), _, _, _), _, _, _, _) :: t, _, _, _),
               _, _, _, _, _, _, _) =>
                    "select " + String.valueOf(h) + (s.copy(cols = c.copy(cols = t)).sql substring 6)
           }

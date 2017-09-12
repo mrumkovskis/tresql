@@ -74,9 +74,17 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   case class UnOp(operation: String, operand: Exp) extends Exp {
     def tresql = operation + operand.tresql
   }
-  case class Fun(name: String, parameters: List[Exp], distinct: Boolean) extends Exp {
+  case class Fun(
+    name: String,
+    parameters: List[Exp],
+    distinct: Boolean,
+    aggregateOrder: Option[Ord],
+    aggregateWhere: Option[Exp]
+  ) extends Exp {
     def tresql = name + "(" + (if (distinct) "# " else "") +
-      ((parameters map any2tresql) mkString ", ") + ")"
+      ((parameters map any2tresql) mkString ", ") +
+      s""")${aggregateOrder.map(o => " " + o.tresql).mkString}${
+        aggregateWhere.map(_.tresql).mkString("[", "", "]")}"""
   }
   case class In(lop: Exp, rop: List[Exp], not: Boolean) extends Exp {
     def tresql = any2tresql(lop) + (if (not) " !" else " ") + rop.map(any2tresql).mkString(
@@ -228,9 +236,16 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
      * insert, delete, update parsers must be applied before query parser */
   def operand: MemParser[Exp] = (const | ALL | withQuery | function | insert | update | query |
     variable | id | idref | result | array) named "operand"
-  def function: MemParser[Fun] = (qualifiedIdent <~ "(") ~ opt("#") ~ repsep(expr, ",") <~ ")" ^^ {
-    case Ident(a) ~ d ~ b => Fun(a.mkString("."), b, d.map(x=> true).getOrElse(false))
-  } named "function"
+  /* function(<#> <arglist> <order by>)<[filter]> */
+  def function: MemParser[Fun] = (qualifiedIdent /* name */ <~ "(") ~
+    opt("#") /* distinct */ ~ repsep(expr, ",") /* arglist */ ~
+    ")" ~ opt(order) /* aggregate order */ ~ opt(filter) /* aggregate filter */ ^?({
+    case Ident(n) ~ d ~ p ~ _ ~ o ~ f if f.map(_.elements.size).getOrElse(0) <= 1 =>
+      Fun(n.mkString("."), p, !d.isEmpty, o, f.flatMap(_.elements.lift(0)))
+  }, {
+    case _ ~ _ ~ _ ~ _ ~ _ ~ f => s"Aggregate function filter must contain only one elements, instead of ${
+      f.map(_.elements.size).getOrElse(0)}"
+  }) named "function"
   def array: MemParser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ Arr named "array"
 
   //query parsers
