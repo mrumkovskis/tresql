@@ -84,7 +84,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     def tresql = name + "(" + (if (distinct) "# " else "") +
       ((parameters map any2tresql) mkString ", ") +
       s""")${aggregateOrder.map(o => " " + o.tresql).mkString}${
-        aggregateWhere.map(_.tresql).mkString("[", "", "]")}"""
+        aggregateWhere.map(e => s"[${e.tresql}]").mkString}"""
   }
   case class In(lop: Exp, rop: List[Exp], not: Boolean) extends Exp {
     def tresql = any2tresql(lop) + (if (not) " !" else " ") + rop.map(any2tresql).mkString(
