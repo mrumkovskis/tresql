@@ -120,17 +120,17 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
 
   //resources methods
   def conn: java.sql.Connection = provider.map(_.env.conn).getOrElse(resources.conn)
-  override def metaData = provider.map(_.env.metaData).getOrElse(resources.metaData)
+  override def metadata = provider.map(_.env.metadata).getOrElse(resources.metadata)
   override def dialect: CoreTypes.Dialect = provider.map(_.env.dialect).getOrElse(resources.dialect)
   override def idExpr = provider.map(_.env.idExpr).getOrElse(resources.idExpr)
   override def queryTimeout = provider.map(_.env.queryTimeout).getOrElse(resources.queryTimeout)
   override def maxResultSize = provider.map(_.env.maxResultSize).getOrElse(resources.maxResultSize)
 
   //meta data methods
-  override def table(name: String) = metaData.table(name)
-  override def tableOption(name:String) = metaData.tableOption(name)
-  override def procedure(name: String) = metaData.procedure(name)
-  override def procedureOption(name:String) = metaData.procedureOption(name)
+  override def table(name: String) = metadata.table(name)
+  override def tableOption(name:String) = metadata.tableOption(name)
+  override def procedure(name: String) = metadata.procedure(name)
+  override def procedureOption(name:String) = metadata.procedureOption(name)
 
   def printVariables = "\nBind variables:" +
     vars.map(_.mkString("\n ", "\n ", "\n")).getOrElse("<none>")
@@ -154,7 +154,7 @@ object Env extends Resources {
   //this is for single thread usage
   var sharedConn: java.sql.Connection = null
   //meta data object must be thread safe!
-  private var _metaData: Option[Metadata] = Some(metadata.JDBCMetadata())
+  private var _metadata: Option[Metadata] = Some(org.tresql.metadata.JDBCMetadata())
   private var _dialect: Option[CoreTypes.Dialect] = None
   private var _idExpr: Option[String => String] = None
   //available functions
@@ -179,7 +179,7 @@ object Env extends Resources {
 
   def apply(params: Map[String, Any], reusableExpr: Boolean) = new Env(params, this, reusableExpr)
   def conn = { val c = threadConn.get; if (c == null) sharedConn else c }
-  override def metaData = _metaData.get
+  override def metadata = _metadata.get
   override def dialect = _dialect.getOrElse(super.dialect)
   override def idExpr = _idExpr.getOrElse(super.idExpr)
   def functions = _functions
@@ -193,7 +193,7 @@ object Env extends Resources {
   override def maxResultSize = _maxResultSize
 
   def conn_=(conn: java.sql.Connection) = this.threadConn set conn
-  def metaData_=(metaData: Metadata) = this._metaData = Option(metaData)
+  def metadata_=(metadata: Metadata) = this._metadata = Option(metadata)
   def dialect_=(dialect: CoreTypes.Dialect) = this._dialect =
     Option(dialect).map(_.orElse {case e=> e.defaultSQL})
   def idExpr_=(idExpr: String => String) = this._idExpr = Option(idExpr)
@@ -224,28 +224,28 @@ object Env extends Resources {
 trait Resources { self =>
   private case class Resources_(
     val _conn: Option[java.sql.Connection] = None,
-    val _metaData: Option[Metadata] = None,
+    val _metadata: Option[Metadata] = None,
     val _dialect: Option[CoreTypes.Dialect] = None,
     val _idExpr: Option[String => String] = None,
     val _queryTimeout: Option[Int] = None,
     val _maxResultSize: Option[Int] = None,
     val _params: Option[Map[String, Any]] = None) extends Resources {
     override def conn: java.sql.Connection = _conn getOrElse self.conn
-    override def metaData: Metadata = _metaData getOrElse self.metaData
+    override def metadata: Metadata = _metadata getOrElse self.metadata
     override def dialect: CoreTypes.Dialect = _dialect getOrElse self.dialect
     override def idExpr: String => String = _idExpr getOrElse self.idExpr
     override def queryTimeout: Int = _queryTimeout getOrElse self.queryTimeout
     override def maxResultSize: Int = _maxResultSize getOrElse self.maxResultSize
     override def params: Map[String, Any] = _params getOrElse self.params
     override def toString = s"Resources_(conn = $conn, " +
-      s"metaData = $metaData, dialect = $dialect, idExpr = $idExpr, " +
+      s"metadata = $metadata, dialect = $dialect, idExpr = $idExpr, " +
       s"queryTimeout = $queryTimeout, maxResultSize = $maxResultSize, params = $params)"
   }
 
   private var _valueExprMap: Option[Map[(String, String), String]] = None
 
   def conn: java.sql.Connection
-  def metaData: Metadata
+  def metadata: Metadata
   def dialect: CoreTypes.Dialect = null
   def idExpr: String => String = s => "nextval('" + s + "')"
   def queryTimeout = 0
@@ -265,7 +265,7 @@ trait Resources { self =>
 
   //resource construction convenience methods
   def withConn(conn: java.sql.Connection): Resources = Resources_(_conn = Option(conn))
-  def withMetadata(metaData: Metadata): Resources = Resources_(_metaData = Option(metaData))
+  def withMetadata(metadata: Metadata): Resources = Resources_(_metadata = Option(metadata))
   def withDialect(dialect: CoreTypes.Dialect): Resources = Resources_(_dialect = Option(dialect))
   def withIdExpr(idExpr: String => String): Resources = Resources_(_idExpr = Option(idExpr))
   def withQueryTimeout(queryTimeout: Int): Resources = Resources_(_queryTimeout = Option(queryTimeout))

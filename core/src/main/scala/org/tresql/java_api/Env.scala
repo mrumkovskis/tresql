@@ -36,8 +36,8 @@ object Env {
   def setIdExprFunc(f: IdExprFunc) { env.idExpr = f.getIdExpr }
   //def isDefined(functionName: String): Boolean
   //def log(msg: => String, level: Int = 0): Unit
-  def getMetadata: Metadata = env.metaData
-  def setMetadata(md: Metadata) { env.metaData = md }
+  def getMetadata: Metadata = env.metadata
+  def setMetadata(md: Metadata) { env.metadata = md }
   //def getNameMap: NameMap = env.nameMap
   //def setNameMap(m: NameMap) = { env.nameMap = m }
   //var sharedConn: Connection
@@ -68,7 +68,7 @@ object Env {
     dialect = env.dialect,
     functions = env.functions,
     idExpr = env.idExpr,
-    metadata = env.metaData,
+    metadata = env.metadata,
     logger = env.logger
   )
   def restoreState(state: State) = {
@@ -78,7 +78,7 @@ object Env {
     env.dialect = dialect
     env.functions = functions
     env.idExpr = idExpr
-    env.metaData = metadata
+    env.metadata = metadata
     env.logger = logger
   }
 }

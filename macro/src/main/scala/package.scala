@@ -212,7 +212,7 @@ package object tresql extends CoreTypes {
       val tresqlString = parts.map { case Literal(Constant(x)) => x } match {
         case l => l.head + l.tail.zipWithIndex.map(t => ":_" + t._2 + t._1).mkString //replace placeholders with variable defs
       }
-      Env.metaData = metadata(macroSettings)
+      Env.metadata = metadata(macroSettings)
       info(s"Compiling: $tresqlString")
       val compiledExp = try compile(tresqlString) catch {
         case ce: CompilerException => c.abort(c.enclosingPosition, ce.getMessage)

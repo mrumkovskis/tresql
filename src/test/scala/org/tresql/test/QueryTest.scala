@@ -149,7 +149,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
   test("compiler") {
     println("\n-------------- TEST compiler ----------------\n")
     //set new metadata
-    Env.metaData = new metadata.JDBCMetadata with compiling.CompilerFunctionMetadata {
+    Env.metadata = new metadata.JDBCMetadata with compiling.CompilerFunctionMetadata {
       override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
     }
     testTresqls("/test.txt", (tresql, _, _, nr) => {

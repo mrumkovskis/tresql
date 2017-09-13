@@ -171,7 +171,7 @@ trait ORT extends Query {
   (implicit resources: Resources = Env): Any = {
     val Array(tableName, alias) = name.split("\\s+").padTo(2, null)
     (for {
-      table <- resources.metaData.tableOption(tableName)
+      table <- resources.metadata.tableOption(tableName)
       pk <- table.key.cols.headOption
       if table.key.cols.size == 1
     } yield {
@@ -201,7 +201,7 @@ trait ORT extends Query {
      * Additionaly primary key of table is returned if it consist only of one column */
     def importedKeysAndPks(tableName: String, relations: List[String]) = {
       val x = tableName split ":"
-      val table = resources.metaData.table(x.head)
+      val table = resources.metadata.table(x.head)
       relations.foldLeft(x.tail.toSet) { (keys, rel) =>
         val relation = rel.split(":").head
         val refs = table.refs(relation).filter(_.cols.size == 1)
@@ -296,7 +296,7 @@ trait ORT extends Query {
     val Property(tables, insertOption, updateOption, deleteOption, alias, filters) =
       parseProperty(name)
     val parent = parents.headOption.map(_.table).orNull
-    val md = resources.metaData
+    val md = resources.metadata
     //find first imported key to parent in list of table links passed as a param.
     def importedKeyOption(tables: List[TableLink]): Option[(metadata.Table, String)] = {
       def refInSet(refs: Set[String], child: metadata.Table) = refs.find(r =>
@@ -423,7 +423,7 @@ trait ORT extends Query {
       refColName: String,
       name: String,
       struct: Map[String, _])(implicit resources: Resources) =
-      resources.metaData.tableOption(name).filter(_.key.cols.size == 1).map {
+      resources.metadata.tableOption(name).filter(_.key.cols.size == 1).map {
         table =>
         val pk = table.key.cols.headOption.filter(struct contains).orNull
         val insert = save_tresql(name, struct, Nil, null, insert_tresql)
@@ -483,7 +483,7 @@ trait ORT extends Query {
             .orElse(Some(base))
         } yield tresql + tresqlColAlias).orNull
     }
-    val md = resources.metaData
+    val md = resources.metadata
     val headTable = tables.head
     val linkedTables = tables.tail
     def idRefId(idRef: String, id: String) = s"_id_ref_id($idRef, $id)"

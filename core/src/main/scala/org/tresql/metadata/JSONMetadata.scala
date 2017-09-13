@@ -6,10 +6,10 @@ import sys._
 
 //TODO improve json parser so it accepts property names without quotes
 
-case class JSONMetadata(val metaData:Map[String, Table]) extends Metadata {
+case class JSONMetadata(val metadata:Map[String, Table]) extends Metadata {
 
-  override def table(name: String) = metaData(name)
-  override def tableOption(name:String) = metaData.get(name)
+  override def table(name: String) = metadata(name)
+  override def tableOption(name:String) = metadata.get(name)
   override def procedure(name: String) = sys.error("Unsupported method")
   override def procedureOption(name: String) = sys.error("Unsupported method")
 }
