@@ -12,7 +12,7 @@ lazy val commonSettings = Seq(
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",
     "-language:postfixOps", "-language:implicitConversions", "-language:reflectiveCalls",
     "-language:existentials",
-    "-Xmacro-settings:metadataFactoryClass=org.tresql.compiling.CompilerJDBCMetadata, driverClass=org.hsqldb.jdbc.JDBCDriver, url=jdbc:hsqldb:mem:., dbCreateScript=src/test/resources/db.sql, functions=org.tresql.compiling.TestFunctionSignatures"),
+    "-Xmacro-settings:metadataFactoryClass=org.tresql.compiling.CompilerJDBCMetadata, driverClass=org.hsqldb.jdbc.JDBCDriver, url=jdbc:hsqldb:mem:., dbCreateScript=src/test/resources/db.sql, functions=org.tresql.test.TestFunctionSignatures"),
   publishTo := {
     val nexus = "https://oss.sonatype.org/"
     if (version.value.trim.endsWith("SNAPSHOT"))
@@ -53,7 +53,7 @@ val packageMerges = for {
 
 
 lazy val tresql = (project in file("."))
-  .dependsOn(core, macros)
+  .dependsOn(core % "test->test;compile->compile", macros)
   .aggregate(core, macros)
   .settings(
     //compiler macro works only on scala 2.12.x
