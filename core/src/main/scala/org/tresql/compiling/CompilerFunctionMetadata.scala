@@ -1,12 +1,12 @@
 package org.tresql.compiling
 
-import org.tresql.{MetaData, Env}
+import org.tresql.{Metadata, Env}
 import org.tresql.metadata.{Procedure, Par}
 
 import scala.reflect.{Manifest, ManifestFactory}
 import java.lang.reflect._
 
-trait CompilerFunctionMetadata extends org.tresql.MetaData {
+trait CompilerFunctionMetadata extends org.tresql.Metadata {
 
   def compilerFunctionSignatures: Class[_]
 

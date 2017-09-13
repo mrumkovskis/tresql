@@ -4,7 +4,7 @@ import java.sql.Connection
 
 import org.tresql._
 import org.tresql.{ Env => env }
-import org.tresql.metadata.JDBCMetaData
+import org.tresql.metadata.JDBCMetadata
 
 trait IdExprFunc { def getIdExpr(table: String): String }
 trait LogMessage { def get: String }
@@ -15,7 +15,7 @@ object Dialects {
   def Oracle = dialects.OracleDialect
 }
 object Metadata {
-  def JDBC(defaultSchema: String) = JDBCMetaData(defaultSchema)
+  def JDBC(defaultSchema: String) = JDBCMetadata(defaultSchema)
 }
 object Env {
   import CoreTypes._
@@ -36,8 +36,8 @@ object Env {
   def setIdExprFunc(f: IdExprFunc) { env.idExpr = f.getIdExpr }
   //def isDefined(functionName: String): Boolean
   //def log(msg: => String, level: Int = 0): Unit
-  def getMetadata: MetaData = env.metaData
-  def setMetadata(md: MetaData) { env.metaData = md }
+  def getMetadata: Metadata = env.metaData
+  def setMetadata(md: Metadata) { env.metaData = md }
   //def getNameMap: NameMap = env.nameMap
   //def setNameMap(m: NameMap) = { env.nameMap = m }
   //var sharedConn: Connection
@@ -59,7 +59,7 @@ object Env {
     dialect: Dialect,
     functions: Object,
     idExpr: String => String,
-    metadata: MetaData,
+    metadata: Metadata,
     logger: (=> String, Int) => Unit
   )
   def saveState = State(

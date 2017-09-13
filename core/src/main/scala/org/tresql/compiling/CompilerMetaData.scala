@@ -1,26 +1,26 @@
 package org.tresql.compiling
 
 import java.sql._
-import org.tresql.{Env, MetaData}
-import org.tresql.metadata.JDBCMetaData
+import org.tresql.{Env, Metadata}
+import org.tresql.metadata.JDBCMetadata
 
 /** Implementation must have empty constructor so can be instantiated with {{{Class.newInstance}}} */
-trait CompilerMetaDataFactory {
-  def create(conf: Map[String, String]): MetaData
+trait CompilerMetadataFactory {
+  def create(conf: Map[String, String]): Metadata
 }
 
 private[tresql] object MetadataCache {
   def create(
     conf: Map[String, String],
-    factory: CompilerMetaDataFactory
-  ): MetaData = {
+    factory: CompilerMetadataFactory
+  ): Metadata = {
     if (md == null) md = factory.create(conf)
     md
   }
-  private[this] var md: MetaData = null
+  private[this] var md: Metadata = null
 }
 
-class CompilerJDBCMetaData extends CompilerMetaDataFactory {
+class CompilerJDBCMetadata extends CompilerMetadataFactory {
   override def create(conf: Map[String, String]) = {
     val driverClassName = conf.getOrElse("driverClass", null)
     val url = conf.getOrElse("url", null)
@@ -50,9 +50,9 @@ class CompilerJDBCMetaData extends CompilerMetaDataFactory {
         }
       Env.log("Success")
     }
-    if (functions == null) JDBCMetaData() else {
+    if (functions == null) JDBCMetadata() else {
       val f = Class.forName(functions)
-      new JDBCMetaData with CompilerFunctionMetadata {
+      new JDBCMetadata with CompilerFunctionMetadata {
         override def compilerFunctionSignatures = f
       }
     }

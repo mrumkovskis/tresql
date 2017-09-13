@@ -1,6 +1,6 @@
 package org.tresql.metadata
 
-import org.tresql.MetaData
+import org.tresql.Metadata
 import org.tresql._
 import scala.collection.JavaConverters._
 import java.sql.{ Connection => C }
@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 //TODO all names perhaps should be stored in upper case?
 //This class is thread safe i.e. instance can be used across multiple threads
-trait JDBCMetaData extends MetaData {
+trait JDBCMetadata extends Metadata {
 
   private val tableCache = new ConcurrentHashMap[String, Table]
   private val procedureCache = new ConcurrentHashMap[String, Procedure[_]]
@@ -182,9 +182,9 @@ trait JDBCMetaData extends MetaData {
   }
 }
 
-object JDBCMetaData {
+object JDBCMetadata {
   def apply(defaultSch: String = null, res: Resources = Env) = {
-    new JDBCMetaData {
+    new JDBCMetadata {
       override def defaultSchema = defaultSch
       override def resources = res
     }
