@@ -52,8 +52,8 @@ class CompilerJDBCMetaData extends CompilerMetaDataFactory {
     }
     if (functions == null) JDBCMetaData() else {
       val f = Class.forName(functions)
-      new JDBCMetaData with CompilerFunctions {
-        override def compilerFunctions = f
+      new JDBCMetaData with CompilerFunctionMetadata {
+        override def compilerFunctionSignatures = f
       }
     }
   }

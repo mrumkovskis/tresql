@@ -6,11 +6,11 @@ import org.tresql.metadata.{Procedure, Par}
 import scala.reflect.{Manifest, ManifestFactory}
 import java.lang.reflect._
 
-trait CompilerFunctions extends org.tresql.MetaData {
+trait CompilerFunctionMetadata extends org.tresql.MetaData {
 
-  def compilerFunctions: Class[_]
+  def compilerFunctionSignatures: Class[_]
 
-  private val procedures: Map[String, List[Procedure[_]]] = compilerFunctions
+  private val procedures: Map[String, List[Procedure[_]]] = compilerFunctionSignatures
     .getMethods.map { method => method.getName -> proc_from_meth(method) }
     .toList.asInstanceOf[List[(String, Procedure[_])]] //strange cast is needed???
     .groupBy(_._1)
