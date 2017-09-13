@@ -27,7 +27,7 @@ class CompilerJDBCMetadata extends CompilerMetadataFactory {
     val user = conf.getOrElse("user", null)
     val password = conf.getOrElse("password", null)
     val dbCreateScript = conf.getOrElse("dbCreateScript", null)
-    val functions = conf.getOrElse("functions", null)
+    val functions = conf.getOrElse("functionSignatures", null)
 
     Env.logger = ((msg, level) => println (msg))
     Class.forName(driverClassName)
