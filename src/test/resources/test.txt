@@ -534,3 +534,6 @@ dept{group_concat(dname)#(dname)[deptno < 30]} --> [["ACCOUNTING,RESEARCH"]]
 dept{group_concat(dname)[deptno = 10]} --> [["ACCOUNTING"]]
 (dept ++ dept){group_concat(dname)[deptno = 10]} --> [["ACCOUNTING,ACCOUNTING"]]
 (dept ++ dept){group_concat(# dname)[deptno = 10]} --> [["ACCOUNTING"]]
+
+//cast
+dept{cast(deptno, 'integer')}#(1) --> [[10], [20], [30], [40]]

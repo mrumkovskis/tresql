@@ -16,6 +16,12 @@ package object dialects {
     }
   }
 
+  val CommonDialect: CoreTypes.Dialect = {
+    case f: QueryBuilder#FunExpr
+      if f.name == "cast" && f.params.size == 2 && f.params(1).isInstanceOf[QueryBuilder#ConstExpr] =>
+      s"cast(${f.params(0).sql} as ${f.params(1).asInstanceOf[QueryBuilder#ConstExpr].value})"
+  }
+
   object HSQLRawDialect extends CoreTypes.Dialect {
     def isDefinedAt(e: Expr) = {
       val b = e.builder
@@ -104,10 +110,10 @@ package object dialects {
     case v: QueryBuilder#VarExpr if v.typ != null => s"cast(${v.defaultSQL} as ${v.typ})"
   }
 
-  def HSQLDialect = HSQLRawDialect orElse ANSISQLDialect
+  def HSQLDialect = HSQLRawDialect orElse CommonDialect orElse ANSISQLDialect
 
-  def OracleDialect = OracleRawDialect orElse ANSISQLDialect
+  def OracleDialect = OracleRawDialect orElse CommonDialect orElse ANSISQLDialect
 
-  def PostgresqlDialect = PostgresqlRawDialect orElse ANSISQLDialect
+  def PostgresqlDialect = PostgresqlRawDialect orElse CommonDialect orElse ANSISQLDialect
 
 }
