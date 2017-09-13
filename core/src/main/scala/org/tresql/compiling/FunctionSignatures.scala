@@ -21,15 +21,6 @@ trait TresqlMacroFunctionSignatures {
   def sql(expr: Any): Any
 }
 
-trait TresqlScalaFunctionSignatures {
-  //tresql scala functions
-  import org.tresql.QueryCompiler._
-  def mkString(sel: SelectDefBase): String
-  def mkString(sel: SelectDefBase, colSep: String): String
-  def mkString(sel: SelectDefBase, colSep: String, rowSep: String)
-  def concat(string: String*): String
-}
-
 trait BasicDBFunctionSignatures {
   import org.tresql.QueryCompiler._
   def coalesce[T](pars: T*): T
@@ -51,12 +42,16 @@ trait BasicDialectFunctionSignatures {
 trait TresqlFunctionSignatures
   extends DBAggregateFunctionSignatures
   with TresqlMacroFunctionSignatures
-  with TresqlScalaFunctionSignatures
   with BasicDBFunctionSignatures
   with BasicDialectFunctionSignatures
 
 //TODO move to test
 trait TestFunctionSignatures extends TresqlFunctionSignatures {
+  import org.tresql.QueryCompiler._
+  def mkString(sel: SelectDefBase): String
+  def mkString(sel: SelectDefBase, colSep: String): String
+  def mkString(sel: SelectDefBase, colSep: String, rowSep: String)
+  def concat(string: String*): String
   def macro_interpolator_test1(exp1: Any, exp2: Any): Any
   def in_twice(expr: Any, in: Any): Boolean
   //test macros function
