@@ -1,6 +1,6 @@
 package org.tresql.compiling
 
-trait DBAggregateFunctions {
+trait DBAggregateFunctionSignatures {
   //aggregate functions
   def count(col: Any): java.lang.Long
   def max[T](col: T): T
@@ -9,7 +9,7 @@ trait DBAggregateFunctions {
   def avg[T](col: T): T
 }
 
-trait TresqlMacroFunctions {
+trait TresqlMacroFunctionSignatures {
   //macros
   def if_defined[T](variable: Any, exp: T): T
   def if_missing[T](variable: Any, exp: T): T
@@ -21,7 +21,7 @@ trait TresqlMacroFunctions {
   def sql(expr: Any): Any
 }
 
-trait TresqlScalaFunctions {
+trait TresqlScalaFunctionSignatures {
   //tresql scala functions
   import org.tresql.QueryCompiler._
   def mkString(sel: SelectDefBase): String
@@ -30,7 +30,7 @@ trait TresqlScalaFunctions {
   def concat(string: String*): String
 }
 
-trait BasicDBFunctions {
+trait BasicDBFunctionSignatures {
   import org.tresql.QueryCompiler._
   def coalesce[T](pars: T*): T
   def upper(string: String): String
@@ -42,21 +42,21 @@ trait BasicDBFunctions {
   def group_concat(what: Any): String
 }
 
-trait BasicDialectFunctions {
+trait BasicDialectFunctionSignatures {
   //dialect
   def `case`[T](when: Any, `then`: T, rest: Any*): T
   def nextval(seq: String): Any
 }
 
-trait TresqlFunctions
-  extends DBAggregateFunctions
-  with TresqlMacroFunctions
-  with TresqlScalaFunctions
-  with BasicDBFunctions
-  with BasicDialectFunctions
+trait TresqlFunctionSignatures
+  extends DBAggregateFunctionSignatures
+  with TresqlMacroFunctionSignatures
+  with TresqlScalaFunctionSignatures
+  with BasicDBFunctionSignatures
+  with BasicDialectFunctionSignatures
 
 //TODO move to test
-trait TestFunctionSignatures extends TresqlFunctions {
+trait TestFunctionSignatures extends TresqlFunctionSignatures {
   def macro_interpolator_test1(exp1: Any, exp2: Any): Any
   def in_twice(expr: Any, in: Any): Boolean
   //test macros function
