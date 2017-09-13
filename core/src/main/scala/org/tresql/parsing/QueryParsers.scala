@@ -9,6 +9,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   //comparison operator regular expression
   val comp_op = """!?in\b|[<>=!~%$]+"""r
 
+  private val simple_ident_regex = "^[_\\p{IsLatin}][_\\p{IsLatin}0-9]*$".r
+
   //JavaTokenParsers overrides
   //besides standart whitespace symbols consider as a whitespace also comments in form /* comment */ and //comment
   override val whiteSpace = """(\s*+(/\*(.|\s)*?\*/)?(//.*+(\n|$))?)+"""r
@@ -56,7 +58,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   case class Variable(variable: String, members: List[String], typ: String, opt: Boolean) extends Exp {
     def tresql = if (variable == "?") "?" else {
       ":" +
-        (if (variable contains "'") "\"" + variable + "\"" else "'" + variable + "'") +
+        (if (simple_ident_regex.pattern.matcher(variable).matches) variable
+         else if (variable contains "'") "\"" + variable + "\""
+         else "'" + variable + "'") +
         (if (members == null | members == Nil) "" else "." + (members map any2tresql mkString ".")) +
         (if (typ == null) "" else ": " + typ) +
         (if (opt) "?" else "")
