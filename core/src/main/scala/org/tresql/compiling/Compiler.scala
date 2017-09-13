@@ -320,7 +320,11 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     lazy val builder: TransformerWithState[Ctx] = transformerWithState(ctx => {
       case f: Fun => procedure(s"${f.name}#${f.parameters.size}").map { p =>
         val retType = if (p.returnTypeParIndex == -1) p.scalaReturnType else ManifestFactory.Nothing
-        FunDef(p.name, f.copy(parameters = f.parameters map(tr(ctx, _))), retType, p)
+        FunDef(p.name, f.copy(
+          parameters = f.parameters map(tr(ctx, _)),
+          aggregateOrder = f.aggregateOrder.map(tr(ctx, _).asInstanceOf[Ord]),
+          aggregateWhere = f.aggregateWhere.map(tr(ctx, _))
+        ), retType, p)
       }.getOrElse(throw CompilerException(s"Unknown function: ${f.name}"))
       case c: Col =>
         val alias = if (c.alias != null) c.alias else c.col match {

@@ -148,13 +148,9 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
 
   test("compiler") {
     println("\n-------------- TEST compiler ----------------\n")
-    trait TestFunctionSignatures extends compiling.Functions {
-      def macro_interpolator_test1(exp1: Any, exp2: Any): Any
-      def in_twice(expr: Any, in: Any): Boolean
-    }
     //set new metadata
     Env.metaData = new metadata.JDBCMetaData with compiling.CompilerFunctions {
-      override def compilerFunctions = classOf[TestFunctionSignatures]
+      override def compilerFunctions = classOf[compiling.TestFunctionSignatures]
     }
     testTresqls("/test.txt", (tresql, _, _, nr) => {
       println(s"$nr. Compiling tresql:\n$tresql")
@@ -184,6 +180,9 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("dept d{deptno dn, dname || ' ' || loc}#(~(dept[dname = dn]{deptno}))"))
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("dept d[d.dname in (d[1]{dname})]"))
     intercept[QueryCompiler.CompilerException](QueryCompiler.compile("(dummy{dummy} + dummy{dummy d}) d{d}"))
+    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("dept{group_concat(dname)#(dnamez)}"))
+    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("dept{group_concat(dname)#(dname)[dept{deptnox} < 30]}"))
+    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("dept{group_concat(dname)#(dname)[deptno{deptno} < 30]}"))
   }
 
   if (executeCompilerMacroDependantTests) test("compiler macro") {

@@ -55,7 +55,10 @@ trait TresqlFunctions
   with BasicDBFunctions
   with BasicDialectFunctions
 
-trait Functions extends TresqlFunctions {
+//TODO move to test
+trait TestFunctionSignatures extends TresqlFunctions {
+  def macro_interpolator_test1(exp1: Any, exp2: Any): Any
+  def in_twice(expr: Any, in: Any): Boolean
   //test macros function
   def null_macros: Null
   //test tresql scala functions (must be registered here to be accessible during compile time)
