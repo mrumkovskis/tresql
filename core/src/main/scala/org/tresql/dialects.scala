@@ -108,6 +108,12 @@ package object dialects {
   val PostgresqlRawDialect: CoreTypes.Dialect = {
     case c: QueryBuilder#ColExpr if c.alias != null => c.col.sql + " as " + c.alias
     case v: QueryBuilder#VarExpr if v.typ != null => s"cast(${v.defaultSQL} as ${v.typ})"
+    case c: QueryBuilder#BinExpr if c.op == "::" =>
+      val b = c.builder
+      c.rop match {
+        case b.ConstExpr(str: String) => c.lop.sql + "::" + str
+        case x => c.defaultSQL
+      }
   }
 
   def HSQLDialect = HSQLRawDialect orElse CommonDialect orElse ANSISQLDialect

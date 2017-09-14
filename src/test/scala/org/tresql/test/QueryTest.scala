@@ -189,6 +189,12 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     compilerMacroDependantTests.compilerMacro
   }
 
+  test("dialects") {
+    Env.dialect = dialects.PostgresqlDialect
+    assertResult(Query.build("a::'b'").sql)("select * from a::b")
+    assertResult(Query.build("a {1::int + 2::'double precision'}").sql)("select 1::int + 2::double precision from a")
+  }
+
   test("cache") {
     Env.cache map(c => println(s"\nCache size: ${c.size}\n"))
   }

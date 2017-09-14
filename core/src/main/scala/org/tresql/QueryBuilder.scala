@@ -264,6 +264,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
           case _: BracesExpr | _: ArrExpr => rop.sql
           case _ => "(" + rop.sql + ")"
         })
+      case "::" => lop.sql + "::" + rop.sql
       case _ => error("unknown operation " + op)
     }
     override def exprType: Class[_] = if (List("&&", "++", "+", "-", "*", "/") exists (_ == op)) {

@@ -446,7 +446,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       case a ~ (b: Exp) => a.map(UnOp(_, b)).getOrElse(b)
       case x: Exp => x
     } named "unary-exp"
-  def mulDiv: MemParser[Exp] = unaryExpr ~ rep("*" ~ unaryExpr | "/" ~ unaryExpr) ^^ binOp named "mul-div"
+  def cast: MemParser[Exp] = unaryExpr ~ rep("::" ~ unaryExpr) ^^ binOp named "cast" //postgresql style type conversion operator
+  def mulDiv: MemParser[Exp] = cast ~ rep("*" ~ cast | "/" ~ cast) ^^ binOp named "mul-div"
   def plusMinus: MemParser[Exp] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ binOp named "plus-minus"
   def comp: MemParser[Exp] = plusMinus ~ rep(comp_op ~ plusMinus) ^? (
       {
