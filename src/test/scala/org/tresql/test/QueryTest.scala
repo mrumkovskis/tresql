@@ -193,6 +193,8 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     Env.dialect = dialects.PostgresqlDialect
     assertResult(Query.build("a::'b'").sql)("select * from a::b")
     assertResult(Query.build("a {1::int + 2::'double precision'}").sql)("select 1::int + 2::double precision from a")
+    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] {da.addr = a.addr} <- (addr a {a.addr}) a").sql)(
+      "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where da.addr_nr = a.nr")
   }
 
   test("cache") {

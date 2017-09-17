@@ -416,8 +416,10 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def values: MemParser[Values] = rep1sep(array, ",") ^^ Values named "values"
   def valuesSelect: MemParser[Exp] = queryWithCols ~ rep(
     ("++" | "+" | "-" | "&&") ~ queryWithCols) ^^ binOp named "values-select"
-  def valuesFromSelect: MemParser[Exp] = "from" ~> expr ~ opt(ident) ^^ {
-    case s ~ i => ValuesFromSelect(s, i)
+  def valuesFromSelect: MemParser[Exp] = "<-" ~> expr ^^ {
+    case o @ Obj(_, alias, _, _, _) =>
+      ValuesFromSelect(if (alias != null) o.copy(alias = null) else o, Option(alias))
+    case s => ValuesFromSelect(s, None)
   } named "values-from-select"
 
   def insert: MemParser[Insert] = (("+" ~> qualifiedIdent ~ opt(ident) ~ opt(columns) ~
@@ -431,7 +433,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       case x => sys.error(s"Unexpected insert parse result: $x")
     } named "insert"
   def update: MemParser[Update] = (("=" ~> qualifiedIdent ~ opt(ident) ~
-    opt(filter) ~ opt(columns) ~ opt(valuesSelect | array)) |
+    opt(filter) ~ opt(columns) ~ opt(valuesSelect | array | valuesFromSelect)) |
     ((qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) <~ "=") ~ array)) ^^ {
       case t ~ a ~ f ~ c ~ v =>
         Update(t, a orNull, f orNull, c.map(_.cols).getOrElse(Nil),

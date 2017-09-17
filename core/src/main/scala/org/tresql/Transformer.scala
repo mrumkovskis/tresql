@@ -43,6 +43,7 @@ trait Transformer { self: QueryBuilder =>
       case d: DeleteExpr => //put delete at the end since it is superclass of insert and update
         DeleteExpr(cf(d.table).asInstanceOf[IdentExpr], d.alias, d.filter map cf)
       case ValuesExpr(vals) => ValuesExpr(vals map cf)
+      case vfs: ValuesFromSelectExpr => vfs.copy(sel = cf(vfs.sel))
       case e => e
     }
     cf(expr)

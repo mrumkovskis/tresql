@@ -554,6 +554,9 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   case class ValuesExpr(vals: List[Expr]) extends PrimitiveExpr {
     def defaultSQL = vals map (_.sql) mkString("values ", ",", "")
   }
+  case class ValuesFromSelectExpr(sel: Expr, alias: Option[String]) extends PrimitiveExpr {
+    def defaultSQL = s"from ${sel.sql}${alias.map(" " + _).mkString}"
+  }
   class UpdateExpr(table: IdentExpr, alias: String, filter: List[Expr],
       val cols: List[Expr], val vals: Expr) extends DeleteExpr(table, alias, filter) {
     override def apply() = cols match {
@@ -570,6 +573,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       " set " + (vals match {
         case ValuesExpr(v) => (cols zip v map { v => v._1.sql + " = " + v._2.sql }).mkString(", ")
         case q: SelectExpr => cols.map(_.sql).mkString("(", ", ", ")") + " = " + "(" + q.sql + ")"
+        case f: ValuesFromSelectExpr => cols.map(_.sql).mkString(", ") + " " + f.sql
         case x => error("Knipis: " + x)
       }) + (if (filter == null) "" else " where " + where)
   }
@@ -737,12 +741,14 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case Nil => this.table(table).cols.map(c => IdentExpr(List(c.name)))
         case c => c map (buildInternal(_, COL_CTX)) filter {
           case ColExpr(IdentExpr(_), _, _, _, _) => true
+          case ColExpr(BinExpr("=", _, _), _, _, _, _) => true //update from select
           case e: ColExpr => registerChildUpdate(e.col, e.name); false
           case _ => sys.error("Unexpected UpdateExpr type")
         }
       }, buildInternal(vals, VALUES_CTX) match {
         case v: ArrExpr => ValuesExpr(patchVals(table, cols, v.elements))
         case q: SelectExpr => q
+        case f: ValuesFromSelectExpr => f
         case null => ValuesExpr(patchVals(table, cols, Nil))
         case x => error("Knipis: " + x)
       })
@@ -1150,6 +1156,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case Ord(cols) => Order(cols map (c=> (buildInternal(c._1, parseCtx),
             buildInternal(c._2, parseCtx), buildInternal(c._3, parseCtx))))
         case All => AllExpr()
+        case ValuesFromSelect(sel, alias) => ValuesFromSelectExpr(buildInternal(sel, parseCtx), alias)
         case Braces(expr) =>
           val e = buildInternal(expr, parseCtx)
           if (e == null) null else BracesExpr(e)
