@@ -411,12 +411,12 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   }) named "with-query"
 
   def values: MemParser[Values] = rep1sep(array, ",") ^^ Values named "values"
-  def dmlSelect: MemParser[Exp] = queryWithCols ~ rep(
+  def valuesSelect: MemParser[Exp] = queryWithCols ~ rep(
     ("++" | "+" | "-" | "&&") ~ queryWithCols) ^^ binOp named "dml-select"
-  def updateFromDmlSelect: MemParser[Exp] = "(" ~> dmlSelect <~ ")" ~ ident
+  //def updateFromDmlSelect: MemParser[Exp] = "from" ~> expr ~ ident named "update-from-dml-select"
 
   def insert: MemParser[Insert] = (("+" ~> qualifiedIdent ~ opt(ident) ~ opt(columns) ~
-    opt(dmlSelect | repsep(array, ","))) |
+    opt(valuesSelect | repsep(array, ","))) |
     ((qualifiedIdent ~ opt(ident) ~ opt(columns) <~ "+") ~ values)) ^^ {
       case t ~ a ~ c ~ (v: Option[_]) =>
         Insert(t, a.orNull, c.map(_.cols).getOrElse(Nil),
@@ -426,7 +426,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       case x => sys.error(s"Unexpected insert parse result: $x")
     } named "insert"
   def update: MemParser[Update] = (("=" ~> qualifiedIdent ~ opt(ident) ~
-    opt(filter) ~ opt(columns) ~ opt(dmlSelect | array)) |
+    opt(filter) ~ opt(columns) ~ opt(valuesSelect | array)) |
     ((qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) <~ "=") ~ array)) ^^ {
       case t ~ a ~ f ~ c ~ v =>
         Update(t, a orNull, f orNull, c.map(_.cols).getOrElse(Nil),
