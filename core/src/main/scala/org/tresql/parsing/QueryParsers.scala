@@ -172,6 +172,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       (if (!cols.isEmpty) cols.map(_.tresql).mkString("{", ",", "}") else "") +
       (if (vals != null) any2tresql(vals) else "")
   }
+  case class ValuesFromSelect(select: Exp, alias: Option[String]) extends Exp {
+    def tresql = s"from ${select.tresql} ${alias.mkString}"
+  }
   case class Delete(table: Ident, alias: String, filter: Arr) extends DMLExp {
     override def cols = null
     override def vals = null
@@ -413,7 +416,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def values: MemParser[Values] = rep1sep(array, ",") ^^ Values named "values"
   def valuesSelect: MemParser[Exp] = queryWithCols ~ rep(
     ("++" | "+" | "-" | "&&") ~ queryWithCols) ^^ binOp named "values-select"
-  //def updateFromDmlSelect: MemParser[Exp] = "from" ~> expr ~ ident named "update-from-dml-select"
+  def valuesFromSelect: MemParser[Exp] = "from" ~> expr ~ opt(ident) ^^ {
+    case s ~ i => ValuesFromSelect(s, i)
+  } named "values-from-select"
 
   def insert: MemParser[Insert] = (("+" ~> qualifiedIdent ~ opt(ident) ~ opt(columns) ~
     opt(valuesSelect | repsep(array, ","))) |
