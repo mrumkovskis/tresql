@@ -412,7 +412,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
 
   def values: MemParser[Values] = rep1sep(array, ",") ^^ Values named "values"
   def valuesSelect: MemParser[Exp] = queryWithCols ~ rep(
-    ("++" | "+" | "-" | "&&") ~ queryWithCols) ^^ binOp named "dml-select"
+    ("++" | "+" | "-" | "&&") ~ queryWithCols) ^^ binOp named "values-select"
   //def updateFromDmlSelect: MemParser[Exp] = "from" ~> expr ~ ident named "update-from-dml-select"
 
   def insert: MemParser[Insert] = (("+" ~> qualifiedIdent ~ opt(ident) ~ opt(columns) ~
