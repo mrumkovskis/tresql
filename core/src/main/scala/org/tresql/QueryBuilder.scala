@@ -1156,7 +1156,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case Ord(cols) => Order(cols map (c=> (buildInternal(c._1, parseCtx),
             buildInternal(c._2, parseCtx), buildInternal(c._3, parseCtx))))
         case All => AllExpr()
-        case ValuesFromSelect(sel, alias) => ValuesFromSelectExpr(buildInternal(sel, parseCtx), alias)
+        case ValuesFromSelect(sel, alias) => ValuesFromSelectExpr(buildInternal(sel, FROM_CTX), alias)
         case Braces(expr) =>
           val e = buildInternal(expr, parseCtx)
           if (e == null) null else BracesExpr(e)

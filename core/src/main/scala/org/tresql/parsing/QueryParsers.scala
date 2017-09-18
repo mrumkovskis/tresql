@@ -173,7 +173,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       (if (vals != null) any2tresql(vals) else "")
   }
   case class ValuesFromSelect(select: Exp, alias: Option[String]) extends Exp {
-    def tresql = s"from ${select.tresql} ${alias.mkString}"
+    def tresql = select.tresql + alias.map(" " + _).mkString
   }
   case class Delete(table: Ident, alias: String, filter: Arr) extends DMLExp {
     override def cols = null
@@ -416,11 +416,6 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def values: MemParser[Values] = rep1sep(array, ",") ^^ Values named "values"
   def valuesSelect: MemParser[Exp] = queryWithCols ~ rep(
     ("++" | "+" | "-" | "&&") ~ queryWithCols) ^^ binOp named "values-select"
-  def valuesFromSelect: MemParser[Exp] = "<-" ~> expr ^^ {
-    case o @ Obj(_, alias, _, _, _) =>
-      ValuesFromSelect(if (alias != null) o.copy(alias = null) else o, Option(alias))
-    case s => ValuesFromSelect(s, None)
-  } named "values-from-select"
 
   def insert: MemParser[Insert] = (("+" ~> qualifiedIdent ~ opt(ident) ~ opt(columns) ~
     opt(valuesSelect | repsep(array, ","))) |
@@ -432,17 +427,32 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
         Insert(t, a.orNull, c.map(_.cols).getOrElse(Nil), v)
       case x => sys.error(s"Unexpected insert parse result: $x")
     } named "insert"
-  def update: MemParser[Update] = (("=" ~> qualifiedIdent ~ opt(ident) ~
-    opt(filter) ~ opt(columns) ~ opt(valuesSelect | array | valuesFromSelect)) |
-    ((qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) <~ "=") ~ array)) ^^ {
-      case t ~ a ~ f ~ c ~ v =>
-        Update(t, a orNull, f orNull, c.map(_.cols).getOrElse(Nil),
-          v match {
-            case a: Arr => a
-            case Some(vals: Exp @unchecked) => vals
-            case None => null
-          })
-    } named "update"
+  def update: MemParser[Update] = (("=" ~> objs ~
+    opt(filter) ~ opt(columns) ~ opt(valuesSelect | array)) |
+    ((qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) <~ "=") ~ array)) ^? ({
+      case List(Obj(t @ Ident(_), a, _, _, _)) ~ f ~ c ~ v =>
+        Update(t, a, f orNull, c.map(_.cols).getOrElse(Nil), v match {
+          case a: Arr => a
+          case Some(vals: Exp @unchecked) => vals
+          case None => null
+        })
+      case List(Obj(t @ Ident(_), a, _, _, _), s: Obj) ~ f ~ c ~ _ =>
+        //TODO provide where (filter) clause
+        Update(t, a, f orNull, c.map(_.cols).getOrElse(Nil), s match {
+          case Obj(t: Ident, a, _, _, _) => ValuesFromSelect(t, Option(a))
+          case s @ Obj(Braces(st), a, _, _, _) =>
+            // eliminate enclosing Obj because we need braces expr not select ... from select ...
+            ValuesFromSelect(Braces(st), Option(a))
+          case o =>
+            ValuesFromSelect(o.copy(alias = null), Option(o.alias))
+        })
+      case (t: Ident) ~ (a: Option[String] @unchecked) ~ f ~ c ~ v => Update(
+        t, a orNull, f orNull, c.map(_.cols).getOrElse(Nil), v.asInstanceOf[Arr])
+    }, {
+      case (objs: List[Obj] @unchecked) ~ _ ~ _ ~ _ => "Update tables clause must contain max. 2 elements - " +
+        "qualifiedIdent with optional alias as table to be updated and optional from values" +
+        s"select statement. Instead encountered: ${objs.map(_.tresql).mkString}"
+    }) named "update"
   def delete: MemParser[Delete] = (("-" ~> qualifiedIdent ~ opt(ident) ~ filter) |
     (((qualifiedIdent ~ opt(ident)) <~ "-") ~ filter)) ^^ {
       case t ~ a ~ f => Delete(t, a orNull, f)
