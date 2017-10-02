@@ -26,6 +26,7 @@ lazy val commonSettings = Seq(
 )
 
 lazy val core = (project in file("core"))
+  .disablePlugins(plugins.JUnitXmlReportPlugin)
   .settings(
     name := "tresql-core",
     libraryDependencies ++= Seq(
@@ -36,12 +37,14 @@ lazy val core = (project in file("core"))
   ).settings(commonSettings: _*)
 
 lazy val macros = (project in file("macro"))
+  .disablePlugins(plugins.JUnitXmlReportPlugin)
   .dependsOn(core)
   .settings(
     name := "macro",
     excludeFilter in unmanagedSources := (if (scalaVersion.value.startsWith("2.10.")) "*.*" else "")
   )
   .settings(commonSettings: _*)
+
 val packageScopes = Seq(packageBin, packageSrc)
 
 val packageProjects = Seq(core, macros)
@@ -51,8 +54,8 @@ val packageMerges = for {
   scope <- packageScopes
 } yield mappings in(Compile, scope) := (mappings in (Compile, scope)).value ++ (mappings in (project, Compile, scope)).value
 
-
 lazy val tresql = (project in file("."))
+  .disablePlugins(plugins.JUnitXmlReportPlugin)
   .dependsOn(core % "test->test;compile->compile", macros)
   .aggregate(core, macros)
   .settings(
