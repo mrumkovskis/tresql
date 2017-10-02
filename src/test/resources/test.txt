@@ -540,3 +540,6 @@ dept{group_concat(dname)[deptno = 10]} --> [["ACCOUNTING"]]
 
 //cast
 dept{cast(deptno, 'integer')}#(1) --> [[10], [20], [30], [40]]
+
+//string literal apostrophe escape
+dummy {"let's go"} --> [["let's go"]]

@@ -78,7 +78,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     def defaultSQL = value match {
       case v: Int => v.toString
       case v: Number => v.toString
-      case v: String => "'" + v + "'"
+      case v: String => "'" + v.replace("'", "''") + "'"
       case v: Boolean => v.toString
       case null => "null"
       case x => String.valueOf(x)
