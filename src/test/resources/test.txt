@@ -486,6 +486,8 @@ dummy {macro_interpolator_test1((dept{count(*)}) + 0, (emp{count(*)}) + 0)} --> 
 
 //whitespace test
 emp /*comment*/[/**/ename /****/ ~~ /***/ /*another comment*/'sc%'/* comment */] //comment --> [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 4000.35, null, 20]]
+//no-break space U+00A0
+emp{ename name}#(1)@(1) --> [["ADAMS"]]
 
 //select with empty from clause
 {1, 'x', true, null} --> [[1, "x", true, null]]

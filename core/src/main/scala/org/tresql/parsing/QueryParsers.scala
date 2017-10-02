@@ -13,7 +13,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
 
   //JavaTokenParsers overrides
   //besides standart whitespace symbols consider as a whitespace also comments in form /* comment */ and //comment
-  override val whiteSpace = """(\s*+(/\*(.|\s)*?\*/)?(//.*+(\n|$))?)+"""r
+  override val whiteSpace = """([\h\v]*+(/\*(.|[\h\v])*?\*/)?(//.*+(\n|$))?)+"""r
 
   override def stringLiteral: MemParser[String] = ("""("[^"]*+")|('[^']*+')"""r) ^^ {
     case s => s.substring(1, s.length - 1)
