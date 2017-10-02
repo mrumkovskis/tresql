@@ -21,6 +21,7 @@ trait ExpTransformer { this: QueryParsers =>
       case e: IdentAll => e
       case e: Variable => e
       case Fun(n, pars, d, o, f) => Fun(n, pars map tt, d, o map tt, f map tt)
+      case Cast(e, t) => Cast(tt(e), t)
       case UnOp(o, op) => UnOp(o, tt(op))
       case BinOp(o, lop, rop) => BinOp(o, tt(lop), tt(rop))
       case TerOp(lop, op1, mop, op2, rop) => TerOp(tt(lop), op1, tt(mop), op2, tt(rop))
@@ -65,6 +66,7 @@ trait ExpTransformer { this: QueryParsers =>
       case e: Variable => e
       case Fun(n, pars, d, o, f) =>
         Fun(n, pars.map(tt(state)(_)), d, o.map(tt(state)(_)), f.map(tt(state)(_)))
+      case Cast(e, t) => Cast(tt(state)(e), t)
       case UnOp(o, op) => UnOp(o, tt(state)(op))
       case BinOp(o, lop, rop) => BinOp(o, tt(state)(lop), tt(state)(rop))
       case TerOp(lop, op1, mop, op2, rop) => TerOp(tt(state)(lop), op1, tt(state)(mop), op2, tt(state)(rop))
@@ -119,6 +121,7 @@ trait ExpTransformer { this: QueryParsers =>
         val ps = trl(state, pars)
         val os = o.map(tr(ps, _)).getOrElse(ps)
         f.map(tr(os, _)).getOrElse(os)
+      case Cast(e, _) => tr(state, e)
       case UnOp(_, operand) => tr(state, operand)
       case BinOp(_, lop, rop) => tr(tr(state, lop), rop)
       case In(lop, rop, _) => trl(tr(state, lop), rop)

@@ -75,6 +75,10 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   case class Res(rNr: Int, col: Any) extends Exp {
     def tresql = ":" + rNr + "(" + any2tresql(col) + ")"
   }
+  case class Cast(exp: Exp, typ: String) extends Exp {
+    def tresql = exp.tresql + "::" +
+      (if (simple_ident_regex.pattern.matcher(typ).matches) typ else "'" + typ + "'")
+  }
   case class UnOp(operation: String, operand: Exp) extends Exp {
     def tresql = operation + operand.tresql
   }
@@ -464,7 +468,10 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       case a ~ (b: Exp) => a.map(UnOp(_, b)).getOrElse(b)
       case x: Exp => x
     } named "unary-exp"
-  def cast: MemParser[Exp] = unaryExpr ~ rep("::" ~ unaryExpr) ^^ binOp named "cast" //postgresql style type conversion operator
+  def cast: MemParser[Exp] = unaryExpr ~ opt("::" ~> (ident | stringLiteral)) ^^ {
+    case e ~ Some(t) => Cast(e, t)
+    case e ~ None => e
+  } named "cast" //postgresql style type conversion operator
   def mulDiv: MemParser[Exp] = cast ~ rep("*" ~ cast | "/" ~ cast) ^^ binOp named "mul-div"
   def plusMinus: MemParser[Exp] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ binOp named "plus-minus"
   def comp: MemParser[Exp] = plusMinus ~ rep(comp_op ~ plusMinus) ^? (

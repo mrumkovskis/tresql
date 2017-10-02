@@ -38,6 +38,7 @@ trait Transformer { self: QueryBuilder =>
       case WithBinExpr(tables, query) =>
         WithBinExpr(tables.map(cf(_).asInstanceOf[WithTableExpr]), cf(query).asInstanceOf[BinExpr])
       case UnExpr(o, op) => UnExpr(o, cf(op))
+      case CastExpr(e, t) => CastExpr(cf(e), t)
       case u: UpdateExpr => new UpdateExpr(cf(u.table).asInstanceOf[IdentExpr], u.alias,
         u.filter map cf, u.cols map cf, cf(u.vals))
       case d: DeleteExpr => //put delete at the end since it is superclass of insert and update

@@ -171,6 +171,10 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     }
   }
 
+  case class CastExpr(exp: Expr, typ: String) extends PrimitiveExpr {
+    def defaultSQL = exp.sql + "::" + typ
+  }
+
   case class UnExpr(op: String, operand: Expr) extends BaseExpr {
     override def apply() = op match {
       case "-" => -operand().asInstanceOf[Number]
@@ -264,7 +268,6 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
           case _: BracesExpr | _: ArrExpr => rop.sql
           case _ => "(" + rop.sql + ")"
         })
-      case "::" => lop.sql + "::" + rop.sql
       case _ => error("unknown operation " + op)
     }
     override def exprType: Class[_] = if (List("&&", "++", "+", "-", "*", "/") exists (_ == op)) {
@@ -1107,6 +1110,10 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case UnOp(op, oper) =>
           val o = buildInternal(oper, parseCtx)
           if (o == null) null else UnExpr(op, o)
+        case Cast(exp, typ) => buildInternal(exp, parseCtx) match {
+          case null => null
+          case e => CastExpr(e, typ)
+        }
         case e @ BinOp(op, lop, rop) => parseCtx match {
           case ROOT_CTX if op != "=" /*do not create new query for assignment or equals operation*/=>
             buildInternal(e, QUERY_CTX)
