@@ -431,32 +431,55 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
         Insert(t, a.orNull, c.map(_.cols).getOrElse(Nil), v)
       case x => sys.error(s"Unexpected insert parse result: $x")
     } named "insert"
-  def update: MemParser[Update] = (("=" ~> objs ~
-    opt(filter) ~ opt(columns) ~ opt(valuesSelect | array)) |
-    ((qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) <~ "=") ~ array)) ^? ({
-      case List(Obj(t @ Ident(_), a, _, _, _)) ~ f ~ c ~ v =>
-        Update(t, a, f orNull, c.map(_.cols).getOrElse(Nil), v match {
-          case a: Arr => a
-          case Some(vals: Exp @unchecked) => vals
-          case None => null
-        })
-      case List(Obj(t @ Ident(_), a, _, _, _), s: Obj) ~ f ~ c ~ _ =>
-        //TODO provide where (filter) clause
-        Update(t, a, f orNull, c.map(_.cols).getOrElse(Nil), s match {
+
+  //UPDATE parsers
+  /* update table set col1 = val1, col2 = val2 where ...
+  or
+  update table set (col1, col2) = (select col1, col2 from table 2 ...) where ... */
+  private def simpleUpdate: MemParser[Update] =
+    (("=" ~> qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) ~ opt(array)) |
+      ((qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) <~ "=") ~ array)) ^^ {
+        case (t: Ident) ~ (a: Option[String] @unchecked) ~ f ~ c ~ v => Update(
+          t, a orNull, f orNull, c.map(_.cols).getOrElse(Nil), v match {
+            case a: Arr => a
+            case Some(vals: Exp @unchecked) => vals
+            case None => null
+          })
+      } named "simple-update"
+  private def updateColsSelect: MemParser[Update] =
+    "=" ~> qualifiedIdent ~ opt(ident) ~ opt(filter) ~ columns ~ valuesSelect ^^ {
+        case (t: Ident) ~ (a: Option[String] @unchecked) ~ f ~ c ~ v =>
+          Update(t, a orNull, f orNull, c.cols, v)
+      } named "update-cols-select"
+  //update table set col1 = sel_col1, col2 = sel_col2 from (select sel_col1, sel_col2 from table2 ...) values_table where ....
+  private def updateFromSelect: MemParser[Update] = "=" ~> objs ~ opt(filter) ~ opt(columns) ^? ({
+    case List(
+      Obj(t @ Ident(_), a, _, _, _), //table to be updated
+      s @ Obj(_, _, Join(false, Arr(List(join)), false), _, _) //values select with join condition to update table
+    ) ~ f ~ c =>
+      Update(t, a,
+        f.map {
+          case Arr(List(filter)) => Arr(List(BinOp("&", join, Braces(filter)))) //combine filter with values select join
+          case x => sys.error(s"Invalid update filter: ${x.tresql}")
+        }.getOrElse(Arr(List(join))),
+        c.map(_.cols).getOrElse(Nil),
+        s match {
           case Obj(t: Ident, a, _, _, _) => ValuesFromSelect(t, Option(a))
-          case s @ Obj(Braces(st), a, _, _, _) =>
+          case Obj(Braces(st), a, _, _, _) =>
             // eliminate enclosing Obj because we need braces expr not select ... from select ...
             ValuesFromSelect(Braces(st), Option(a))
-          case o =>
-            ValuesFromSelect(o.copy(alias = null), Option(o.alias))
-        })
-      case (t: Ident) ~ (a: Option[String] @unchecked) ~ f ~ c ~ v => Update(
-        t, a orNull, f orNull, c.map(_.cols).getOrElse(Nil), v.asInstanceOf[Arr])
-    }, {
-      case (objs: List[Obj] @unchecked) ~ _ ~ _ ~ _ => "Update tables clause must contain max. 2 elements - " +
-        "qualifiedIdent with optional alias as table to be updated and optional from values" +
-        s"select statement. Instead encountered: ${objs.map(_.tresql).mkString}"
-    }) named "update"
+          case x => sys.error(s"Knipis: $x") //obj can be only qualified ident or braces
+       }
+     )
+   }, {
+   case (objs: List[Obj] @unchecked) ~ _ ~ _ => "Update tables clause must contain 2 elements - " +
+     "qualifiedIdent with optional alias as table to be updated and table (select) which provides values. " +
+     "Table to be updated and values select must be joined with normal join." +
+     s"Instead encountered: ${objs.map(_.tresql).mkString}"
+  }) named "update-from-select"
+  def update: MemParser[Update] = (updateColsSelect | updateFromSelect | simpleUpdate) named "update"
+  //END UPDATE parsers
+
   def delete: MemParser[Delete] = (("-" ~> qualifiedIdent ~ opt(ident) ~ filter) |
     (((qualifiedIdent ~ opt(ident)) <~ "-") ~ filter)) ^^ {
       case t ~ a ~ f => Delete(t, a orNull, f)
