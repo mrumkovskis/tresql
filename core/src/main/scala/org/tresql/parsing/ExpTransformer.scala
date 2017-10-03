@@ -42,6 +42,7 @@ trait ExpTransformer { this: QueryParsers =>
       case Arr(els) => Arr(els map tt)
       case Filters(f) => Filters((f map tt))
       case Values(v) => Values(v map tt)
+      case ValuesFromSelect(s, a) => ValuesFromSelect(tt(s), a)
       case Braces(expr) => Braces(tt(expr))
       case null => null
       //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
@@ -103,6 +104,7 @@ trait ExpTransformer { this: QueryParsers =>
       case Arr(els) => Arr(els.map(tt(state)(_)))
       case Filters(f) => Filters(f map (tt(state)(_)))
       case Values(v) => Values(v map (tt(state)(_)))
+      case ValuesFromSelect(s, a) => ValuesFromSelect(tt(state)(s), a)
       case Braces(expr) => Braces(tt(state)(expr))
       case null => null
       //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
@@ -142,6 +144,7 @@ trait ExpTransformer { this: QueryParsers =>
       case Arr(els) => trl(state, els)
       case Filters(f) => trl(state, f)
       case Values(v) => trl(state, v)
+      case ValuesFromSelect(s, _) => tr(state, s)
       case Braces(expr) => tr(state, expr)
       //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
       case x: Exp => sys.error("Unknown expression: " + x)
