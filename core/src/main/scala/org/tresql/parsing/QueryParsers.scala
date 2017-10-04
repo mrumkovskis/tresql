@@ -463,16 +463,20 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
         }.getOrElse(Arr(List(join))),
         c.map(_.cols).getOrElse(Nil),
         s match {
-          case Obj(t: Ident, a, _, _, _) => ValuesFromSelect(t, Option(a))
-          case Obj(Braces(st), a, _, _, _) =>
+          case t @ Obj(_: Ident, a, _, _, _) =>
+            ValuesFromSelect(t.copy(alias = null, join = null), Option(a))
+          case Obj(st: Braces, a, _, _, _) if a != null =>
             // eliminate enclosing Obj because we need braces expr not select ... from select ...
-            ValuesFromSelect(Braces(st), Option(a))
-          case x => sys.error(s"Knipis: $x") //obj can be only qualified ident or braces
+            ValuesFromSelect(st, Option(a))
+          //obj can be only qualified ident or braces
+          case x => sys.error(
+            s"From select clause must be qualified ident or select in braces with alias. Instead encountered: $x")
        }
      )
    }, {
    case (objs: List[Obj] @unchecked) ~ _ ~ _ => "Update tables clause must contain 2 elements - " +
-     "qualifiedIdent with optional alias as table to be updated and table (select) which provides values. " +
+     "qualifiedIdent with optional alias as a table to be updated and table " +
+     "(or select (in this case alias is mandatory)) which provides values. " +
      "Table to be updated and values select must be joined with normal join." +
      s"Instead encountered: ${objs.map(_.tresql).mkString}"
   }) named "update-from-select"

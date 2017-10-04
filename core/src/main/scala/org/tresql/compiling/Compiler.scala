@@ -181,6 +181,16 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     }
   }
 
+  case class ValuesFromSelectDef(exp: SelectDefBase, alias: Option[String]) extends SelectDefBase {
+    override def cols = exp.cols
+    override def tables = List(TableDef(tableNames.head, Obj(TableObj(exp), null, null, null)))
+    override def tableNames = alias.map(List(_)).getOrElse(exp.tableNames)
+    override def table(table: String) = tableNames
+      .find(_ == table)
+      .map(t => table_from_selectdef(t, exp))
+    override def column(col: String) = exp.column(col)
+  }
+
   /** select definition returned from macro or db function, is used in {{{BinSelectDef}}} */
   case class FunSelectDef(
     cols: List[ColDef[_]],
@@ -426,6 +436,8 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           case d: Delete =>
             DeleteDef(List(table), Delete(table = null, alias = null, filter = filter))
         }
+      case ValuesFromSelect(sel, alias) =>
+        ValuesFromSelectDef(tr(QueryCtx, sel).asInstanceOf[SelectDefBase], alias)
       case WithTable(name, wtCols, recursive, table) =>
         val exp = builder(QueryCtx)(table) match {
           case s: SQLDefBase => s
@@ -545,11 +557,11 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         ctx
       case dml: DMLDefBase =>
         dml.tables foreach (t => namer(ctx)(t.exp.obj))
-        val nctx = ctx.copy(colScopes = dml :: ctx.colScopes)
-        dml.cols foreach (namer(nctx)(_))
+        val col_ctx = ctx.copy(colScopes = dml :: ctx.colScopes)
+        dml.cols foreach (namer(col_ctx)(_))
         dml match {
           case ins: InsertDef => namer(ctx)(ins.exp) //do not change scope for insert value clause name resolving
-          case upd_del => namer(nctx)(upd_del.exp) //change scope for update delete filter and values name resolving
+          case upd_del => namer(col_ctx)(upd_del.exp) //change scope for update delete filter and values name resolving
         }
         //return old scope
         ctx
@@ -690,6 +702,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case wsd: WithSelectDef => wsd.copy(exp = tt(wsd.exp), withTables = (wsd.withTables map tt))
       case BracesSelectDef(sdb) => BracesSelectDef(tt(sdb))
       case fsd: FunSelectDef => fsd.copy(exp = tt(fsd.exp))
+      case vfsd: ValuesFromSelectDef => vfsd.copy(exp = tt(vfsd.exp))
     }
     transform_traverse
   }
@@ -739,6 +752,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       )
       case BracesSelectDef(sdb) => BracesSelectDef(tt(state)(sdb))
       case fsd: FunSelectDef => fsd.copy(exp = tt(state)(fsd.exp))
+      case vfsd: ValuesFromSelectDef => vfsd.copy(exp = tt(state)(vfsd.exp))
     }
     transform_traverse _
   }
@@ -767,6 +781,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case wsd: WithSelectDef => tr(trl(state, wsd.withTables), wsd.exp)
       case bsd: BracesSelectDef => tr(state, bsd.exp)
       case fsd: FunSelectDef => tr(state, fsd.exp)
+      case vfsd: ValuesFromSelectDef => tr(state, vfsd.exp)
     }
     fun_traverse _
   }

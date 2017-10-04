@@ -558,7 +558,14 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     def defaultSQL = vals map (_.sql) mkString("values ", ",", "")
   }
   case class ValuesFromSelectExpr(sel: Expr, alias: Option[String]) extends PrimitiveExpr {
-    def defaultSQL = s"from ${sel.sql}${alias.map(" " + _).mkString}"
+    def defaultSQL = {
+      val exp = sel match {
+        case b: BracesExpr => b
+        case s: SelectExpr => s.tables.head //must be only one table
+        case x => x
+      }
+      s"from ${exp.sql}${alias.map(" " + _).mkString}"
+    }
   }
   class UpdateExpr(table: IdentExpr, alias: String, filter: List[Expr],
       val cols: List[Expr], val vals: Expr) extends DeleteExpr(table, alias, filter) {
