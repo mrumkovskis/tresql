@@ -406,7 +406,12 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           Obj(TableObj(dml.table), null, null, null))
         val cols =
           if (dml.cols != null) dml.cols.map {
-            case c @ Col(Obj(_: Ident, _, _, _, _), _, _) => builder(ColsCtx)(c) //insertable col
+            case c @ Col(Obj(_: Ident, _, _, _, _), _, _) => builder(ColsCtx)(c) //insertable, updatable col
+            case c @ Col(
+              BinOp("=",
+                Obj(_: Ident, _, _, _, _),
+                Obj(_: Ident, _, _, _, _)),
+              _, _) if dml.isInstanceOf[Update] => builder(ColsCtx)(c) //updatable col
             case c => builder(QueryCtx)(c) //child expression
           }.asInstanceOf[List[ColDef[_]]]
           else Nil

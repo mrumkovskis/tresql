@@ -433,9 +433,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     } named "insert"
 
   //UPDATE parsers
-  /* update table set col1 = val1, col2 = val2 where ...
-  or
-  update table set (col1, col2) = (select col1, col2 from table 2 ...) where ... */
+  // update table set col1 = val1, col2 = val2 where ...
   private def simpleUpdate: MemParser[Update] =
     (("=" ~> qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) ~ opt(array)) |
       ((qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) <~ "=") ~ array)) ^^ {
@@ -446,6 +444,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
             case None => null
           })
       } named "simple-update"
+  //update table set (col1, col2) = (select col1, col2 from table 2 ...) where ...
   private def updateColsSelect: MemParser[Update] =
     "=" ~> qualifiedIdent ~ opt(ident) ~ opt(filter) ~ columns ~ valuesSelect ^^ {
         case (t: Ident) ~ (a: Option[String] @unchecked) ~ f ~ c ~ v =>
