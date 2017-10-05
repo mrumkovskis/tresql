@@ -470,7 +470,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
             ValuesFromSelect(st, Option(a))
           //obj can be only qualified ident or braces
           case x => sys.error(
-            s"From select clause must be qualified ident or select in braces with alias. Instead encountered: $x")
+            s"From select clause must be qualified ident or select in braces with alias. Instead encountered: ${x.tresql}")
        }
      )
    }, {

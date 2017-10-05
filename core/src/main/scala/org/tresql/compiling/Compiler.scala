@@ -552,16 +552,27 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         ctx
       case wsd: WithSelectDef =>
         val nctx = ctx.copy(colScopes = wsd :: ctx.colScopes, tblScopes = wsd :: ctx.tblScopes)
-        wsd.withTables foreach (namer(nctx)(_))
+        wsd.withTables foreach namer(nctx)
         namer(nctx)(wsd.exp)
         ctx
       case dml: DMLDefBase =>
         dml.tables foreach (t => namer(ctx)(t.exp.obj))
-        val col_ctx = ctx.copy(colScopes = dml :: ctx.colScopes)
-        dml.cols foreach (namer(col_ctx)(_))
+        val this_ctx = ctx.copy(colScopes = dml :: ctx.colScopes)
         dml match {
-          case ins: InsertDef => namer(ctx)(ins.exp) //do not change scope for insert value clause name resolving
-          case upd_del => namer(col_ctx)(upd_del.exp) //change scope for update delete filter and values name resolving
+          case ins: InsertDef =>
+            dml.cols foreach namer(this_ctx)
+            namer(ctx)(ins.exp) //do not change scope for insert value clause name resolving
+          case upd: UpdateDef => upd.exp.vals match {
+            case vfsd: ValuesFromSelectDef =>
+              namer(ctx)(vfsd) //vals clause
+              val vfsd_ctx = this_ctx.copy(colScopes = vfsd :: this_ctx.colScopes)
+              upd.cols foreach namer(vfsd_ctx) //cols clause
+              namer(vfsd_ctx)(upd.exp.filter) //filter clause
+            case vals =>
+              dml.cols foreach namer(this_ctx)
+              namer(this_ctx)(upd.exp) //filters and vals check with this context
+          }
+          case del: DeleteDef => namer(this_ctx)(del.exp) //change scope for delete filter and values name resolving
         }
         //return old scope
         ctx

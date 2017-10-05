@@ -152,37 +152,48 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     Env.metadata = new metadata.JDBCMetadata with compiling.CompilerFunctionMetadata {
       override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
     }
+    import QueryCompiler._
     testTresqls("/test.txt", (tresql, _, _, nr) => {
       println(s"$nr. Compiling tresql:\n$tresql")
-      try QueryCompiler.compile(tresql)
+      try compile(tresql)
       catch {
         case e: Exception => throw new RuntimeException(s"Error compiling statement #$nr:\n$tresql", e)
       }
     })
 
     //with recursive compile with braces select def
-    QueryCompiler.compile("""t(*) {(emp[ename ~~ 'kin%']{empno}) +
+    compile("""t(*) {(emp[ename ~~ 'kin%']{empno}) +
       (t[t.empno = e.mgr]emp e{e.empno})} t#(1)""")
 
     //with recursive in column clause compile
-    QueryCompiler.compile("""dummy { (kd(nr, name) {
+    compile("""dummy { (kd(nr, name) {
       emp[ename ~~ 'kin%']{empno, ename} + emp[mgr = nr]kd{empno, ename}
     } kd {name}) val}""")
 
-    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("work/dept{*}"))
-    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("works"))
-    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("emp{aa}"))
-    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("(dummy() ++ dummy()){dummy}"))
-    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("(dummy ++ dummiz())"))
-    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("(dummiz() ++ dummy){dummy}"))
-    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("dept/emp[l = 'x']{loc l}(l)^(count(loc) > 1)#(l || 'x')"))
-    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("dept/emp{loc l}(l)^(count(l) > 1)#(l || 'x')"))
-    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("dept d{deptno dn, dname || ' ' || loc}#(~(dept[dname = dn]{deptno}))"))
-    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("dept d[d.dname in (d[1]{dname})]"))
-    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("(dummy{dummy} + dummy{dummy d}) d{d}"))
-    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("dept{group_concat(dname)#(dnamez)}"))
-    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("dept{group_concat(dname)#(dname)[dept{deptnox} < 30]}"))
-    intercept[QueryCompiler.CompilerException](QueryCompiler.compile("dept{group_concat(dname)#(dname)[deptno{deptno} < 30]}"))
+    //values from select compilation
+    compile("=dept_addr da [da.addr_nr = a.nr] address a {da.addr = a.addr}")
+    compile("=dept_addr da [da.addr_nr = address.nr] address {da.addr = address.addr}")
+    compile("=dept_addr da [da.addr_nr = a.nr] (address a {a.nr, a.addr}) a {da.addr = a.addr}")
+    compile("=dept_addr da [da.addr_nr = nr] (address a {a.nr, a.addr}) a {da.addr = a.addr}")
+
+    //values from select compilation errors
+    intercept[CompilerException](compile("=dept_addr da [da.addr_nr = a.nr] (address a {a.addr}) a {da.addr = a.addr}"))
+    intercept[CompilerException](compile("=dept_addr da [da.addr_nr = nrz] (address a {a.nr, a.addr}) a  {da.addr = a.addr}"))
+
+    intercept[CompilerException](compile("work/dept{*}"))
+    intercept[CompilerException](compile("works"))
+    intercept[CompilerException](compile("emp{aa}"))
+    intercept[CompilerException](compile("(dummy() ++ dummy()){dummy}"))
+    intercept[CompilerException](compile("(dummy ++ dummiz())"))
+    intercept[CompilerException](compile("(dummiz() ++ dummy){dummy}"))
+    intercept[CompilerException](compile("dept/emp[l = 'x']{loc l}(l)^(count(loc) > 1)#(l || 'x')"))
+    intercept[CompilerException](compile("dept/emp{loc l}(l)^(count(l) > 1)#(l || 'x')"))
+    intercept[CompilerException](compile("dept d{deptno dn, dname || ' ' || loc}#(~(dept[dname = dn]{deptno}))"))
+    intercept[CompilerException](compile("dept d[d.dname in (d[1]{dname})]"))
+    intercept[CompilerException](compile("(dummy{dummy} + dummy{dummy d}) d{d}"))
+    intercept[CompilerException](compile("dept{group_concat(dname)#(dnamez)}"))
+    intercept[CompilerException](compile("dept{group_concat(dname)#(dname)[dept{deptnox} < 30]}"))
+    intercept[CompilerException](compile("dept{group_concat(dname)#(dname)[deptno{deptno} < 30]}"))
   }
 
   if (executeCompilerMacroDependantTests) test("compiler macro") {
