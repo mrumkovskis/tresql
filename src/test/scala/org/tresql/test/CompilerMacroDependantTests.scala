@@ -914,7 +914,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       //recursive queries
       assertResult((7839, "KING", -1, null, 1))(
         tresql"""kings_descendants(nr, name, mgrnr, mgrname, level) {
-            emp [ename ~~ 'kin%']{empno, ename, -1, null: string, 1} +
+            emp [ename ~~ 'kin%']{empno, ename, -1, null, 1} +
             emp[emp.mgr = kings_descendants.nr]kings_descendants;emp/emp mgr{
               emp.empno, emp.ename, emp.mgr, mgr.ename, level + 1}
           } kings_descendants{ nr, name, mgrnr, mgrname, level}#(level, mgrnr, nr)""".map(h =>

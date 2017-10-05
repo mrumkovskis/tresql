@@ -8,7 +8,7 @@ package object macro_ {
       val params = zipped.toMap
       val expr = sc.standardInterpolator(identity, zipped.map(":" + _._1))
       b.transform(b.buildExpr(expr), {
-        case v @ b.VarExpr(name, _, _, _) =>
+        case v @ b.VarExpr(name, _, _) =>
           if (usedNames(name)) sys.error(
             s"Unable to expand macro because of reserved variable name clash: $name")
           usedNames += name

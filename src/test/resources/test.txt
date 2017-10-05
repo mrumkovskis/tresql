@@ -185,8 +185,8 @@ emp [ename ~~ ? & empno in ? & mgr = null & sal = ?]{empno, ename, job} --> 'kin
 //named variables
 dept[dname ~~ :name] --> name='acc% --> [[10, "ACCOUNTING", "NEW YORK"]]
 
-//namded variable with type
-dept[dname ~~ :name:string] --> name='acc% --> [[10, "ACCOUNTING", "NEW YORK"]]
+//namded variable
+dept[dname ~~ :name] --> name='acc% --> [[10, "ACCOUNTING", "NEW YORK"]]
 
 //mixed mode - named indexed variables
 dept[deptno = ? & dname ~~ :name] --> name='acc%;10 --> [[10, "ACCOUNTING", "NEW YORK"]]
@@ -321,10 +321,10 @@ emp[mgr = null][sal > 2000]{empno, ename, |[:1(empno) = mgr]}#(1) --> [[7839, "K
 emp[mgr = null][sal > 2000]{empno, ename, (|[:1(empno) = mgr]) emps}#(1) --> [[7839, "KING", [[7566, "JONES", [[7788, "SCOTT", []], [7902, "FORD", []]]], [7698, "BLAKE", []], [7782, "CLARK", []]]]]
 
 //optional binding
-dept[deptno = :id:long?] {deptno} #(deptno) --> [[10], [20], [30], [40]]
+dept[deptno = :id?] {deptno} #(deptno) --> [[10], [20], [30], [40]]
 dept[:id?] {deptno} #(deptno) --> id=10 --> [[10]]
 dept[:id?] {deptno} #(deptno) --> [[10], [20], [30], [40]]
-dept[:id? & dname ~~ :name? & loc ~~ :loc:string?] --> loc = 'bost% --> [[40, "OPERATIONS", "BOSTON"]]
+dept[:id? & dname ~~ :name? & loc ~~ :loc?] --> loc = 'bost% --> [[40, "OPERATIONS", "BOSTON"]]
 dept[(:id? & (dname ~~ :name? & (loc ~~ :loc?)))] --> loc = 'bost% --> [[40, "OPERATIONS", "BOSTON"]]
 dept [deptno in (emp[ename ~~ :n?]{deptno})]{deptno}#(deptno) --> [[10], [20], [30], [40]]
 dept [deptno in (emp[ename ~~ :n?]{deptno}) | deptno = 40]#(deptno) --> [[40, "OPERATIONS", "BOSTON"]]

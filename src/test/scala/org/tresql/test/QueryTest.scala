@@ -36,7 +36,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       val value = String.valueOf(const.value)
       val vars = varRegex.findAllIn(value).toList
         .map(_ substring 2)
-        .map(v => b.VarExpr(v.replace("?", ""), Nil, null, v endsWith "?"))
+        .map(v => b.VarExpr(v.replace("?", ""), Nil, v endsWith "?"))
       val sqlSnippet = varRegex.replaceAllIn(value, " ?")
       if (vars.exists(v => v.opt && !(b.env contains v.name)))
         b.SQLExpr("null", Nil)

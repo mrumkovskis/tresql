@@ -28,7 +28,7 @@ trait ExpTransformer { this: QueryParsers =>
       case In(lop, rop, not) => In(tt(lop), rop map tt, not)
       case Obj(t, a, j, o, n) => Obj(tt(t), a, tt(j), o, n)
       case Join(d, j, n) => Join(d, tt(j), n)
-      case Col(c, a, t) => Col(tt(c), a, t)
+      case Col(c, a) => Col(tt(c), a)
       case Cols(d, cols) => Cols(d, (cols map tt))
       case Grp(cols, hv) => Grp(cols map tt, tt(hv))
       case Ord(cols) => Ord(cols map (c=> (c._1, tt(c._2), c._3)))
@@ -74,7 +74,7 @@ trait ExpTransformer { this: QueryParsers =>
       case In(lop, rop, not) => In(tt(state)(lop), rop.map(tt(state)(_)), not)
       case Obj(t, a, j, o, n) => Obj(tt(state)(t), a, tt(state)(j), o, n)
       case Join(d, j, n) => Join(d, tt(state)(j), n)
-      case Col(c, a, t) => Col(tt(state)(c), a, t)
+      case Col(c, a) => Col(tt(state)(c), a)
       case Cols(d, cols) => Cols(d, cols map (tt(state)(_)))
       case Grp(cols, hv) => Grp(cols.map(tt(state)(_)), tt(state)(hv))
       case Ord(cols) => Ord(cols map (c=> (c._1, tt(state)(c._2), c._3)))
@@ -130,7 +130,7 @@ trait ExpTransformer { this: QueryParsers =>
       case TerOp(lop, op1, mop, op2, rop) => tr(tr(tr(state, lop), mop), rop)
       case Obj(t, _, j, _, _) => tr(tr(state, j), t) //call tr method in order of writing tresql statement
       case Join(_, j, _) => tr(state, j)
-      case Col(c, _, _) => tr(state, c)
+      case Col(c, _) => tr(state, c)
       case Cols(_, cols) => trl(state, cols)
       case Grp(cols, hv) => tr(trl(state, cols), hv)
       case Ord(cols) => trl(state, cols.map(_._2))
@@ -156,7 +156,7 @@ trait ExpTransformer { this: QueryParsers =>
   def variableExtractor: Traverser[List[Variable]] = {
     var bindIdx = 0
     vars => {
-      case v @ Variable("?", _, _, _) =>
+      case v @ Variable("?", _, _) =>
         bindIdx += 1
         (v copy bindIdx.toString) :: vars
       case v: Variable => v :: vars

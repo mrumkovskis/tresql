@@ -437,7 +437,7 @@ trait ORT extends Query {
       import QueryParser._
       val RESOLVER_PROP_PATTERN(name, fk, rt) = property
       table.colOption(fk).map(_.name).map { _ -> transformer {
-          case Ident(List("_")) => Variable(name + "->", Nil, null, false)
+          case Ident(List("_")) => Variable(name + "->", Nil, false)
         } (parseExp(if (rt startsWith "(" ) rt else s"($rt)")).tresql
       }.toList
     }

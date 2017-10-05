@@ -59,7 +59,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   lazy val joinsWithChildrenColExprs = for {
     tc <- this.joinsWithChildren
     c <- tc._2
-  } yield (ColExpr(IdentExpr(List(tc._1, c)), tc._1 + "_" + c + "_", null, Some(false), true))
+  } yield (ColExpr(IdentExpr(List(tc._1, c)), tc._1 + "_" + c + "_", Some(false), true))
 
   /*****************************************************************************
   ****************** methods to be implemented or overriden ********************
@@ -92,7 +92,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     def defaultSQL = name.mkString(".") + ".*"
   }
 
-  case class VarExpr(name: String, members: List[String], typ: String, opt: Boolean) extends BaseVarExpr {
+  case class VarExpr(name: String, members: List[String], opt: Boolean) extends BaseVarExpr {
     override def apply() = {
       def accessProduct(p: Product, idx: String) = Try(idx.toInt).toOption.map(i =>
           p.productElement(i - 1)).getOrElse(error(s"Variable member '$idx' should be number to access product $p"))
@@ -219,7 +219,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case "-" => if (exprType == classOf[SelectExpr]) sel(sql, cols) else lop - rop
         case "=" => lop match {
           //assign expression
-          case VarExpr(variable, _, _, _) =>
+          case VarExpr(variable, _, _) =>
             env(variable) = rop()
             env(variable)
           case x => x == rop
@@ -461,8 +461,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     override def defaultSQL = cols.withFilter(!_.separateQuery).map(_.sql).mkString(", ")
     override def toString = cols.map(_.toString).mkString("Columns(", ", ", ")")
   }
-  case class ColExpr(col: Expr, alias: String, typ: String,
-      sepQuery: Option[Boolean] = None, hidden: Boolean = false)
+  case class ColExpr(col: Expr, alias: String, sepQuery: Option[Boolean] = None, hidden: Boolean = false)
     extends PrimitiveExpr {
     val separateQuery = sepQuery.getOrElse(QueryBuilder.this.separateQueryFlag)
     def defaultSQL = col.sql + (if (alias != null) " " + alias else "")
@@ -472,7 +471,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     }
     override def toString =
       s"""${col.toString}${if (alias != null) " " + alias
-        else ""}, hidden = $hidden, separateQuery = $separateQuery, type = $typ"""
+        else ""}, hidden = $hidden, separateQuery = $separateQuery"""
   }
   case class HiddenColRefExpr(expr: Expr, resType: Class[_]) extends PrimitiveExpr {
     override def apply() = {
@@ -640,7 +639,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case Nil => None
         case expr :: tail => findSQL(expr).orElse(findSQLInSeq(tail))
       }
-    val cols = findSQL(this).getOrElse(ColsExpr(List(ColExpr(AllExpr(), null, null)), true, false, false))
+    val cols = findSQL(this).getOrElse(ColsExpr(List(ColExpr(AllExpr(), null)), true, false, false))
     override def apply() = sel(sql, cols)
     def defaultSQL = expr.filter(_ != null).map(_.sql) mkString ""
   }
@@ -726,7 +725,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         //get column clause from metadata
         case Nil => this.table(table).cols.map(c => IdentExpr(List(c.name)))
         case c => c map (buildInternal(_, COL_CTX)) filter {
-          case x @ ColExpr(IdentExpr(_), _, _, _, _) => true
+          case x @ ColExpr(IdentExpr(_), _, _, _) => true
           case e: ColExpr => registerChildUpdate(e.col, e.name); false
           case _ => sys.error("Unexpected InsertExpr type")
         }
@@ -750,8 +749,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         //get column clause from metadata
         case Nil => this.table(table).cols.map(c => IdentExpr(List(c.name)))
         case c => c map (buildInternal(_, COL_CTX)) filter {
-          case ColExpr(IdentExpr(_), _, _, _, _) => true
-          case ColExpr(BinExpr("=", _, _), _, _, _, _) => true //update from select
+          case ColExpr(IdentExpr(_), _, _, _) => true
+          case ColExpr(BinExpr("=", _, _), _, _, _) => true //update from select
           case e: ColExpr => registerChildUpdate(e.col, e.name); false
           case _ => sys.error("Unexpected UpdateExpr type")
         }
@@ -772,7 +771,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   private def patchVals(table: Ident, cols: List[Col], vals: List[Expr]) = {
     val diff = (if (cols.isEmpty) this.table(table).cols else cols).size - vals.size
     val allExprIdx = vals.indexWhere(_.isInstanceOf[AllExpr])
-    def v(i: Int) = buildInternal(Variable("?", null, null, false), VALUES_CTX)
+    def v(i: Int) = buildInternal(Variable("?", null, false), VALUES_CTX)
     if (diff > 0 || allExprIdx != -1) allExprIdx match {
       case -1 if vals.isEmpty => 1 to diff map v toList //empty value clause
       case -1 => vals //perhaps hierarchical update
@@ -901,22 +900,22 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     }
     def buildCols(cols: Cols): ColsExpr =
       if (cols == null)
-        ColsExpr(List(ColExpr(AllExpr(), null, null, Some(false))), true, false, false)
+        ColsExpr(List(ColExpr(AllExpr(), null, Some(false))), true, false, false)
       else {
         var (hasAll, hasIdentAll, hasHidden) = (false, false, false)
         val colExprs = cols.cols.map(buildInternal(_, COL_CTX) match {
-          case c @ ColExpr(_: AllExpr, _, _, _, _) =>
+          case c @ ColExpr(_: AllExpr, _, _, _) =>
             hasAll = true
             c
-          case c @ ColExpr(_: IdentAllExpr, _, _, _, _) =>
+          case c @ ColExpr(_: IdentAllExpr, _, _, _) =>
             hasIdentAll = true
             c
           case c: ColExpr => c
           case x => sys.error(s"ColExpr expected instead found: $x")
         })
         var aliases = colExprs flatMap {
-          case ColExpr(_, a, _, _, _) if a != null => List(a)
-          case ColExpr(IdentExpr(i), null, _, _, _) => List(i.last)
+          case ColExpr(_, a, _, _) if a != null => List(a)
+          case ColExpr(IdentExpr(i), null, _, _) => List(i.last)
           case _ => Nil
         } toSet
         var uid = 1
@@ -930,10 +929,10 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         }
         val colWithHiddenExprs =
           (if (colExprs.exists {
-            case ColExpr(FunExpr(n, _, false, _, _), _, _, _, _) => Env.isDefined(n)
+            case ColExpr(FunExpr(n, _, false, _, _), _, _, _) => Env.isDefined(n)
             case _ => false
           }) (colExprs flatMap { //external function found
-            case ce @ ColExpr(FunExpr(n, pars, false, _, _), a, t, _, _) if Env.isDefined(n) && !ce.separateQuery =>
+            case ce @ ColExpr(FunExpr(n, pars, false, _, _), a, _, _) if Env.isDefined(n) && !ce.separateQuery =>
               //checks if last parameter is resources
               def hasResourcesParam(pt: Array[Class[_]]) = pt
                 .lastOption
@@ -958,9 +957,9 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
                   parameterTypes.headOption.orNull).zip(pars).map(tp => HiddenColRefExpr(tp._2, tp._1))
               hasHidden = hiddenColPars.size > 0
               ColExpr(
-                ExternalFunExpr(n, hiddenColPars, m, hasResourcesParam(m.getParameterTypes)), a, t,
+                ExternalFunExpr(n, hiddenColPars, m, hasResourcesParam(m.getParameterTypes)), a,
                 Some(true)
-              ) :: hiddenColPars.map(ColExpr(_, uniqueAlias(uid), null, Some(ce.separateQuery), true))
+              ) :: hiddenColPars.map(ColExpr(_, uniqueAlias(uid), Some(ce.separateQuery), true))
             case e => List(e)
           }).groupBy(_.hidden) match { //put hidden columns at the end
             case m: Map[Boolean @unchecked, ColExpr @unchecked] => m(false) ++ m.getOrElse(true, Nil)
@@ -1153,16 +1152,16 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
           case ROOT_CTX => buildArray(a)
           case ctx => buildArray(a, ctx)
         }
-        case Variable("?", _, t, o) =>
-          this.bindIdx += 1; VarExpr(this.bindIdx.toString, Nil, t, o)
-        case Variable(n, m, t, o) =>
-          if (!env.reusableExpr && o && !(env contains n)) null else VarExpr(n, m, t, o)
+        case Variable("?", _, o) =>
+          this.bindIdx += 1; VarExpr(this.bindIdx.toString, Nil, o)
+        case Variable(n, m, o) =>
+          if (!env.reusableExpr && o && !(env contains n)) null else VarExpr(n, m, o)
         case Id(seq) => IdExpr(seq)
         case IdRef(seq) => IdRefExpr(seq)
         case Res(r, c) => ResExpr(r, c)
-        case Col(c, a, t) =>
+        case Col(c, a) =>
           separateQueryFlag = false
-          val ce = ColExpr(buildInternal(c, parseCtx), a, t)
+          val ce = ColExpr(buildInternal(c, parseCtx), a)
           separateQueryFlag = false
           ce
         case Grp(cols, having) => Group(cols map { buildInternal(_, GROUP_CTX) },

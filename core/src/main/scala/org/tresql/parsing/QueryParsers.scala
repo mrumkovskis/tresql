@@ -55,14 +55,13 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   case class Ident(ident: List[String]) extends Exp {
     def tresql = ident.mkString(".")
   }
-  case class Variable(variable: String, members: List[String], typ: String, opt: Boolean) extends Exp {
+  case class Variable(variable: String, members: List[String], opt: Boolean) extends Exp {
     def tresql = if (variable == "?") "?" else {
       ":" +
         (if (simple_ident_regex.pattern.matcher(variable).matches) variable
          else if (variable contains "'") "\"" + variable + "\""
          else "'" + variable + "'") +
         (if (members == null | members == Nil) "" else "." + (members map any2tresql mkString ".")) +
-        (if (typ == null) "" else ": " + typ) +
         (if (opt) "?" else "")
     }
   }
@@ -125,9 +124,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       obj.tresql + (if (outerJoin == "l") "?" else if (outerJoin == "i") "!" else "") +
       (if (alias != null) " " + alias else "")
   }
-  case class Col(col: Exp, alias: String, typ: String) extends Exp {
-    def tresql = any2tresql(col) + (if (typ != null) " :" + typ else "") +
-      (if (alias != null) " " + alias else "")
+  case class Col(col: Exp, alias: String) extends Exp {
+    def tresql = any2tresql(col) + (if (alias != null) " " + alias else "")
   }
   case class Cols(distinct: Boolean, cols: List[Col]) extends Exp {
     def tresql = (if (distinct) "#" else "") + cols.map(_.tresql).mkString("{", ",", "}")
@@ -224,8 +222,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def qualifiedIdentAll: MemParser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
   def variable: MemParser[Variable] = ((":" ~> ((ident | stringLiteral) ~
       rep("." ~> (ident | stringLiteral | wholeNumber)) ~ opt(":" ~> ident) ~ opt("?"))) | "?") ^^ {
-    case "?" => Variable("?", null, null,  false)
-    case (i: String) ~ (m: List[String @unchecked]) ~ (t: Option[String @unchecked]) ~ o => Variable(i, m, t orNull, o != None)
+    case "?" => Variable("?", null, false)
+    case (i: String) ~ (m: List[String @unchecked]) ~ (t: Option[String @unchecked]) ~ o => Variable(i, m, o != None)
   } named "variable"
   def id: MemParser[Id] = "#" ~> ident ^^ Id named "id"
   def idref: MemParser[IdRef] = ":#" ~> ident ^^ IdRef named "id-ref"
@@ -317,36 +315,35 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
         case x => res.zipWithIndex.map(t => if (t._2 < x && !t._1.nullable) t._1.copy(nullable = true) else t._1)
       }
   } named "objs"
-  def column: MemParser[Col] = (qualifiedIdentAll |
-    (expr ~ opt(":" ~> ident) ~ opt(stringLiteral | qualifiedIdent))) ^^ {
-      case i: IdentAll => Col(i, null, null)
-      //move object alias to column alias
-      case (o @ Obj(_, a, _, _, _)) ~ (typ: Option[String @unchecked]) ~ None => Col(o.copy(alias = null), a, typ orNull)
-      case (e: Exp @unchecked) ~ (typ: Option[String @unchecked]) ~ (a: Option[_]) => Col(e, a map {
-        case Ident(i) => i.mkString; case s => "\"" + s + "\""
-      } orNull, typ orNull)
-    } ^^ { pr =>
-      def extractAlias(expr: Exp): (String, Exp) = expr match {
-        case t: TerOp => extractAlias(t.content)
-        case o@BinOp(_, lop, rop) =>
-          val x = extractAlias(rop)
-          (x._1, o.copy(rop = x._2))
-        case o@UnOp(_, op) =>
-          val x = extractAlias(op)
-          (x._1, o.copy(operand = x._2))
-        case o@Obj(_, alias, _, null, _) if alias != null => (alias, o.copy(alias = null))
-        case o => (null, o)
+  def column: MemParser[Col] = (qualifiedIdentAll | (expr ~ opt(stringLiteral | qualifiedIdent))) ^^ {
+    case i: IdentAll => Col(i, null)
+    //move object alias to column alias
+    case (o @ Obj(_, a, _, _, _))  ~ None => Col(o.copy(alias = null), a)
+    case (e: Exp @unchecked) ~ (a: Option[_]) => Col(e, a map {
+      case Ident(i) => i.mkString; case s => "\"" + s + "\""
+    } orNull)
+  } ^^ { pr =>
+    def extractAlias(expr: Exp): (String, Exp) = expr match {
+      case t: TerOp => extractAlias(t.content)
+      case o@BinOp(_, lop, rop) =>
+        val x = extractAlias(rop)
+        (x._1, o.copy(rop = x._2))
+      case o@UnOp(_, op) =>
+        val x = extractAlias(op)
+        (x._1, o.copy(operand = x._2))
+      case o@Obj(_, alias, _, null, _) if alias != null => (alias, o.copy(alias = null))
+      case o => (null, o)
+    }
+    pr match {
+      case c @ Col(_: IdentAll | _: Obj, _) => c
+      case c @ Col(e, null) => extractAlias(e) match {
+        case (null, _) => c
+        case (a, e) =>
+          c.copy(col = e, alias = a)
       }
-      pr match {
-        case c @ Col(_: IdentAll | _: Obj, _, _) => c
-        case c @ Col(e, null, _) => extractAlias(e) match {
-          case (null, _) => c
-          case (a, e) =>
-            c.copy(col = e, alias = a)
-        }
-        case r => r
-      }
-    } named "column"
+      case r => r
+    }
+  } named "column"
   def columns: MemParser[Cols] = (opt("#") <~ "{") ~ rep1sep(column, ",") <~ "}" ^^ {
     case d ~ c => Cols(d != None, c)
   } named "columns"

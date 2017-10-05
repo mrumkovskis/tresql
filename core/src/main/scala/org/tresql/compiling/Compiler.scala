@@ -316,7 +316,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     def buildCols(cols: Cols): List[ColDef[_]] = {
       if (cols != null) (cols.cols map {
           //child dml statement in select
-          case c @ Col(_: DMLExp @unchecked, _, _) => builder(QueryCtx)(c)
+          case c @ Col(_: DMLExp @unchecked, _) => builder(QueryCtx)(c)
           case c => builder(ColsCtx)(c)
         }).asInstanceOf[List[ColDef[_]]] match {
           case l if l.exists(_.name == null) => //set names of columns
@@ -341,13 +341,13 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           case Obj(Ident(name), _, _, _, _) => name.last //use last part of qualified ident as name
           case _ => null
         }
-        ColDef(
+        ColDef[Nothing](
           alias,
           tr(ctx, c.col) match {
             case x: DMLDefBase @unchecked => ChildDef(x)
             case x => x
           },
-          if(c.typ != null) metadata.xsd_scala_type_map(c.typ) else ManifestFactory.Nothing
+          ManifestFactory.Nothing
         )
       case Obj(b: Braces, _, _, _, _) if ctx == QueryCtx =>
         builder(ctx)(b) //unwrap braces top level expression
@@ -416,12 +416,12 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           Obj(TableObj(dml.table), null, null, null))
         val cols =
           if (dml.cols != null) dml.cols.map {
-            case c @ Col(Obj(_: Ident, _, _, _, _), _, _) => builder(ColsCtx)(c) //insertable, updatable col
+            case c @ Col(Obj(_: Ident, _, _, _, _), _) => builder(ColsCtx)(c) //insertable, updatable col
             case c @ Col(
               BinOp("=",
                 Obj(_: Ident, _, _, _, _),
                 Obj(_: Ident, _, _, _, _)),
-              _, _) if dml.isInstanceOf[Update] => builder(ColsCtx)(c) //updatable col
+              _) if dml.isInstanceOf[Update] => builder(ColsCtx)(c) //updatable col
             case c => builder(QueryCtx)(c) //child expression
           }.asInstanceOf[List[ColDef[_]]]
           else Nil

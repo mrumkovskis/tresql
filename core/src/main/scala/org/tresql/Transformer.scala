@@ -11,7 +11,7 @@ trait Transformer { self: QueryBuilder =>
       case ArrExpr(e) => ArrExpr(e map cf)
       case BinExpr(o, lop, rop) => BinExpr(o, cf(lop), cf(rop))
       case BracesExpr(b) => BracesExpr(cf(b))
-      case ColExpr(col, alias, typ, sepQuery, hidden) => ColExpr(cf(col), alias, typ, sepQuery, hidden)
+      case ColExpr(col, alias, sepQuery, hidden) => ColExpr(cf(col), alias, sepQuery, hidden)
       case cols: ColsExpr => cols.copy(cols = (cols.cols map cf).asInstanceOf[List[ColExpr]])
       case ExternalFunExpr(n, p, m, hrp) => ExternalFunExpr(n, p map cf, m, hrp)
       case FunExpr(n, p, d, o, f) => FunExpr(n, p map cf, d, o map cf, f map cf)
