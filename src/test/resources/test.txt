@@ -51,10 +51,6 @@ dummy --> [[0]]
 (dummy ++ dummy){count(# dummy)} --> [[1]]
 (dummy{dummy d} + dummy{dummy}) d{d} --> [[0]]
 
-//div, default join discernement
-{(pi()) / pi()} --> [[1]]
-{(truncate(pi())) / truncate(pi())} --> [[1]]
-
 //alias
 dummy {1 int} --> [[1]]
 
@@ -366,6 +362,8 @@ emp[](emp{avg(sal) avgsal}) [sal/avgsal <= 1] {count(*)} --> [[8]]
 emp[](emp{avg(sal) avgsal}) [(sal)/(avgsal) <= 1] {count(*)} --> [[8]]
 emp[](emp{avg(sal) avgsal}) [sal/(avgsal) <= 1] {count(*)} --> [[8]]
 emp[](emp{avg(sal) avgsal}) [(sal)/avgsal <= 1] {count(*)} --> [[8]]
+{(pi()) / pi()} --> [[1]]
+{(truncate(pi())) / truncate(pi())} --> [[1]]
 
 //----UPDATE----
 emp[hiredate >= ? & hiredate <= ?]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;1000.35 --> [[2]]
