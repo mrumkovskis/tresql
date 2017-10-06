@@ -21,4 +21,6 @@ trait TestFunctionSignatures extends org.tresql.compiling.TresqlFunctionSignatur
   def dept_count(): java.lang.Integer
   def dept_desc_with_empc(d: String): String
   def vararg_with_resources(s: String*): String
+  def pi(): Double
+  def truncate(param: Any): Int
 }

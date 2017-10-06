@@ -181,7 +181,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
 
     //values from select compilation errors
     intercept[CompilerException](compile("=dept_addr da [da.addr_nr = a.nr] (address a {a.addr}) a {da.addr = a.addr}"))
-    intercept[CompilerException](compile("=dept_addr da [da.addr_nr = nrz] (address a {a.nr, a.addr}) a  {da.addr = a.addr}"))
+    intercept[CompilerException](compile("=dept_addr da [da.addr_nr = nrz] (address a {a.nr, a.addr}) a {da.addr = a.addr}"))
 
     intercept[CompilerException](compile("work/dept{*}"))
     intercept[CompilerException](compile("works"))

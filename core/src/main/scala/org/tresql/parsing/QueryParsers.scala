@@ -241,10 +241,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
      * withQuery parser must be applied before function parser
      * array parser must be applied after query parser because it matches join parser
      * of the query.
-     * variable parser must be applied after query parser since ? mark matches variable
      * insert, delete, update parsers must be applied before query parser */
-  def operand: MemParser[Exp] = (const | ALL | withQuery | function | insert | update | query |
-    variable | id | idref | result | array) named "operand"
+  def operand: MemParser[Exp] = (const | ALL | withQuery | function | insert | update | variable |
+    query | id | idref | result | array) named "operand"
   /* function(<#> <arglist> <order by>)<[filter]> */
   def function: MemParser[Fun] = (qualifiedIdent /* name */ <~ "(") ~
     opt("#") /* distinct */ ~ repsep(expr, ",") /* arglist */ ~
@@ -269,7 +268,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     } named "join"
   def filter: MemParser[Arr] = array named "filter"
   def filters: MemParser[Filters] = rep(filter) ^^ Filters named "filters"
-  def obj: MemParser[Obj] = opt(join) ~ opt("?") ~ (qualifiedIdent | braces) ~
+  private def objContent = const | function | variable | qualifiedIdent | braces
+  def obj: MemParser[Obj] = opt(join) ~ opt("?") ~ objContent ~
     opt(opt("?" | "!") ~ ident ~ opt("?" | "!")) ^^ {
     case _ ~ Some(_) ~ _ ~ Some(Some(_) ~ _ ~ _ | _ ~ _ ~ Some(_)) =>
       sys.error("Cannot be right and left join at the same time")
@@ -279,7 +279,12 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
         (leftoj orElse leftoj1).map(_ == "?").getOrElse(false))
     case join ~ rightoj ~ o ~ None => Obj(o, null, join orNull, rightoj.map(x => "r") orNull)
   } named "obj"
-  def objs: MemParser[List[Obj]] = obj ~ rep(obj ~ opt("?" | "!")) ^^ {
+  def objWithJoin: MemParser[Obj] = obj ^? ({
+    case obj if obj.join != null => obj
+  } , {
+    case obj => s"no join condition found on object: ${obj.tresql}"
+  }) named "obj-with-join"
+  def objs: MemParser[List[Obj]] = obj ~ rep(objWithJoin ~ opt("?" | "!")) ^^ {
     case o ~ l =>
       var prev: Obj = null
       val res = (o :: l.map {
@@ -365,15 +370,20 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
         }
       }
     } named "offset-limit"
-  def query: MemParser[Exp] = ((objs | NULL) ~ filters ~ opt(columns) ~ opt(group) ~ opt(order) ~
+  def query: MemParser[Exp] = ((objs | NULL) ~ filters ~ opt(columns ~ opt(group)) ~ opt(order) ~
     opt(offsetLimit) | (columns ~ filters)) ^^ {
-      case Null ~ Filters(Nil) ~ None ~ None ~ None ~ None => Null //null literal
-      case List(t) ~ Filters(Nil) ~ None ~ None ~ None ~ None => t
-      case t ~ (f: Filters) ~ (c: Option[Cols @unchecked]) ~ (g: Option[Grp @unchecked]) ~ (o: Option[Ord @unchecked]) ~
-        (l: Option[(Exp, Exp) @unchecked]) => Query(t match {
+      case Null ~ Filters(Nil) ~ None ~ None ~ None => Null //null literal
+      case List(t) ~ Filters(Nil) ~ None ~ None ~ None => t
+      case t ~ (f: Filters) ~ cgo ~ (o: Option[Ord @unchecked]) ~ (l: Option[(Exp, Exp) @unchecked]) =>
+        val cg: (Cols, Grp) = cgo match {
+          case Some((c: Cols) ~ Some(g: Grp)) => (c, g)
+          case Some((c: Cols) ~ None) => (c, null)
+          case None => (null, null)
+        }
+        Query(t match {
           case tables: List[Obj @unchecked] => tables
           case Null => List(Obj(Null, null, null, null))
-        }, f, c.orNull, g.orNull, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
+        }, f, cg._1, cg._2, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
       case (c: Cols) ~ (f: Filters) => Query(List(Obj(Null, null, null, null)), f, c,
         null, null, null, null)
     } ^^ { pr =>
