@@ -364,6 +364,7 @@ emp[](emp{avg(sal) avgsal}) [sal/(avgsal) <= 1] {count(*)} --> [[8]]
 emp[](emp{avg(sal) avgsal}) [(sal)/avgsal <= 1] {count(*)} --> [[8]]
 {(pi()) / pi()} --> [[1]]
 {(truncate(pi())) / truncate(pi())} --> [[1]]
+{(truncate(pi())) / :nr} --> nr=1 --> [[3]]
 
 //----UPDATE----
 emp[hiredate >= ? & hiredate <= ?]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;1000.35 --> [[2]]
