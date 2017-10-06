@@ -75,6 +75,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         Option(table_alias(name mkString "."))
       case TableDef(n, Obj(TableObj(s: SelectDefBase), _, _, _, _)) =>
         Option(table_from_selectdef(n, s))
+      case TableDef(_, Obj(TableObj(Null), _, _, _,_)) => Option(table_alias(null))
       case x => throw CompilerException(
         s"Unrecognized table clause: '${x.tresql}'. Try using Query(...)")
     }
@@ -235,8 +236,8 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     }
   }
   /** Table from metadata or defined in from clause or dml table of any scope in {{{scopes}}} list */
-  def table(scopes: List[Scope])(tableName: String): Option[Table] = {
-    val table = tableName.toLowerCase
+  def table(scopes: List[Scope])(tableName: String): Option[Table] = Option(tableName).flatMap { tn =>
+    val table = tn.toLowerCase
     declaredTable(scopes)(table) orElse metadata.tableOption(table)
   }
   /** Column declared in any scope in {{{scopes}}} list */

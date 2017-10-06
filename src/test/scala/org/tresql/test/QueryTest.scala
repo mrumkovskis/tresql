@@ -197,6 +197,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     intercept[CompilerException](compile("dept{group_concat(dname)#(dnamez)}"))
     intercept[CompilerException](compile("dept{group_concat(dname)#(dname)[dept{deptnox} < 30]}"))
     intercept[CompilerException](compile("dept{group_concat(dname)#(dname)[deptno{deptno} < 30]}"))
+    intercept[CompilerException](compile("{dept[10]{dnamez}}"))
   }
 
   if (executeCompilerMacroDependantTests) test("compiler macro") {
