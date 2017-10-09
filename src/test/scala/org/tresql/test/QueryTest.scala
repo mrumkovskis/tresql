@@ -56,20 +56,22 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     else
       null
 
+  val hsqlDialect: PartialFunction[Expr, String] = dialects.HSQLDialect orElse {
+    case e: QueryBuilder#SelectExpr =>
+      val b = e.builder
+      e match {
+        case s @ b.SelectExpr(List(b.Table(b.ConstExpr(null), _, _, _, _)), _, _, _, _, _, _, _, _, _) =>
+          s.copy(tables = List(s.tables.head.copy(table = b.IdentExpr(List("dummy"))))).sql
+        case _ => e.defaultSQL
+      }
+  }
+
   override def beforeAll {
     //initialize environment
     Class.forName("org.hsqldb.jdbc.JDBCDriver")
     val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
     Env.conn = conn
-    Env.dialect = dialects.HSQLDialect orElse {
-      case e: QueryBuilder#SelectExpr =>
-        val b = e.builder
-        e match {
-          case s @ b.SelectExpr(List(b.Table(b.ConstExpr(null), _, _, _, _)), _, _, _, _, _, _, _, _, _) =>
-            s.copy(tables = List(s.tables.head.copy(table = b.IdentExpr(List("dummy"))))).sql
-          case _ => e.defaultSQL
-        }
-    }
+    Env.dialect = hsqlDialect
     Env.idExpr = s => "nextval('seq')"
     Env.functions = new TestFunctions
     Env.macros = Macros
@@ -216,6 +218,9 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where da.addr_nr = a.nr and (da.addr_nr = 1 and a.addr = 'a')")
     assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] addr a [da.addr_nr = 1 & a.addr = 'a'] {da.addr = a.addr}").sql)(
       "update dept_addr da set da.addr = a.addr from addr a where da.addr_nr = a.nr and (da.addr_nr = 1 and a.addr = 'a')")
+
+    //restore hsql dialect
+    Env.dialect = hsqlDialect
   }
 
   test("cache") {
