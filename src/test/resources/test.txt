@@ -517,6 +517,8 @@ t(# deptno) {emp[ename ~~'kin%']{deptno}} t[t.deptno = d.deptno]dept d {d.deptno
 kd(nr, name) {emp[ename ~~ 'kin%']{empno, ename} + emp[mgr = nr]kd{empno, ename}} kd{nr, name}#(1) --> [[7369, "SMITH"], [7499, "ALLEN"], [7521, "WARD"], [7566, "JONES"], [7654, "MARTIN"], [7698, "BLAKE"], [7782, "CLARK"], [7788, "SCOTT"], [7839, "KING"], [7844, "TURNER"], [7876, "ADAMS"], [7900, "JAMES"], [7902, "FORD"], [7934, "MILLER"], [9999, "MĀRTIŅŠ ŽVŪKŠĶIS"]]
 //simple with multiple times
 d(# name) {dept{dname}}, e(# name) {emp{ename}} (d + e)#(1) --> [["ACCOUNTING"], ["ADAMS"], ["ALLEN"], ["BLAKE"], ["CLARK"], ["FORD"], ["JAMES"], ["JONES"], ["KING"], ["MARTIN"], ["MILLER"], ["MĀRTIŅŠ ŽVŪKŠĶIS"], ["OPERATIONS"], ["RESEARCH"], ["SALES"], ["SCOTT"], ["SMITH"], ["TURNER"], ["WARD"]]
+a(# x) {dummy{dummy}}, b(# y) {a{x}} b{y} --> [[0]]
+//a(# *) {dummy}, b(# *) {a} b --> []
 
 //test for compiler - where clause select references parent select column
 dept[(dept_addr[deptnr = deptno]{deptnr})]{dname}#(1) --> []

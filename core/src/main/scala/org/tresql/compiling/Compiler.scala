@@ -646,7 +646,9 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         val cols = wtd.cols zip exp.cols map { case (col, ecol) => col.copy(typ = ecol.typ) }
         wtd.copy(cols = cols, exp = exp)
       case wsd: WithSelectDef =>
-        val wt = (wsd.withTables map(type_resolver(ctx)(_))).asInstanceOf[List[WithTableDef]]
+        //TODO with table scope consists of all previous with table definitions
+        val nctx = wsd :: ctx
+        val wt = (wsd.withTables map(type_resolver(nctx)(_))).asInstanceOf[List[WithTableDef]]
         val nwsd = wsd.copy(withTables = wt)
         //'with' expression - wsd.exp must be resolved after 'as' clause - wsd.withTables
         nwsd.copy(exp = type_resolver(nwsd :: ctx)(wsd.exp).asInstanceOf[SelectDefBase])
