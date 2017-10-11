@@ -173,13 +173,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
   ) extends SelectDefBase {
     def cols = exp.cols
     def tables = exp.tables
-    override def table(table: String) = {
-      def t(wts: List[WithTableDef]): Option[Table] = wts match {
-        case Nil => None
-        case wt :: tail => wt.table(table) orElse t(tail)
-      }
-      t(withTables)
-    }
+    override def table(table: String) = exp.table(table)
   }
 
   case class ValuesFromSelectDef(exp: SelectDefBase, alias: Option[String]) extends SelectDefBase {
@@ -645,7 +639,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         if (s.cols.size > 1)
           throw CompilerException(s"Select must contain only one column, instead:${
             s.cols.map(_.tresql).mkString(", ")}")
-        else type_from_exp(ctx.copy(scopes = s :: ctx.scopes), s.cols.head)
+        else type_from_const(s.cols.head.typ)
       case f: FunDef[_] =>
         if (f.typ != null && f.typ != Manifest.Nothing) type_from_const(f.typ)
         else if (f.procedure.returnTypeParIndex == -1) type_from_const(Manifest.Any)
