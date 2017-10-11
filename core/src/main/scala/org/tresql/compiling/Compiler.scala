@@ -567,9 +567,11 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         namer(ctx.copy(colScopes = wtd :: ctx.colScopes, tblScopes = wtd :: ctx.tblScopes))(wtd.exp)
         ctx
       case wsd: WithSelectDef =>
-        val nctx = ctx.copy(colScopes = wsd :: ctx.colScopes, tblScopes = wsd :: ctx.tblScopes)
-        wsd.withTables foreach namer(nctx)
-        namer(nctx)(wsd.exp)
+        val wt_ctx = wsd.withTables.foldLeft(ctx) { (ctx, table) =>
+          namer(ctx)(table)
+          ctx.copy(colScopes = table :: ctx.colScopes, tblScopes = table :: ctx.tblScopes)
+        }
+        namer(wt_ctx)(wsd.exp)
         ctx
       case dml: DMLDefBase =>
         dml.tables foreach (t => namer(ctx)(t.exp.obj))
@@ -661,12 +663,13 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         val cols = wtd.cols zip exp.cols map { case (col, ecol) => col.copy(typ = ecol.typ) }
         wtd.copy(cols = cols, exp = exp)
       case wsd: WithSelectDef =>
-        //TODO with table scope consists of all previous with table definitions
-        val nctx = wsd :: ctx
-        val wt = (wsd.withTables map(type_resolver(nctx)(_))).asInstanceOf[List[WithTableDef]]
-        val nwsd = wsd.copy(withTables = wt)
-        //'with' expression - wsd.exp must be resolved after 'as' clause - wsd.withTables
-        nwsd.copy(exp = type_resolver(nwsd :: ctx)(wsd.exp).asInstanceOf[SelectDefBase])
+        val wtables = wsd.withTables.foldLeft(List[WithTableDef]()) { (tables, table) =>
+          type_resolver(tables ++ ctx)(table).asInstanceOf[WithTableDef] :: tables
+        }
+        wsd.copy(
+          exp = type_resolver(wtables ++ ctx)(wsd.exp).asInstanceOf[SelectDefBase],
+          withTables = wtables.reverse
+        )
       case dml: DMLDefBase if ctx.isEmpty || ctx.head != dml => type_resolver(dml :: ctx)(dml)
       case ColDef(n, ChildDef(ch), t) => ColDef(n, ChildDef(type_resolver(ctx)(ch)), t)
       case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
