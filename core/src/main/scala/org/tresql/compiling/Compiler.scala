@@ -444,7 +444,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           case s: SQLDefBase => s
           case x => throw CompilerException(s"Table in with clause must be query. Instead found: ${x.tresql}")
         }
-        val tables: List[TableDef] = List(TableDef(name, Obj(Null, null, null, null, false)))
+        val tables: List[TableDef] = List(TableDef(name, Obj(TableObj(Ident(List(name))), null, null, null, false)))
         val cols: List[ColDef[_]] =
           if (wtCols.isEmpty) exp match {
             case sd: SelectDefBase => sd.cols
@@ -473,7 +473,6 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
 
     lazy val resolver: TransformerWithState[List[Scope]] = transformerWithState(scopes => {
       case sd: SelectDef =>
-
         val nsd = sd.copy(tables = {
           sd.tables.map {
             case td @ TableDef(_, Obj(TableObj(_: SelectDefBase), _, _, _, _)) =>
@@ -484,12 +483,11 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         val nscopes = nsd :: scopes
         nsd.copy (cols = {
           nsd.cols.flatMap {
-            case ColDef(_, All, _) =>
-              nsd.tables.flatMap { td =>
-                table(nscopes)(td.name).map(_.cols.map { c =>
-                  ColDef(c.name, createCol(s"${td.name}.${c.name}").col, c.scalaType)
-                }).getOrElse(throw CompilerException(s"Cannot find table: ${td.tresql}"))
-              }
+            case ColDef(_, All, _) => nsd.tables.flatMap { td =>
+              table(nscopes)(td.name).map(_.cols.map { c =>
+                ColDef(c.name, createCol(s"${td.name}.${c.name}").col, c.scalaType)
+              }).getOrElse(throw CompilerException(s"Cannot find table: ${td.tresql}\nScopes:\n$nscopes"))
+            }
             case ColDef(_, IdentAll(Ident(ident)), _) =>
               val alias = ident mkString "."
               table(nscopes)(alias)
@@ -500,8 +498,25 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
             case cd => List(cd)
           }
         }, exp = resolver(nscopes)(nsd.exp).asInstanceOf[Query])
-      case wsd: WithSelectDef if scopes.isEmpty || scopes.head != wsd => resolver(wsd :: scopes)(wsd)
-      case wtd: WithTableDef if scopes.isEmpty || scopes.head != wtd => resolver(wtd :: scopes)(wtd)
+      case wsd: WithSelectDef =>
+        val wtables = wsd.withTables.foldLeft(List[WithTableDef]()) { (tables, table) =>
+            val withScopes = tables ++ scopes
+            (resolver(if (table.recursive) table :: withScopes else withScopes)(table) match {
+              case wtd @ WithTableDef(List(ColDef(_, All, _)), _, _, _) =>
+                wtd.copy(cols = wtd.exp.cols.map(col =>
+                  ColDef(
+                    col.name,
+                    Obj(Ident(List(wtd.tables.head.name, col.name)), null, null, null, false),
+                    col.typ
+                  )))
+              case x: WithTableDef => x
+              case x => sys.error(s"Compiler error, expected WithTableDef, encountered: $x")
+            }) :: tables
+          }
+        wsd.copy(
+          exp = resolver(wtables ++ scopes)(wsd.exp).asInstanceOf[SelectDefBase],
+          withTables = wtables.reverse
+        )
     })
     resolver(Nil)(exp)
   }

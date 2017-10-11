@@ -519,7 +519,8 @@ kd(nr, name) {emp[ename ~~ 'kin%']{empno, ename} + emp[mgr = nr]kd{empno, ename}
 d(# name) {dept{dname}}, e(# name) {emp{ename}} (d + e)#(1) --> [["ACCOUNTING"], ["ADAMS"], ["ALLEN"], ["BLAKE"], ["CLARK"], ["FORD"], ["JAMES"], ["JONES"], ["KING"], ["MARTIN"], ["MILLER"], ["MĀRTIŅŠ ŽVŪKŠĶIS"], ["OPERATIONS"], ["RESEARCH"], ["SALES"], ["SCOTT"], ["SMITH"], ["TURNER"], ["WARD"]]
 a(# x) {dummy{dummy}}, b(# y) {a{x}} b{y} --> [[0]]
 a(# x) {dummy{dummy}}, b(# x) {a{x}}, c(# y) {a{x} ++ b{x}} c{y} --> [[0], [0]]
-//a(# *) {dummy}, b(# *) {a} b --> []
+a(# *) {dummy} a --> [[0]]
+a(# *) {dummy}, b(# *) {a} b --> [[0]]
 
 //test for compiler - where clause select references parent select column
 dept[(dept_addr[deptnr = deptno]{deptnr})]{dname}#(1) --> []
