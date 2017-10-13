@@ -262,8 +262,8 @@ trait Query extends QueryBuilder with TypedQuery {
         case cl: java.sql.Clob => st.setClob(idx, cl)
         case ab: Array[Byte] => st.setBytes(idx, ab)
         //array binding
-        case i: scala.collection.Traversable[_] => i foreach (bindVar(_)); idx -= 1
-        case a: Array[_] => a foreach (bindVar(_)); idx -= 1
+        case i: scala.collection.Traversable[_] => i foreach bindVar; idx -= 1
+        case a: Array[_] => a foreach bindVar; idx -= 1
         case p@InOutPar(v) => {
           bindVar(v)
           idx -= 1

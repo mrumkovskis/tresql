@@ -448,7 +448,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           }
         WithTableDef(cols, tables, recursive, exp)
       case With(tables, query) =>
-        val withTables = (tables map(builder(ctx)(_))).asInstanceOf[List[WithTableDef]]
+        val withTables = (tables map builder(ctx)).asInstanceOf[List[WithTableDef]]
         val exp = builder(QueryCtx)(query) match {
           case s: SelectDefBase => s
           case x => throw CompilerException(s"with clause must be select query. Instead found: ${x.tresql}")
@@ -545,7 +545,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           }
           prevTable = t
         }
-        sd.cols foreach (namer(nctx)(_))
+        sd.cols foreach namer(nctx)
         namer(nctx)(sd.exp.filter)
         val grpOrdCtx = nctx.copy(isGrpOrd = true)
         Option(sd.exp.group).foreach { g =>
@@ -648,9 +648,9 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     lazy val type_resolver: TransformerWithState[List[Scope]] = transformerWithState(ctx => {
       case s: SelectDef =>
         //resolve column types for potential from clause select definitions
-        val nsd = s.copy(tables = (s.tables map(type_resolver(s :: ctx)(_))).asInstanceOf[List[TableDef]])
+        val nsd = s.copy(tables = (s.tables map type_resolver(s :: ctx)).asInstanceOf[List[TableDef]])
         //resolve types for column defs
-        nsd.copy(cols = (nsd.cols map(type_resolver(nsd :: ctx)(_))).asInstanceOf[List[ColDef[_]]])
+        nsd.copy(cols = (nsd.cols map type_resolver(nsd :: ctx)).asInstanceOf[List[ColDef[_]]])
       case wtd: WithTableDef =>
         val nctx = if (wtd.recursive) wtd :: ctx else ctx
         val exp = type_resolver(nctx)(wtd.exp).asInstanceOf[SQLDefBase]
@@ -746,8 +746,8 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case to: TableObj => to.copy(obj = tt(state)(to.obj))
       case ta: TableAlias => ta.copy(obj = tt(state)(ta.obj))
       case sd: SelectDef =>
-        val t = sd.tables map(tt(state)(_))
-        val c = sd.cols map(tt(state)(_))
+        val t = sd.tables map tt(state)
+        val c = sd.cols map tt(state)
         val q = tt(state)(sd.exp)
         sd.copy(cols = c, tables = t, exp = q)
       case bd: BinSelectDef => bd.copy(
@@ -755,26 +755,26 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         rightOperand = tt(state)(bd.rightOperand)
       )
       case id: InsertDef =>
-        val t = id.tables map(tt(state)(_))
-        val c = id.cols map(tt(state)(_))
+        val t = id.tables map tt(state)
+        val c = id.cols map tt(state)
         val i = tt(state)(id.exp)
         InsertDef(c, t, i)
       case ud: UpdateDef =>
-        val t = ud.tables map(tt(state)(_))
-        val c = ud.cols map(tt(state)(_))
+        val t = ud.tables map tt(state)
+        val c = ud.cols map tt(state)
         val u = tt(state)(ud.exp)
         UpdateDef(c, t, u)
-      case dd: DeleteDef => DeleteDef(dd.tables map(tt(state)(_)), tt(state)(dd.exp))
-      case ad: ArrayDef => ad.copy(cols = ad.cols map(tt(state)(_)))
+      case dd: DeleteDef => DeleteDef(dd.tables map tt(state), tt(state)(dd.exp))
+      case ad: ArrayDef => ad.copy(cols = ad.cols map tt(state))
       case rd: RecursiveDef => rd.copy(exp = tt(state)(rd.exp))
       case wtd: WithTableDef => wtd.copy(
-        cols = wtd.cols map(tt(state)(_)),
-        tables = wtd.tables map(tt(state)(_)),
+        cols = wtd.cols map tt(state),
+        tables = wtd.tables map tt(state),
         exp = tt(state)(wtd.exp)
       )
       case wsd: WithSelectDef => wsd.copy(
         exp = tt(state)(wsd.exp),
-        withTables = wsd.withTables map(tt(state)(_))
+        withTables = wsd.withTables map tt(state)
       )
       case BracesSelectDef(sdb) => BracesSelectDef(tt(state)(sdb))
       case fsd: FunSelectDef => fsd.copy(exp = tt(state)(fsd.exp))

@@ -66,21 +66,21 @@ trait ExpTransformer { this: QueryParsers =>
       case e: IdentAll => e
       case e: Variable => e
       case Fun(n, pars, d, o, f) =>
-        Fun(n, pars.map(tt(state)(_)), d, o.map(tt(state)(_)), f.map(tt(state)(_)))
+        Fun(n, pars map tt(state), d, o map tt(state), f map tt(state))
       case Cast(e, t) => Cast(tt(state)(e), t)
       case UnOp(o, op) => UnOp(o, tt(state)(op))
       case BinOp(o, lop, rop) => BinOp(o, tt(state)(lop), tt(state)(rop))
       case TerOp(lop, op1, mop, op2, rop) => TerOp(tt(state)(lop), op1, tt(state)(mop), op2, tt(state)(rop))
-      case In(lop, rop, not) => In(tt(state)(lop), rop.map(tt(state)(_)), not)
+      case In(lop, rop, not) => In(tt(state)(lop), rop map tt(state), not)
       case Obj(t, a, j, o, n) => Obj(tt(state)(t), a, tt(state)(j), o, n)
       case Join(d, j, n) => Join(d, tt(state)(j), n)
       case Col(c, a) => Col(tt(state)(c), a)
-      case Cols(d, cols) => Cols(d, cols map (tt(state)(_)))
-      case Grp(cols, hv) => Grp(cols.map(tt(state)(_)), tt(state)(hv))
+      case Cols(d, cols) => Cols(d, cols map tt(state))
+      case Grp(cols, hv) => Grp(cols map tt(state), tt(state)(hv))
       case Ord(cols) => Ord(cols map (c=> (c._1, tt(state)(c._2), c._3)))
       case Query(objs, filters, cols, gr, ord, off, lim) =>
         Query(
-          objs map (tt(state)(_)),
+          objs map tt(state),
           tt(state)(filters),
           tt(state)(cols),
           tt(state)(gr),
@@ -101,9 +101,9 @@ trait ExpTransformer { this: QueryParsers =>
           tt(state)(vals)
         )
       case Delete(table, alias, filter) => Delete(tt(state)(table), alias, tt(state)(filter))
-      case Arr(els) => Arr(els.map(tt(state)(_)))
-      case Filters(f) => Filters(f map (tt(state)(_)))
-      case Values(v) => Values(v map (tt(state)(_)))
+      case Arr(els) => Arr(els map tt(state))
+      case Filters(f) => Filters(f map tt(state))
+      case Values(v) => Values(v map tt(state))
       case ValuesFromSelect(s, a) => ValuesFromSelect(tt(state)(s), a)
       case Braces(expr) => Braces(tt(state)(expr))
       case null => null
