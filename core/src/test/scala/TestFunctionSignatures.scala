@@ -7,6 +7,8 @@ trait TestFunctionSignatures extends org.tresql.compiling.TresqlFunctionSignatur
   def mkString(sel: SelectDefBase, colSep: String, rowSep: String)
   def concat(string: String*): String
   def macro_interpolator_test1(exp1: Any, exp2: Any): Any
+  def macro_interpolator_test2(exp1: Any, exp2: Any): Any
+  def macro_interpolator_test3(exp1: Any, exp2: Any): Any
   def in_twice(expr: Any, in: Any): Boolean
   //test macros function
   def null_macros: Null
