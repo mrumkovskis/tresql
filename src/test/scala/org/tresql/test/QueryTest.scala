@@ -55,7 +55,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
   val executeCompilerMacroDependantTests = scala.util.Properties.versionNumberString.startsWith("2.12.")
   val compilerMacroDependantTests =
     if (executeCompilerMacroDependantTests)
-      Class.forName("org.tresql.test.CompilerMacroDependantTests").newInstance
+      Class.forName("org.tresql.test.CompilerMacroDependantTests").getDeclaredConstructor().newInstance()
         .asInstanceOf[CompilerMacroDependantTestsApi]
     else
       null
@@ -233,7 +233,8 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
   }
 
   test("Test Java API") {
-    Class.forName("org.tresql.test.TresqlJavaApiTest").newInstance.asInstanceOf[Runnable].run
+    Class.forName("org.tresql.test.TresqlJavaApiTest").getDeclaredConstructor().newInstance()
+      .asInstanceOf[Runnable].run
   }
 
   def testTresqls(resource: String, testFunction: (String, String, String, Int) => Unit) = {

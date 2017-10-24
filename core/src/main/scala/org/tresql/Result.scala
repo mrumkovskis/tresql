@@ -205,21 +205,21 @@ trait SelectResult[T <: RowLike] extends Result[T] {
   override def jInt(columnIndex: Int): java.lang.Integer = {
     if (cols(columnIndex).idx != -1) {
       val x = rs.getInt(cols(columnIndex).idx)
-      if (rs.wasNull()) null else new java.lang.Integer(x)
+      if (rs.wasNull()) null else java.lang.Integer.valueOf(x)
     } else children(columnIndex).asInstanceOf[java.lang.Integer]
   }
   override def jInt(columnLabel: String): java.lang.Integer = jInt(colMap(columnLabel))
   override def jLong(columnIndex: Int): java.lang.Long = {
     if (cols(columnIndex).idx != -1) {
       val x = rs.getLong(cols(columnIndex).idx)
-      if (rs.wasNull()) null else new java.lang.Long(x)
+      if (rs.wasNull()) null else java.lang.Long.valueOf(x)
     } else children(columnIndex).asInstanceOf[java.lang.Long]
   }
   override def jLong(columnLabel: String): java.lang.Long = jLong(colMap(columnLabel))
   override def jDouble(columnIndex: Int): java.lang.Double = {
     if (cols(columnIndex).idx != -1) {
       val x = rs.getDouble(cols(columnIndex).idx)
-      if (rs.wasNull()) null else new java.lang.Double(x)
+      if (rs.wasNull()) null else java.lang.Double.valueOf(x)
     } else children(columnIndex).asInstanceOf[java.lang.Double]
   }
   override def jDouble(columnLabel: String): java.lang.Double = jDouble(colMap(columnLabel))
@@ -231,7 +231,7 @@ trait SelectResult[T <: RowLike] extends Result[T] {
   override def jBoolean(columnIndex: Int): java.lang.Boolean = {
     if (cols(columnIndex).idx != -1) {
       val x = rs.getBoolean(cols(columnIndex).idx)
-      if (rs.wasNull()) null else new java.lang.Boolean(x)
+      if (rs.wasNull()) null else java.lang.Boolean.valueOf(x)
     } else children(columnIndex).asInstanceOf[java.lang.Boolean]
   }
   override def jBoolean(columnLabel: String): java.lang.Boolean = jBoolean(colMap(columnLabel))
