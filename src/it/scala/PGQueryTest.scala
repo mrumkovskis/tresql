@@ -72,14 +72,13 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAll {
 
   override def beforeAll {
     //initialize environment
-    //Class.forName("org.hsqldb.jdbc.JDBCDriver")
+
     Class.forName("org.postgresql.Driver")
-    //val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
-    val conn = DriverManager.getConnection("jdbc:postgresql://127.0.0.1/postgres","postgres","$~HE8}1DAE978GrwgfCLy{B{jPq;np")
+    val conn = DriverManager.getConnection("jdbc:postgresql://127.0.0.1/postgres","postgres","")
 
     Env.conn = conn
     Env.dialect = dialects.PostgresqlDialect
-    // TODO Env.idExpr = s => "nextval('seq')"
+    Env.idExpr = s => "nextval('seq')"
     Env.functions = new TestFunctions
     Env.macros = Macros
     Env.cache = new SimpleCache(-1)
