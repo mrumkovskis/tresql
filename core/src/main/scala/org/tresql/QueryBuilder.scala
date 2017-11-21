@@ -39,7 +39,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   private[tresql] var childrenCount = 0
 
   //set by buildInternal method when building Query for potential use in RecursiveExpr
-  private[tresql] var recursiveQueryExp: QueryParser.Query = null
+  private[tresql] var recursiveQueryExp: QueryParser.Query = _
 
   //used for non flat updates, i.e. hierarhical object.
   private val _childUpdatesBuildTime = scala.collection.mutable.ListBuffer[(Expr, String)]()
@@ -59,7 +59,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   lazy val joinsWithChildrenColExprs = for {
     tc <- this.joinsWithChildren
     c <- tc._2
-  } yield (ColExpr(IdentExpr(List(tc._1, c)), tc._1 + "_" + c + "_", Some(false), true))
+  } yield ColExpr(IdentExpr(List(tc._1, c)), tc._1 + "_" + c + "_", Some(false), hidden = true)
 
   /*****************************************************************************
   ****************** methods to be implemented or overriden ********************
@@ -104,10 +104,10 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     }
     override def defaultSQL = {
       if (!binded) QueryBuilder.this._bindVariables += this
-      val s = (if (!env.reusableExpr && (env contains name) && (members == null | members == Nil)) {
+      val s = if (!env.reusableExpr && (env contains name) && (members == null | members == Nil)) {
         apply() match {
           case l: scala.collection.Traversable[_] =>
-            if (!l.isEmpty) ("?," * (l size) dropRight 1) + s"/*$name*/" else {
+            if (l.nonEmpty) ("?," * (l size) dropRight 1) + s"/*$name*/" else {
               //return null for empty collection (not to fail in 'in' operator)
               s"null/*$name*/"
             }
@@ -118,7 +118,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
           }
           case _ => s"?/*$name*/"
         }
-      } else s"?/*$name*/")
+      } else s"?/*$name*/"
       binded = true
       s
     }
@@ -156,7 +156,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       case r => col match {
         case c: Ident => r(c.ident.mkString("."))
         case c: String => r(c)
-        case c: Int if (c > 0) => r(c - 1)
+        case c: Int if c > 0 => r(c - 1)
         case c: Int => error("column index in result expression must be greater than 0. Is: " + c)
       }
     }
@@ -270,7 +270,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         })
       case _ => error("unknown operation " + op)
     }
-    override def exprType: Class[_] = if (List("&&", "++", "+", "-", "*", "/") exists (_ == op)) {
+    override def exprType: Class[_] = if (List("&&", "++", "+", "-", "*", "/") contains op) {
       if (lop.exprType == rop.exprType) lop.exprType else super.exprType
     } else classOf[ConstExpr]
   }
@@ -295,11 +295,11 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
             f, p.asInstanceOf[List[Object]]: _*)).get
         } catch {
           case ex: NoSuchMethodException => {
-            Env.functions.flatMap(f => f.getClass.getMethods.filter(m =>
+            Env.functions.flatMap(f => f.getClass.getMethods.find(m =>
               m.getName == name && (m.getParameterTypes match {
                 case Array(par) => par.isAssignableFrom(classOf[Seq[_]])
                 case _ => false
-              })).headOption.map(_.invoke(f, List(p).asInstanceOf[List[Object]]: _*)).orElse(Some(
+              })).map(_.invoke(f, List(p).asInstanceOf[List[Object]]: _*)).orElse(Some(
               call("{call " + sql + "}")))).get
           }
         }
@@ -409,7 +409,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       def joinPrefix(implicitLeftJoinPossible: Boolean) = (outerJoin match {
         case "l" => "left "
         case "r" => "right "
-        case j if (j != "i"/*forced inner join*/ && implicitLeftJoinPossible && nullable) => "left "
+        case j if j != "i"/*forced inner join*/ && implicitLeftJoinPossible && nullable => "left "
         case _ => ""
       }) + "join "
       def fkAliasJoin(i: IdentExpr) = sqlName + " on " + (if (i.name.size < 2 && joinTable.alias != null)
@@ -667,7 +667,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
 
   private def executeChildren: Map[String, Any] = {
     childUpdates.map {
-      case (ex, n) if (!env.contains(n)) => (n, ex())
+      case (ex, n) if !env.contains(n) => (n, ex())
       case (ex, n) => (n, env(n) match {
         case m: Map[String @unchecked, _] => ex(m)
         case t: scala.collection.Traversable[Map[String, _] @unchecked] => t.map(ex(_))
@@ -681,13 +681,13 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   //return value in form: (child query table col(s) -> parent query cols(s) alias(es))
   private def joinWithChild(childTable: String,
     refCol: Option[String]): Option[(List[String], List[String])] =
-    (refCol map { ref =>
+    refCol map { ref =>
       val refTable = env.table(childTable).refTable.getOrElse(List(ref),
         error("No referenced table found for table: " + childTable + ". Reference: " + ref))
       List(ref) -> env.table(refTable).key.cols -> findAliasByName(refTable)
         .getOrElse(error("Unable to find relationship between table " + childTable +
           ", reference column: " + ref + " and tables: " + this.tableDefs))
-    } orElse (this.findJoin(childTable)).map(t=> ((t._1._1.cols, t._1._2.cols) -> t._2))) match {
+    } orElse (this.findJoin(childTable)).map(t=> ((t._1._1.cols, t._1._2.cols) -> t._2)) match {
       case None => None
       case Some(((k1: List[String], k2: List[String]), t)) =>
         this.joinsWithChildren += (t -> k2)
@@ -782,7 +782,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
 
   private def buildArray(a: Arr, ctx: Ctx = ARR_CTX) = a.elements
     .map { buildInternal(_, ctx) } filter (_ != null) match {
-      case al if !al.isEmpty => ArrExpr(al) case _ => null
+      case al if al.nonEmpty => ArrExpr(al) case _ => null
     }
 
 
@@ -799,10 +799,10 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       val limit = buildInternal(q.limit, LIMIT_CTX)
       val aliases = tablesAndAliases._2
       //check whether parent query with at least one primitive table exists
-      def hasParentQuery = env.provider.map {
+      def hasParentQuery = env.provider.exists {
         case b: QueryBuilder => b.tableDefs != Nil
         case _ => false
-      } getOrElse (false)
+      }
       //establish link between ancestors
       val parentJoin =
         if (QueryBuilder.this.ctxStack.headOption.orNull != QUERY_CTX || !hasParentQuery) None else {
@@ -853,15 +853,15 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     //build tables, set nullable flag for tables right to default join or foreign key shortcut join,
     //which is used for implicit left outer join, create aliases map
     def buildTables(tables: List[Obj]) = {
-      ((tables map buildTable).foldLeft((List[Table]() -> Map[String, Table]())) { (ts, t) =>
+      (tables map buildTable).foldLeft(List[Table]() -> Map[String, Table]()) { (ts, t) =>
         val nt = ts._1.headOption.map(pt => (pt, t) match {
           case (Table(IdentExpr(ptn), ptna, _, _, _), Table(IdentExpr(n), _, j, null, false)) =>
             //get previous table from aliases map if exists
-            val prevTable = ts._2.get(ptn.mkString(".")).getOrElse(pt)
+            val prevTable = ts._2.getOrElse(ptn.mkString("."), pt)
             j match {
               //foreign key of shortcut join must come from previous table i.e. ptn
-              case TableJoin(false, IdentExpr(fk), _, _) if (fk.size == 1 ||
-                fk.dropRight(1) == (if (ptna == null) ptn else List(ptna))) =>
+              case TableJoin(false, IdentExpr(fk), _, _) if fk.size == 1 ||
+                fk.dropRight(1) == (if (ptna == null) ptn else List(ptna)) =>
                 env.colOption(prevTable.name, fk.last).map(col =>
                   //set current table to nullable if foreign key column or previous table is nullable
                   if (prevTable.nullable || col.nullable) t.copy(nullable = true) else t).getOrElse(t)
@@ -879,7 +879,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         }).getOrElse(t)
         (nt :: ts._1) ->
          (if (nt.alias != null && !ts._2.contains(nt.alias)) ts._2 + (nt.alias -> nt) else ts._2)
-      }) match {
+      } match {
         case (tables: List[Table], aliases: Map[String, Table]) => (tables.reverse, aliases)
       }
     }
@@ -900,7 +900,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     }
     def buildCols(cols: Cols): ColsExpr =
       if (cols == null)
-        ColsExpr(List(ColExpr(AllExpr(), null, Some(false))), true, false, false)
+        ColsExpr(List(ColExpr(AllExpr(), null, Some(false))), hasAll = true, hasIdentAll = false, hasHidden = false)
       else {
         var (hasAll, hasIdentAll, hasHidden) = (false, false, false)
         val colExprs = cols.cols.map(buildInternal(_, COL_CTX) match {
@@ -936,17 +936,16 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
               //checks if last parameter is resources
               def hasResourcesParam(pt: Array[Class[_]]) = pt
                 .lastOption
-                .map(_.isAssignableFrom(classOf[org.tresql.Resources]))
-                .getOrElse(false)
-              val m = Env.functions.flatMap(_.getClass.getMethods.filter(m => m.getName == n && {
+                .exists(_.isAssignableFrom(classOf[org.tresql.Resources]))
+              val m = Env.functions.flatMap(_.getClass.getMethods.find(m => m.getName == n && {
                 val pt = m.getParameterTypes
                 //parameter count must match or must be of variable count
                 val ps = pt.size - (if (hasResourcesParam(pt)) 1 else 0)
                 ps == pars.size || (ps == 1 && pt(0).isAssignableFrom(classOf[Seq[_]]))
-              }).headOption).getOrElse(
+              })).getOrElse(
                 error("External function " + n + " with " + pars.size + " parameters not found"))
               val parameterTypes = (m.getParameterTypes match {
-                case Array(l) if (l.isAssignableFrom(classOf[Seq[_]])) =>
+                case Array(l) if l.isAssignableFrom(classOf[Seq[_]]) =>
                   m.getGenericParameterTypes()(0).asInstanceOf[java.lang.reflect.ParameterizedType]
                    .getActualTypeArguments()(0) match {
                     case c: Class[_] => Array(c) //vararg parameter type
@@ -955,11 +954,11 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
               }) toList
               val hiddenColPars = parameterTypes.padTo(pars.size,
                   parameterTypes.headOption.orNull).zip(pars).map(tp => HiddenColRefExpr(tp._2, tp._1))
-              hasHidden = hiddenColPars.size > 0
+              hasHidden = hiddenColPars.nonEmpty
               ColExpr(
                 ExternalFunExpr(n, hiddenColPars, m, hasResourcesParam(m.getParameterTypes)), a,
                 Some(true)
-              ) :: hiddenColPars.map(ColExpr(_, uniqueAlias(uid), Some(ce.separateQuery), true))
+              ) :: hiddenColPars.map(ColExpr(_, uniqueAlias(uid), Some(ce.separateQuery), hidden = true))
             case e => List(e)
           }).groupBy(_.hidden) match { //put hidden columns at the end
             case m: Map[Boolean @unchecked, ColExpr @unchecked] => m(false) ++ m.getOrElse(true, Nil)
@@ -967,7 +966,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
           else colExprs) ++
             //for top level queries add hidden columns used in filters of descendant queries
             (if (ctxStack.headOption.orNull == QUERY_CTX) {
-              hasHidden |= joinsWithChildrenColExprs.size > 0
+              hasHidden |= joinsWithChildrenColExprs.nonEmpty
               joinsWithChildrenColExprs
             } else Nil)
         ColsExpr(colWithHiddenExprs, hasAll, hasIdentAll, hasHidden)
@@ -1002,12 +1001,12 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
           case fun: FunExpr =>
             if (Env isMacroDefined fun.name) {
               val m = Env.macroMethod(fun.name)
-              val p = m.getParameterTypes()
+              val p = m.getParameterTypes
               if (p.length > 1 && p(1).isAssignableFrom(classOf[Seq[_]]))
                 //second parameter is list of expressions
                 m.invoke(Env.macros.get, this, fun.params).asInstanceOf[Expr]
-              else m.invoke(Env.macros.get, (this :: fun.params): _*).asInstanceOf[Expr]
-            } else if (fun.params.exists(_ == null)) null else fun
+              else m.invoke(Env.macros.get, this :: fun.params: _*).asInstanceOf[Expr]
+            } else if (fun.params.contains(null)) null else fun
           case binExpr: BinExpr =>
             if (!(STANDART_BIN_OPS contains binExpr.op)) {
               val macroName = scala.reflect.NameTransformer.encode(binExpr.op)
@@ -1066,7 +1065,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
               //copy join condition in the right place for parent child join calculation
               recursiveQueryExp.copy(
                 tables = t.head.copy(
-                  join = QueryParser.Join(false, join, false)) :: t.tail,
+                  join = QueryParser.Join(default = false, join, noJoin = false)) :: t.tail,
                 //drop first filter for recursive query, since first filter is used to obtain initial set
                 filter = recursiveQueryExp.filter.copy(
                   filters = recursiveQueryExp.filter.filters drop 1))
