@@ -6,7 +6,7 @@ TreSQL - Tree SQL language for web clients
 <b>With TreSQL, we provide: </b>  
 1. Query and data manipulation language with SQL functionality  
 2. Database API from Scala or Java  
-3. [Web service and simple web form](http://uniso.lv/querytest/get) to run queries and receive data in JSON format.
+3. [Web service and simple web form](http://tresql.org/querytest/get) to run queries and receive data in JSON format.
 
 <b>
 Reasons to use TreSQL:  
@@ -32,7 +32,7 @@ See documentation below how TreSQL can make your life easier (some familiarity w
 Try it online
 -------------
 You can test TreSQL queries, including all examples from this guide, directly using our web service:  
-http://uniso.lv/querytest/get
+http://tresql.org/querytest/get
 
 This web service is set up with test data described in [Appendix Data](Query/wiki/language-guide#wiki-appendix-data). (We do no allow data manipulation at this URL).  
 Note: With this web service you can not only receive result data, but also see SQL statement(s) that are generated from your TreSQL query. This way you can understand the meaning of any TreSQL query even without explanations below.  

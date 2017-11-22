@@ -1,5 +1,5 @@
 // each line consists of statement to be tested. line format is following:
-//<statement> --> [<semicolon separated bind params (array elements are comma separated)>] --> <result as returned from method uniso.query.result.Jsonizer.jsonize(..., Jsonizer.Arrays)>
+//<statement> --> [<semicolon separated bind params (array elements are comma separated)>] --> <result as returned from method org.tresql.result.Jsonizer.jsonize(..., Jsonizer.Arrays)>
 //INSERT
 //DEPTS
 DEPT {DEPTNO, DNAME, LOC} + [10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"] --> [[2]]
