@@ -74,8 +74,7 @@ lazy val tresql = (project in file("."))
     publishArtifact in Test := false,
     publishArtifact in Compile := true,
     pomIncludeRepository := { x => false },
-    pomExtra := (
-      <url>https://github.com/uniso/tresql</url>
+    pomExtra := <url>https://github.com/mrumkovskis/tresql</url>
       <licenses>
         <license>
           <name>MIT</name>
@@ -84,8 +83,8 @@ lazy val tresql = (project in file("."))
         </license>
       </licenses>
       <scm>
-        <url>git@github.com:uniso/tresql.git</url>
-        <connection>scm:git:git@github.com:uniso/tresql.git</connection>
+        <url>git@github.com:mrumkovskis/tresql.git</url>
+        <connection>scm:git:git@github.com:mrumkovskis/tresql.git</connection>
       </scm>
       <developers>
         <developer>
@@ -99,5 +98,4 @@ lazy val tresql = (project in file("."))
           <url>https://github.com/guntiso/</url>
         </developer>
       </developers>
-    )
   )
