@@ -229,6 +229,7 @@ dept[10, 20]{dname, |[dept.deptno = e.deptno](emp) e {ename}#(1) }#(1) --> [["AC
 dept[?]{loc, deptno, |emp[deptno = :1(2)] {job}, dname} --> 10 --> [["NEW YORK", 10, [["PRESIDENT"], ["MANAGER"], ["CLERK"]], "ACCOUNTING"]]
 //default parent child hierarchical query join
 dept[?]{loc, |emp {job}#(1), dname} --> 10 --> [["NEW YORK", [["CLERK"], ["MANAGER"], ["PRESIDENT"]], "ACCOUNTING"]]
+dept[10]{dname, (({1 x}){x}) x, |emp{ename}#(1)} --> [["ACCOUNTING", 1, [["CLARK"], ["KING"], ["MILLER"]]]]
 
 //hierarchical query default shortcut join
 emp/dept[10]{dname, ename, |[deptno]emp{ename}#(1)}#(1,2) --> [["ACCOUNTING", "CLARK", [["CLARK"], ["KING"], ["MILLER"]]], ["ACCOUNTING", "KING", [["CLARK"], ["KING"], ["MILLER"]]], ["ACCOUNTING", "MILLER", [["CLARK"], ["KING"], ["MILLER"]]]]
@@ -523,6 +524,9 @@ a(# x) {dummy{dummy}}, b(# y) {a{x}} b{y} --> [[0]]
 a(# x) {dummy{dummy}}, b(# x) {a{x}}, c(# y) {a{x} ++ b{x}} c{y} --> [[0], [0]]
 a(# *) {dummy} a --> [[0]]
 a(# *) {dummy}, b(# *) {a} b --> [[0]]
+//with in column clause & with child expression
+dept[10]{dname, ((wq(# x) {{1}} wq{x}){x}) x} --> [["ACCOUNTING", 1]]
+//dept[10]{dname, ((wq(# x) {{1}} wq{x}){x}) x, |emp{ename}#(1)} --> [] // FIXME
 
 //test for compiler - where clause select references parent select column
 dept[(dept_addr[deptnr = deptno]{deptnr})]{dname}#(1) --> []
