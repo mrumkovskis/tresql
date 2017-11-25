@@ -21,6 +21,7 @@ object QueryBuildCtx {
   object VALUES_CTX extends Ctx
   object LIMIT_CTX extends Ctx
   object FUN_CTX extends Ctx
+  object WITH_TABLE_CTX extends Ctx
   object EXTERNAL_FUN_CTX extends Ctx
 }
 
@@ -800,10 +801,10 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       val aliases = tablesAndAliases._2
       //check whether parent query with at least one primitive table exists
       def hasParentQuery = env.provider.exists {
-        case b: QueryBuilder => b.tableDefs != Nil
+        case b: QueryBuilder => b.tableDefs.nonEmpty
         case _ => false
       }
-      //establish link between ancestors
+      //establish link with ancestors
       val parentJoin =
         if (QueryBuilder.this.ctxStack.headOption.orNull != QUERY_CTX || !hasParentQuery) None else {
           def parentChildJoinExpr(table: Table, qname: List[String], refCol: Option[String] = None) = {
@@ -849,7 +850,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       if (ctxStack.head == WHERE_CTX && q.filter.filters != Nil && sel.filter == null) null else sel
     }
     def buildSelectFromObj(o: Obj) =
-      buildSelect(QueryParser.Query(List(o), null, null, null, null, null, null))
+      buildSelect(QueryParser.Query(List(o), Filters(Nil), null, null, null, null, null))
     //build tables, set nullable flag for tables right to default join or foreign key shortcut join,
     //which is used for implicit left outer join, create aliases map
     def buildTables(tables: List[Obj]) = {
@@ -1085,7 +1086,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
             case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx) //unwrap braces expression
             case _ => buildSelectFromObj(t)
           }
-          case FROM_CTX | TABLE_CTX => buildSelectFromObj(t) //table in from clause of top level query or in any other subquery
+          case FROM_CTX | TABLE_CTX | WITH_TABLE_CTX => buildSelectFromObj(t) //table in from clause of top level query or in any other subquery
           case COL_CTX => buildColumnIdentOrBracesExpr(t)
           case _ => buildIdentOrBracesExpr(t)
         }
@@ -1111,7 +1112,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
             }
         }
         case WithTable(name, cols, recursive, query) =>
-          WithTableExpr(name, cols, recursive, buildInternal(query, QUERY_CTX))
+          WithTableExpr(name, cols, recursive, buildInternal(query, WITH_TABLE_CTX))
         case UnOp(op, oper) =>
           val o = buildInternal(oper, parseCtx)
           if (o == null) null else UnExpr(op, o)

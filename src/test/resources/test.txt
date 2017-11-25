@@ -527,7 +527,7 @@ a(# *) {dummy}, b(# *) {a} b --> [[0]]
 //with in column clause & with child expression
 dept[10]{dname, ((wq(# x) {{1}} wq{x}){x}) x} --> [["ACCOUNTING", 1]]
 dept[10]{dname, |[dept.deptno = e.dn](e(# dn, n) {emp{deptno, ename}#(1)} e{dn, n}) e{e.n}} --> [["ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
-//dept[10]{dname, ((wq(# x) {{1}} wq{x}){x}) x, |emp{ename}#(1)} --> [] // FIXME
+dept[10]{dname, ((wq(# x) {{1}} wq{x}){x}) x, |emp{ename}#(1)} --> [["ACCOUNTING", 1, [["CLARK"], ["KING"], ["MILLER"]]]]
 
 //test for compiler - where clause select references parent select column
 dept[(dept_addr[deptnr = deptno]{deptnr})]{dname}#(1) --> []
