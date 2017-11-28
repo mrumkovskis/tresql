@@ -601,7 +601,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           .orElse(throw CompilerException(s"Unknown column: $cn"))
         ctx
     })
-    namer(Context(Nil, Nil, ColumnCtx, false))(exp)
+    namer(Context(Nil, Nil, ColumnCtx, isGrpOrd = false))(exp)
     exp
   }
 
@@ -718,14 +718,14 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         val u = tt(ud.exp)
         UpdateDef(c, t, u)
       case dd: DeleteDef => DeleteDef(dd.tables map tt, tt(dd.exp))
-      case ad: ArrayDef => ad.copy(cols = (ad.cols map tt))
+      case ad: ArrayDef => ad.copy(cols = ad.cols map tt)
       case rd: RecursiveDef => rd.copy(exp = tt(rd.exp))
       case wtd: WithTableDef => wtd.copy(
         cols = wtd.cols map tt,
         tables = wtd.tables map tt,
         exp = tt(wtd.exp)
       )
-      case wsd: WithSelectDef => wsd.copy(exp = tt(wsd.exp), withTables = (wsd.withTables map tt))
+      case wsd: WithSelectDef => wsd.copy(exp = tt(wsd.exp), withTables = wsd.withTables map tt)
       case BracesSelectDef(sdb) => BracesSelectDef(tt(sdb))
       case fsd: FunSelectDef => fsd.copy(exp = tt(fsd.exp))
       case vfsd: ValuesFromSelectDef => vfsd.copy(exp = tt(vfsd.exp))
@@ -780,7 +780,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case fsd: FunSelectDef => fsd.copy(exp = tt(state)(fsd.exp))
       case vfsd: ValuesFromSelectDef => vfsd.copy(exp = tt(state)(vfsd.exp))
     }
-    transform_traverse _
+    transform_traverse
   }
 
   override def traverser[T](fun: Traverser[T]): Traverser[T] = {
@@ -809,7 +809,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case fsd: FunSelectDef => tr(state, fsd.exp)
       case vfsd: ValuesFromSelectDef => tr(state, vfsd.exp)
     }
-    fun_traverse _
+    fun_traverse
   }
 
   def parseExp(expr: String): Exp = try {

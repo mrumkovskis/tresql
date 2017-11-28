@@ -161,10 +161,10 @@ trait ORT extends Query {
     errorMsg: String)
     (implicit resources: Resources): Any = {
     val struct = tresql_structure(obj)
-    Env log (s"\nStructure: $name - $struct")
+    Env log s"\nStructure: $name - $struct"
     val tresql = save_tresql(name, struct, Nil, filter, save_tresql_fun)
     if(tresql == null) error(errorMsg)
-    build(tresql, obj, false)(resources)()
+    build(tresql, obj, reusableExpr = false)(resources)()
   }
 
   def delete(name: String, id: Any, filter: String = null, filterParams: Map[String, Any] = null)
