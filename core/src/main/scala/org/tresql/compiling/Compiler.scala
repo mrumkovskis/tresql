@@ -107,7 +107,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case TableDef(_, Obj(_: TableAlias, _, _, _, _)) => false
       case _ => true
     }.groupBy(_.name).filter(_._2.size > 1) match {
-      case d => if(d.size > 0) throw CompilerException(
+      case d => if(d.nonEmpty) throw CompilerException(
         s"Duplicate table names: ${d.mkString(", ")}")
     }
   }
@@ -159,7 +159,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       }
       if (cols.isEmpty) throw CompilerException(s"Recursive table definition must have at least one column")
     }
-    if (!cols.isEmpty && cols.size != exp.cols.size)
+    if (cols.nonEmpty && cols.size != exp.cols.size)
       throw CompilerException(s"with table definition column count must equal corresponding query definition column count: ${exp.tresql}")
     override def table(table: String) = tables.find(_.name == table).map {
       case _ => table_from_selectdef(table, this)

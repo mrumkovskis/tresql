@@ -177,7 +177,7 @@ trait ORT extends Query {
     } yield {
       val delete = s"-${table.name}${Option(alias).map(" " + _).getOrElse("")}[$pk = ?${Option(filter)
         .map(f => s" & ($f)").getOrElse("")}]"
-      build(delete, Map("1" -> id) ++ Option(filterParams).getOrElse(Map()), false)(resources)()
+      build(delete, Map("1" -> id) ++ Option(filterParams).getOrElse(Map()), reusableExpr = false)(resources)()
     }) getOrElse {
       error(s"Table $name not found or table primary key not found or table primary key consists of more than one column")
     }
@@ -236,10 +236,10 @@ trait ORT extends Query {
       lm.tail.foldLeft(tresql_structure(lm.head))((l, m) => {
         val x = tresql_structure(m)
         l map (t => (t._1, (t._2, x.getOrElse(t._1, null)))) map {
-          case (k, (v1: Map[String @unchecked, _], v2: Map[String @unchecked, _])) if !v1.isEmpty && !v2.isEmpty =>
+          case (k, (v1: Map[String @unchecked, _], v2: Map[String @unchecked, _])) if v1.nonEmpty && v2.nonEmpty =>
             (k, merge(List(v1, v2)))
-          case (k, (v1: Map[String @unchecked, _], _)) if !v1.isEmpty => (k, v1)
-          case (k, (_, v2: Map[String @unchecked, _])) if !v2.isEmpty => (k, v2)
+          case (k, (v1: Map[String @unchecked, _], _)) if v1.nonEmpty => (k, v1)
+          case (k, (_, v2: Map[String @unchecked, _])) if v2.nonEmpty => (k, v2)
           case (k, (v1, _)) => (k, v1 match { case _: Map[_, _] | _: Seq[_] => v1 case _ => "***" })
         }
       })
@@ -339,7 +339,7 @@ trait ORT extends Query {
     (implicit resources: Resources): String = {
     def table_save_tresql(tableName: String, alias: String,
       cols_vals: List[(String, String)],
-      refsAndPk: Set[(String, String)]) = (cols_vals ++ refsAndPk) match {
+      refsAndPk: Set[(String, String)]) = cols_vals ++ refsAndPk match {
         case cols_vals =>
           val (cols, vals) = cols_vals.unzip
           cols.mkString(s"+$tableName {", ", ", "}") +
@@ -362,7 +362,7 @@ trait ORT extends Query {
     def table_save_tresql(tableName: String, alias: String,
       cols_vals: List[(String, String)],
       refsAndPk: Set[(String, String)]) = cols_vals.unzip match {
-        case (cols: List[String], vals: List[String]) if !cols.isEmpty =>
+        case (cols: List[String], vals: List[String]) if cols.nonEmpty =>
           val filter = ctx.filters.flatMap(_.update).map(f => s" & ($f)").getOrElse("")
           val tn = tableName + (if (alias == null) "" else " " + alias)
           val updateFilter = refsAndPk.map(t=> s"${t._1} = ${t._2}").mkString("[", " & ", s"$filter]")
@@ -437,7 +437,7 @@ trait ORT extends Query {
       import QueryParser._
       val RESOLVER_PROP_PATTERN(name, fk, rt) = property
       table.colOption(fk).map(_.name).map { _ -> transformer {
-          case Ident(List("_")) => Variable(name + "->", Nil, false)
+          case Ident(List("_")) => Variable(name + "->", Nil, opt = false)
         } (parseExp(if (rt startsWith "(" ) rt else s"($rt)")).tresql
       }.toList
     }
@@ -468,9 +468,9 @@ trait ORT extends Query {
         val lookupTresql = m.get("l").map(_.asInstanceOf[List[String]].map(_ + ", ").mkString).orNull
         //base table tresql
         val tresql =
-          (m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]]
-           .filter(_._1 != null /*check if prop->col mapping found*/) ++
-             children.map(_ -> null)/*add same level one to one children*/)
+          m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]]
+            .filter(_._1 != null /*check if prop->col mapping found*/) ++
+            children.map(_ -> null) /*add same level one to one children*/
            match {
              case x if x.isEmpty && refsAndPk.isEmpty => null //no columns & refs found
              case cols_vals => table_save_tresql(tableName, alias, cols_vals, refsAndPk)

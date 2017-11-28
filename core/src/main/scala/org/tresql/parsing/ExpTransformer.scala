@@ -29,18 +29,18 @@ trait ExpTransformer { this: QueryParsers =>
       case Obj(t, a, j, o, n) => Obj(tt(t), a, tt(j), o, n)
       case Join(d, j, n) => Join(d, tt(j), n)
       case Col(c, a) => Col(tt(c), a)
-      case Cols(d, cols) => Cols(d, (cols map tt))
+      case Cols(d, cols) => Cols(d, cols map tt)
       case Grp(cols, hv) => Grp(cols map tt, tt(hv))
       case Ord(cols) => Ord(cols map (c=> (c._1, tt(c._2), c._3)))
       case Query(objs, filters, cols, gr, ord, off, lim) =>
-        Query((objs map tt), tt(filters), tt(cols), tt(gr), tt(ord), tt(off), tt(lim))
+        Query(objs map tt, tt(filters), tt(cols), tt(gr), tt(ord), tt(off), tt(lim))
       case WithTable(n, c, r, q) => WithTable(n, c, r, tt(q))
-      case With(ts, q) => With((ts map tt), tt(q))
-      case Insert(t, a, cols, vals) => Insert(tt(t), a, (cols map tt), tt(vals))
-      case Update(t, a, filter, cols, vals) => Update(tt(t), a, tt(filter), (cols map tt), tt(vals))
+      case With(ts, q) => With(ts map tt, tt(q))
+      case Insert(t, a, cols, vals) => Insert(tt(t), a, cols map tt, tt(vals))
+      case Update(t, a, filter, cols, vals) => Update(tt(t), a, tt(filter), cols map tt, tt(vals))
       case Delete(t, a, filter) => Delete(tt(t), a, tt(filter))
       case Arr(els) => Arr(els map tt)
-      case Filters(f) => Filters((f map tt))
+      case Filters(f) => Filters(f map tt)
       case Values(v) => Values(v map tt)
       case ValuesFromSelect(s, a) => ValuesFromSelect(tt(s), a)
       case Braces(expr) => Braces(tt(expr))
@@ -89,15 +89,15 @@ trait ExpTransformer { this: QueryParsers =>
           tt(state)(lim)
         )
       case WithTable(n, c, r, q) => WithTable(n, c, r, tt(state)(q))
-      case With(ts, q) => With((ts map {wt => tt(state)(wt) }), tt(state)(q))
+      case With(ts, q) => With(ts map { wt => tt(state)(wt) }, tt(state)(q))
       case Insert(t, a, cols, vals) => Insert(tt(state)(t), a,
-          (cols map { c => tt(state)(c) }), tt(state)(vals))
+          cols map { c => tt(state)(c) }, tt(state)(vals))
       case Update(table, alias, filter, cols, vals) =>
         Update(
           tt(state)(table),
           alias,
           tt(state)(filter),
-          (cols map { c => tt(state)(c) }),
+          cols map { c => tt(state)(c) },
           tt(state)(vals)
         )
       case Delete(table, alias, filter) => Delete(tt(state)(table), alias, tt(state)(filter))
@@ -110,7 +110,7 @@ trait ExpTransformer { this: QueryParsers =>
       //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
       case x: Exp => sys.error("Unknown expression: " + x)
     }
-    transform_traverse _
+    transform_traverse
   }
 
   def traverser[T](fun: Traverser[T]): Traverser[T] = {
@@ -149,7 +149,7 @@ trait ExpTransformer { this: QueryParsers =>
       //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
       case x: Exp => sys.error("Unknown expression: " + x)
     }
-    fun_traverse _
+    fun_traverse
   }
 
   /** Extract variables in reverse order. Variable names '?' are replaced with index starting with 1 */

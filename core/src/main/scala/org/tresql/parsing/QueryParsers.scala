@@ -29,7 +29,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   /** Copied from RegexParsers to support comment handling as whitespace */
   override protected def handleWhiteSpace(source: java.lang.CharSequence, offset: Int): Int =
     if (skipWhitespace)
-      (whiteSpace findPrefixMatchOf (new SubSequence(source, offset))) match {
+      whiteSpace findPrefixMatchOf new SubSequence(source, offset) match {
         case Some(matched) => offset + matched.end
         case None => offset
       }
@@ -115,8 +115,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       case _ => sys.error("Unexpected Join case")
     }
   }
-  val NoJoin = Join(false, null, true)
-  val DefaultJoin = Join(true, null, false)
+  val NoJoin = Join(default = false, null, noJoin = true)
+  val DefaultJoin = Join(default = true, null, noJoin = false)
 
   case class Obj(obj: Exp, alias: String, join: Join, outerJoin: String, nullable: Boolean = false)
       extends Exp {
@@ -147,7 +147,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       (if (group != null) any2tresql(group) else "") +
       (if (order != null) order.tresql else "") +
       (if (limit != null)
-        s"@(${(if (offset != null) any2tresql(offset) + " " else "")}${any2tresql(limit)})"
+        s"@(${if (offset != null) any2tresql(offset) + " " else ""}${any2tresql(limit)})"
       else if (offset != null) s"@(${any2tresql(offset)}, )"
       else "")
   }
@@ -165,13 +165,13 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   case class Insert(table: Ident, alias: String, cols: List[Col], vals: Exp) extends DMLExp {
     override def filter = null
     def tresql = "+" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
-      (if (!cols.isEmpty) cols.map(_.tresql).mkString("{", ",", "}") else "") +
+      (if (cols.nonEmpty) cols.map(_.tresql).mkString("{", ",", "}") else "") +
       (if (vals != null) any2tresql(vals) else "")
   }
   case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp) extends DMLExp {
     def tresql = "=" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
       (if (filter != null) filter.tresql else "") +
-      (if (!cols.isEmpty) cols.map(_.tresql).mkString("{", ",", "}") else "") +
+      (if (cols.nonEmpty) cols.map(_.tresql).mkString("{", ",", "}") else "") +
       (if (vals != null) any2tresql(vals) else "")
   }
   case class ValuesFromSelect(select: Exp, alias: Option[String]) extends Exp {
@@ -222,7 +222,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def qualifiedIdentAll: MemParser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
   def variable: MemParser[Variable] = ((":" ~> ((ident | stringLiteral) ~
       rep("." ~> (ident | stringLiteral | wholeNumber)) ~ opt(":" ~> ident) ~ opt("?"))) | "?") ^^ {
-    case "?" => Variable("?", null, false)
+    case "?" => Variable("?", null, opt = false)
     case (i: String) ~ (m: List[String @unchecked]) ~ (t: Option[String @unchecked]) ~ o => Variable(i, m, o != None)
   } named "variable"
   def id: MemParser[Id] = "#" ~> ident ^^ Id named "id"
@@ -249,7 +249,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     opt("#") /* distinct */ ~ repsep(expr, ",") /* arglist */ ~
     ")" ~ opt(order) /* aggregate order */ ~ opt(filter) /* aggregate filter */ ^?({
     case Ident(n) ~ d ~ p ~ _ ~ o ~ f if f.map(_.elements.size).getOrElse(0) <= 1 =>
-      Fun(n.mkString("."), p, !d.isEmpty, o, f.flatMap(_.elements.lift(0)))
+      Fun(n.mkString("."), p, d.isDefined, o, f.flatMap(_.elements.lift(0)))
   }, {
     case _ ~ _ ~ _ ~ _ ~ _ ~ f => s"Aggregate function filter must contain only one elements, instead of ${
       f.map(_.elements.size).getOrElse(0)}"
@@ -260,11 +260,11 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def join: MemParser[Join] = (("/" ~ opt("[" ~> expr <~ "]")) | (opt("[" ~> expr <~ "]") ~ "/") |
     ";" | array) ^^ {
       case ";" => NoJoin
-      case "/" ~ Some(e: Exp @unchecked) => Join(true, e, false)
+      case "/" ~ Some(e: Exp @unchecked) => Join(default = true, e, noJoin = false)
       case "/" ~ None => DefaultJoin
-      case Some(e: Exp @unchecked) ~ "/" => Join(true, e, false)
+      case Some(e: Exp @unchecked) ~ "/" => Join(default = true, e, noJoin = false)
       case None ~ "/" => DefaultJoin
-      case a: Exp => Join(false, a, false)
+      case a: Exp => Join(default = false, a, noJoin = false)
     } named "join"
   def filter: MemParser[Arr] = array named "filter"
   def filters: MemParser[Filters] = rep(filter) ^^ Filters named "filters"
@@ -276,7 +276,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     case join ~ rightoj ~ o ~ Some(leftoj ~ alias ~ leftoj1) =>
       Obj(o, alias, join.orNull,
         rightoj.map(x => "r") orElse (leftoj orElse leftoj1).map(j => if(j == "?") "l" else "i") orNull,
-        (leftoj orElse leftoj1).map(_ == "?").getOrElse(false))
+        (leftoj orElse leftoj1).exists(_ == "?"))
     case join ~ rightoj ~ o ~ None => Obj(o, null, join orNull, rightoj.map(x => "r") orNull)
   } named "obj"
   def objWithJoin: MemParser[Obj] = obj ^? ({
@@ -298,18 +298,18 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
         thisObj match {
           case o @ Obj(_, a, j @ Join(false, Arr(l @ List(o1 @ Obj(_, a1, _, oj1, n1), _*)), false), oj, n) =>
             //o1.alias prevail over o.alias, o.{outerJoin, nullable} prevail over o1.{outerJoin, nullable}
-            List(o.copy(alias = (Option(a1).getOrElse(a)), join =
+            List(o.copy(alias = Option(a1).getOrElse(a), join =
               j.copy(expr = o1.copy(alias = null, outerJoin = null, nullable = false)),
-              outerJoin = (if (oj == null) oj1 else oj), nullable = n || n1)) ++
+              outerJoin = if (oj == null) oj1 else oj, nullable = n || n1)) ++
               (if (prevObj == null) List() else l.tail.flatMap {
                 //flattenize array of foreign key shortcut joins
-                case o2 @ Obj(_, a2, _, oj2, n2) => List((if (prevAlias != null) Obj(Ident(List(prevAlias)),
-                  null, NoJoin, null, false)
-                else Obj(prevObj.obj, null, NoJoin, null, false)),
-                  o.copy(alias = (if (a2 != null) a2 else o.alias), join =
+                case o2 @ Obj(_, a2, _, oj2, n2) => List(if (prevAlias != null) Obj(Ident(List(prevAlias)),
+                  null, NoJoin, null)
+                else Obj(prevObj.obj, null, NoJoin, null),
+                  o.copy(alias = if (a2 != null) a2 else o.alias, join =
                     j.copy(expr = o2.copy(alias = null, outerJoin = null, nullable = false)),
-                    outerJoin = (if (oj == null) oj2 else oj), nullable = n || n2))
-                case x => List(o.copy(join = Join(false, x, false)))
+                    outerJoin = if (oj == null) oj2 else oj, nullable = n || n2))
+                case x => List(o.copy(join = Join(default = false, x, noJoin = false)))
               })
           case o => List(o)
         }
@@ -350,13 +350,13 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     }
   } named "column"
   def columns: MemParser[Cols] = (opt("#") <~ "{") ~ rep1sep(column, ",") <~ "}" ^^ {
-    case d ~ c => Cols(d != None, c)
+    case d ~ c => Cols(d.isDefined, c)
   } named "columns"
   def group: MemParser[Grp] = ("(" ~> rep1sep(expr, ",") <~ ")") ~
-    opt(("^" ~ "(") ~> expr <~ ")") ^^ { case g ~ h => Grp(g, if (h == None) null else h.get) }  named "group"
+    opt(("^" ~ "(") ~> expr <~ ")") ^^ { case g ~ h => Grp(g, if (h.isEmpty) null else h.get) }  named "group"
   def orderMember: MemParser[(Exp, Exp, Exp)] = opt(NULL) ~ expr ~ opt(NULL) ^^ {
     case Some(nf) ~ e ~ Some(nl) => sys.error("Cannot be nulls first and nulls last at the same time")
-    case nf ~ e ~ nl => (if (nf == None) null else nf.get, e, if (nl == None) null else nl.get)
+    case nf ~ e ~ nl => (if (nf.isEmpty) null else nf.get, e, if (nl.isEmpty) null else nl.get)
   } named "order-member"
   def order: MemParser[Ord] = ("#" ~ "(") ~> rep1sep(orderMember, ",") <~ ")" ^^ Ord named "order"
   def offsetLimit: MemParser[(Exp, Exp)] = ("@" ~ "(") ~> (wholeNumber | variable) ~ opt(",") ~
@@ -518,8 +518,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
           " operands encountered."
       }) named "comp"
   def in: MemParser[In] = plusMinus ~ ("in" | "!in") ~ "(" ~ rep1sep(plusMinus, ",") <~ ")" ^^ {
-    case lop ~ "in" ~ "(" ~ rop => In(lop, rop, false)
-    case lop ~ "!in" ~ "(" ~ rop => In(lop, rop, true)
+    case lop ~ "in" ~ "(" ~ rop => In(lop, rop, not = false)
+    case lop ~ "!in" ~ "(" ~ rop => In(lop, rop, not = true)
   } named "in"
   //in parser should come before comp so that it is not taken for in function which is illegal
   def logicalOp: MemParser[Exp] = in | comp named "logical-op"
