@@ -19,7 +19,7 @@ object Jsonizer {
   def jsonize(result: Any, buf: Writer, rType: ResultType = Objects) {
     result match {
       case r: Result[RowLike] =>
-        var done = false;
+        var done = false
         try {
           jsonizeResult(r, buf, rType)
           done = true

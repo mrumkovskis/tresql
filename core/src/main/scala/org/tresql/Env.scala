@@ -27,8 +27,8 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   private var vars: Option[scala.collection.mutable.Map[String, Any]] = None
   private var _exprs: Option[Map[Expr, Int]] = None
   private val ids = scala.collection.mutable.Map[String, Any]()
-  private var _result: Result[_ <: RowLike] = null
-  private var _statement: java.sql.PreparedStatement = null
+  private var _result: Result[_ <: RowLike] = _
+  private var _statement: java.sql.PreparedStatement = _
   //stores row count returned by SelectResult and all subresults.
   //if resources.maxResultSize is greater than zero
   //Row count is accumulated only for top level Env i.e. provider is None
@@ -50,14 +50,14 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   def contains(name: String): Boolean =
     vars.map(_.contains(name))
      .filter(_ == true)
-     .getOrElse(provider.map(_.env.contains(name)).getOrElse(false))
+     .getOrElse(provider.exists(_.env.contains(name)))
 
   /* finds closest env with vars map set (Some(vars)) and looks there if variable exists */
   def containsNearest(name: String): Boolean =
-    vars.map(_.contains(name)).getOrElse(provider.map(_.env.containsNearest(name)).getOrElse(false))
+    vars.map(_.contains(name)).getOrElse(provider.exists(_.env.containsNearest(name)))
 
   private[tresql] def update(name: String, value: Any) {
-    vars.map(_(name) = value) orElse (provider.map(_.env(name) = value))
+    vars.map(_(name) = value) orElse provider.map(_.env(name) = value)
   }
 
   private[tresql] def update(vars: Map[String, Any]) {
@@ -152,7 +152,7 @@ object Env extends Resources {
     override def initialValue = None
   }
   //this is for single thread usage
-  var sharedConn: java.sql.Connection = null
+  var sharedConn: java.sql.Connection = _
   //meta data object must be thread safe!
   private var _metadata: Option[Metadata] = Some(org.tresql.metadata.JDBCMetadata())
   private var _dialect: Option[CoreTypes.Dialect] = None
@@ -167,7 +167,7 @@ object Env extends Resources {
   //cache
   private var _cache: Option[Cache] = None
   //logger
-  private var _logger: (=> String, Int) => Unit = null
+  private var _logger: (=> String, Int) => Unit = _
   //loggable bind variable filter
   private var _bindVarLogFilter: Option[PartialFunction[Expr, String]] = Some({
     case v: QueryBuilder#VarExpr if v.name == "password" => v.fullName + " = [FILTERED]"
@@ -183,10 +183,10 @@ object Env extends Resources {
   override def dialect = _dialect.getOrElse(super.dialect)
   override def idExpr = _idExpr.getOrElse(super.idExpr)
   def functions = _functions
-  def isDefined(functionName: String) = _functionMethods.map(_.contains(functionName)).getOrElse(false)
+  def isDefined(functionName: String) = _functionMethods.exists(_.contains(functionName))
   def function(name: String) = _functionMethods.map(_(name)).get
   def macros = _macros
-  def isMacroDefined(macroName: String) = _macrosMethods.map(_.contains(macroName)).getOrElse(false)
+  def isMacroDefined(macroName: String) = _macrosMethods.exists(_.contains(macroName))
   def macroMethod(name: String) = _macrosMethods.map(_(name)).get
   def cache = _cache
   override def queryTimeout = query_timeout.get
@@ -223,13 +223,13 @@ object Env extends Resources {
 
 trait Resources { self =>
   private case class Resources_(
-    val _conn: Option[java.sql.Connection] = None,
-    val _metadata: Option[Metadata] = None,
-    val _dialect: Option[CoreTypes.Dialect] = None,
-    val _idExpr: Option[String => String] = None,
-    val _queryTimeout: Option[Int] = None,
-    val _maxResultSize: Option[Int] = None,
-    val _params: Option[Map[String, Any]] = None) extends Resources {
+    _conn: Option[java.sql.Connection] = None,
+    _metadata: Option[Metadata] = None,
+    _dialect: Option[CoreTypes.Dialect] = None,
+    _idExpr: Option[String => String] = None,
+    _queryTimeout: Option[Int] = None,
+    _maxResultSize: Option[Int] = None,
+    _params: Option[Map[String, Any]] = None) extends Resources {
     override def conn: java.sql.Connection = _conn getOrElse self.conn
     override def metadata: Metadata = _metadata getOrElse self.metadata
     override def dialect: CoreTypes.Dialect = _dialect getOrElse self.dialect

@@ -10,14 +10,14 @@ trait Metadata extends metadata.TypeMapper {
   def join(table1: String, table2: String): (key_, key_) = {
     val t1 = table(table1); val t2 = table(table2)
     (t1.refs(t2.name), t2.refs(t1.name)) match {
-      case (k1, k2) if (k1.length + k2.length > 1) =>
+      case (k1, k2) if k1.length + k2.length > 1 =>
         val r1 = reduceRefs(k1, t2.key)
         val r2 = reduceRefs(k2, t1.key)
         if (r1.length + r2.length == 1)
           if (r1.length == 1) (fk(r1.head.cols), uk(r1.head.refCols)) else (uk(r2.head.refCols), fk(r2.head.cols))
         else if (r1.length == 1) (fk(r1.head.cols), uk(r1.head.refCols))
         else error(s"Ambiguous relation. Too many found between tables $table1, $table2: ($r1, $r2)")
-      case (k1, k2) if (k1.length + k2.length == 0) => { //try to find two imported keys of the same primary key
+      case (k1, k2) if k1.length + k2.length == 0 => { //try to find two imported keys of the same primary key
         t1.rfs.filter(_._2.size == 1).foldLeft(List[(List[String], List[String])]()) {
           (res, t1refs) =>
               t2.rfs.foldLeft(res)((r, t2refs) => if (t2refs._2.size == 1 && t1refs._1 == t2refs._1)
@@ -75,7 +75,7 @@ package metadata {
     val refTable: Map[List[String], String] = rfs.flatMap(t => t._2.map(_.cols -> t._1))
     def col(name: String) = colMap(name)
     def colOption(name: String) = colMap.get(name)
-    def refs(table: String) = rfs.get(table).getOrElse(Nil)
+    def refs(table: String) = rfs.getOrElse(table, Nil)
     def ref(table: String, ref: List[String]) = rfs(table)
     .find(_.cols == ref)
     .getOrElse(error(s"""Column(s) "$ref" is not reference from table "$name" to table "$table" """))

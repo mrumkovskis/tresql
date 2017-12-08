@@ -62,7 +62,6 @@ trait JDBCMetadata extends Metadata {
   override def procedure(name: String): Procedure[_] = procedureOption(name)
     .getOrElse(sys.error(s"Procedure not found: $name"))
   override def procedureOption(name: String) = Option(procedureCache.get(name)).orElse {
-    import org.tresql.metadata._
     val conn = resources.conn
     if (conn == null) throw new NullPointerException(
       """Connection not found in environment. Check if "Env.conn = conn" (in this case statement execution must be done in the same thread) or "Env.sharedConn = conn" is called.""")
@@ -174,11 +173,12 @@ trait JDBCMetadata extends Metadata {
       crfs += (fkColName -> pkColName)
     }
     rs.close
-    (l.values.map { t =>
+    l.values.map { t =>
       Map("table" -> t("table"),
-        "refs" -> (t("refs").asInstanceOf[ListBuffer[ListBuffer[String]]] map
-          { _.toList }).toList)
-    }).toList
+        "refs" -> (t("refs").asInstanceOf[ListBuffer[ListBuffer[String]]] map {
+          _.toList
+        }).toList)
+    }.toList
   }
 }
 

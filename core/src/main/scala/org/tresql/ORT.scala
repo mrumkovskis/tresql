@@ -123,7 +123,7 @@ trait ORT extends Query {
   }
   case class NotDeleteIdsExpr(expr: Expr) extends BaseExpr {
     override def defaultSQL = env.get("ids").map {
-      case ids: Seq[_] if !ids.isEmpty => expr.sql
+      case ids: Seq[_] if ids.nonEmpty => expr.sql
       case _ =>
         //add 'ids' bind variable to query builder so it can be bound later in the case
         expr.sql

@@ -35,7 +35,7 @@ trait Query extends QueryBuilder with TypedQuery {
           and returns {{{org.tresql.Result}}} where instead some single value is expected
           (judging by function's signature)*/
           SingleValueResult(conv(r))
-        } getOrElse (r)
+        } getOrElse r
       case x => SingleValueResult(x)
     }
   }
@@ -284,7 +284,7 @@ trait Query extends QueryBuilder with TypedQuery {
       }
       idx += 1
     }
-    bindVariables.map(_()).foreach { bindVar(_) }
+    bindVariables.map(_()).foreach { bindVar }
   }
   private def registerOutPar(st: CallableStatement, par: OutPar, idx: Int) {
     import java.sql.Types._

@@ -30,7 +30,7 @@ abstract class CoreTypes {
   //do not make Product conversion implicit since it spans also case classes
   def convTuple[T <: Product](r: RowLike, m: Manifest[T]) = if (m.toString.startsWith("scala.Tuple"))
     (m.typeArguments: @unchecked) match {
-      case m1 :: Nil => (r.typed(0)(m1)).asInstanceOf[T]
+      case m1 :: Nil => r.typed(0)(m1).asInstanceOf[T]
       case m1 :: m2 :: Nil => (r.typed(0)(m1), r.typed(1)(m2)).asInstanceOf[T]
       case m1 :: m2 :: m3 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3)).asInstanceOf[T]
       case m1 :: m2 :: m3 :: m4 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4)).asInstanceOf[T]
@@ -57,7 +57,7 @@ abstract class CoreTypes {
 
   implicit def convTuple1[T <: Tuple1[_]](r: RowLike, m: Manifest[T]) = {
     val a = m.typeArguments
-    (r.typed(0)(a(0))).asInstanceOf[T]
+    r.typed(0)(a(0)).asInstanceOf[T]
   }
   implicit def convTuple2[T <: Tuple2[_, _]](r: RowLike, m: Manifest[T]) = {
     val a = m.typeArguments

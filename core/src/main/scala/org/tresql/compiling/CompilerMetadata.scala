@@ -29,7 +29,7 @@ class CompilerJDBCMetadata extends CompilerMetadataFactory {
     val dbCreateScript = conf.getOrElse("dbCreateScript", null)
     val functions = conf.getOrElse("functionSignatures", null)
 
-    Env.logger = ((msg, level) => println (msg))
+    Env.logger = (msg, level) => println(msg)
     Class.forName(driverClassName)
     val conn =
       if (user == null) DriverManager.getConnection(url)

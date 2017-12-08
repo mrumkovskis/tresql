@@ -9,7 +9,7 @@ package object dialects {
       val b = e.builder
       e match {
         case b.FunExpr("case", pars, false, None, None) if pars.size > 1 => (true, pars.grouped(2).map(l =>
-          if (l.size == 1) "else " + l(0).sql else "when " + l(0).sql + " then " + l(1).sql)
+          if (l.size == 1) "else " + l.head.sql else "when " + l.head.sql + " then " + l(1).sql)
           .mkString("case ", " ", " end"))
         case _ => (false, "<none>")
       }
@@ -28,7 +28,7 @@ package object dialects {
       e match {
         case b.FunExpr("lower", _: List[_], false, None, None) => true
         case b.FunExpr("translate", List(_, b.ConstExpr(from: String),
-          b.ConstExpr(to: String)), false, None, None) if (from.length == to.length) => true
+          b.ConstExpr(to: String)), false, None, None) if from.length == to.length => true
         case b.FunExpr("nextval", List(b.ConstExpr(_)), false, None, None) => true
         case _ => false
       }
@@ -38,9 +38,8 @@ package object dialects {
       (e: @unchecked) match {
         case b.FunExpr("lower", List(p), false, None, None) => "lcase(" + p.sql + ")"
         case b.FunExpr("translate", List(col, b.ConstExpr(from: String),
-          b.ConstExpr(to: String)), false, None, None) if (from.length == to.length) => {
+          b.ConstExpr(to: String)), false, None, None) if from.length == to.length =>
           (from zip to).foldLeft(col.sql)((s, a) => "replace(" + s + ", '" + a._1 + "', '" + a._2 + "')")
-        }
         case b.FunExpr("nextval", List(b.ConstExpr(seq)), false, None, None) => "next value for " + seq
       }
     }
@@ -52,13 +51,11 @@ package object dialects {
       e match {
         case b.BinExpr("-", _, _) => true
         case e: QueryBuilder#SelectExpr if e.limit != null || e.offset != null => true
-        case e: QueryBuilder#SelectExpr if e.cols.cols.headOption.map {
-          _.col match {
-            case f: QueryBuilder#FunExpr if f.name == "optimizer_hint" && f.params.size == 1 &&
-              f.params.head.isInstanceOf[QueryBuilder#ConstExpr] => true
-            case _ => false
-          }
-        } getOrElse false => true
+        case e: QueryBuilder#SelectExpr if e.cols.cols.headOption.exists(_.col match {
+          case f: QueryBuilder#FunExpr if f.name == "optimizer_hint" && f.params.size == 1 &&
+            f.params.head.isInstanceOf[QueryBuilder#ConstExpr] => true
+          case _ => false
+        }) => true
         case _ => false
       }
     }
@@ -87,13 +84,11 @@ package object dialects {
               }
             case x => sys.error(s"Unexpected case: $x")
           }
-        case e: QueryBuilder#SelectExpr if e.cols.cols.headOption.map {
-          _.col match {
-            case f: QueryBuilder#FunExpr if f.name == "optimizer_hint" && f.params.size == 1 &&
-              f.params.head.isInstanceOf[QueryBuilder#ConstExpr] => true
-            case _ => false
-          }
-        } getOrElse false =>
+        case e: QueryBuilder#SelectExpr if e.cols.cols.headOption.exists(_.col match {
+          case f: QueryBuilder#FunExpr if f.name == "optimizer_hint" && f.params.size == 1 &&
+            f.params.head.isInstanceOf[QueryBuilder#ConstExpr] => true
+          case _ => false
+        }) =>
           val b = e.builder
           e match {
             case s @ b.SelectExpr(_, _,

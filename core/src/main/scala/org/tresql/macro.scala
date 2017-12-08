@@ -25,7 +25,7 @@ package object macro_ {
       val expr = sc.standardInterpolator(identity, zipped.map(":" + _._1))
       b.transform(b.buildExpr(expr), {
         case v @ b.VarExpr(name, _, _) =>
-          params.get(name) getOrElse v
+          params.getOrElse(name, v)
       })
     }
   }
