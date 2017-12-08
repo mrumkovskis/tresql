@@ -31,7 +31,13 @@ trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T]
     }
   }
 
+  /** Close underlying database resources related to this result. Default implementation does nothing. */
   def close {}
+
+  /** Close underlying database resources related to this result and also related database connection.
+    * Default implementation does nothing.
+    */
+  def closeWithDb {}
 
   def head: T = try hasNext match {
     case true => next
@@ -57,10 +63,10 @@ trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T]
   } finally close
 
   /** Shortcut method for {{{headOption != None}}}*/
-  def exists = headOption != None
+  def exists = headOption.isDefined
 
   /** needs to be overriden since super class implementation calls hasNext method */
-  override def toString = getClass.toString + ":" + (columns.mkString(","))
+  override def toString = getClass.toString + ":" + columns.mkString(",")
 }
 
 trait DynamicResult extends Result[DynamicRow] with DynamicRow
@@ -131,6 +137,11 @@ trait SelectResult[T <: RowLike] extends Result[T] {
     env.result = null
     if (!env.reusableExpr && st != null) st.close
     closed = true
+  }
+
+  override def closeWithDb: Unit = {
+    close
+    env.conn.close
   }
 
   //concrete type return methods
@@ -257,7 +268,6 @@ trait SelectResult[T <: RowLike] extends Result[T] {
       case DOUBLE | FLOAT | REAL => val v = rs.getDouble(pos); if (rs.wasNull) null else v
     }
   }
-
 }
 
 class DynamicSelectResult private[tresql] (
@@ -296,7 +306,7 @@ trait ArrayResult[T <: RowLike] extends Result[T] {
     true
   } else false
 
-  private lazy val cols = (0 until values.size) map { i =>
+  private lazy val cols = values.indices map { i =>
     Column(i, s"_${i + 1}", null)
   }
 
@@ -415,10 +425,10 @@ trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
   def compatibilityObj: Any = {
     val x = (count, children, id) match {
       case (Some(c), ch, None) if ch.isEmpty => c
-      case (Some(c), ch, None) if !ch.isEmpty => c -> compatibilityChildren
-      case (None, ch, None) if !ch.isEmpty => compatibilityChildren
+      case (Some(c), ch, None) if ch.nonEmpty => c -> compatibilityChildren
+      case (None, ch, None) if ch.nonEmpty => compatibilityChildren
       case (Some(c), ch, Some(id)) if ch.isEmpty => c -> id
-      case (Some(c), ch, Some(id)) if !ch.isEmpty => (c -> compatibilityChildren) -> id
+      case (Some(c), ch, Some(id)) if ch.nonEmpty => (c -> compatibilityChildren) -> id
     }
     //println(s"!!!!!!!!!!!!!!: $x")
     x
@@ -434,7 +444,7 @@ trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
 
   override def toString = s"""new ${getClass.getSimpleName}($countToString$childrenToString$idToString)"""
   private def countToString = count.map(c => s"Row count = Some($c)").getOrElse("None")
-  private def childrenToString = if (children.isEmpty) "" else s", children = ${children}"
+  private def childrenToString = if (children.isEmpty) "" else s", children = $children"
   private def idToString = id.map(id => s", id = Some($id)").getOrElse("")
 
 }
