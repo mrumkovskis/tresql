@@ -713,19 +713,18 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
 
     println("\n--- Name resolving ---\n")
     obj = Map("wdate" -> "2017-03-10", "hours" -> 8, "emp" -> "SCOTT", "emp_mgr" -> "KING",
-      "emp->" -> "SCOTT",
-      "emp->empno=emp[ename = _] {empno}" -> "SCOTT",
-      "emp_mgr->" -> "KING",
-      "emp_mgr->empno_mgr=emp[ename = :emp_mgr] {empno}" -> "KING")
+      "emp" -> "SCOTT",
+      "emp->" -> "empno=emp[ename = _] {empno}",
+      "emp_mgr" -> "KING",
+      "emp_mgr->" -> "empno_mgr=emp[ename = :emp_mgr] {empno}")
     assertResult(new InsertResult(Some(1), Map(), None))(ORT.insert("work", obj))
 
     obj = Map("empno" -> 7369, "sal" -> 850, "dept-name" -> "SALES",
-      "dept-name->" -> "SALES", "dept-name->deptno=dept[dname = _]{deptno}" -> null)
+      "dept-name" -> "SALES", "dept-name->" -> "deptno=dept[dname = _]{deptno}")
     assertResult(new UpdateResult(Some(1)))(ORT.update("emp", obj))
 
     obj = Map("deptno" -> 10037, "loc" -> "Latvia", "zip_code" -> "LV-1005", "addr" -> "Tvaika iela 48",
-      "address-city" -> "Riga, LV",
-      "address-city->" -> "Riga, LV", "address-city->addr_nr=address[addr = _]{nr}" -> null)
+      "address-city" -> "Riga, LV", "address-city->" -> "addr_nr=address[addr = _]{nr}")
     assertResult(new UpdateResult(Some(1), Map("_1" -> new UpdateResult(Some(1)))))(
       ORT.updateMultiple(obj, "dept", "dept_addr")())
 
@@ -837,14 +836,14 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     //resolving the same column
     obj = Map("deptno" -> 10004,
       "dname" -> "legal",
-      "dname->dname=upper(_)" -> null)
+      "dname->" -> "dname=upper(_)")
     assertResult(new UpdateResult(Some(1)))(
       ORT.updateMultiple(obj, "dept")())
 
-    obj = Map("dname" -> "attorney", "dname->dname=upper(_)" -> null)
+    obj = Map("dname" -> "attorney", "dname->" -> "dname=upper(_)")
     assertResult(new InsertResult(Some(1), Map(), Some(10079)))(ORT.insert("dept", obj)())
 
-    obj = Map("deptno" -> 10079, "dname" -> "devop", "dname->dname=upper(_)" -> null)
+    obj = Map("deptno" -> 10079, "dname" -> "devop", "dname->" -> "dname=upper(_)")
     assertResult(new UpdateResult(Some(1)))(ORT.update("dept", obj)())
 
     assertResult(List("DEVOP"))(tresql"dept[10079]{dname}".map(_.dname).toList)

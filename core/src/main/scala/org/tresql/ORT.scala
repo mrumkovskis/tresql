@@ -14,7 +14,7 @@ trait ORT extends Query {
   *    dept[+=] alias
   *    emp[+-=] e|:deptno in currentUserDept(:current_user), null /* no statement */, e.deptno in currentUserDept(:current_user)
   */
-  val PROP_PATTERN = {
+  val PropPattern = {
     val ident = """[^:\[\]\s#]+"""
     val table = s"$ident(?::$ident)*"
     val tables = s"""($table(?:#$table)*)"""
@@ -32,7 +32,8 @@ trait ORT extends Query {
   *  Example:
   *    dept_name->dept_id=dept[dname = _]{id}
   */
-  val RESOLVER_PROP_PATTERN = "(.*?)->([^=]+)=(.*)"r
+  val ResolverPropPattern = "(.*?)->"r
+  val ResolverExpPattern = "([^=]+)=(.*)"r
 
   type ObjToMapConverter[T] = (T) => (String, Map[String, _])
 
@@ -252,8 +253,10 @@ trait ORT extends Query {
         case m: Map[String @unchecked, Any @unchecked] => tresql_structure(m)
         case x =>
           //filter out properties which are duplicated because of resolver
-          if (key.indexOf("->") != -1) resolvableProps += key.substring(0, key.indexOf("->"))
-          "***"
+          if (key.indexOf("->") != -1) {
+            resolvableProps += key.substring(0, key.indexOf("->"))
+            value
+          } else "***"
       })
     } (bf)
     if (resolvableProps.isEmpty) struct
@@ -274,7 +277,7 @@ trait ORT extends Query {
           if (optionIdx != -1) multiSaveProp(name.substring(0, optionIdx)
             .split("#")) + name.substring(optionIdx) else multiSaveProp(name.split("#"))
         }
-      val PROP_PATTERN(tables, options, alias, filterStr) = setLinks(name)
+      val PropPattern(tables, options, alias, filterStr) = setLinks(name)
       //insert update delete option
       val (i, u, d) = Option(options).map (_ =>
         (options contains "+", options contains "=", options contains "-")
@@ -439,9 +442,10 @@ trait ORT extends Query {
             if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
           refColName -> resources.valueExpr(name, refColName))
     }.orNull
-    def resolver_tresql(table: metadata.Table, property: String) = {
+    def resolver_tresql(table: metadata.Table, property: String, resolverExp: String) = {
       import QueryParser._
-      val RESOLVER_PROP_PATTERN(prop, col, exp) = property
+      val ResolverPropPattern(prop) = property
+      val ResolverExpPattern(col, exp) = resolverExp
       table.colOption(col).map(_.name).map { _ -> transformer {
           case Ident(List("_")) => Variable(prop, Nil, opt = false)
         } (parseExp(if (exp startsWith "(" ) exp else s"($exp)")).tresql
@@ -465,7 +469,7 @@ trait ORT extends Query {
             //pk or ref to parent
             case _ if refsAndPk.exists(_._1 == n) => Nil
             //resolvable field check
-            case _ if n.indexOf("->") != -1 && n.indexOf('=') != -1 => resolver_tresql(table, n)
+            case v: String if n.indexOf("->") != -1 => resolver_tresql(table, n, v)
             //ordinary field
             case _ => List(table.colOption(n).map(_.name).orNull -> resources.valueExpr(table.name, n))
           }
