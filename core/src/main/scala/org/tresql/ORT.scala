@@ -25,9 +25,9 @@ trait ORT extends Query {
   }
   /**
   *  Resolvable property format:
-  *  name_field>foreign_key_field>resolver_tresql
+  *  saveable_property->saveable_column=tresql_expression
   *  Resolver tresqls where clause can contain placeholder _
-  *  which will be replaced with bind variable ':name_field'.
+  *  which will be replaced with bind variable ':saveable_property'.
   *  Statement must return no more than one row.
   *  Example:
   *    dept_name->dept_id=dept[dname = _]{id}
@@ -435,10 +435,10 @@ trait ORT extends Query {
     }.orNull
     def resolver_tresql(table: metadata.Table, property: String) = {
       import QueryParser._
-      val RESOLVER_PROP_PATTERN(name, fk, rt) = property
-      table.colOption(fk).map(_.name).map { _ -> transformer {
-          case Ident(List("_")) => Variable(name + "->", Nil, opt = false)
-        } (parseExp(if (rt startsWith "(" ) rt else s"($rt)")).tresql
+      val RESOLVER_PROP_PATTERN(prop, col, exp) = property
+      table.colOption(col).map(_.name).map { _ -> transformer {
+          case Ident(List("_")) => Variable(prop + "->", Nil, opt = false)
+        } (parseExp(if (exp startsWith "(" ) exp else s"($exp)")).tresql
       }.toList
     }
     import ctx._
@@ -447,42 +447,42 @@ trait ORT extends Query {
       refsAndPk: Set[(String, String)],
       children: List[String],
       tresqlColAlias: String) = struct.flatMap {
-      case (n, v) => v match {
-        //children
-        case o: Map[String @unchecked, Any @unchecked] => table.refTable.get(List(n)).map(lookupTable =>
-          lookup_tresql(n, lookupTable, o)).getOrElse {
-          List(children_save_tresql(n, o,
-            ParentRef(table.name, refToParent) :: parents) -> null)
+        case (n, v) => v match {
+          //children
+          case o: Map[String @unchecked, Any @unchecked] => table.refTable.get(List(n)).map(lookupTable =>
+            lookup_tresql(n, lookupTable, o)).getOrElse {
+            List(children_save_tresql(n, o,
+              ParentRef(table.name, refToParent) :: parents) -> null)
+          }
+          //pk or ref to parent
+          case _ if refsAndPk.exists(_._1 == n) => Nil
+          //resolvable field check
+          case _ if n.indexOf("->") != -1 && n.indexOf('=') != -1 => resolver_tresql(table, n)
+          //ordinary field
+          case _ => List(table.colOption(n).map(_.name).orNull -> resources.valueExpr(table.name, n))
         }
-        //pk or ref to parent
-        case _ if refsAndPk.exists(_._1 == n) => Nil
-        //resolvable field check
-        case _ if n.indexOf("->") != -1 && n.indexOf('=') != -1 => resolver_tresql(table, n)
-        //ordinary field
-        case _ => List(table.colOption(n).map(_.name).orNull -> resources.valueExpr(table.name, n))
+      }.groupBy { case _: String => "l" case _ => "b"} match {
+        case m: Map[String @unchecked, List[_] @unchecked] =>
+          val tableName = table.name
+          //lookup edit tresql
+          val lookupTresql = m.get("l").map(_.asInstanceOf[List[String]].map(_ + ", ").mkString).orNull
+          //base table tresql
+          val tresql =
+            m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]]
+              .filter(_._1 != null /*check if prop->col mapping found*/) ++
+              children.map(_ -> null) /*add same level one to one children*/
+             match {
+               case x if x.isEmpty && refsAndPk.isEmpty => null //no columns & refs found
+               case cols_vals => table_save_tresql(tableName, alias, cols_vals, refsAndPk)
+             }
+          (for {
+            base <- Option(tresql)
+            tresql <- Option(lookupTresql).map(lookup =>
+                s"([$lookup$base])") //put lookup in braces and array,
+                //so potentially not to conflict with insert expr with multiple values arrays
+              .orElse(Some(base))
+          } yield tresql + tresqlColAlias).orNull
       }
-    }.groupBy { case _: String => "l" case _ => "b"} match {
-      case m: Map[String @unchecked, List[_] @unchecked] =>
-        val tableName = table.name
-        //lookup edit tresql
-        val lookupTresql = m.get("l").map(_.asInstanceOf[List[String]].map(_ + ", ").mkString).orNull
-        //base table tresql
-        val tresql =
-          m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]]
-            .filter(_._1 != null /*check if prop->col mapping found*/) ++
-            children.map(_ -> null) /*add same level one to one children*/
-           match {
-             case x if x.isEmpty && refsAndPk.isEmpty => null //no columns & refs found
-             case cols_vals => table_save_tresql(tableName, alias, cols_vals, refsAndPk)
-           }
-        (for {
-          base <- Option(tresql)
-          tresql <- Option(lookupTresql).map(lookup =>
-              s"([$lookup$base])") //put lookup in braces and array,
-              //so potentially not to conflict with insert expr with multiple values arrays
-            .orElse(Some(base))
-        } yield tresql + tresqlColAlias).orNull
-    }
     val md = resources.metadata
     val headTable = tables.head
     val linkedTables = tables.tail
