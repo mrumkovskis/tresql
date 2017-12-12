@@ -243,15 +243,15 @@ trait ORT extends Query {
           case (k, (v1, _)) => (k, v1 match { case _: Map[_, _] | _: Seq[_] => v1 case _ => "***" })
         }
       }
-    obj.map { kv =>
-      (kv._1, kv._2 match {
+    obj.map { case (key, value) =>
+      (key, value match {
         case Seq() | Array() => Map()
         case l: Seq[Map[String, _] @unchecked] => merge(l)
         case l: Array[Map[String, _] @unchecked] => merge(l)
         case m: Map[String @unchecked, Any @unchecked] => tresql_structure(m)
         case x => "***"
       })
-    }(bf.asInstanceOf[scala.collection.generic.CanBuildFrom[Map[String, Any], (String, Any), M]]) //somehow cast is needed
+    } (bf.asInstanceOf[scala.collection.generic.CanBuildFrom[Map[String, Any], (String, Any), M]]) //somehow cast is needed
   }
 
   def save_tresql(
