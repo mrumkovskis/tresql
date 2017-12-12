@@ -231,7 +231,7 @@ trait ORT extends Query {
   private def tresql_structure[M <: Map[String, Any]](obj: M)(
     /* ensure that returned map is of the same type as passed.
      * For example in the case of ListMap when key ordering is important. */
-    implicit bf: scala.collection.generic.CanBuildFrom[M, (String, Any), M]): M = {
+    implicit bf: scala.collection.generic.CanBuildFrom[Map[String, Any], (String, Any), M]): M = {
     def merge(lm: Seq[Map[String, Any]]): Map[String, Any] =
       lm.tail.foldLeft(tresql_structure(lm.head)) {(l, m) =>
         val x = tresql_structure(m)
@@ -243,15 +243,21 @@ trait ORT extends Query {
           case (k, (v1, _)) => (k, v1 match { case _: Map[_, _] | _: Seq[_] => v1 case _ => "***" })
         }
       }
-    obj.map { case (key, value) =>
+    var resolvableProps = Set[String]()
+    val struct: M = obj.map { case (key, value) =>
       (key, value match {
         case Seq() | Array() => Map()
         case l: Seq[Map[String, _] @unchecked] => merge(l)
         case l: Array[Map[String, _] @unchecked] => merge(l)
         case m: Map[String @unchecked, Any @unchecked] => tresql_structure(m)
-        case x => "***"
+        case x =>
+          //filter out properties which are duplicated because of resolver
+          if (key.indexOf("->") != -1) resolvableProps += key.substring(0, key.indexOf("->"))
+          "***"
       })
-    } (bf.asInstanceOf[scala.collection.generic.CanBuildFrom[Map[String, Any], (String, Any), M]]) //somehow cast is needed
+    } (bf)
+    if (resolvableProps.isEmpty) struct
+    else struct.flatMap { case (k, _) if resolvableProps(k) => Nil case x => List(x) } (bf)
   }
 
   def save_tresql(
@@ -437,7 +443,7 @@ trait ORT extends Query {
       import QueryParser._
       val RESOLVER_PROP_PATTERN(prop, col, exp) = property
       table.colOption(col).map(_.name).map { _ -> transformer {
-          case Ident(List("_")) => Variable(prop + "->", Nil, opt = false)
+          case Ident(List("_")) => Variable(prop, Nil, opt = false)
         } (parseExp(if (exp startsWith "(" ) exp else s"($exp)")).tresql
       }.toList
     }

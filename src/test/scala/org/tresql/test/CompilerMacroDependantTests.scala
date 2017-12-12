@@ -836,13 +836,18 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     println("----- SAVE with resolver for self column -----")
     //resolving the same column
     obj = Map("deptno" -> 10004,
-      "dname->" -> "legal",
+      "dname" -> "legal",
       "dname->dname=upper(_)" -> null)
     assertResult(new UpdateResult(Some(1)))(
       ORT.updateMultiple(obj, "dept")())
 
-    obj = Map("dname->" -> "attorney", "dname->dname=upper(_)" -> null)
+    obj = Map("dname" -> "attorney", "dname->dname=upper(_)" -> null)
     assertResult(new InsertResult(Some(1), Map(), Some(10079)))(ORT.insert("dept", obj)())
+
+    obj = Map("deptno" -> 10079, "dname" -> "devop", "dname->dname=upper(_)" -> null)
+    assertResult(new UpdateResult(Some(1)))(ORT.update("dept", obj)())
+
+    assertResult(List("DEVOP"))(tresql"dept[10079]{dname}".map(_.dname).toList)
   }
   override def compilerMacro {
       println("\n-------------- TEST compiler macro ----------------\n")
