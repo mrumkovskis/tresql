@@ -233,7 +233,7 @@ trait ORT extends Query {
      * For example in the case of ListMap when key ordering is important. */
     implicit bf: scala.collection.generic.CanBuildFrom[M, (String, Any), M]): M = {
     def merge(lm: Seq[Map[String, Any]]): Map[String, Any] =
-      lm.tail.foldLeft(tresql_structure(lm.head))((l, m) => {
+      lm.tail.foldLeft(tresql_structure(lm.head)) {(l, m) =>
         val x = tresql_structure(m)
         l map (t => (t._1, (t._2, x.getOrElse(t._1, null)))) map {
           case (k, (v1: Map[String @unchecked, _], v2: Map[String @unchecked, _])) if v1.nonEmpty && v2.nonEmpty =>
@@ -242,7 +242,7 @@ trait ORT extends Query {
           case (k, (_, v2: Map[String @unchecked, _])) if v2.nonEmpty => (k, v2)
           case (k, (v1, _)) => (k, v1 match { case _: Map[_, _] | _: Seq[_] => v1 case _ => "***" })
         }
-      })
+      }
     obj.map { kv =>
       (kv._1, kv._2 match {
         case Seq() | Array() => Map()
