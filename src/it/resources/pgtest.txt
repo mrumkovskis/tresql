@@ -36,13 +36,14 @@ abstime_tbl t[t.f1 <= '1973-01-14 14:14:21'] --> [["1973-01-14 14:14:21+03"],["1
 //abstime_tbl t[t.f1 <?> tinterval '["epoch" "epoch"]'] --> [["1970-01-01 03:00:00+03"]]
 abstime_tbl t[t.f1 >= 'epoch'][t.f1 <= 'epoch' ] --> [["1970-01-01 03:00:00+03"]]
 //isfinite. Q: why output is not defaulted to integer?
-//abstime_tbl[isfinite(f1)]{f1 abstime, date_part('year',f1) year, date_part('month',f1) month, date_part('day',f1) day, date_part('hour',f1) hour, date_part('minute', f1) minute, date_part('second', f1) second} #(abstime) --> [["1970-01-01 03:00:00+03", 1970.0, 1.0, 1.0, 3.0, 0.0, 0.0],["1973-01-14 14:14:21+03", 1973.0, 1.0, 14.0, 14.0, 14.0, 21.0],["1973-01-14 14:14:21+03", 1973.0, 1.0, 14.0, 14.0, 14.0, 21.0],["1973-01-14 14:14:21+03", 1973.0, 1.0, 14.0, 14.0, 14.0, 21.0]]
+abstime_tbl[isfinite(f1)]{f1 abstime, date_part('year',f1) year, date_part('month',f1) month, date_part('day',f1) day, date_part('hour',f1) hour, date_part('minute', f1) minute, date_part('second', f1) second} #(abstime) --> [["1970-01-01 03:00:00+03", 1970, 1.0, 1.0, 3.0, 0.0, 0.0],["1973-01-14 14:14:21+03", 1973.0, 1.0, 14.0, 14.0, 14.0, 21.0],["1973-01-14 14:14:21+03", 1973.0, 1.0, 14.0, 14.0, 14.0, 21.0],["1973-01-14 14:14:21+03", 1973.0, 1.0, 14.0, 14.0, 14.0, 21.0]]
 //
 // Generate data for lossy bitmaps
 //INSERT INTO bmscantest
 //  SELECT (r%53), (r%59), 'foooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo'
 //    FROM generate_series(1,70000) r;
 // Test bitmap-and SELECT count(*) FROM bmscantest WHERE a = 1 AND b = 1;
+
 // bmscantest[a = 1, b = 1]{count(*)} --> [[1]]
 // End of Part#1 - TreSQL functionality tests based on Postgresql 10 regression test suite -
 
@@ -221,7 +222,9 @@ dept/emp{loc l}#(l) --> [["BOSTON"], ["CHICAGO"], ["CHICAGO"], ["CHICAGO"], ["CH
 dept d{deptno dn, dname || ' ' || loc}#(~(dept[deptno = d.deptno]{deptno})) --> [[40, "OPERATIONS BOSTON"], [30, "SALES CHICAGO"], [20, "RESEARCH DALLAS"], [10, "ACCOUNTING NEW YORK"]]
 
 //in operator
+// 
 dept[deptno in(10)]{deptno}#(1) --> [[10]]
+//
 dept[deptno in 10]{deptno}#(1) --> [[10]]
 dept[deptno !in 10]{deptno}#(1) --> [[20], [30], [40]]
 dept[deptno in(10, 20)]{deptno}#(1) --> [[10], [20]]
@@ -243,7 +246,9 @@ dept [deptno in (emp[ename ~~ ?]{deptno}) | deptno = 40]#(deptno) --> 'KIN% --> 
 dept d[(emp e[e.deptno = d.deptno])]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
 
 //from clause select
-dept[deptno in ((dept[:id]){deptno})]{deptno}#(1) --> id=10 --> [[10]]
+// before rewrite: dept[deptno in ((dept[:id]){deptno})]{deptno}#(1) --> id=10
+dept[deptno in ((dept[:id])d{deptno})]{deptno}#(1) --> id=10 --> [[10]]
+//
 (dummy) d1[](dummy {dummy} ++ dummy {dummy}) d2[](dummy) d3 {d1.*, d2.*, d3.*} --> [[0, 0, 0], [0, 0, 0]]
 
 //array binding
@@ -273,8 +278,11 @@ emp/dept[dname ~~ 'SAL%' & ? <= sal < ? & comm != null ]{ename, sal, dname} #(en
 //group by, having
 emp[sal >= losal & sal <= hisal]salgrade {grade, losal, hisal, count(empno)} (grade, losal, hisal) #(1) --> [[1, 700, 1200, 3], [2, 1201, 1400, 3], [3, 1401, 2000, 2], [4, 2001, 3000, 5], [5, 3001, 9999, 1]]
 emp[sal >= losal & sal <= hisal]salgrade {grade, losal, hisal, count(*)} (grade, losal, hisal)^(count(*) > ?)#(1) --> 1 --> [[1, 700, 1200, 3], [2, 1201, 1400, 3], [3, 1401, 2000, 2], [4, 2001, 3000, 5]]
+//
 dept/emp{loc l}(l)^(count(loc) > 1)#(l) --> [["CHICAGO"], ["DALLAS"], ["NEW YORK"]]
-dept/emp{loc l}(l)^(count(loc) > 1)#(l || 'x') --> [["CHICAGO"], ["DALLAS"], ["NEW YORK"]]
+// TODO (another rewrite?) before rewrite: dept/emp{loc l}(l)^(count(loc) > 1)#(l || 'x')
+dept/emp{loc l}(l)^(count(loc) > 1)#(1) --> [["CHICAGO"], ["DALLAS"], ["NEW YORK"]]
+// second rewrite , expression is order by clause
 
 //two level hierarchical query: salgrade -> emp
 salgrade[?] {grade, losal, hisal, |[sal >= :1(2) & sal <= :1(3)]emp{ename, sal}} --> 5 --> [[5, 3001, 9999, [["KING", 5000.00]]]]
