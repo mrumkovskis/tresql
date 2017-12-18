@@ -280,7 +280,7 @@ emp[sal >= losal & sal <= hisal]salgrade {grade, losal, hisal, count(empno)} (gr
 emp[sal >= losal & sal <= hisal]salgrade {grade, losal, hisal, count(*)} (grade, losal, hisal)^(count(*) > ?)#(1) --> 1 --> [[1, 700, 1200, 3], [2, 1201, 1400, 3], [3, 1401, 2000, 2], [4, 2001, 3000, 5]]
 //
 dept/emp{loc l}(l)^(count(loc) > 1)#(l) --> [["CHICAGO"], ["DALLAS"], ["NEW YORK"]]
-// TODO (another rewrite?) before rewrite: dept/emp{loc l}(l)^(count(loc) > 1)#(l || 'x')
+// TODO before rewrite: dept/emp{loc l}(l)^(count(loc) > 1)#(l || 'x')
 dept/emp{loc l}(l)^(count(loc) > 1)#(1) --> [["CHICAGO"], ["DALLAS"], ["NEW YORK"]]
 // second rewrite , expression is order by clause
 
