@@ -166,14 +166,32 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     }
   }
 
+  trait WithQuery extends SQLDefBase {
+    def exp: SQLDefBase
+    def withTables: List[WithTableDef]
+  }
+  trait WithSelectBase extends SelectDefBase with WithQuery {
+    def exp: SelectDefBase
+  }
+  trait WithDMLQuery extends WithQuery {
+    def exp: DMLDefBase
+  }
   // with [recursive] ...
   case class WithSelectDef(
     exp: SelectDefBase,
     withTables: List[WithTableDef]
-  ) extends SelectDefBase {
+  ) extends WithSelectBase {
     def cols = exp.cols
     def tables = exp.tables
     override def table(table: String) = exp.table(table)
+  }
+
+  case class WithInsertDef(
+    exp: InsertDef,
+    withTables: List[WithTableDef]
+  ) extends WithDMLQuery {
+    def cols = exp.cols
+    def tables = exp.tables
   }
 
   case class ValuesFromSelectDef(exp: SelectDefBase, alias: Option[String]) extends SelectDefBase {

@@ -21,6 +21,7 @@ object QueryBuildCtx {
   object VALUES_CTX extends Ctx
   object LIMIT_CTX extends Ctx
   object FUN_CTX extends Ctx
+  object WITH_CTX extends Ctx
   object WITH_TABLE_CTX extends Ctx
   object EXTERNAL_FUN_CTX extends Ctx
 }
@@ -815,6 +816,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
               case c :: l => BinExpr("&", exp(c._1, c._2), exps(l))
               case _ => sys.error("Unexpected cols type")
             }
+            println(s"ctx: ${QueryBuilder.this.ctxStack.headOption.orNull}")
+            println(s"has parent query: $hasParentQuery")
             joinWithParent(qname mkString ".", refCol).map(t => exps(t._1 zip t._2))
           }
           tablesAndAliases._1.headOption.flatMap {
@@ -1053,7 +1056,11 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case Const(x) => ConstExpr(x)
         case Null => ConstExpr(null)
         //insert
-        case Insert(t, a, c, v) => buildWithNew(_.buildInsert(t, a, c, v))
+        case Insert(t, a, c, v) => parseCtx match {
+          //insert can be statement of with query, in this case it is part of this builder (sql statement)
+          case WITH_CTX => buildInsert(t, a, c, v)
+          case _ => buildWithNew(_.buildInsert(t, a, c, v))
+        }
         //update
         case Update(t, a, f, c, v) => buildWithNew(_.buildUpdate(t, a, f, c, v))
         //delete
@@ -1086,7 +1093,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
             case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx) //unwrap braces expression
             case _ => buildSelectFromObj(t)
           }
-          case FROM_CTX | TABLE_CTX | WITH_TABLE_CTX => buildSelectFromObj(t) //table in from clause of top level query or in any other subquery
+          //table in from clause of top level query or in any other subquery
+          case FROM_CTX | TABLE_CTX | WITH_CTX | WITH_TABLE_CTX => buildSelectFromObj(t)
           case COL_CTX => buildColumnIdentOrBracesExpr(t)
           case _ => buildIdentOrBracesExpr(t)
         }
@@ -1102,13 +1110,13 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
           case ARR_CTX => buildWithNew(_.buildInternal(wq, QUERY_CTX)) //may have other elements in array
           case _ =>
             val withTables = tables.map(buildInternal(_, parseCtx).asInstanceOf[WithTableExpr])
-            buildInternal(query, parseCtx) match {
+            buildInternal(query, WITH_CTX) match {
               case s: SelectExpr => WithSelectExpr(withTables, s)
               case b: BinExpr if b.exprType == classOf[SelectExpr] => WithBinExpr(withTables, b)
-              //case i: InsertExpr => new WithInsertExpr(withTables, i) //built by another builder
+              case i: InsertExpr => new WithInsertExpr(withTables, i)
               //case u: UpdateExpr =>
               //case d: DeleteExpr =>
-              case x => sys.error(s"Currently unsupported WITH query: ${query.tresql}")
+              case x => sys.error(s"""Currently unsupported after "WITH" query: ${query.tresql}""")
             }
         }
         case WithTable(name, cols, recursive, query) =>

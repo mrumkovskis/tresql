@@ -176,6 +176,9 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       emp[ename ~~ 'kin%']{empno, ename} + emp[mgr = nr]kd{empno, ename}
     } kd {name}) val}""")
 
+    //with expression with insert
+    //compile("d(# dname) {dept{dname}} +dept{deptno, dname} d{#dept, dname || '[reorganized]'}")
+
     //values from select compilation
     compile("=dept_addr da [da.addr_nr = a.nr] address a {da.addr = a.addr}")
     compile("=dept_addr da [da.addr_nr = address.nr] address {da.addr = address.addr}")
@@ -223,6 +226,8 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where da.addr_nr = a.nr and (da.addr_nr = 1 and a.addr = 'a')")
     assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] addr a [da.addr_nr = 1 & a.addr = 'a'] {da.addr = a.addr}").sql)(
       "update dept_addr da set da.addr = a.addr from addr a where da.addr_nr = a.nr and (da.addr_nr = 1 and a.addr = 'a')")
+    assertResult(Query.build("d(# dname) {dept{dname}} +dept{deptno, dname} d{#dept, dname || '[reorganized]'}").sql)(
+      "with d(dname) as (select dname from dept) insert into dept (deptno, dname) select ?, dname || '[reorganized]' from d")
 
     //restore hsql dialect
     Env.dialect = hsqlDialect
