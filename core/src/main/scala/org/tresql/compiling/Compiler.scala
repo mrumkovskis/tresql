@@ -272,6 +272,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     }).orElse(procedure(s"$col#0").map(p => //check for empty pars function declaration
       org.tresql.metadata.Col(name = col, true, -1, scalaType = p.scalaReturnType)))
   }
+  /** Method is used to resolve column names in group by or order by clause, since they can reference columns by name from column clause. */
   def declaredColumn(scopes: List[Scope])(colName: String): Option[org.tresql.metadata.Col[_]] = {
     val col = colName.toLowerCase
     scopes.head.column(col) orElse column(scopes)(col)
