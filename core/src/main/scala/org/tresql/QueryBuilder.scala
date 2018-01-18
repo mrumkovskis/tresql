@@ -542,7 +542,12 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   class WithInsertExpr(val tables: List[WithTableExpr], val query: InsertExpr)
     extends InsertExpr(query.table, query.alias, query.cols, query.vals)
     with WithExpr
-
+  class WithUpdateExpr(val tables: List[WithTableExpr], val query: UpdateExpr)
+    extends UpdateExpr(query.table, query.alias, query.filter, query.cols, query.vals)
+    with WithExpr
+  class WithDeleteExpr(val tables: List[WithTableExpr], val query: DeleteExpr)
+    extends DeleteExpr(query.table, query.alias, query.filter)
+    with WithExpr
 
   class InsertExpr(table: IdentExpr, alias: String, val cols: List[Expr], val vals: Expr)
     extends DeleteExpr(table, alias, null) {
@@ -1062,9 +1067,17 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
           case _ => buildWithNew(_.buildInsert(t, a, c, v))
         }
         //update
-        case Update(t, a, f, c, v) => buildWithNew(_.buildUpdate(t, a, f, c, v))
+        case Update(t, a, f, c, v) => parseCtx match {
+          //update can be statement of with query, in this case it is part of this builder (sql statement)
+          case WITH_CTX => buildUpdate(t, a, f, c, v)
+          case _ => buildWithNew(_.buildUpdate(t, a, f, c, v))
+        }
         //delete
-        case Delete(t, a, f) => buildWithNew(_.buildDelete(t, a, f))
+        case Delete(t, a, f) => parseCtx match {
+          //delete can be statement of with query, in this case it is part of this builder (sql statement)
+          case WITH_CTX => buildDelete(t, a, f)
+          case _ => buildWithNew(_.buildDelete(t, a, f))
+        }
         //recursive child query
         case UnOp("|", join: Arr) =>
           if (recursiveQueryExp != null) {
@@ -1114,8 +1127,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
               case s: SelectExpr => WithSelectExpr(withTables, s)
               case b: BinExpr if b.exprType == classOf[SelectExpr] => WithBinExpr(withTables, b)
               case i: InsertExpr => new WithInsertExpr(withTables, i)
-              //case u: UpdateExpr =>
-              //case d: DeleteExpr =>
+              case u: UpdateExpr => new WithUpdateExpr(withTables, u)
+              case d: DeleteExpr => new WithDeleteExpr(withTables, d)
               case x => sys.error(s"""Currently unsupported after "WITH" query: ${query.tresql}""")
             }
         }

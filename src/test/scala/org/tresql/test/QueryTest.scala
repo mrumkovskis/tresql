@@ -176,14 +176,18 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       emp[ename ~~ 'kin%']{empno, ename} + emp[mgr = nr]kd{empno, ename}
     } kd {name}) val}""")
 
-    //with expression with insert
-    //compile("d(# dname) {dept{dname}} +dept{deptno, dname} d{#dept, dname || '[reorganized]'}")
+    //with expression with dml statement
+    compile("d(# dname) {dept{dname}} +dept{deptno, dname} d{#dept, dname || '[reorganized]'}")
+    compile("d(# dname) {dept{dname}} =dept[d.dname = 'x']{deptno, dname} d{#dept, dname || '[reorganized]'}")
+    compile("d(# dname) {dept{dname}} =dept[dept.dname = d.dname]d[d.dname = 'x'] {deptno = #dept, dname = d.dname}")
+    compile("d(# dname) {dept[deptno = 1]{dname}} dept - [deptno in d{deptno}]")
 
     //values from select compilation
     compile("=dept_addr da [da.addr_nr = a.nr] address a {da.addr = a.addr}")
     compile("=dept_addr da [da.addr_nr = address.nr] address {da.addr = address.addr}")
     compile("=dept_addr da [da.addr_nr = a.nr] (address a {a.nr, a.addr}) a {da.addr = a.addr}")
     compile("=dept_addr da [da.addr_nr = nr] (address a {a.nr, a.addr}) a {da.addr = a.addr}")
+    compile("=dept_addr da [da.addr_nr = nr] (address a {a.nr, a.addr}) a {da.addr = 'ADDR'}")
 
     //postgresql style cast compilation
     compile("dummy[dummy::int = 1 & dummy::'double precision' & (dummy + dummy)::long] {dummy::int}")
@@ -228,6 +232,15 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       "update dept_addr da set da.addr = a.addr from addr a where da.addr_nr = a.nr and (da.addr_nr = 1 and a.addr = 'a')")
     assertResult(Query.build("d(# dname) {dept{dname}} +dept{deptno, dname} d{#dept, dname || '[reorganized]'}").sql)(
       "with d(dname) as (select dname from dept) insert into dept (deptno, dname) select ?, dname || '[reorganized]' from d")
+    assertResult(Query.build("d(# dname) {dept{dname}} =dept[d.dname = 'x']{deptno, dname} d{#dept, dname || '[reorganized]'}").sql)(
+      "with d(dname) as (select dname from dept) update dept set (deptno, dname) = (select ?, dname || '[reorganized]' from d) where d.dname = 'x'"
+    )
+    assertResult(Query.build("d(# dname) {dept{dname}} =dept[dept.dname = d.dname]d[d.dname = 'x'] {deptno = #dept, dname = d.dname}").sql)(
+      "with d(dname) as (select dname from dept) update dept set deptno = ?, dname = d.dname from d where dept.dname = d.dname and (d.dname = 'x')"
+    )
+    assertResult(Query.build("d(# dname) {dept[deptno = 1]{dname}} dept - [deptno in d{deptno}]").sql)(
+      "with d(dname) as (select dname from dept where deptno = 1) delete from dept where deptno in (select deptno from d)"
+    )
 
     //restore hsql dialect
     Env.dialect = hsqlDialect
