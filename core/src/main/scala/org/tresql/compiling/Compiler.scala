@@ -169,51 +169,6 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     }
   }
 
-  trait WithQuery extends SQLDefBase {
-    def exp: SQLDefBase
-    def withTables: List[WithTableDef]
-  }
-  trait WithSelectBase extends SelectDefBase with WithQuery {
-    def exp: SelectDefBase
-  }
-  trait WithDMLQuery extends DMLDefBase with WithQuery {
-    def exp: DMLDefBase
-  }
-  // with [recursive] ...
-  case class WithSelectDef(
-    exp: SelectDefBase,
-    withTables: List[WithTableDef]
-  ) extends WithSelectBase {
-    def cols = exp.cols
-    def tables = exp.tables
-    override def table(table: String) = exp.table(table)
-  }
-
-  case class WithInsertDef(
-    exp: InsertDef,
-    withTables: List[WithTableDef]
-  ) extends WithDMLQuery {
-    def cols = exp.cols
-    def tables = exp.tables
-  }
-
-  case class WithUpdateDef(
-    exp: UpdateDef,
-    withTables: List[WithTableDef]
-  ) extends WithDMLQuery {
-    def cols = exp.cols
-    def tables = exp.tables
-  }
-
-  case class WithDeleteDef(
-    exp: DeleteDef,
-    withTables: List[WithTableDef]
-  ) extends WithDMLQuery {
-    def cols = exp.cols
-    def tables = exp.tables
-  }
-
-
   case class ValuesFromSelectDef(exp: SelectDefBase, alias: Option[String]) extends SelectDefBase {
     override def cols = exp.cols
     override def tables = List(TableDef(tableNames.head, Obj(TableObj(exp), null, null, null)))
@@ -258,6 +213,52 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       exp.copy(table = Ident(List(tables.head.name))).tresql
   }
 
+  // with [recursive] expressions
+  trait WithQuery extends SQLDefBase {
+    def exp: SQLDefBase
+    def withTables: List[WithTableDef]
+  }
+  trait WithSelectBase extends SelectDefBase with WithQuery {
+    def exp: SelectDefBase
+  }
+  trait WithDMLQuery extends DMLDefBase with WithQuery {
+    def exp: DMLDefBase
+  }
+
+  case class WithSelectDef(
+    exp: SelectDefBase,
+    withTables: List[WithTableDef]
+  ) extends WithSelectBase {
+    def cols = exp.cols
+    def tables = exp.tables
+    override def table(table: String) = exp.table(table)
+  }
+
+  case class WithInsertDef(
+    exp: InsertDef,
+    withTables: List[WithTableDef]
+  ) extends WithDMLQuery {
+    def cols = exp.cols
+    def tables = exp.tables
+  }
+
+  case class WithUpdateDef(
+    exp: UpdateDef,
+    withTables: List[WithTableDef]
+  ) extends WithDMLQuery {
+    def cols = exp.cols
+    def tables = exp.tables
+  }
+
+  case class WithDeleteDef(
+    exp: DeleteDef,
+    withTables: List[WithTableDef]
+  ) extends WithDMLQuery {
+    def cols = exp.cols
+    def tables = exp.tables
+  }
+
+  //array
   case class ArrayDef(cols: List[ColDef[_]]) extends RowDefBase {
     def exp = this
     override def tresql = cols.map(c => any2tresql(c.col)).mkString("[", ", ", "]")
@@ -773,6 +774,9 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         exp = tt(wtd.exp)
       )
       case wsd: WithSelectDef => wsd.copy(exp = tt(wsd.exp), withTables = wsd.withTables map tt)
+      case wid: WithInsertDef => wid.copy(exp = tt(wid.exp), withTables = wid.withTables map tt)
+      case wud: WithInsertDef => wud.copy(exp = tt(wud.exp), withTables = wud.withTables map tt)
+      case wdd: WithInsertDef => wdd.copy(exp = tt(wdd.exp), withTables = wdd.withTables map tt)
       case BracesSelectDef(sdb) => BracesSelectDef(tt(sdb))
       case fsd: FunSelectDef => fsd.copy(exp = tt(fsd.exp))
       case vfsd: ValuesFromSelectDef => vfsd.copy(exp = tt(vfsd.exp))
@@ -822,6 +826,18 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case wsd: WithSelectDef => wsd.copy(
         exp = tt(state)(wsd.exp),
         withTables = wsd.withTables map tt(state)
+      )
+      case wid: WithSelectDef => wid.copy(
+        exp = tt(state)(wid.exp),
+        withTables = wid.withTables map tt(state)
+      )
+      case wud: WithSelectDef => wud.copy(
+        exp = tt(state)(wud.exp),
+        withTables = wud.withTables map tt(state)
+      )
+      case wdd: WithSelectDef => wdd.copy(
+        exp = tt(state)(wdd.exp),
+        withTables = wdd.withTables map tt(state)
       )
       case BracesSelectDef(sdb) => BracesSelectDef(tt(state)(sdb))
       case fsd: FunSelectDef => fsd.copy(exp = tt(state)(fsd.exp))
