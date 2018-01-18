@@ -87,13 +87,10 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
   }
 
   //is superclass of insert, update, delete
-  trait DMLDefBase extends SQLDefBase {
-    override def exp: DMLExp
-  }
+  trait DMLDefBase extends SQLDefBase
 
   //is superclass of select, union, intersect etc.
   trait SelectDefBase extends SQLDefBase {
-    def cols: List[ColDef[_]]
     override def column(col: String) = cols.find(_.name == col) map col_from_coldef
   }
 
@@ -173,7 +170,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
   trait WithSelectBase extends SelectDefBase with WithQuery {
     def exp: SelectDefBase
   }
-  trait WithDMLQuery extends WithQuery {
+  trait WithDMLQuery extends DMLDefBase with WithQuery {
     def exp: DMLDefBase
   }
   // with [recursive] ...
