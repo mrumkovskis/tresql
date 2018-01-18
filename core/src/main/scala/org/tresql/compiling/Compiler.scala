@@ -38,7 +38,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
   }
   case class ColDef[T](name: String, col: Exp, typ: Manifest[T]) extends TypedExp[T] {
     def exp = this
-    override def tresql = any2tresql(col)
+    override def tresql = Col(col, name).tresql
   }
   case class ChildDef(exp: Exp) extends TypedExp[ChildDef] {
     val typ: Manifest[ChildDef] = ManifestFactory.classType(this.getClass)
@@ -84,6 +84,12 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     protected def table_alias(name: String) = Table(name, Nil, null, Map())
     protected def col_from_coldef(cd: ColDef[_]) =
       org.tresql.metadata.Col(name = cd.name, true, -1, scalaType = cd.typ)
+
+    override def tresql = exp match {
+      case q: Query =>
+        /* FIXME distinct keyword is lost in Cols */
+        q.copy(tables = this.tables.map(_.exp), cols = Cols(false, this.cols.map(c => Col(c.exp, c.name)))).tresql
+    }
   }
 
   //is superclass of insert, update, delete
@@ -191,6 +197,23 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     def tables = exp.tables
   }
 
+  case class WithUpdateDef(
+    exp: UpdateDef,
+    withTables: List[WithTableDef]
+  ) extends WithDMLQuery {
+    def cols = exp.cols
+    def tables = exp.tables
+  }
+
+  case class WithDeleteDef(
+    exp: DeleteDef,
+    withTables: List[WithTableDef]
+  ) extends WithDMLQuery {
+    def cols = exp.cols
+    def tables = exp.tables
+  }
+
+
   case class ValuesFromSelectDef(exp: SelectDefBase, alias: Option[String]) extends SelectDefBase {
     override def cols = exp.cols
     override def tables = List(TableDef(tableNames.head, Obj(TableObj(exp), null, null, null)))
@@ -212,19 +235,27 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     cols: List[ColDef[_]],
     tables: List[TableDef],
     exp: Insert
-  ) extends DMLDefBase
+  ) extends DMLDefBase {
+    override def tresql = // FIXME alias lost
+      exp.copy(table = Ident(List(tables.head.name)), cols = this.cols.map(c => Col(c.exp, c.name))).tresql
+  }
 
   case class UpdateDef(
     cols: List[ColDef[_]],
     tables: List[TableDef],
     exp: Update
-  ) extends DMLDefBase
+  ) extends DMLDefBase {
+    override def tresql = // FIXME alias lost
+      exp.copy(table = Ident(List(tables.head.name)), cols = this.cols.map(c => Col(c.exp, c.name))).tresql
+  }
 
   case class DeleteDef(
     tables: List[TableDef],
     exp: Delete
   ) extends DMLDefBase {
     def cols = Nil
+    override def tresql = // FIXME alias lost
+      exp.copy(table = Ident(List(tables.head.name))).tresql
   }
 
   case class ArrayDef(cols: List[ColDef[_]]) extends RowDefBase {
