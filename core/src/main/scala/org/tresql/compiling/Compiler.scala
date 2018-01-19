@@ -3,7 +3,6 @@ package compiling
 
 import org.tresql.parsing._
 import org.tresql.metadata._
-import org.tresql.Env
 import scala.reflect.ManifestFactory
 
 trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
