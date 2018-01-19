@@ -68,8 +68,9 @@ lazy val tresql = (project in file("."))
     sources in (Compile, doc) := (sources in (core, Compile)).value ++ (sources in (macros, Compile)).value,
 
     name := "tresql",
-    libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "3.0.0" % "test",
-                                "org.hsqldb" % "hsqldb" % "2.3.1" % "test"),
+    libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "3.0.0" % "test,it",
+                                "org.hsqldb" % "hsqldb" % "2.3.1" % "test", 
+                                "org.postgresql" % "postgresql" % "42.1.4" % "it,test"),
     initialCommands in console := "import org.tresql._; import org.tresql.implicits._; import org.scalatest.run",
     publishArtifact in Test := false,
     publishArtifact in Compile := true,
@@ -99,3 +100,5 @@ lazy val tresql = (project in file("."))
         </developer>
       </developers>
   )
+  .configs(IntegrationTest extend(Test))
+  .settings(Defaults.itSettings) 
