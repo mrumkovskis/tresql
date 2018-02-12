@@ -241,7 +241,11 @@ trait ORT extends Query {
             (k, merge(List(v1, v2)))
           case (k, (v1: Map[String @unchecked, _], _)) if v1.nonEmpty => (k, v1)
           case (k, (_, v2: Map[String @unchecked, _])) if v2.nonEmpty => (k, v2)
-          case (k, (v1, _)) => (k, v1 match { case _: Map[_, _] | _: Seq[_] => v1 case _ => "***" })
+          case (k, (v1, _)) => (k, v1 match {
+            case _: Map[_, _] | _: Seq[_] => v1
+            case _ if k endsWith "->" => v1
+            case _ => "***"
+          })
         }
       }
     var resolvableProps = Set[String]()
@@ -253,8 +257,8 @@ trait ORT extends Query {
         case m: Map[String @unchecked, Any @unchecked] => tresql_structure(m)
         case x =>
           //filter out properties which are duplicated because of resolver
-          if (key.indexOf("->") != -1) {
-            resolvableProps += key.substring(0, key.indexOf("->"))
+          if (key endsWith "->") {
+            resolvableProps += key.substring(0, key.length - "->".length)
             value
           } else "***"
       })

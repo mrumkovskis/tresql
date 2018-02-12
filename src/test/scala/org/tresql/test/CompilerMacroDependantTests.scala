@@ -719,6 +719,15 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       "emp_mgr->" -> "empno_mgr=emp[ename = :emp_mgr] {empno}")
     assertResult(new InsertResult(Some(1), Map(), None))(ORT.insert("work", obj))
 
+    obj = Map("deptno" -> 10, "emp[=]" ->
+      List(
+        Map("empno" -> 7782, "ename" -> "CLARK", "mgr" -> "KING", "mgr->" -> "mgr=emp[ename = _]{empno}"),
+        Map("empno" -> 7839, "ename" -> "KING", "mgr" -> null, "mgr->" -> "mgr=emp[ename = _]{empno}")
+      )
+    )
+    assertResult(new UpdateResult(None, Map("emp[=]" -> List(new UpdateResult(Some(1)), new UpdateResult(Some(1))))))(
+      ORT.update("dept", obj))
+
     obj = Map("empno" -> 7369, "sal" -> 850, "dept-name" -> "SALES",
       "dept-name" -> "SALES", "dept-name->" -> "deptno=dept[dname = _]{deptno}")
     assertResult(new UpdateResult(Some(1)))(ORT.update("emp", obj))
