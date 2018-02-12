@@ -453,7 +453,8 @@ trait ORT extends Query {
       table.colOption(col).map(_.name).map { _ -> transformer {
           case Ident(List("_")) => Variable(prop, Nil, opt = false)
         } (parseExp(if (exp startsWith "(" ) exp else s"($exp)")).tresql
-      }.toList
+      }// TODO .orElse(sys.error(s"Resolver target not found for property '$prop'. Column '$col', expression '$resolverExp'"))
+       .toList
     }
     import ctx._
     def tresql_string(
