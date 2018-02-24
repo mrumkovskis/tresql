@@ -174,8 +174,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       (if (cols.nonEmpty) cols.map(_.tresql).mkString("{", ",", "}") else "") +
       (if (vals != null) any2tresql(vals) else "")
   }
-  case class ValuesFromSelect(select: Exp, alias: Option[String]) extends Exp {
-    def tresql = select.tresql + alias.map(" " + _).mkString
+  case class ValuesFromSelect(select: Exp) extends Exp {
+    def tresql = select.tresql
   }
   case class Delete(table: Ident, alias: String, filter: Arr) extends DMLExp {
     override def cols = null
@@ -459,32 +459,12 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       } named "update-cols-select"
   //update table set col1 = sel_col1, col2 = sel_col2 from (select sel_col1, sel_col2 from table2 ...) values_table where ....
   private def updateFromSelect: MemParser[Update] = "=" ~> objs ~ opt(filter) ~ opt(columns) ^? ({
-    case List(
-      Obj(t @ Ident(_), a, _, _, _), //table to be updated
-      s @ Obj(_, _, Join(false, Arr(List(join)), false), _, _) //values select with join condition to update table
-    ) ~ f ~ c =>
-      Update(t, a,
-        f.map {
-          case Arr(List(filter)) => Arr(List(BinOp("&", join, Braces(filter)))) //combine filter with values select join
-          case x => sys.error(s"Invalid update filter: ${x.tresql}")
-        }.getOrElse(Arr(List(join))),
-        c.map(_.cols).getOrElse(Nil),
-        s match {
-          case t @ Obj(_: Ident, a, _, _, _) =>
-            ValuesFromSelect(t.copy(alias = null, join = null), Option(a))
-          case Obj(st: Braces, a, _, _, _) if a != null =>
-            // eliminate enclosing Obj because we need braces expr not select ... from select ...
-            ValuesFromSelect(st, Option(a))
-          //obj can be only qualified ident or braces
-          case x => sys.error(
-            s"From select clause must be qualified ident or select in braces with alias. Instead encountered: ${x.tresql}")
-       }
-     )
+    case (tables @ Obj(updateTable @ Ident(_), alias, _, _, _) :: fromTables) ~ f ~ c if fromTables.nonEmpty =>
+      Update(updateTable, alias, f.orNull, c.map(_.cols).getOrElse(Nil),
+        ValuesFromSelect(Query(tables = tables, Filters(Nil), Cols(false, List(Col(All, null))), null, null, null, null)))
    }, {
-   case (objs: List[Obj] @unchecked) ~ _ ~ _ => "Update tables clause must contain 2 elements - " +
-     "qualifiedIdent with optional alias as a table to be updated and table " +
-     "(or select (in this case alias is mandatory)) which provides values. " +
-     "Table to be updated and values select must be joined with normal join." +
+   case (objs: List[Obj] @unchecked) ~ _ ~ _ => "Update tables clause must as the first element must have - " +
+     "qualifiedIdent with optional alias as a table to be updated" +
      s"Instead encountered: ${objs.map(_.tresql).mkString}"
   }) named "update-from-select"
   def update: MemParser[Update] = (updateColsSelect | updateFromSelect | simpleUpdate) named "update"

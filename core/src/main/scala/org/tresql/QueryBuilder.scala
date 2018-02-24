@@ -422,7 +422,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         //foreign key join shortcut syntax
         case TableJoin(false, e @ IdentExpr(_), _, _) => fkAliasJoin(e)
         //normal join
-        case TableJoin(false, e, _, _) => e.sql
+        case TableJoin(false, e, _, _) => e match { case ArrExpr(List(j)) => j.sql /*remove unnecessary braces*/ case _ => e.sql }
         //default join
         case TableJoin(true, null, _, dj) => defaultJoin(dj)
         //default join with additional expression
@@ -570,14 +570,11 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   case class ValuesExpr(vals: List[Expr]) extends PrimitiveExpr {
     def defaultSQL = vals map (_.sql) mkString("values ", ",", "")
   }
-  case class ValuesFromSelectExpr(sel: Expr, alias: Option[String]) extends PrimitiveExpr {
-    def defaultSQL = {
-      val exp = sel match {
-        case b: BracesExpr => b
-        case s: SelectExpr => s.tables.head //must be only one table
-        case x => x
-      }
-      s"from ${exp.sql}${alias.map(" " + _).mkString}"
+  case class ValuesFromSelectExpr(sel: Expr) extends PrimitiveExpr {
+    def defaultSQL = sel match {
+      // start from clause with second table (first table is updateable)
+      case select: SelectExpr => s"from ${select.tables(1).sql}${select.join(select.tables.tail)}"
+      case x => sys.error(s"ValuesFromSelectExpr must contain SelectExpr, instead encountered: $x")
     }
   }
   class UpdateExpr(table: IdentExpr, alias: String, filter: List[Expr],
@@ -598,7 +595,18 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case q: SelectExpr => cols.map(_.sql).mkString("(", ", ", ")") + " = " + "(" + q.sql + ")"
         case f: ValuesFromSelectExpr => cols.map(_.sql).mkString(", ") + " " + f.sql
         case x => error("Knipis: " + x)
-      }) + (if (filter == null) "" else " where " + where)
+      }) + {
+        val filterSql = if (filter == null) null else where
+        val joinWithUpdateTableSql = vals match {
+          case ValuesFromSelectExpr(sel: SelectExpr) => sel.tables(1).sqlJoinCondition(sel.tables.head)
+          case _ => null
+        }
+        Option(joinWithUpdateTableSql) ++ Option(filterSql) match {
+          case List(j, f) => s" where ($j) and ($f)"
+          case List(f) => s" where $f"
+          case _ => ""
+        }
+      }
   }
   case class DeleteExpr(table: IdentExpr, alias: String, filter: List[Expr]) extends BaseExpr {
     override def apply() = {
@@ -1197,7 +1205,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case Ord(cols) => Order(cols map (c=> (buildInternal(c._1, parseCtx),
             buildInternal(c._2, parseCtx), buildInternal(c._3, parseCtx))))
         case All => AllExpr()
-        case ValuesFromSelect(sel, alias) => ValuesFromSelectExpr(buildInternal(sel, FROM_CTX), alias)
+        case ValuesFromSelect(sel) => ValuesFromSelectExpr(buildInternal(sel, FROM_CTX))
         case Braces(expr) =>
           val e = buildInternal(expr, parseCtx)
           if (e == null) null else BracesExpr(e)

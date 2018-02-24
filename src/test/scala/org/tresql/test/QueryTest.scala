@@ -179,7 +179,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     //with expression with dml statement
     compile("d(# dname) {dept{dname}} +dept{deptno, dname} d{#dept, dname || '[reorganized]'}")
     compile("d(# dname) {dept{dname}} =dept[d.dname = 'x']{deptno, dname} d{#dept, dname || '[reorganized]'}")
-    compile("d(# dname) {dept{dname}} =dept[dept.dname = d.dname]d[d.dname = 'x'] {deptno = #dept, dname = d.dname}")
+    compile("d(# dname) {dept{dname}} =dept[dept.dname = d.dname]d[d.dname = 'x'] {deptno = #dept, dept.dname = d.dname}")
     compile("d(# dname) {dept[deptno = 1]{dname}} dept - [deptno in d{deptno}]")
 
     //values from select compilation
@@ -188,6 +188,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     compile("=dept_addr da [da.addr_nr = a.nr] (address a {a.nr, a.addr}) a {da.addr = a.addr}")
     compile("=dept_addr da [da.addr_nr = nr] (address a {a.nr, a.addr}) a {da.addr = a.addr}")
     compile("=dept_addr da [da.addr_nr = nr] (address a {a.nr, a.addr}) a {da.addr = 'ADDR'}")
+    compile("=dept_addr da / address a / dept_addr da1 {da.addr = a.nr}")
 
     //postgresql style cast compilation
     compile("dummy[dummy::int = 1 & dummy::'double precision' & (dummy + dummy)::long] {dummy::int}")
@@ -227,16 +228,19 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] addr a {da.addr = a.addr}").sql)(
       "update dept_addr da set da.addr = a.addr from addr a where da.addr_nr = a.nr")
     assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] (addr a {a.addr}) a [da.addr_nr = 1 & a.addr = 'a'] {da.addr = a.addr}").sql)(
-      "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where da.addr_nr = a.nr and (da.addr_nr = 1 and a.addr = 'a')")
+      "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where (da.addr_nr = a.nr) and (da.addr_nr = 1 and a.addr = 'a')")
     assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] addr a [da.addr_nr = 1 & a.addr = 'a'] {da.addr = a.addr}").sql)(
-      "update dept_addr da set da.addr = a.addr from addr a where da.addr_nr = a.nr and (da.addr_nr = 1 and a.addr = 'a')")
+      "update dept_addr da set da.addr = a.addr from addr a where (da.addr_nr = a.nr) and (da.addr_nr = 1 and a.addr = 'a')")
+    assertResult(Query.build("=dept_addr da / address a / dept_addr da1 {da.addr = 'ADDR'}").sql)(
+      "update dept_addr da set da.addr = 'ADDR' from address a left join dept_addr da1 on a.nr = da1.addr_nr where da.addr_nr = a.nr"
+    )
     assertResult(Query.build("d(# dname) {dept{dname}} +dept{deptno, dname} d{#dept, dname || '[reorganized]'}").sql)(
       "with d(dname) as (select dname from dept) insert into dept (deptno, dname) select ?, dname || '[reorganized]' from d")
     assertResult(Query.build("d(# dname) {dept{dname}} =dept[d.dname = 'x']{deptno, dname} d{#dept, dname || '[reorganized]'}").sql)(
       "with d(dname) as (select dname from dept) update dept set (deptno, dname) = (select ?, dname || '[reorganized]' from d) where d.dname = 'x'"
     )
     assertResult(Query.build("d(# dname) {dept{dname}} =dept[dept.dname = d.dname]d[d.dname = 'x'] {deptno = #dept, dname = d.dname}").sql)(
-      "with d(dname) as (select dname from dept) update dept set deptno = ?, dname = d.dname from d where dept.dname = d.dname and (d.dname = 'x')"
+      "with d(dname) as (select dname from dept) update dept set deptno = ?, dname = d.dname from d where (dept.dname = d.dname) and (d.dname = 'x')"
     )
     assertResult(Query.build("d(# dname) {dept[deptno = 1]{dname}} dept - [deptno in d{deptno}]").sql)(
       "with d(dname) as (select dname from dept where deptno = 1) delete from dept where deptno in (select deptno from d)"

@@ -168,13 +168,11 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     }
   }
 
-  case class ValuesFromSelectDef(exp: SelectDefBase, alias: Option[String]) extends SelectDefBase {
+  case class ValuesFromSelectDef(exp: SelectDefBase) extends SelectDefBase {
     override def cols = exp.cols
-    override def tables = List(TableDef(tableNames.head, Obj(TableObj(exp), null, null, null)))
-    override def tableNames = alias.map(List(_)).getOrElse(exp.tableNames)
-    override def table(table: String) = tableNames
-      .find(_ == table)
-      .map(t => table_from_selectdef(t, exp))
+    override def tables = exp.tables
+    override def tableNames = exp.tableNames
+    override def table(table: String) = exp.table(table)
     override def column(col: String) = exp.column(col)
   }
 
@@ -458,8 +456,8 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           case d: Delete =>
             DeleteDef(List(table), Delete(table = null, alias = null, filter = filter))
         }
-      case ValuesFromSelect(sel, alias) =>
-        ValuesFromSelectDef(tr(QueryCtx, sel).asInstanceOf[SelectDefBase], alias)
+      case ValuesFromSelect(sel) =>
+        ValuesFromSelectDef(tr(QueryCtx, sel).asInstanceOf[SelectDefBase])
       case WithTable(name, wtCols, recursive, table) =>
         val exp = builder(QueryCtx)(table) match {
           case s: SQLDefBase => s
@@ -613,8 +611,10 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           case upd: UpdateDef => upd.exp.vals match {
             case vfsd: ValuesFromSelectDef =>
               namer(ctx)(vfsd) //vals clause
-              upd.cols foreach namer(dmlColCtx.copy(colScopes = vfsd :: dmlColCtx.colScopes)) // dml cols clause
-              namer(thisCtx.copy(colScopes = vfsd :: thisCtx.colScopes))(upd.exp.filter) //filter clause
+              val colsCtx = thisCtx.copy(colScopes = vfsd :: thisCtx.colScopes)
+              // TODO cols clause consists of assignement operations, so left side must be analyzed with dmlColCtx, right side with colsCtx scope
+              upd.cols foreach namer(colsCtx) // dml cols clause
+              namer(colsCtx)(upd.exp.filter) //filter clause
             case vals =>
               dml.cols foreach namer(dmlColCtx) // dml columns must come from dml table
               namer(thisCtx)(upd.exp) //filters and vals check with this context
