@@ -407,13 +407,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     def name = table.sql
     def sqlName = name + (if (alias != null) " " + alias else "")
     def aliasOrName = if (alias != null) alias else name
-    def sqlJoin(joinTable: Table) = {
-      def joinPrefix(implicitLeftJoinPossible: Boolean) = (outerJoin match {
-        case "l" => "left "
-        case "r" => "right "
-        case j if j != "i"/*forced inner join*/ && implicitLeftJoinPossible && nullable => "left "
-        case _ => ""
-      }) + "join "
+    def sqlJoinCondition(joinTable: Table) = {
       def fkAliasJoin(i: IdentExpr) = (if (i.name.size < 2 && joinTable.alias != null)
         i.copy(name = joinTable.alias :: i.name) else i).sql +
         " = " + aliasOrName + "." + env.table(joinTable.name).ref(name, List(i.name.last)).refCols.mkString
@@ -425,28 +419,47 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         }) mkString " and "
       }
       join match {
+        //foreign key join shortcut syntax
+        case TableJoin(false, e @ IdentExpr(_), _, _) => fkAliasJoin(e)
+        //normal join
+        case TableJoin(false, e, _, _) => e.sql
+        //default join
+        case TableJoin(true, null, _, dj) => defaultJoin(dj)
+        //default join with additional expression
+        case TableJoin(true, j: Expr, _, dj) =>
+          defaultJoin(dj) + " and " + (j match {
+          //primary key equals search
+          case _: ConstExpr | _: VarExpr | _: ResExpr => joinTable.aliasOrName + "." +
+            env.table(joinTable.name).key.cols(0) + " = " + j.sql
+          //primary key in search
+          case ArrExpr(l) => joinTable.aliasOrName + "." +
+            env.table(joinTable.name).key.cols(0) + (l map (_.sql) mkString (" in(", ", ", ")"))
+          //normal join expression
+          case e => (if (e.exprType == classOf[SelectExpr]) "exists " else "") + e.sql
+        })
+        case x => error(s"Unrecognized join condition: $x")
+      }
+    }
+    def sqlJoin(joinTable: Table) = {
+      def joinPrefix(implicitLeftJoinPossible: Boolean) = (outerJoin match {
+        case "l" => "left "
+        case "r" => "right "
+        case j if j != "i"/*forced inner join*/ && implicitLeftJoinPossible && nullable => "left "
+        case _ => ""
+      }) + "join "
+      join match {
         //no join (used for table alias join)
         case TableJoin(_, _, true, _) => ""
         //product join
         case TableJoin(false, ArrExpr(Nil) | null, _, _) => ", " + sqlName
         //foreign key join shortcut syntax
-        case TableJoin(false, e @ IdentExpr(_), _, _) => joinPrefix(true) + sqlName + " on " + fkAliasJoin(e)
+        case TableJoin(false, IdentExpr(_), _, _) => joinPrefix(true) + sqlName + " on " + sqlJoinCondition(joinTable)
         //normal join
-        case TableJoin(false, e, _, _) => joinPrefix(false) + sqlName + " on " + e.sql
+        case TableJoin(false, _, _, _) => joinPrefix(false) + sqlName + " on " + sqlJoinCondition(joinTable)
         //default join
-        case TableJoin(true, null, _, dj) => joinPrefix(true) + sqlName + " on " + defaultJoin(dj)
+        case TableJoin(true, null, _, _) => joinPrefix(true) + sqlName + " on " + sqlJoinCondition(joinTable)
         //default join with additional expression
-        case TableJoin(true, j: Expr, _, dj) => joinPrefix(true) + sqlName + " on " +
-          defaultJoin(dj) + " and " + (j match {
-            //primary key equals search
-            case _: ConstExpr | _: VarExpr | _: ResExpr => joinTable.aliasOrName + "." +
-              env.table(joinTable.name).key.cols(0) + " = " + j.sql
-            //primary key in search
-            case ArrExpr(l) => joinTable.aliasOrName + "." +
-              env.table(joinTable.name).key.cols(0) + (l map (_.sql) mkString (" in(", ", ", ")"))
-            //normal join expression
-            case e => (if (e.exprType == classOf[SelectExpr]) "exists " else "") + e.sql
-          })
+        case TableJoin(true, _, _, _) => joinPrefix(true) + sqlName + " on " + sqlJoinCondition(joinTable)
         case null => error(s"Cannot build sql query, join not specified between tables '$joinTable' and '$this'.")
       }
     }
