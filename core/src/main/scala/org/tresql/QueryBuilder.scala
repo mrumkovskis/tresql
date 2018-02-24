@@ -452,15 +452,9 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case TableJoin(_, _, true, _) => ""
         //product join
         case TableJoin(false, ArrExpr(Nil) | null, _, _) => ", " + sqlName
-        //foreign key join shortcut syntax
-        case TableJoin(false, IdentExpr(_), _, _) => joinPrefix(true) + sqlName + " on " + sqlJoinCondition(joinTable)
-        //normal join
-        case TableJoin(false, _, _, _) => joinPrefix(false) + sqlName + " on " + sqlJoinCondition(joinTable)
-        //default join
-        case TableJoin(true, null, _, _) => joinPrefix(true) + sqlName + " on " + sqlJoinCondition(joinTable)
-        //default join with additional expression
-        case TableJoin(true, _, _, _) => joinPrefix(true) + sqlName + " on " + sqlJoinCondition(joinTable)
         case null => error(s"Cannot build sql query, join not specified between tables '$joinTable' and '$this'.")
+        //other types of join
+        case _ => joinPrefix(true) + sqlName + " on " + sqlJoinCondition(joinTable)
       }
     }
     override def defaultSQL = table.sql + Option(alias).map(" " + _).mkString
