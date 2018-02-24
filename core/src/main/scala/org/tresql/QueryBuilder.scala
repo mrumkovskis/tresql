@@ -414,7 +414,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case j if j != "i"/*forced inner join*/ && implicitLeftJoinPossible && nullable => "left "
         case _ => ""
       }) + "join "
-      def fkAliasJoin(i: IdentExpr) = sqlName + " on " + (if (i.name.size < 2 && joinTable.alias != null)
+      def fkAliasJoin(i: IdentExpr) = (if (i.name.size < 2 && joinTable.alias != null)
         i.copy(name = joinTable.alias :: i.name) else i).sql +
         " = " + aliasOrName + "." + env.table(joinTable.name).ref(name, List(i.name.last)).refCols.mkString
       def defaultJoin(jcols: (key_, key_)) = {
@@ -430,7 +430,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         //product join
         case TableJoin(false, ArrExpr(Nil) | null, _, _) => ", " + sqlName
         //foreign key join shortcut syntax
-        case TableJoin(false, e @ IdentExpr(_), _, _) => joinPrefix(true) + fkAliasJoin(e)
+        case TableJoin(false, e @ IdentExpr(_), _, _) => joinPrefix(true) + sqlName + " on " + fkAliasJoin(e)
         //normal join
         case TableJoin(false, e, _, _) => joinPrefix(false) + sqlName + " on " + e.sql
         //default join
