@@ -369,17 +369,17 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     private val rowConverter = env.rowConverter(QueryBuilder.this.queryDepth, QueryBuilder.this.childIdx)
     override def apply() = sel(sql, cols)
     def defaultSQL = "select " + (if (distinct) "distinct " else "") +
-      cols.sql + (
-        tables match {
-          case List(Table(ConstExpr(null), _, _, _, _)) => ""
-          case _ => " from " + tables.head.sqlName + join(tables)
-        }) +
-        //(filter map where).getOrElse("")
-        Option(where).map(" where " + _).getOrElse("") +
-        (if (group == null) "" else " group by " + group.sql) +
-        (if (order == null) "" else Option(order.sql).map(" order by " + _).getOrElse("")) +
-        (if (offset == null) "" else " offset " + offset.sql) +
-        (if (limit == null) "" else " limit " + limit.sql)
+      cols.sql +
+      (tables match {
+        case List(Table(ConstExpr(null), _, _, _, _)) => ""
+        case _ => " from " + tables.head.sqlName + join(tables)
+      }) +
+      //(filter map where).getOrElse("")
+      Option(where).map(" where " + _).getOrElse("") +
+      (if (group == null) "" else " group by " + group.sql) +
+      (if (order == null) "" else Option(order.sql).map(" order by " + _).getOrElse("")) +
+      (if (offset == null) "" else " offset " + offset.sql) +
+      (if (limit == null) "" else " limit " + limit.sql)
     def join(tables: List[Table]): String = {
       //used to find table if alias join is used
       def find(t: Table) = t match {
