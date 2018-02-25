@@ -430,7 +430,6 @@ trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
       case (Some(c), ch, Some(id)) if ch.isEmpty => c -> id
       case (Some(c), ch, Some(id)) if ch.nonEmpty => (c -> compatibilityChildren) -> id
     }
-    //println(s"!!!!!!!!!!!!!!: $x")
     x
 }
   private def compatibilityChildren: List[Any] = children.map (_._2 match {

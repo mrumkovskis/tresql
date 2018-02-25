@@ -833,8 +833,6 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
               case c :: l => BinExpr("&", exp(c._1, c._2), exps(l))
               case _ => sys.error("Unexpected cols type")
             }
-            println(s"ctx: ${QueryBuilder.this.ctxStack.headOption.orNull}")
-            println(s"has parent query: $hasParentQuery")
             joinWithParent(qname mkString ".", refCol).map(t => exps(t._1 zip t._2))
           }
           tablesAndAliases._1.headOption.flatMap {
