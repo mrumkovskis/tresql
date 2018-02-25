@@ -570,12 +570,9 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   case class ValuesExpr(vals: List[Expr]) extends PrimitiveExpr {
     def defaultSQL = vals map (_.sql) mkString("values ", ",", "")
   }
-  case class ValuesFromSelectExpr(sel: Expr) extends PrimitiveExpr {
-    def defaultSQL = sel match {
-      // start from clause with second table (first table is updateable)
-      case select: SelectExpr => s"from ${select.tables(1).sql}${select.join(select.tables.tail)}"
-      case x => sys.error(s"ValuesFromSelectExpr must contain SelectExpr, instead encountered: $x")
-    }
+  case class ValuesFromSelectExpr(select: SelectExpr) extends PrimitiveExpr {
+    // start from clause with second table (first table is updateable)
+    def defaultSQL = s"from ${select.tables(1).sql}${select.join(select.tables.tail)}"
   }
   class UpdateExpr(table: IdentExpr, alias: String, filter: List[Expr],
       val cols: List[Expr], val vals: Expr) extends DeleteExpr(table, alias, filter) {
@@ -1205,7 +1202,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case Ord(cols) => Order(cols map (c=> (buildInternal(c._1, parseCtx),
             buildInternal(c._2, parseCtx), buildInternal(c._3, parseCtx))))
         case All => AllExpr()
-        case ValuesFromSelect(sel) => ValuesFromSelectExpr(buildInternal(sel, FROM_CTX))
+        case ValuesFromSelect(sel) => ValuesFromSelectExpr(buildInternal(sel, FROM_CTX).asInstanceOf[SelectExpr])
         case Braces(expr) =>
           val e = buildInternal(expr, parseCtx)
           if (e == null) null else BracesExpr(e)

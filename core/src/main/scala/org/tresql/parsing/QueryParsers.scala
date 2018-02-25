@@ -174,7 +174,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       (if (cols.nonEmpty) cols.map(_.tresql).mkString("{", ",", "}") else "") +
       (if (vals != null) any2tresql(vals) else "")
   }
-  case class ValuesFromSelect(select: Exp) extends Exp {
+  case class ValuesFromSelect(select: Query) extends Exp {
     def tresql = select.tresql
   }
   case class Delete(table: Ident, alias: String, filter: Arr) extends DMLExp {
