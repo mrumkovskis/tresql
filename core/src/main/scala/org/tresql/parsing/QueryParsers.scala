@@ -463,7 +463,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       Update(updateTable, alias, f.orNull, c.map(_.cols).getOrElse(Nil),
         ValuesFromSelect(Query(tables = tables, Filters(Nil), Cols(false, List(Col(All, null))), null, null, null, null)))
    }, {
-   case (objs: List[Obj] @unchecked) ~ _ ~ _ => "Update tables clause must as the first element have - " +
+   case (objs: List[Obj] @unchecked) ~ _ ~ _ => "Update tables clause must as the first element have " +
      "qualifiedIdent with optional alias as a table to be updated" +
      s"Instead encountered: ${objs.map(_.tresql).mkString}"
   }) named "update-from-select"
