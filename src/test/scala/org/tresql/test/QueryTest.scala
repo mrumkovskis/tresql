@@ -184,6 +184,8 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
 
     //values from select compilation
     compile("=dept_addr da [da.addr_nr = a.nr] address a {da.addr = a.addr}")
+    compile("=dept_addr da [da.addr_nr = a.nr] address a {addr = a.addr}")
+    compile("=dept_addr da [da.addr_nr = a.nr] address a {addr = da.addr}")
     compile("=dept_addr da [da.addr_nr = address.nr] address {da.addr = address.addr}")
     compile("=dept_addr da [da.addr_nr = a.nr] (address a {a.nr, a.addr}) a {da.addr = a.addr}")
     compile("=dept_addr da [da.addr_nr = nr] (address a {a.nr, a.addr}) a {da.addr = a.addr}")
@@ -196,6 +198,8 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     //values from select compilation errors
     intercept[CompilerException](compile("=dept_addr da [da.addr_nr = a.nr] (address a {a.addr}) a {da.addr = a.addr}"))
     intercept[CompilerException](compile("=dept_addr da [da.addr_nr = nrz] (address a {a.nr, a.addr}) a {da.addr = a.addr}"))
+    intercept[CompilerException](compile("=dept_addr da [da.addr_nr = a.nr] address a {addr = addr}"))
+    intercept[CompilerException](compile("=dept_addr da [da.addr_nr = a.nr] address a {1}"))
 
     intercept[CompilerException](compile("work/dept{*}"))
     intercept[CompilerException](compile("works"))

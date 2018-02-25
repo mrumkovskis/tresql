@@ -612,8 +612,13 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
             case vfsd: ValuesFromSelectDef =>
               namer(ctx)(vfsd) //vals clause
               val colsCtx = thisCtx.copy(colScopes = vfsd :: thisCtx.colScopes)
-              // TODO cols clause consists of assignement operations, so left side must be analyzed with dmlColCtx, right side with colsCtx scope
-              upd.cols foreach namer(colsCtx) // dml cols clause
+              upd.cols foreach {
+                // column must consist of assignement operation, on left side of which must be updateable column
+                case ColDef(_, BinOp("=" ,lop @ Obj(Ident(_), _, _, _, _), rop), _) =>
+                  namer(dmlColCtx)(lop) //updateable column must come from update statement table
+                  namer(colsCtx)(rop)
+                case x => throw CompilerException(s"For updateable column clause expected assignement operation to column. Instead found: $x")
+              }
               namer(colsCtx)(upd.exp.filter) //filter clause
             case vals =>
               dml.cols foreach namer(dmlColCtx) // dml columns must come from dml table
