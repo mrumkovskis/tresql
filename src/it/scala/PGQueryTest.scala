@@ -95,7 +95,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
         i = errStream.read
         baos.write(i)
       }
-      Thread.sleep(1000)
+      process.waitFor
       val exitValue = process.exitValue
       if (exitValue != 0) {
         println(s"Error occured during executing command:\n$DockerCmd")
@@ -132,7 +132,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   override def afterAll(configMap: ConfigMap) {
     if (configMap.contains("docker") && !configMap.get("remove").contains("false")) {
       val DockerCmd = "docker stop tresql-it-tests"
-      println(s"Stopping tresql test docker postgres container...")
+      print(s"Stopping tresql test docker postgres container...")
       val process = Runtime.getRuntime.exec(DockerCmd)
       val baos = new ByteArrayOutputStream()
       val errStream = process.getErrorStream
@@ -141,14 +141,14 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
         i = errStream.read
         baos.write(i)
       }
-      Thread.sleep(1000)
+      process.waitFor
       val exitValue = process.exitValue
       if (exitValue != 0) {
         println(s"Error occured during executing command:\n$DockerCmd")
         println(baos.toString("utf8"))
       } else {
-        println(baos.toString("utf8"))
-        println("Docker stopped.")
+        print(baos.toString("utf8"))
+        println("docker stopped.")
       }
     }
   }
