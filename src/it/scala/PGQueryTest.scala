@@ -1,16 +1,24 @@
 package org.tresql.test
 
-import org.scalatest.{FunSuite, BeforeAndAfterAll}
+import java.io.ByteArrayOutputStream
+
+import org.scalatest.{BeforeAndAfterAllConfigMap, ConfigMap, FunSuite}
 import java.sql.DriverManager
+
 import org.tresql._
 import org.tresql.implicits._
 import org.tresql.result.Jsonizer._
-import scala.util.parsing.json._
 
+import scala.util.control.NonFatal
+import scala.util.parsing.json._
 import sys._
 
-/** To run from console {{{org.scalatest.run(new test.QueryTest)}}} */
-class PGQueryTest extends FunSuite with BeforeAndAfterAll {
+/** To run from console {{{org.scalatest.run(new test.QueryTest)}}},
+  * to run from sbt - {{{it:testOnly * -- -oD -Ddocker=<docker image name>}}},
+  * example
+  * 1. specific postgres version - {{{it:testOnly * -- -oD -Ddocker=postgres:10.2}}}
+  * 2. latest postgres version - {{{it:testOnly * -- -oD -Ddocker=postgres}}} */
+class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   class TestFunctions extends Functions {
     def echo(x: String) = x
     def plus(a: java.lang.Long, b: java.lang.Long) = a + b
@@ -70,36 +78,76 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAll {
       }
   }
 
-  override def beforeAll {
+  override def beforeAll(configMap: ConfigMap) {
     //initialize environment
-
     Class.forName("org.postgresql.Driver")
-    val conn = DriverManager.getConnection("jdbc:postgresql://127.0.0.1/postgres","postgres","")
-
-    Env.conn = conn
+    val (dbUri, dbUser, dbPwd) = ("jdbc:postgresql://127.0.0.1/postgres", "postgres", "")
+    Env.conn = if (configMap.get("docker").isDefined) {
+      val postgresDockerImage = configMap("docker")
+      val DockerCmd = s"docker run -d --rm --name tresql-it-tests -p 5432:5432 $postgresDockerImage"
+      println(s"Starting tresql test docker postgres container...")
+      val process = Runtime.getRuntime.exec(DockerCmd)
+      val baos = new ByteArrayOutputStream()
+      val errStream = process.getErrorStream
+      var i: Int = errStream.read
+      while (i != -1) {
+        i = errStream.read
+        baos.write(i)
+      }
+      Thread.sleep(1000)
+      val exitValue = process.exitValue
+      if (exitValue != 0) {
+        println(s"Error occured during executing command:\n$DockerCmd")
+        println(baos.toString("utf8"))
+        sys.error("Failure")
+      } else {
+        println("Docker started.")
+        println("Wait 2 seconds for db port binding")
+        Thread.sleep(2000)
+        try DriverManager.getConnection(dbUri, dbUser, dbPwd)
+        catch {
+          case NonFatal(e) => sys.error(s"Error occurred trying to connect to database ($dbUri, $dbUser, $dbPwd) - ${e.toString}")
+        }
+      }
+    } else DriverManager.getConnection(dbUri, dbUser, dbPwd)
     Env.dialect = dialects.PostgresqlDialect
     Env.idExpr = s => "nextval('seq')"
     Env.functions = new TestFunctions
     Env.macros = Macros
     Env.cache = new SimpleCache(-1)
-    Env.logger = ((msg, level) => println (msg))
-    Env updateValueExprs (
-      /*value expr*/
-      Map(("car_usage" -> "empno") -> "(emp[empno = :empno]{empno})",
-          ("car" -> "deptnr") -> "(case((dept[deptno = :deptnr] {count(deptno)}) = 1, (dept[deptno = :deptnr] {deptno}), -1))",
-          ("tyres_usage" -> "carnr") -> ":#car"))
+    Env.logger = (msg, level) => println(msg)
+    Env updateValueExprs /*value expr*/ Map(("car_usage" -> "empno") -> "(emp[empno = :empno]{empno})",
+      ("car" -> "deptnr") -> "(case((dept[deptno = :deptnr] {count(deptno)}) = 1, (dept[deptno = :deptnr] {deptno}), -1))",
+      ("tyres_usage" -> "carnr") -> ":#car")
     //create test db script
     new scala.io.BufferedSource(getClass.getResourceAsStream("/pgdb.sql")).mkString.split("//").foreach {
-      sql => val st = conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
+      sql => val st = Env.conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
     }
   }
 
-/*  override def afterAll {
-   val conn = Env.conn
-   new scala.io.BufferedSource(getClass.getResourceAsStream("/pgdbdrop.sql")).mkString.split("//").foreach {
-      sql => val st = conn.createStatement; Env.log("Dropping postgres database tables:\n" + sql); st.execute(sql); st.close
+  override def afterAll(configMap: ConfigMap) {
+    if (configMap.contains("docker")) {
+      val DockerCmd = "docker stop tresql-it-tests"
+      println(s"Stopping tresql test docker postgres container...")
+      val process = Runtime.getRuntime.exec(DockerCmd)
+      val baos = new ByteArrayOutputStream()
+      val errStream = process.getErrorStream
+      var i: Int = errStream.read
+      while (i != -1) {
+        i = errStream.read
+        baos.write(i)
+      }
+      Thread.sleep(1000)
+      val exitValue = process.exitValue
+      if (exitValue != 0) {
+        println(s"Error occured during executing command:\n$DockerCmd")
+        println(baos.toString("utf8"))
+      } else {
+        println(baos.toString("utf8"))
+        println("Docker stopped.")
+      }
     }
-  } */
+  }
 
   test("tresql statements") {
     def parsePars(pars: String, sep:String = ";"): Map[String, Any] = {
