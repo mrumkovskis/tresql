@@ -13,7 +13,7 @@ import scala.util.control.NonFatal
 import scala.util.parsing.json._
 import sys._
 
-/** To run from console {{{org.scalatest.run(new test.QueryTest)}}},
+/** To run from console {{{new org.tresql.test.PGQueryTest().execute(configMap = ConfigMap("docker" -> "postgres", "remove" -> "false"))}}},
   * to run from sbt - {{{it:testOnly * -- -oD -Ddocker=<docker image name>}}},
   * example
   * 1. specific postgres version - {{{it:testOnly * -- -oD -Ddocker=postgres:10.2}}}
@@ -110,7 +110,10 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
           case NonFatal(e) => sys.error(s"Error occurred trying to connect to database ($dbUri, $dbUser, $dbPwd) - ${e.toString}")
         }
       }
-    } else DriverManager.getConnection(dbUri, dbUser, dbPwd)
+    } else try DriverManager.getConnection(dbUri, dbUser, dbPwd) catch {
+      case e: Exception =>
+        throw sys.error(s"Unable to connect to database: ${e.toString}.\n For postgres docker container try command: it:testOnly * -- -oD -Ddocker=postgres")
+    }
     Env.dialect = dialects.PostgresqlDialect
     Env.idExpr = s => "nextval('seq')"
     Env.functions = new TestFunctions
