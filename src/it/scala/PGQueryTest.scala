@@ -17,7 +17,8 @@ import sys._
   * to run from sbt - {{{it:testOnly * -- -oD -Ddocker=<docker image name>}}},
   * example
   * 1. specific postgres version - {{{it:testOnly * -- -oD -Ddocker=postgres:10.2}}}
-  * 2. latest postgres version - {{{it:testOnly * -- -oD -Ddocker=postgres}}} */
+  * 2. latest postgres version and do not remove postgres container after test run -
+  *   {{{it:testOnly * -- -oD -Ddocker=postgres -Dremove=false}}} */
 class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   class TestFunctions extends Functions {
     def echo(x: String) = x
@@ -126,7 +127,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   }
 
   override def afterAll(configMap: ConfigMap) {
-    if (configMap.contains("docker")) {
+    if (configMap.contains("docker") && !configMap.get("remove").contains("false")) {
       val DockerCmd = "docker stop tresql-it-tests"
       println(s"Stopping tresql test docker postgres container...")
       val process = Runtime.getRuntime.exec(DockerCmd)
