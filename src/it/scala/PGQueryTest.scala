@@ -103,11 +103,12 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
         sys.error("Failure")
       } else {
         println("Docker started.")
-        println("Wait 2 seconds for db port binding")
-        Thread.sleep(2000)
+        val timeout = configMap.getOptional[String]("wait_for_startup_millis").map(_.toLong).getOrElse(2000L)
+        println(s"Wait $timeout milliseconds for db port binding")
+        Thread.sleep(timeout)
         try DriverManager.getConnection(dbUri, dbUser, dbPwd)
         catch {
-          case NonFatal(e) => sys.error(s"Error occurred trying to connect to database ($dbUri, $dbUser, $dbPwd) - ${e.toString}")
+          case NonFatal(e) => sys.error(s"Error occurred trying to connect to database ($dbUri, $dbUser, $dbPwd) - ${e.toString}.\n Try to increase wait_for_startup_millis test parameter")
         }
       }
     } else try DriverManager.getConnection(dbUri, dbUser, dbPwd) catch {
