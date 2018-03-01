@@ -14,11 +14,12 @@ import scala.util.parsing.json._
 import sys._
 
 /** To run from console {{{new org.tresql.test.PGQueryTest().execute(configMap = ConfigMap("docker" -> "postgres", "remove" -> "false"))}}},
-  * to run from sbt - {{{it:testOnly * -- -oD -Ddocker=<docker image name>}}},
+  * to run from sbt - {{{it:testOnly * -- -oD -Ddocker=<docker image name> [-Dport=<posgtres host port>] [-Dwait_after_startup_millis=<wait time after postgres docker start until connection port is bound>] [-Dremove=<true|false - whether to stop docker after test are run, useful in console mode>]}}},
   * example
   * 1. specific postgres version - {{{it:testOnly * -- -oD -Ddocker=postgres:10.2}}}
-  * 2. latest postgres version and do not remove postgres container after test run -
-  *   {{{it:testOnly * -- -oD -Ddocker=postgres -Dremove=false}}} */
+  * 2. latest postgres version and do not remove postgres container after test run with specific postgres host port
+  *    and wait time after docker started until jdbc connection attempt is made -
+  *   {{{it:testOnly * -- -oD -Ddocker=postgres -Dremove=false -Dport=54321 -Dwait_after_startup_millis=4000}}} */
 class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   class TestFunctions extends Functions {
     def echo(x: String) = x
@@ -105,13 +106,13 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
         sys.error("Failure")
       } else {
         println("Docker started.")
-        val timeout = configMap.getOptional[String]("wait_for_startup_millis").map(_.toLong).getOrElse(2000L)
+        val timeout = configMap.getOptional[String]("wait_after_startup_millis").map(_.toLong).getOrElse(2000L)
         println(s"Wait $timeout milliseconds for db port binding")
         Thread.sleep(timeout)
         try DriverManager.getConnection(dbUri, dbUser, dbPwd)
         catch {
           case NonFatal(e) => sys.error(s"Error occurred trying to connect to database ($dbUri, $dbUser, $dbPwd) - ${e.toString}.\n" +
-            "Try to specify different test parameters as postgres port: -Dport=<port> or increase docker startup wait time -Dwait_for_startup_millis")
+            "Try to specify different test parameters as postgres port: -Dport=<port> or increase docker startup wait time -Dwait_after_startup_millis")
         }
       }
     } else try DriverManager.getConnection(dbUri, dbUser, dbPwd) catch {
