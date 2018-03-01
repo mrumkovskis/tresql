@@ -82,10 +82,12 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   override def beforeAll(configMap: ConfigMap) {
     //initialize environment
     Class.forName("org.postgresql.Driver")
-    val (dbUri, dbUser, dbPwd) = ("jdbc:postgresql://127.0.0.1/postgres", "postgres", "")
+    val jdbcPort = configMap.getOptional[String]("port").map(":" + _).getOrElse("")
+    val (dbUri, dbUser, dbPwd) = (s"jdbc:postgresql://127.0.0.1$jdbcPort/postgres", "postgres", "")
     Env.conn = if (configMap.get("docker").isDefined) {
       val postgresDockerImage = configMap("docker")
-      val DockerCmd = s"docker run -d --rm --name tresql-it-tests -p 5432:5432 $postgresDockerImage"
+      val hostPort = configMap.getOrElse("port", "5432")
+      val DockerCmd = s"docker run -d --rm --name tresql-it-tests -p $hostPort:5432 $postgresDockerImage"
       println(s"Starting tresql test docker postgres container...")
       val process = Runtime.getRuntime.exec(DockerCmd)
       val baos = new ByteArrayOutputStream()
@@ -108,12 +110,14 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
         Thread.sleep(timeout)
         try DriverManager.getConnection(dbUri, dbUser, dbPwd)
         catch {
-          case NonFatal(e) => sys.error(s"Error occurred trying to connect to database ($dbUri, $dbUser, $dbPwd) - ${e.toString}.\n Try to increase wait_for_startup_millis test parameter")
+          case NonFatal(e) => sys.error(s"Error occurred trying to connect to database ($dbUri, $dbUser, $dbPwd) - ${e.toString}.\n" +
+            "Try to specify different test parameters as postgres port: -Dport=<port> or increase docker startup wait time -Dwait_for_startup_millis")
         }
       }
     } else try DriverManager.getConnection(dbUri, dbUser, dbPwd) catch {
       case e: Exception =>
-        throw sys.error(s"Unable to connect to database: ${e.toString}.\n For postgres docker container try command: it:testOnly * -- -oD -Ddocker=postgres")
+        throw sys.error(s"Unable to connect to database: ${e.toString}.\n" +
+          "For postgres docker container try command: it:testOnly * -- -oD -Ddocker=postgres")
     }
     Env.dialect = dialects.PostgresqlDialect
     Env.idExpr = s => "nextval('seq')"
