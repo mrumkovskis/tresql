@@ -148,9 +148,6 @@ object Env extends Resources {
   private val threadConn = new ThreadLocal[java.sql.Connection]
   //query timeout
   private val query_timeout = new ThreadLocal[Int]
-  private val threadLogLevel = new ThreadLocal[Option[Int]] {
-    override def initialValue = None
-  }
   //this is for single thread usage
   var sharedConn: java.sql.Connection = _
   //meta data object must be thread safe!
@@ -167,7 +164,7 @@ object Env extends Resources {
   //cache
   private var _cache: Option[Cache] = None
   //logger
-  private var _logger: (=> String, Int) => Unit = _
+  private var _logger: (=> String, => Map[String, Any], LogTopic) => Unit = _
   //loggable bind variable filter
   private var _bindVarLogFilter: Option[PartialFunction[Expr, String]] = Some({
     case v: QueryBuilder#VarExpr if v.name == "password" => v.fullName + " = [FILTERED]"
@@ -214,9 +211,10 @@ object Env extends Resources {
 
   def maxResultSize_=(size: Int) = this._maxResultSize = size
 
-  def log(msg: => String, level: Int = 0): Unit = if (_logger != null) _logger(msg, level)
+  def log(msg: => String, params: => Map[String, Any] = Map(), topic: LogTopic = LogTopic.info): Unit =
+    if (_logger != null) _logger(msg, params, topic)
   def logger = _logger
-  def logger_=(logger: (=> String, Int) => Unit) = this._logger = logger
+  def logger_=(logger: (=> String, => Map[String, Any], LogTopic) => Unit) = this._logger = logger
   def bindVarLogFilter = _bindVarLogFilter
   def bindVarLogFilter_=(filter: PartialFunction[Expr, String]) = Option(filter)
 }
@@ -279,3 +277,12 @@ trait EnvProvider {
 
 class MissingBindVariableException(val name: String)
   extends RuntimeException(s"Missing bind variable: $name")
+
+trait LogTopic
+object LogTopic {
+  case object tresql extends LogTopic
+  case object sql extends LogTopic
+  case object params extends LogTopic
+  case object sql_with_params extends LogTopic
+  case object info extends LogTopic
+}

@@ -60,7 +60,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     else
       null
 
-  val hsqlDialect: PartialFunction[Expr, String] = dialects.HSQLDialect orElse {
+  val hsqlDialect: CoreTypes.Dialect = dialects.HSQLDialect orElse dialects.VariableNameDialect orElse {
     case e: QueryBuilder#SelectExpr =>
       val b = e.builder
       e match {
@@ -80,12 +80,10 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     Env.functions = new TestFunctions
     Env.macros = Macros
     Env.cache = new SimpleCache(-1)
-    Env.logger = ((msg, level) => println (msg))
-    Env updateValueExprs (
-      /*value expr*/
-      Map(("car_usage" -> "empno") -> "(emp[empno = :empno]{empno})",
-          ("car" -> "deptnr") -> "(case((dept[deptno = :deptnr] {count(deptno)}) = 1, (dept[deptno = :deptnr] {deptno}), -1))",
-          ("tyres_usage" -> "carnr") -> ":#car"))
+    Env.logger = (msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg)
+    Env updateValueExprs /*value expr*/ Map(("car_usage" -> "empno") -> "(emp[empno = :empno]{empno})",
+      ("car" -> "deptnr") -> "(case((dept[deptno = :deptnr] {count(deptno)}) = 1, (dept[deptno = :deptnr] {deptno}), -1))",
+      ("tyres_usage" -> "carnr") -> ":#car")
     //create test db script
     new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
       sql => val st = conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
@@ -104,7 +102,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       var map = false
       def par(p: String): Any = p.trim match {
         case VAR(v, x) => {map = true; (v, par(x))}
-        case s if (s.startsWith("'")) => s.substring(1, s.length)
+        case s if s.startsWith("'") => s.substring(1, s.length)
         case "null" => null
         case "false" => false
         case "true" => true
@@ -255,7 +253,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
   }
 
   test("cache") {
-    Env.cache map(c => println(s"\nCache size: ${c.size}\n"))
+    Env.cache foreach(c => println(s"\nCache size: ${c.size}\n"))
   }
 
   test("Test Java API") {
@@ -267,8 +265,8 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     var nr = 0
     new scala.io.BufferedSource(getClass.getResourceAsStream(resource))("UTF-8")
       .getLines.foreach {
-        case l if (l.trim.startsWith("//")) =>
-        case l if (l.trim.length > 0) =>
+        case l if l.trim.startsWith("//") =>
+        case l if l.trim.length > 0 =>
           val (st, params, patternRes) = l.split("-->") match {
             case scala.Array(s, r) => (s, null, r)
             case scala.Array(s, p, r) => (s, p, r)

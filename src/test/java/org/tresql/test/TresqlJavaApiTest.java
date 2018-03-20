@@ -3,6 +3,7 @@ package org.tresql.test;
 import java.sql.Connection;
 import java.util.*;
 
+import org.tresql.LogTopic;
 import org.tresql.SimpleCache;
 import org.tresql.java_api.*;
 
@@ -25,8 +26,8 @@ public class TresqlJavaApiTest implements Runnable {
         Env.setLogger(new Logger() {
             // TODO test msg laziness
             @Override
-            public void log(LogMessage msg, int level) {
-                println("Java API logger [" + level + "]: " + msg.get());
+            public void log(LogMessage msg, LogParams params, LogTopic topic) {
+                println("Java API logger [" + topic + "]: " + msg.get() + "; params: " + params.get());
             }
         });
         Env.setCache(new SimpleCache(-1));

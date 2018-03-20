@@ -16,6 +16,10 @@ package object dialects {
     }
   }
 
+  val VariableNameDialect: CoreTypes.Dialect = {
+    case v: QueryBuilder#VarExpr => v.defaultSQL + s"/*${v.name}*/"
+  }
+
   val CommonDialect: CoreTypes.Dialect = {
     case f: QueryBuilder#FunExpr
       if f.name == "cast" && f.params.size == 2 && f.params(1).isInstanceOf[QueryBuilder#ConstExpr] =>

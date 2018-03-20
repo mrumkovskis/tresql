@@ -109,18 +109,18 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       val s = if (!env.reusableExpr && (env contains name) && (members == null | members == Nil)) {
         apply() match {
           case l: scala.collection.Traversable[_] =>
-            if (l.nonEmpty) ("?," * (l size) dropRight 1) + s"/*$name*/" else {
+            if (l.nonEmpty) "?," * (l size) dropRight 1 else {
               //return null for empty collection (not to fail in 'in' operator)
-              s"null/*$name*/"
+              "null"
             }
-          case _: Array[Byte] => s"?/*$name*/"
+          case _: Array[Byte] => "?"
           case a: Array[_] => if (a.length > 0) "?," * (a length) dropRight 1 else {
             //return null for empty array (not to fail in 'in' operator)
             "null"
           }
-          case _ => s"?/*$name*/"
+          case _ => "?"
         }
-      } else s"?/*$name*/"
+      } else "?"
       binded = true
       s
     }

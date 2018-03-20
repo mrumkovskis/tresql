@@ -8,7 +8,8 @@ import org.tresql.metadata.JDBCMetadata
 
 trait IdExprFunc { def getIdExpr(table: String): String }
 trait LogMessage { def get: String }
-trait Logger { def log(msg: LogMessage, level: Int): Unit }
+trait LogParams { def get: Map[String, Any] }
+trait Logger { def log(msg: LogMessage, params: LogParams, topic: LogTopic): Unit }
 object Dialects {
   def ANSISQL = dialects.ANSISQLDialect
   def HSQL = dialects.HSQLDialect
@@ -35,7 +36,6 @@ object Env {
   }
   def setIdExprFunc(f: IdExprFunc) { env.idExpr = f.getIdExpr }
   //def isDefined(functionName: String): Boolean
-  //def log(msg: => String, level: Int = 0): Unit
   def getMetadata: Metadata = env.metadata
   def setMetadata(md: Metadata) { env.metadata = md }
   //def getNameMap: NameMap = env.nameMap
@@ -43,13 +43,13 @@ object Env {
   //var sharedConn: Connection
   //def tableName(objectName: String): String
   def setLogger(logger: Logger) {
-    env.logger = (msg, level) => logger.log(new LogMessage {
+    env.logger = (msg, params, topic) => logger.log(new LogMessage {
       override def get = msg
-    }, level)
+    }, new LogParams { override def get = params }, topic)
   }
   def getLogger: Logger = new Logger {
     private[this] val logger = env.logger
-    override def log(msg: LogMessage, level: Int) = logger(msg.get, level)
+    override def log(msg: LogMessage, params: LogParams, topic: LogTopic) = logger(msg.get, params.get, topic)
   }
   //def update(map: (Map[String, String], Map[String, Map[String, (String, String)]])): Unit
   //def valueExpr(objectName: String, propertyName: String): String
@@ -60,7 +60,7 @@ object Env {
     functions: Object,
     idExpr: String => String,
     metadata: Metadata,
-    logger: (=> String, Int) => Unit
+    logger: (=> String, => Map[String, Any], LogTopic) => Unit
   )
   def saveState = State(
     cache = env.cache,

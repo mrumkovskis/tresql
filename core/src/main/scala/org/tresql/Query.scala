@@ -45,7 +45,7 @@ trait Query extends QueryBuilder with TypedQuery {
     params: Map[String, Any] = null,
     reusableExpr: Boolean = true
   )(implicit resources: Resources = Env): Expr = {
-    Env.log(expr, 1)
+    Env.log(expr, Map(), LogTopic.tresql)
     val pars =
       if (resources.params.isEmpty) params
       else if (params != null) resources.params ++ params else resources.params
@@ -207,7 +207,11 @@ trait Query extends QueryBuilder with TypedQuery {
   }
 
   private def statement(sql: String, env: Env, call: Boolean = false) = {
-    Env.log(sql, 2)
+    Env.log(sql, Map(), LogTopic.sql)
+    Env.log(sql, bindVariables.flatMap {
+      case v: VarExpr => List(v.name -> Env.bindVarLogFilter.map(_(v)).getOrElse(v()))
+      case _ => Nil
+    }.toMap, LogTopic.sql_with_params)
     val conn = env.conn
     if (conn == null) throw new NullPointerException(
       """Connection not found in environment. Check if "Env.conn = conn" (in this case statement execution must be done in the same thread) or "Env.sharedConn = conn" is called.""")
@@ -230,7 +234,7 @@ trait Query extends QueryBuilder with TypedQuery {
   private def bindVars(st: PreparedStatement, bindVariables: List[Expr]) {
     Env.log(bindVariables
       .map(v => Env.bindVarLogFilter.map(_(v)).getOrElse(v.toString))
-      .mkString("Bind vars: ", ", ", ""), 3)
+      .mkString("Bind vars: ", ", ", ""), Map(), LogTopic.params)
     var idx = 1
     def bindVar(p: Any) {
       try p match {
