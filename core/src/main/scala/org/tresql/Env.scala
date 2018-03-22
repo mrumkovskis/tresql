@@ -167,8 +167,7 @@ object Env extends Resources {
   private var _logger: (=> String, => Map[String, Any], LogTopic) => Unit = _
   //loggable bind variable filter
   private var _bindVarLogFilter: Option[PartialFunction[Expr, String]] = Some({
-    case v: QueryBuilder#VarExpr if v.name == "password" => v.fullName + " = [FILTERED]"
-    case x => x.toString
+    case v: QueryBuilder#VarExpr if v.name == "password" => v.fullName + " = ***"
   })
   //recursive execution depth
   private var _recursive_stack_depth = 50
