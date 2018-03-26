@@ -25,4 +25,11 @@ trait TestFunctionSignatures extends org.tresql.compiling.TresqlFunctionSignatur
   def vararg_with_resources(s: String*): String
   def pi(): Double
   def truncate(param: Any): Int
+  //postgres dialect
+  def to_char(a: BigDecimal, p: Any): String
+  def trunc(a: BigDecimal, i: java.lang.Integer): BigDecimal
+  def trunc(a: BigDecimal): BigDecimal
+  def round(a: BigDecimal, i: java.lang.Integer): BigDecimal
+  def date_part(field: Any, source: Any): Any
+  def isfinite(field: Any): Any
 }
