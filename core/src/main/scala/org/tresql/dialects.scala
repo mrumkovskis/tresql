@@ -18,6 +18,7 @@ package object dialects {
 
   val VariableNameDialect: CoreTypes.Dialect = {
     case v: QueryBuilder#VarExpr => v.defaultSQL + s"/*${v.name}*/"
+    case r: QueryBuilder#ResExpr => r.defaultSQL + s"/*${r.name}*/"
   }
 
   val CommonDialect: CoreTypes.Dialect = {

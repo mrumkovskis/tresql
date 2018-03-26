@@ -211,6 +211,7 @@ trait Query extends QueryBuilder with TypedQuery {
     Env.log(sql, bindVariables.flatMap {
       case v: VarExpr => List(v.name ->
         Env.bindVarLogFilter.filter(_.isDefinedAt(v)).map(_(v)).getOrElse(v()))
+      case r: ResExpr => List(r.name -> r())
       case _ => Nil
     }.toMap, LogTopic.sql_with_params)
     val conn = env.conn

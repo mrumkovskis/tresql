@@ -162,7 +162,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case c: Int => error("column index in result expression must be greater than 0. Is: " + c)
       }
     }
-    override def toString = s"$nr($col) = ${Try(this()).getOrElse("value not available")}"
+    def name = s"$nr($col)"
+    override def toString = s"$name = ${Try(this()).getOrElse("value not available")}"
   }
 
   class BaseVarExpr extends BaseExpr {
