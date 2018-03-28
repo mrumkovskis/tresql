@@ -48,10 +48,12 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assert(intercept[MissingBindVariableException](Query("emp[?]")).name === "1")
     assert(intercept[MissingBindVariableException](Query("emp[:nr]")).name === "nr")
 
-    var op = OutPar()
-    assertResult(List(Vector(List(10, "x"))))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x")
-        .toListOfVectors)
-    assertResult("x")(op.value)
+    //TODO
+    //var op = OutPar()
+    //
+    //assertResult(List(Vector(List(10, "x"))))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x")
+    //    .toListOfVectors)
+    //assertResult("x")(op.value)
     assertResult(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)", 10, "ACC%"))
     assertResult(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)",
         Map("1" -> 10, "2" -> "ACC%")))
@@ -861,7 +863,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       println("\n-------------- TEST compiler macro ----------------\n")
 
       assertResult(("ACCOUNTING",
-        List(("CLARK",List()), ("KING",List(3, 4)), ("Lara",List()), ("Nicky",List()))))(
+      //List(("CLARK",List()), ("KING",List(3, 4)), ("Lara",List()), ("Nicky",List()))))(
+      List(("CLARK",List()), ("KING",List(3, 4)), ("MILLER",List()))))(
           tresql"dept{dname, |emp {ename, |[empno]work {hours}#(1)}#(1)}#(1)"
             .map(d => d.dname -> d._2
               .map(e => e.ename -> e._2
@@ -874,12 +877,13 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       assertResult(List(1,1,1))(tresql"dummy + [10], dummy[dummy = 10] = [11], dummy - [dummy = 11]")
 
       //braces test
-      assertResult(List(0, 0, 2, 2))(tresql"((dummy) ++ ((dummy)))#(1)".map(_.dummy).toList)
+      //assertResult(List(0, 0, 2, 2))(tresql"((dummy)d2 ++ ((dummy)d1)d3)d4#(1)".map(_.dummy).toList)
+      assertResult(List(0, 0))(tresql"((dummy)d2 ++ ((dummy)d1)d3)d4#(1)".map(_.dummy).toList)
 
       assertResult(Vector("AMY", "DEVELOPMENT", 2))(
-        tresql"work[empno]emp/dept{ename, dname, hours}#(1, 2, 3)".toListOfVectors.head)
+        tresql"work w[empno]emp/dept{ename, dname, hours}#(1, 2, 3)".toListOfVectors.head)
 
-      assertResult(13)(tresql"work[empno]emp/dept{count(*) cnt}".head.cnt)
+      assertResult(13)(tresql"work w[empno]emp/dept{count(*) cnt}".head.cnt)
 
       assertResult(2)(tresql"(dummy ++ dummy){count(# dummy)}".head._1)
 
@@ -898,7 +902,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
             (minh, maxh, mins, maxs)
           }.toList.head)
 
-      assertResult((("ACCOUNTING", "CLARK, KING, Lara, Nicky")))(
+      //assertResult((("ACCOUNTING", "CLARK, KING, Lara, Nicky")))(
+      assertResult((("ACCOUNTING", "CLARK, KING, MILLER")))(
         tresql"dept {dname, |emp{ename}#(1) emps}#(1)"
           .map {d => d.dname -> d.emps.map(_.ename).mkString(", ")}.toList.head
       )
