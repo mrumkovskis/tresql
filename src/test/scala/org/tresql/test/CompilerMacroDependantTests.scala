@@ -379,7 +379,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         Map("ename" -> "GUNTER",
             "work:empno" -> List(
             Map("wdate" -> java.sql.Date.valueOf("2014-08-27"), "hours" -> 8),
-            Map("wdate" -> java.sql.Date.valueOf("2012-08-28"), "hours" -> 8)))))
+            Map("wdate" -> java.sql.Date.valueOf("2014-08-28"), "hours" -> 8)))))
     assertResult(List(0, List(((1,List(List())),10019), ((1,List(List(1, 1))),10020))))(ORT.update("dept", obj))
     //delete third level children
     obj = Map("deptno" -> 10013, "emp" -> List(
@@ -422,7 +422,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           Map("empno"->null, "ename"->"AMY", "mgr"->7788, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
             "work:empno[+-=]"->List(
               Map("wdate"->java.sql.Date.valueOf("2012-7-12"), "empno"->null, "hours"->5, "empno_mgr"->7839),
-              Map("wdate"->java.sql.Date.valueOf("2012-7-12"), "empno"->null, "hours"->2, "empno_mgr"->7839))),
+              Map("wdate"->java.sql.Date.valueOf("2012-7-13"), "empno"->null, "hours"->2, "empno_mgr"->7839))),
           Map("empno"->null, "ename"->"LENE", "mgr"->7566, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
             "work:empno[+-=]"->List(
               Map("wdate"->java.sql.Date.valueOf("2012-7-14"), "empno"->null, "hours"->5, "empno_mgr"->7839),
