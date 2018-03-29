@@ -455,6 +455,10 @@ emp[](emp{avg(sal) avgsal})t [(sal)/avgsal <= 1] {count(*)} --> [[8]]
 {(trunc(pi())) / :nr} --> nr=1 --> [[3]]
 
 //----UPDATE----
+emp[hiredate >= ?::date & hiredate <= ?::date]{sal} = [sal + ?] --> '1982-01-23;'1982-12-09;1000.35 --> [[2]]
+// parameter must be explicitly typecasted to date
+emp[hiredate >= ?::date & hiredate <= ?::date]{sal} #(~1) --> '1982-01-23;'1982-12-09 --> [[4000.35], [2300.35]]
+//
 =emp[?] [7876, *, 20] --> 7876; null; 'DESIGNER; null; null; null; null --> [[1]]
 emp[7876] --> [[7876, null, "DESIGNER", null, null, null, null, 20]]
 =emp[?] --> 7876; 7876; null; null; null; null; null; null; 20 --> [[1]]
@@ -482,9 +486,7 @@ dummy d - [], DUMMY {DUMMY} + [0], -dummy[], DUMMY {DUMMY} + [0] --> [[[[1]], [[
 :v = 5, :s = "kuku" --> [[5, "kuku"]]
 
 //----BATCH----
-SALGRADE {GRADE, LOSAL, HISAL} + [?, ?, ?], emp[?] {ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} = [?, ?, ?, to_date('1983-01-12','YYYY-MM-DD'), ?, ?, ?], emp[?] --> 6; 10000; 11000; 7876; 'ADAMS;  'CLERK; 7788; 1100; null; 20; 7788 --> [[[[1]], [[1]], [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 3000.00, null, 20]]]]
-//alvitunk TODO: double check 4000.35 vs 3000.00
-//SALGRADE {GRADE, LOSAL, HISAL} + [?, ?, ?], emp[?] {ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} = [?, ?, ?, to_date('1983-01-12','YYYY-MM-DD'), ?, ?, ?], emp[?] --> 6; 10000; 11000; 7876; 'ADAMS;  'CLERK; 7788; 1100; null; 20; 7788 --> [[[[1]], [[1]], [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 4000.35, null, 20]]]]
+SALGRADE {GRADE, LOSAL, HISAL} + [?, ?, ?], emp[?] {ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} = [?, ?, ?, to_date('1983-01-12','YYYY-MM-DD'), ?, ?, ?], emp[?] --> 6; 10000; 11000; 7876; 'ADAMS;  'CLERK; 7788; 1100; null; 20; 7788 --> [[[[1]], [[1]], [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 4000.35, null, 20]]]]
 //two unions in batch
 salgrade[?] {grade} + dummy, "A" + " " + "B", dept[dname ~~ ?]{deptno} + dummy, 1 + 3 --> -1; 'kuku% --> [[[[0]], "A B", [[0]], 4]]
 
@@ -578,8 +580,8 @@ dept[in_twice(deptno, :deptno)] --> deptno = 10 -->[[10, "ACCOUNTING", "NEW YORK
 {macro_interpolator_test1(1, 2)} --> [[3]]
 dummy {macro_interpolator_test1((dept{count(*)}) + 0, (emp{count(*)}) + 0)} --> [[19]]
 
-//whitespace test //TODO: double check 4000.35 or 3000.00 is correct expected salary
-emp /*comment*/[/**/ename /****/ ~~ /***/ /*another comment*/'sc%'/* comment */] //comment --> [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 3000.00, null, 20]]
+//whitespace test
+emp /*comment*/[/**/ename /****/ ~~ /***/ /*another comment*/'sc%'/* comment */] //comment --> [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 4000.35, null, 20]]
 //no-break space U+00A0
 emp{ename name}#(1)@(1) --> [["ADAMS"]]
 
@@ -651,28 +653,28 @@ dummy {"let's go"} --> [["let's go"]]
 
 //
 // TODO!!
-//test("dialects") {
-    assertResult(Query.build("a::'b'").sql)("select * from a::b")
-    assertResult(Query.build("a {1::int + 2::'double precision'}").sql)("select 1::int + 2::double precision from a")
-    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] (addr a {a.addr}) a {da.addr = a.addr}").sql)(
-      "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where da.addr_nr = a.nr")
-    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] addr a {da.addr = a.addr}").sql)(
-      "update dept_addr da set da.addr = a.addr from addr a where da.addr_nr = a.nr")
-    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] (addr a {a.addr}) a [da.addr_nr = 1 & a.addr = 'a'] {da.addr = a.addr}").sql)(
-      "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where (da.addr_nr = a.nr) and (da.addr_nr = 1 and a.addr = 'a')")
-    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] addr a [da.addr_nr = 1 & a.addr = 'a'] {da.addr = a.addr}").sql)(
-      "update dept_addr da set da.addr = a.addr from addr a where (da.addr_nr = a.nr) and (da.addr_nr = 1 and a.addr = 'a')")
-    assertResult(Query.build("=dept_addr da / address a / dept_addr da1 {da.addr = 'ADDR'}").sql)(
-      "update dept_addr da set da.addr = 'ADDR' from address a left join dept_addr da1 on a.nr = da1.addr_nr where da.addr_nr = a.nr"
-    )
-    assertResult(Query.build("d(# dname) {dept{dname}} +dept{deptno, dname} d{#dept, dname || '[reorganized]'}").sql)(
-      "with d(dname) as (select dname from dept) insert into dept (deptno, dname) select ?, dname || '[reorganized]' from d")
-    assertResult(Query.build("d(# dname) {dept{dname}} =dept[d.dname = 'x']{deptno, dname} d{#dept, dname || '[reorganized]'}").sql)(
-      "with d(dname) as (select dname from dept) update dept set (deptno, dname) = (select ?, dname || '[reorganized]' from d) where d.dname = 'x'"
-    )
-    assertResult(Query.build("d(# dname) {dept{dname}} =dept[dept.dname = d.dname]d[d.dname = 'x'] {deptno = #dept, dname = d.dname}").sql)(
-      "with d(dname) as (select dname from dept) update dept set deptno = ?, dname = d.dname from d where (dept.dname = d.dname) and (d.dname = 'x')"
-    )
-    assertResult(Query.build("d(# dname) {dept[deptno = 1]{dname}} dept - [deptno in d{deptno}]").sql)(
-      "with d(dname) as (select dname from dept where deptno = 1) delete from dept where deptno in (select deptno from d)"
-    )
+
+//    assertResult(Query.build("a::'b'").sql)("select * from a::b")
+//    assertResult(Query.build("a {1::int + 2::'double precision'}").sql)("select 1::int + 2::double precision from a")
+//    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] (addr a {a.addr}) a {da.addr = a.addr}").sql)(
+//      "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where da.addr_nr = a.nr")
+//    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] addr a {da.addr = a.addr}").sql)(
+//      "update dept_addr da set da.addr = a.addr from addr a where da.addr_nr = a.nr")
+//    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] (addr a {a.addr}) a [da.addr_nr = 1 & a.addr = 'a'] {da.addr = a.addr}").sql)(
+//      "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where (da.addr_nr = a.nr) and (da.addr_nr = 1 and a.addr = 'a')")
+//    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] addr a [da.addr_nr = 1 & a.addr = 'a'] {da.addr = a.addr}").sql)(
+//      "update dept_addr da set da.addr = a.addr from addr a where (da.addr_nr = a.nr) and (da.addr_nr = 1 and a.addr = 'a')")
+//    assertResult(Query.build("=dept_addr da / address a / dept_addr da1 {da.addr = 'ADDR'}").sql)(
+//      "update dept_addr da set da.addr = 'ADDR' from address a left join dept_addr da1 on a.nr = da1.addr_nr where da.addr_nr = a.nr"
+//    )
+//    assertResult(Query.build("d(# dname) {dept{dname}} +dept{deptno, dname} d{#dept, dname || '[reorganized]'}").sql)(
+//      "with d(dname) as (select dname from dept) insert into dept (deptno, dname) select ?, dname || '[reorganized]' from d")
+//    assertResult(Query.build("d(# dname) {dept{dname}} =dept[d.dname = 'x']{deptno, dname} d{#dept, dname || '[reorganized]'}").sql)(
+//      "with d(dname) as (select dname from dept) update dept set (deptno, dname) = (select ?, dname || '[reorganized]' from d) where d.dname = 'x'"
+//    )
+//    assertResult(Query.build("d(# dname) {dept{dname}} =dept[dept.dname = d.dname]d[d.dname = 'x'] {deptno = #dept, dname = d.dname}").sql)(
+//      "with d(dname) as (select dname from dept) update dept set deptno = ?, dname = d.dname from d where (dept.dname = d.dname) and (d.dname = 'x')"
+//    )
+//    assertResult(Query.build("d(# dname) {dept[deptno = 1]{dname}} dept - [deptno in d{deptno}]").sql)(
+//      "with d(dname) as (select dname from dept where deptno = 1) delete from dept where deptno in (select deptno from d)"
+//    )

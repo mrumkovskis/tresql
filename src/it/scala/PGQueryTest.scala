@@ -62,11 +62,11 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
       macro_"(macro_interpolator_test2($e1 * $e1, $e2 * $e2))"
   }
 
-  val executeCompilerMacroDependantTests = scala.util.Properties.versionNumberString.startsWith("2.12.")
-  val compilerMacroDependantTests =
-    if (executeCompilerMacroDependantTests)
-      Class.forName("org.tresql.test.CompilerMacroDependantTests").newInstance
-        .asInstanceOf[CompilerMacroDependantTestsApi]
+  val executePGCompilerMacroDependantTests = scala.util.Properties.versionNumberString.startsWith("2.12.")
+  val PGcompilerMacroDependantTests =
+    if (executePGCompilerMacroDependantTests)
+      Class.forName("org.tresql.test.PGCompilerMacroDependantTests").newInstance
+        .asInstanceOf[PGCompilerMacroDependantTestsApi]
     else
       null
 
@@ -191,12 +191,12 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     })
   }
 
-  if (executeCompilerMacroDependantTests) test("API") {
-    compilerMacroDependantTests.api
+  if (executePGCompilerMacroDependantTests) test("PG API") {
+    PGcompilerMacroDependantTests.api
   }
 
-  if (executeCompilerMacroDependantTests) test("ORT") {
-    compilerMacroDependantTests.ort
+  if (executePGCompilerMacroDependantTests) test("PG ORT") {
+    PGcompilerMacroDependantTests.ort
   }
 
   test("tresql methods") {
@@ -264,8 +264,8 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     intercept[CompilerException](compile("b(# y) {a{x}}, a(# x) {dummy{dummy}} b{y}"))
   }
 
-  if (executeCompilerMacroDependantTests) test("compiler macro") {
-    compilerMacroDependantTests.compilerMacro
+  if (executePGCompilerMacroDependantTests) test("postgres compiler macro") {
+    PGcompilerMacroDependantTests.compilerMacro
   }
 
   test("dialects") {
