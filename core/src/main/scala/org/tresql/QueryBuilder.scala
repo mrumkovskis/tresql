@@ -573,7 +573,9 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   }
   case class ValuesFromSelectExpr(select: SelectExpr) extends PrimitiveExpr {
     // start from clause with second table (first table is updateable)
-    def defaultSQL = s"from ${select.tables(1).sql}${select.join(select.tables.tail)}"
+    def defaultSQL =
+      if (select.tables.size > 1) s" from ${select.tables(1).sql}${select.join(select.tables.tail)}"
+      else ""
   }
   class UpdateExpr(table: IdentExpr, alias: String, filter: List[Expr],
       val cols: List[Expr], val vals: Expr) extends DeleteExpr(table, alias, filter) {
@@ -591,12 +593,13 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       " set " + (vals match {
         case ValuesExpr(v) => (cols zip v map { v => v._1.sql + " = " + v._2.sql }).mkString(", ")
         case q: SelectExpr => cols.map(_.sql).mkString("(", ", ", ")") + " = " + "(" + q.sql + ")"
-        case f: ValuesFromSelectExpr => cols.map(_.sql).mkString(", ") + " " + f.sql
+        case f: ValuesFromSelectExpr => cols.map(_.sql).mkString(", ") + f.sql
         case x => error("Knipis: " + x)
       }) + {
         val filterSql = if (filter == null) null else where
         val joinWithUpdateTableSql = vals match {
-          case ValuesFromSelectExpr(sel: SelectExpr) => sel.tables(1).sqlJoinCondition(sel.tables.head)
+          case ValuesFromSelectExpr(sel: SelectExpr) if sel.tables.size > 1 =>
+            sel.tables(1).sqlJoinCondition(sel.tables.head)
           case _ => null
         }
         Option(joinWithUpdateTableSql) ++ Option(filterSql) match {

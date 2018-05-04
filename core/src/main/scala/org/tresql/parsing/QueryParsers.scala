@@ -175,7 +175,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       (if (vals != null) any2tresql(vals) else "")
   }
   case class ValuesFromSelect(select: Query) extends Exp {
-    def tresql = select.tresql
+    def tresql =
+      if (select.tables.size > 1) select.tresql
+      else ""
   }
   case class Delete(table: Ident, alias: String, filter: Arr) extends DMLExp {
     override def cols = null
@@ -458,14 +460,21 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
           Update(t, a orNull, f orNull, c.cols, v)
       } named "update-cols-select"
   //update table set col1 = sel_col1, col2 = sel_col2 from (select sel_col1, sel_col2 from table2 ...) values_table where ....
-  private def updateFromSelect: MemParser[Update] = "=" ~> objs ~ opt(filter) ~ opt(columns) ^? ({
-    case (tables @ Obj(updateTable @ Ident(_), alias, _, _, _) :: fromTables) ~ f ~ c if fromTables.nonEmpty =>
-      Update(updateTable, alias, f.orNull, c.map(_.cols).getOrElse(Nil),
+  private def updateFromSelect: MemParser[Update] = "=" ~> objs ~ opt(filter) ~ columns ^? ({
+    case (tables @ Obj(updateTable @ Ident(_), alias, _, _, _) :: fromTables) ~ f ~ c =>
+      Update(updateTable, alias, f.orNull, c.cols,
         ValuesFromSelect(Query(tables = tables, Filters(Nil), Cols(false, List(Col(All, null))), null, null, null, null)))
-   }, {
-   case (objs: List[Obj] @unchecked) ~ _ ~ _ => "Update tables clause must as the first element have " +
+  }, {
+    case (objs: List[Obj] @unchecked) ~ _ ~ _ => "Update tables clause must as the first element have " +
      "qualifiedIdent with optional alias as a table to be updated" +
      s"Instead encountered: ${objs.map(_.tresql).mkString}"
+  }) ^? ({
+    case u if u.cols.nonEmpty && u.cols.forall {
+      case Col(BinOp("=", Obj(_: Ident, _, _, _, _), _), _) => true
+      case _ => false
+    } => u
+  }, {
+    case _ => "Update from select columns must be assignment expressions"
   }) named "update-from-select"
   def update: MemParser[Update] = (updateColsSelect | updateFromSelect | simpleUpdate) named "update"
   //END UPDATE parsers
