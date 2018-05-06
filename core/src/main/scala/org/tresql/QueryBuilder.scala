@@ -82,6 +82,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       case v: Number => v.toString
       case v: String => "'" + v.replace("'", "''") + "'"
       case v: Boolean => v.toString
+      case _: Null => "null"
       case null => "null"
       case x => String.valueOf(x)
     }
@@ -246,12 +247,12 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       case "+" => lop.sql + (if (exprType == classOf[SelectExpr]) " union " else " + ") + rop.sql
       case "-" => lop.sql + (if (exprType == classOf[SelectExpr]) " except " else " - ") + rop.sql
       case "=" => rop match {
-        case ConstExpr(null) => lop.sql + " is " + rop.sql
+        case ConstExpr(Null) => lop.sql + " is " + rop.sql
         case _: ArrExpr => lop.sql + " in " + rop.sql
         case _ => lop.sql + " = " + rop.sql
       }
       case "!=" => rop match {
-        case ConstExpr(null) => lop.sql + " is not " + rop.sql
+        case ConstExpr(Null) => lop.sql + " is not " + rop.sql
         case _: ArrExpr => lop.sql + " not in " + rop.sql
         case _ => lop.sql + " != " + rop.sql
       }
@@ -1073,7 +1074,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     try {
       parsedExpr match {
         case Const(x) => ConstExpr(x)
-        case Null => ConstExpr(null)
+        case Null => ConstExpr(Null)
+        case NullUpdate => ConstExpr(NullUpdate)
         //insert
         case Insert(t, a, c, v) => parseCtx match {
           //insert can be statement of with query, in this case it is part of this builder (sql statement)

@@ -74,7 +74,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         Option(table_alias(name mkString "."))
       case TableDef(n, Obj(TableObj(s: SelectDefBase), _, _, _, _)) =>
         Option(table_from_selectdef(n, s))
-      case TableDef(_, Obj(TableObj(Null), _, _, _,_)) => Option(table_alias(null))
+      case TableDef(_, Obj(TableObj(_: Null), _, _, _,_)) => Option(table_alias(null))
       case x => throw CompilerException(
         s"Unrecognized table clause: '${x.tresql}'. Try using Query(...)")
     }
@@ -658,7 +658,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     def type_from_exp(ctx: Ctx, exp: Exp) = typer(ctx)(exp)
     lazy val typer: Traverser[Ctx] = traverser(ctx => {
       case Const(const) => type_from_const(const)
-      case Null => type_from_const(null)
+      case _: Null => type_from_const(null)
       case Ident(ident) =>
         Ctx(ctx.scopes, column(ctx.scopes)(ident mkString ".").map(_.scalaType).get)
       case UnOp(_, operand) => type_from_exp(ctx, operand)

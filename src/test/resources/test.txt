@@ -381,6 +381,7 @@ emp[7876] {ename} --> [["kuku"]]
 emp[7876] {ename} --> [["kukuz"]]
 =emp e[empno = ?]{e.ename = ?, sal = ?} --> 7876; 'kukuzis; 1000 --> [[1]]
 emp[7876] {ename, sal} --> [["kukuzis", 1000.00]]
+=emp[ename ~~ 'king'] {mgr = null} --> [[1]]
 
 //child update
 emp{empno, job, emp[empno = :1(1)]{job} = [:1(2)]}#(1) --> [[7369, "CLERK", [[1]]], [7499, "SALESMAN", [[1]]], [7521, "SALESMAN", [[1]]], [7566, "MANAGER", [[1]]], [7654, "SALESMAN", [[1]]], [7698, "MANAGER", [[1]]], [7782, "MANAGER", [[1]]], [7788, "ANALYST", [[1]]], [7839, "PRESIDENT", [[1]]], [7844, "SALESMAN", [[1]]], [7876, null, [[1]]], [7900, "CLERK", [[1]]], [7902, "ANALYST", [[1]]], [7934, "CLERK", [[1]]]]

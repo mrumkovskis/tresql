@@ -196,9 +196,12 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   case class IdentAll(ident: Ident) extends Exp {
     def tresql = ident.ident.mkString(".") + ".*"
   }
-  object Null extends Exp {
+
+  trait Null extends Exp {
     def tresql = "null"
   }
+  case object Null extends Null
+  case object NullUpdate extends Null
 
   case class Braces(expr: Exp) extends Exp {
     def tresql = "(" + any2tresql(expr) + ")"
@@ -472,7 +475,11 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     case u if u.cols.nonEmpty && u.cols.forall {
       case Col(BinOp("=", Obj(_: Ident, _, _, _, _), _), _) => true
       case _ => false
-    } => u
+    } => u.copy(cols = u.cols.map {
+      //set assignable value to NullUpdate so null update expression is col = null, not col is null
+      case c @ Col(a @ BinOp(_, _, Null), _) => c.copy(col = a.copy(rop = NullUpdate))
+      case x => x
+    })
   }, {
     case _ => "Update from select columns must be assignment expressions"
   }) named "update-from-select"
