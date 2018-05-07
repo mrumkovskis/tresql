@@ -373,7 +373,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     def defaultSQL = "select " + (if (distinct) "distinct " else "") +
       cols.sql +
       (tables match {
-        case List(Table(ConstExpr(null), _, _, _, _)) => ""
+        case List(Table(ConstExpr(Null), _, _, _, _)) => ""
         case _ => " from " + tables.head.sqlName + join(tables)
       }) +
       //(filter map where).getOrElse("")
