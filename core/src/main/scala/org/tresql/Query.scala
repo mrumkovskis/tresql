@@ -1,10 +1,7 @@
 package org.tresql
 
-import java.sql.{ Array => JArray }
-import java.sql.{ Date, Timestamp, PreparedStatement, CallableStatement, ResultSet }
-import org.tresql.metadata._
+import java.sql.{ PreparedStatement, CallableStatement, ResultSet }
 import sys._
-import java.sql.Connection
 import CoreTypes.RowConverter
 
 trait Query extends QueryBuilder with TypedQuery {
