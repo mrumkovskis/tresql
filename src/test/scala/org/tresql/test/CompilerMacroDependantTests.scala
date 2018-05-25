@@ -856,6 +856,12 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(new UpdateResult(Some(1)))(ORT.update("dept", obj)())
 
     assertResult(List("DEVOP"))(tresql"dept[10079]{dname}".map(_.dname).toList)
+
+    println("----- SAVE to multiple tables with children having references to both parent tables -----")
+
+    obj = Map("dname" -> "Radio", "ename" -> "John",
+      "emp:mgr" -> List(Map("ename" -> "Agnes", "deptno" -> 10004)))
+    //assertResult(()) (ORT.insertMultiple(obj, "dept", "emp")())
   }
   override def compilerMacro {
       println("\n-------------- TEST compiler macro ----------------\n")
