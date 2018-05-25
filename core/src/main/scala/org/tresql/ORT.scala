@@ -333,12 +333,14 @@ trait ORT extends Query {
           case Nil => None //no ref to parent
         }
       md.tableOption(tables.head.table) //no parent no ref to parent
-       .filter(_ => parent == null)
-       .map((_, null)) orElse
-      md.tableOption(tables.head.table) //first table has ref to parent
-        .flatMap(table => (refInSet(tables.head.refs, table) orElse imported_key_option(table))
-          .map((table, _))) orElse
-      processLinkedTables(tables.tail) //look for ref to parent in linked tables
+        .filter(_ => parent == null)
+        .map((_, null))
+        .orElse {
+          if (tables.head.refs.nonEmpty) //ref to parent in first table found must be resolved!
+            md.tableOption(tables.head.table).flatMap(table => refInSet(tables.head.refs, table).map(table -> _))
+          else
+            processLinkedTables(tables) //search for ref to parent
+        }
     }
     (for {
       (table, ref) <- importedKeyOption(tables)

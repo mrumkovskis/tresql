@@ -861,7 +861,16 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
 
     obj = Map("dname" -> "Radio", "ename" -> "John",
       "emp:mgr" -> List(Map("ename" -> "Agnes", "deptno" -> 10004)))
-    //assertResult(()) (ORT.insertMultiple(obj, "dept", "emp")())
+    assertResult(new InsertResult(
+      Some(1),
+      Map("_1" -> new InsertResult(
+        Some(1),
+        Map("emp:mgr" -> List(
+          new InsertResult(Some(1), id = Some(10081)))),
+        id = Some(10080)
+      )),
+      id = Some(10080)
+    )) (ORT.insertMultiple(obj, "dept", "emp")())
   }
   override def compilerMacro {
       println("\n-------------- TEST compiler macro ----------------\n")
