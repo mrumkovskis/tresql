@@ -31,6 +31,8 @@ trait BasicDBFunctionSignatures {
   def trim(string: String): String
   def exists(cond: SelectDefBase): Boolean
   def group_concat(what: Any): String
+  //postgres group_concat replacement is string_agg
+  def string_agg(expr: Any*): Any
 }
 
 trait BasicDialectFunctionSignatures {

@@ -62,11 +62,11 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
       macro_"(macro_interpolator_test2($e1 * $e1, $e2 * $e2))"
   }
 
-  val executeCompilerMacroDependantTests = scala.util.Properties.versionNumberString.startsWith("2.12.")
-  val compilerMacroDependantTests =
-    if (executeCompilerMacroDependantTests)
-      Class.forName("org.tresql.test.CompilerMacroDependantTests").newInstance
-        .asInstanceOf[CompilerMacroDependantTestsApi]
+  val executePGCompilerMacroDependantTests = scala.util.Properties.versionNumberString.startsWith("2.12.")
+  val PGcompilerMacroDependantTests =
+    if (executePGCompilerMacroDependantTests)
+      Class.forName("org.tresql.test.PGCompilerMacroDependantTests").newInstance
+        .asInstanceOf[PGCompilerMacroDependantTestsApi]
     else
       null
 
@@ -191,12 +191,12 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     })
   }
 
-  if (executeCompilerMacroDependantTests) test("API") {
-    compilerMacroDependantTests.api
+  if (executePGCompilerMacroDependantTests) test("PG API") {
+    PGcompilerMacroDependantTests.api
   }
 
-  if (executeCompilerMacroDependantTests) test("ORT") {
-    compilerMacroDependantTests.ort
+  if (executePGCompilerMacroDependantTests) test("PG ORT") {
+    PGcompilerMacroDependantTests.ort
   }
 
   test("tresql methods") {
@@ -264,8 +264,8 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     intercept[CompilerException](compile("b(# y) {a{x}}, a(# x) {dummy{dummy}} b{y}"))
   }
 
-  if (executeCompilerMacroDependantTests) test("compiler macro") {
-    compilerMacroDependantTests.compilerMacro
+  if (executePGCompilerMacroDependantTests) test("postgres compiler macro") {
+    PGcompilerMacroDependantTests.compilerMacro
   }
 
   test("dialects") {
@@ -276,9 +276,9 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] addr a {da.addr = a.addr}").sql)(
       "update dept_addr da set da.addr = a.addr from addr a where da.addr_nr = a.nr")
     assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] (addr a {a.addr}) a [da.addr_nr = 1 & a.addr = 'a'] {da.addr = a.addr}").sql)(
-      "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where da.addr_nr = a.nr and (da.addr_nr = 1 and a.addr = 'a')")
+      "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where (da.addr_nr = a.nr) and (da.addr_nr = 1 and a.addr = 'a')")
     assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] addr a [da.addr_nr = 1 & a.addr = 'a'] {da.addr = a.addr}").sql)(
-      "update dept_addr da set da.addr = a.addr from addr a where da.addr_nr = a.nr and (da.addr_nr = 1 and a.addr = 'a')")
+      "update dept_addr da set da.addr = a.addr from addr a where (da.addr_nr = a.nr) and (da.addr_nr = 1 and a.addr = 'a')")
   }
 
   test("cache") {
