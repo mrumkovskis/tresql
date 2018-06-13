@@ -33,7 +33,7 @@ lazy val core = (project in file("core"))
       "org.scala-lang" % "scala-reflect" % scalaVersion.value
     ) ++ (
       if (scalaVersion.value.startsWith("2.10.")) Nil
-      else Seq("org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.5"))
+      else Seq("org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.1"))
   ).settings(commonSettings: _*)
 
 lazy val macros = (project in file("macro"))
