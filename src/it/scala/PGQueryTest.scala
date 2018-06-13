@@ -89,10 +89,17 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
         baos.write(i)
       }
       process.waitFor
+      val errTip =
+        """Try to specify different test parameters as postgres port: -Dport=<port>
+          |  or increase docker startup wait time -Dwait_after_startup_millis
+          |For complete parameter list see scaladoc of PGQueryTest class.""".stripMargin
       val exitValue = process.exitValue
       if (exitValue != 0) {
         println(s"Error occured during executing command:\n$DockerCmd")
         println(baos.toString("utf8"))
+        println()
+        println(errTip)
+        println()
         sys.error("Failure")
       } else {
         println("Docker started.")
@@ -101,8 +108,8 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
         Thread.sleep(timeout)
         try DriverManager.getConnection(dbUri, dbUser, dbPwd)
         catch {
-          case NonFatal(e) => sys.error(s"Error occurred trying to connect to database ($dbUri, $dbUser, $dbPwd) - ${e.toString}.\n" +
-            "Try to specify different test parameters as postgres port: -Dport=<port> or increase docker startup wait time -Dwait_after_startup_millis")
+          case NonFatal(e) =>
+            sys.error(s"Error occurred trying to connect to database ($dbUri, $dbUser, $dbPwd) - ${e.toString}.\n" + errTip)
         }
       }
     } else try DriverManager.getConnection(dbUri, dbUser, dbPwd) catch {
