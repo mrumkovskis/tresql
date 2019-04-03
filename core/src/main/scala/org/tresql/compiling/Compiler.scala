@@ -88,6 +88,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case q: Query =>
         /* FIXME distinct keyword is lost in Cols */
         q.copy(tables = this.tables.map(_.exp), cols = Cols(false, this.cols.map(c => Col(c.exp, c.name)))).tresql
+      case x => x.tresql
     }
   }
 
@@ -159,10 +160,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         case _: BinSelectDef =>
         case q => throw CompilerException(s"Recursive table definition must be union, instead found: ${q.tresql}")
       }
-      if (cols.isEmpty) throw CompilerException(s"Recursive table definition must have at least one column")
     }
-    if (cols.nonEmpty && cols.size != exp.cols.size)
-      throw CompilerException(s"with table definition column count must equal corresponding query definition column count: ${exp.tresql}")
     override def table(table: String) = tables.find(_.name == table).map {
       case _ => table_from_selectdef(table, this)
     }
@@ -464,11 +462,8 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           case x => throw CompilerException(s"Table in with clause must be query. Instead found: ${x.getClass.getName}(${x.tresql})")
         }
         val tables: List[TableDef] = List(TableDef(name, Obj(TableObj(Ident(List(name))), null, null, null, false)))
-        val cols: List[ColDef[_]] =
-          if (wtCols.isEmpty) exp match {
-            case sd: SelectDefBase => sd.cols
-            case x => throw CompilerException(s"Unsupported with table definition: ${x.tresql}")
-          } else wtCols.map { c =>
+        val cols =
+          wtCols.map { c =>
             ColDef[Nothing](c, Ident(List(c)), Manifest.Nothing)
           }
         WithTableDef(cols, tables, recursive, exp)
@@ -495,7 +490,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         val wtables: List[WithTableDef] = withQuery.withTables.foldLeft(List[WithTableDef]()) { (tables, table) =>
           val withScopes = tables ++ scopes
           (resolver(if (table.recursive) table :: withScopes else withScopes)(table) match {
-            case wtd @ WithTableDef(List(ColDef(_, All, _)), _, _, _) =>
+            case wtd @ WithTableDef(Nil, _, _, _) =>
               wtd.copy(cols = wtd.exp.cols.map(col =>
                 ColDef(
                   col.name,

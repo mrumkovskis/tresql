@@ -174,6 +174,13 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       emp[ename ~~ 'kin%']{empno, ename} + emp[mgr = nr]kd{empno, ename}
     } kd {name}) val}""")
 
+    //with expression with asterisk resolving
+    compile("i(# *){emp e[empno = '']{*}} i{*}")
+    compile("i(# *){emp e[empno = '']{e.*}} i{*}")
+    compile("i(*){emp e[empno = '']{e.*} + i[false]emp e{e.*}} i{*}")
+    compile("i(# ename){emp e[empno = '']{*}} i{*}")
+    compile("e(# *){emp{empno, ename}}, t(# *){i(*){e[empno = '']{e.*} + i[false]e{e.*}}i{*}}t{*}")
+
     //with expression with dml statement
     compile("d(# dname) {dept{dname}} +dept{deptno, dname} d{#dept, dname || '[reorganized]'}")
     compile("d(# dname) {dept{dname}} =dept[d.dname = 'x']{deptno, dname} d{#dept, dname || '[reorganized]'}")
