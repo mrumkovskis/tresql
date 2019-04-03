@@ -528,7 +528,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
                   .getOrElse(throw CompilerException(s"Cannot find table: $alias"))
               case cd @ ColDef(_, chd: ChildDef, _) =>
                 List(cd.copy(col = resolver(nscopes)(chd)))
-              case cd => List(cd)
+              case ColDef(n, e, t) => List(ColDef(n, resolver(nscopes)(e), t))
             }
           }, exp = resolver(nscopes)(nsd.exp).asInstanceOf[Query])
         case wsd: WithSelectDef =>
