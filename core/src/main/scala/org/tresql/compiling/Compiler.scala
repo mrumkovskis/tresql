@@ -497,7 +497,12 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
                   Obj(Ident(List(wtd.tables.head.name, col.name)), null, null, null, false),
                   col.typ
                 )))
-            case x: WithTableDef => x
+            case x: WithTableDef =>
+              if (x.exp.cols.size != x.cols.size)
+                throw CompilerException(
+                  s"""Column count mismatch in column name list:
+                     | ${x.exp.cols.size} != ${x.cols.size}""".stripMargin)
+              else x
             case x => sys.error(s"Compiler error, expected WithTableDef, encountered: $x")
           }) :: tables
         }

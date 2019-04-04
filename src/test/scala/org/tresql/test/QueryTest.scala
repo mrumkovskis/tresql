@@ -178,7 +178,6 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     compile("i(# *){emp e[empno = '']{*}} i{*}")
     compile("i(# *){emp e[empno = '']{e.*}} i{*}")
     compile("i(*){emp e[empno = '']{e.*} + i[false]emp e{e.*}} i{*}")
-    compile("i(# ename){emp e[empno = '']{*}} i{*}")
     compile("e(# *){emp{empno, ename}}, t(# *){i(*){e[empno = '']{e.*} + i[false]e{e.*}}i{*}}t{*}")
     compile("dept{(i(){emp e{ename} + i[false]emp e{i.ename}} i{ename}) x}")
     compile("dept{(i(*){emp e{ename} + i[false]emp e{i.ename}} i{ename}) x}")
@@ -224,6 +223,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     intercept[CompilerException](compile("dept{group_concat(dname)#(dname)[deptno{deptno} < 30]}"))
     intercept[CompilerException](compile("{dept[10]{dnamez}}"))
     intercept[CompilerException](compile("b(# y) {a{x}}, a(# x) {dummy{dummy}} b{y}"))
+    intercept[CompilerException](compile("i(# ename){emp e[empno = '']{*}} i{*}"))
   }
 
   if (executeCompilerMacroDependantTests) test("compiler macro") {
