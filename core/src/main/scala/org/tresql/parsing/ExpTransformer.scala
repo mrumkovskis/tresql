@@ -36,9 +36,9 @@ trait ExpTransformer { this: QueryParsers =>
         Query(objs map tt, tt(filters), tt(cols), tt(gr), tt(ord), tt(off), tt(lim))
       case WithTable(n, c, r, q) => WithTable(n, c, r, tt(q))
       case With(ts, q) => With(ts map tt, tt(q))
-      case Insert(t, a, cols, vals) => Insert(tt(t), a, cols map tt, tt(vals))
-      case Update(t, a, filter, cols, vals) => Update(tt(t), a, tt(filter), cols map tt, tt(vals))
-      case Delete(t, a, filter) => Delete(tt(t), a, tt(filter))
+      case Insert(t, a, cols, vals, r) => Insert(tt(t), a, cols map tt, tt(vals), r map tt)
+      case Update(t, a, filter, cols, vals, r) => Update(tt(t), a, tt(filter), cols map tt, tt(vals), r map tt)
+      case Delete(t, a, filter, r) => Delete(tt(t), a, tt(filter), r map tt)
       case Arr(els) => Arr(els map tt)
       case Filters(f) => Filters(f map tt)
       case Values(v) => Values(v map tt)
@@ -90,17 +90,19 @@ trait ExpTransformer { this: QueryParsers =>
         )
       case WithTable(n, c, r, q) => WithTable(n, c, r, tt(state)(q))
       case With(ts, q) => With(ts map { wt => tt(state)(wt) }, tt(state)(q))
-      case Insert(t, a, cols, vals) => Insert(tt(state)(t), a,
-          cols map { c => tt(state)(c) }, tt(state)(vals))
-      case Update(table, alias, filter, cols, vals) =>
+      case Insert(t, a, cols, vals, r) => Insert(tt(state)(t), a,
+          cols map { c => tt(state)(c) }, tt(state)(vals), r map tt(state))
+      case Update(table, alias, filter, cols, vals, r) =>
         Update(
           tt(state)(table),
           alias,
           tt(state)(filter),
           cols map { c => tt(state)(c) },
-          tt(state)(vals)
+          tt(state)(vals),
+          r map tt(state)
         )
-      case Delete(table, alias, filter) => Delete(tt(state)(table), alias, tt(state)(filter))
+      case Delete(table, alias, filter, r) =>
+        Delete(tt(state)(table), alias, tt(state)(filter), r map tt(state))
       case Arr(els) => Arr(els map tt(state))
       case Filters(f) => Filters(f map tt(state))
       case Values(v) => Values(v map tt(state))
@@ -117,6 +119,7 @@ trait ExpTransformer { this: QueryParsers =>
     def fun_traverse(state: T) = fun(state) orElse traverse(state)
     def tr(r: T, e: Exp): T = fun_traverse(r)(e)
     def trl(r: T, l: List[Exp]) = l.foldLeft(r) { (fr, el) => tr(fr, el) }
+    def tro(r: T, o: Option[Exp]) = o.map(tr(r, _)).getOrElse(r)
     def traverse(state: T): PartialFunction[Exp, T] = {
       case _: Ident | _: Id | _: IdRef | _: Res | All | _: IdentAll | _: Variable | _: Null | _: Const | null => state
       case Fun(_, pars, _, o, f) =>
@@ -138,9 +141,9 @@ trait ExpTransformer { this: QueryParsers =>
         tr(tr(tr(tr(tr(tr(trl(state, objs), filters), cols), gr), ord), off), lim)
       case WithTable(_, _, _, q) => tr(state, q)
       case With(ts, q) => tr(trl(state, ts), q)
-      case Insert(_, _, cols, vals) => tr(trl(state, cols), vals)
-      case Update(_, _, filter, cols, vals) => tr(trl(tr(state, filter), cols), vals)
-      case Delete(_, _, filter) => tr(state, filter)
+      case Insert(_, _, cols, vals, r) => tro(tr(trl(state, cols), vals), r)
+      case Update(_, _, filter, cols, vals, r) => tro(tr(trl(tr(state, filter), cols), vals), r)
+      case Delete(_, _, filter, r) => tro(tr(state, filter), r)
       case Arr(els) => trl(state, els)
       case Filters(f) => trl(state, f)
       case Values(v) => trl(state, v)

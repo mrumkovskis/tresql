@@ -1077,19 +1077,19 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case Null => ConstExpr(Null)
         case NullUpdate => ConstExpr(NullUpdate)
         //insert
-        case Insert(t, a, c, v) => parseCtx match {
+        case Insert(t, a, c, v, r) => parseCtx match {
           //insert can be statement of with query, in this case it is part of this builder (sql statement)
           case WITH_CTX => buildInsert(t, a, c, v)
           case _ => buildWithNew(_.buildInsert(t, a, c, v))
         }
         //update
-        case Update(t, a, f, c, v) => parseCtx match {
+        case Update(t, a, f, c, v, r) => parseCtx match {
           //update can be statement of with query, in this case it is part of this builder (sql statement)
           case WITH_CTX => buildUpdate(t, a, f, c, v)
           case _ => buildWithNew(_.buildUpdate(t, a, f, c, v))
         }
         //delete
-        case Delete(t, a, f) => parseCtx match {
+        case Delete(t, a, f, r) => parseCtx match {
           //delete can be statement of with query, in this case it is part of this builder (sql statement)
           case WITH_CTX => buildDelete(t, a, f)
           case _ => buildWithNew(_.buildDelete(t, a, f))
