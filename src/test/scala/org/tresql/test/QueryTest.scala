@@ -224,6 +224,8 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     intercept[CompilerException](compile("{dept[10]{dnamez}}"))
     intercept[CompilerException](compile("b(# y) {a{x}}, a(# x) {dummy{dummy}} b{y}"))
     intercept[CompilerException](compile("i(# ename){emp e[empno = '']{*}} i{*}"))
+    intercept[CompilerException](compile("d(# id) { dummy[dummy =0] }, u(# id) {dummy[dummy =2]}, upd(#) {dummy[dummy in (u.id)]{dummy} = [u.id + 1] }, remove_from(# ) { dummy - [ dummy in (d{id}) ] } remove_from{dummy}"))
+    intercept[CompilerException](compile("d(# id) { dummy[dummy =0] }, u(# id) {dummy[dummy =2]}, upd(#) {dummy[dummy in (u.id)]{dummy} = [u.id + 1] }, remove_from(# ) { dummy - [ dummy in (d{id}) ] } upd{dummy}"))
   }
 
   if (executeCompilerMacroDependantTests) test("compiler macro") {

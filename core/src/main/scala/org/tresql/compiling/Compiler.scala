@@ -593,9 +593,11 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         namer(ctx.copy(colScopes = wtd :: ctx.colScopes, tblScopes = wtd :: ctx.tblScopes))(wtd.exp)
         ctx
       case wsd: WithQuery =>
-        val wtCtx = wsd.withTables.foldLeft(ctx) { (ctx, table) =>
-          namer(ctx)(table)
-          ctx.copy(colScopes = table :: ctx.colScopes, tblScopes = table :: ctx.tblScopes)
+        val wtCtx = wsd.withTables.foldLeft(ctx) {
+          case (ctx, table @ WithTableDef(_, _, _, _: SelectDefBase)) => //add scope only for select definition
+            namer(ctx)(table)
+            ctx.copy(colScopes = table :: ctx.colScopes, tblScopes = table :: ctx.tblScopes)
+          case (ctx, _) => ctx
         }
         namer(wtCtx)(wsd.exp)
         ctx
