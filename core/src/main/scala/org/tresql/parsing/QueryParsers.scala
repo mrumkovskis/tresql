@@ -477,7 +477,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       } named "update-cols-select"
   //update table set col1 = sel_col1, col2 = sel_col2 from (select sel_col1, sel_col2 from table2 ...) values_table where ....
   private def updateFromSelect: MemParser[Update] = "=" ~> objs ~ opt(filter) ~ columns ~ opt(columns) ^? ({
-    case (tables @ Obj(updateTable @ Ident(_), alias, _, _, _) :: fromTables) ~ f ~ c ~ maybeCols =>
+    case (tables @ Obj(updateTable @ Ident(_), alias, _, _, _) :: _) ~ f ~ c ~ maybeCols =>
       Update(
         updateTable,
         alias,

@@ -452,15 +452,17 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           else Nil
         val filter = if (dml.filter != null) tr(BodyCtx, dml.filter).asInstanceOf[Arr] else null
         val vals = if (dml.vals != null) tr(BodyCtx, dml.vals) else null
-        dml match {
+        val retCols = dml.returning map buildCols
+        val dmlDef = dml match {
           case i: Insert =>
-            InsertDef(cols, List(table), Insert(table = null, alias = null, cols = Nil, vals = vals, i.returning))
+            InsertDef(cols, List(table), Insert(table = null, alias = null, cols = Nil, vals = vals, None))
           case u: Update =>
             UpdateDef(cols, List(table), Update(
-              table = null, alias = null, cols = Nil, filter = filter, vals = vals, returning = u.returning))
+              table = null, alias = null, cols = Nil, filter = filter, vals = vals, returning = None))
           case d: Delete =>
-            DeleteDef(List(table), Delete(table = null, alias = null, filter = filter, d.returning))
+            DeleteDef(List(table), Delete(table = null, alias = null, filter = filter, None))
         }
+        retCols.map(rc => ReturningDMLDef(rc, List(table), dmlDef)).getOrElse(dmlDef)
       case ValuesFromSelect(sel) =>
         ValuesFromSelectDef(tr(QueryCtx, sel).asInstanceOf[SelectDefBase])
       case WithTable(name, wtCols, recursive, table) =>
@@ -516,6 +518,22 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         val exp = resolver(wtables ++ scopes)(withQuery.exp).asInstanceOf[T]
         (exp, wtables.reverse)
       }
+      def resolveCols(scopes: List[Scope], sql: SQLDefBase) = {
+        sql.cols.flatMap {
+          case ColDef(_, All, _) => sql.tables.flatMap { td =>
+            table(scopes)(td.name).map(_.cols.map { c =>
+              ColDef(c.name, createCol(s"${td.name}.${c.name}").col, c.scalaType)
+            }).getOrElse(throw CompilerException(s"Cannot find table: ${td.tresql}\nScopes:\n$scopes"))
+          }
+          case ColDef(_, IdentAll(Ident(ident)), _) =>
+            val alias = ident mkString "."
+            table(scopes)(alias)
+              .map(_.cols.map { c => ColDef(c.name, createCol(s"$alias.${c.name}").col, c.scalaType) })
+              .getOrElse(throw CompilerException(s"Cannot find table: $alias"))
+          case ColDef(n, e, t) => List(ColDef(n, resolver(scopes)(e), t))
+        }
+      }
+
       {
         case sd: SelectDef =>
           val nsd = sd.copy(tables = {
@@ -526,23 +544,15 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
             }
           })
           val nscopes = nsd :: scopes
-          nsd.copy (cols = {
-            nsd.cols.flatMap {
-              case ColDef(_, All, _) => nsd.tables.flatMap { td =>
-                table(nscopes)(td.name).map(_.cols.map { c =>
-                  ColDef(c.name, createCol(s"${td.name}.${c.name}").col, c.scalaType)
-                }).getOrElse(throw CompilerException(s"Cannot find table: ${td.tresql}\nScopes:\n$nscopes"))
-              }
-              case ColDef(_, IdentAll(Ident(ident)), _) =>
-                val alias = ident mkString "."
-                table(nscopes)(alias)
-                  .map(_.cols.map { c => ColDef(c.name, createCol(s"$alias.${c.name}").col, c.scalaType) })
-                  .getOrElse(throw CompilerException(s"Cannot find table: $alias"))
-              case cd @ ColDef(_, chd: ChildDef, _) =>
-                List(cd.copy(col = resolver(nscopes)(chd)))
-              case ColDef(n, e, t) => List(ColDef(n, resolver(nscopes)(e), t))
-            }
-          }, exp = resolver(nscopes)(nsd.exp).asInstanceOf[Query])
+          nsd.copy (
+            cols = resolveCols(nscopes, nsd),
+            exp = resolver(nscopes)(nsd.exp).asInstanceOf[Query]
+          )
+        case rd: ReturningDMLDef =>
+          rd.copy(
+            cols = resolveCols(rd :: scopes, rd),
+            exp = resolver(scopes)(rd.exp).asInstanceOf[DMLDefBase]
+          )
         case wsd: WithSelectDef =>
           val (exp, wtables) = resolveWithQuery[SelectDefBase](wsd)
           wsd.copy(exp, wtables)
@@ -637,6 +647,13 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         }
         //return old scope
         ctx
+      case rdml: ReturningDMLDef =>
+        val tableCtx = Context(Nil, Nil, TableCtx, isGrpOrd = false) // root scope
+        val colCtx = Context(colScopes = List(rdml), tblScopes = Nil, ColumnCtx, isGrpOrd = false) // returning dml table scope
+        rdml.tables foreach (t => namer(tableCtx)(t.exp.obj)) // returning dml table must come from root scope
+        rdml.cols foreach namer(colCtx)
+        namer(ctx)(rdml.exp)
+        ctx
       case t: TableObj => namer(ctx.copy(ctx = TableCtx))(t.obj) //set table context
       case _: TableAlias => ctx //do not check table alias is already checked
       case o: Obj => namer(namer(ctx.copy(ctx = ColumnCtx))(o.join))(o.obj) //set column context
@@ -719,6 +736,8 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           val (exp, wtables) = resolveWithQuery[DMLDefBase](wdmld)
           wdmld.copy(exp = exp, withTables = wtables)
         case dml: DMLDefBase if ctx.isEmpty || ctx.head != dml => type_resolver(dml :: ctx)(dml)
+        case rdml: ReturningDMLDef =>
+          rdml.copy(cols = (rdml.cols map type_resolver(rdml :: ctx)).asInstanceOf[List[ColDef[_]]])
         case ColDef(n, ChildDef(ch), t) => ColDef(n, ChildDef(type_resolver(ctx)(ch)), t)
         case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
           val nexp = type_resolver(ctx)(exp) //resolve expression in the case it contains select
@@ -782,6 +801,12 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       )
       case wsd: WithSelectDef => WithSelectDef(tt(wsd.exp), wsd.withTables map tt)
       case wdml: WithDMLDef => WithDMLDef(tt(wdml.exp), wdml.withTables map tt)
+      case rdml: ReturningDMLDef =>
+        ReturningDMLDef(
+          cols = rdml.cols map tt,
+          tables = rdml.tables map tt,
+          exp = tt(rdml.exp)
+        )
       case BracesSelectDef(sdb) => BracesSelectDef(tt(sdb))
       case fsd: FunSelectDef => fsd.copy(exp = tt(fsd.exp))
       case vfsd: ValuesFromSelectDef => vfsd.copy(exp = tt(vfsd.exp))
@@ -830,6 +855,12 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       )
       case wsd: WithSelectDef => WithSelectDef(tt(state)(wsd.exp), wsd.withTables map tt(state))
       case wdml: WithDMLDef => WithDMLDef(tt(state)(wdml.exp), wdml.withTables map tt(state))
+      case rdml: ReturningDMLDef =>
+        ReturningDMLDef(
+          rdml.cols map tt(state),
+          rdml.tables map tt(state),
+          tt(state)(rdml.exp)
+        )
       case BracesSelectDef(sdb) => BracesSelectDef(tt(state)(sdb))
       case fsd: FunSelectDef => fsd.copy(exp = tt(state)(fsd.exp))
       case vfsd: ValuesFromSelectDef => vfsd.copy(exp = tt(state)(vfsd.exp))
