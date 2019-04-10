@@ -181,6 +181,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     exp: FunDef[_]
   ) extends SelectDefBase
 
+  // dml expressions
   case class InsertDef(
     cols: List[ColDef[_]],
     tables: List[TableDef],
@@ -207,6 +208,12 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     override def tresql = // FIXME alias lost
       exp.copy(table = Ident(List(tables.head.name))).tresql
   }
+
+  case class ReturningDMLDef(
+    cols: List[ColDef[_]],
+    tables: List[TableDef],
+    exp: DMLDefBase
+  ) extends SelectDefBase
 
   // with [recursive] expressions
   trait WithQuery extends SQLDefBase {
