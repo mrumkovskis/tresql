@@ -24,6 +24,7 @@ object QueryBuildCtx {
   object WITH_CTX extends Ctx
   object WITH_TABLE_CTX extends Ctx
   object EXTERNAL_FUN_CTX extends Ctx
+  object RETURNING_CTX extends Ctx
 }
 
 trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.tresql.Query =>
@@ -549,17 +550,18 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     override def apply() = sel(sql, query.cols)
   }
   class WithInsertExpr(val tables: List[WithTableExpr], val query: InsertExpr)
-    extends InsertExpr(query.table, query.alias, query.cols, query.vals)
+    extends InsertExpr(query.table, query.alias, query.cols, query.vals, query.returning)
     with WithExpr
   class WithUpdateExpr(val tables: List[WithTableExpr], val query: UpdateExpr)
-    extends UpdateExpr(query.table, query.alias, query.filter, query.cols, query.vals)
+    extends UpdateExpr(query.table, query.alias, query.filter, query.cols, query.vals, query.returning)
     with WithExpr
   class WithDeleteExpr(val tables: List[WithTableExpr], val query: DeleteExpr)
-    extends DeleteExpr(query.table, query.alias, query.filter)
+    extends DeleteExpr(query.table, query.alias, query.filter, query.returning)
     with WithExpr
 
-  class InsertExpr(table: IdentExpr, alias: String, val cols: List[Expr], val vals: Expr)
-    extends DeleteExpr(table, alias, null) {
+  class InsertExpr(table: IdentExpr, alias: String, val cols: List[Expr], val vals: Expr,
+      returning: Option[List[Expr]])
+    extends DeleteExpr(table, alias, null, returning) {
     override def apply() = {
       val r = super.apply().asInstanceOf[DMLResult]
       //include in result id value of the inserted record if it's obtained from IdExpr
@@ -567,7 +569,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       new InsertResult(r.count, r.children, id)
     }
     override protected def _sql = "insert into " + table.sql + (if (alias == null) "" else " " + alias) +
-      " (" + cols.map(_.sql).mkString(", ") + ")" + " " + vals.sql
+      " (" + cols.map(_.sql).mkString(", ") + ")" + " " + vals.sql + returningSql
   }
   case class ValuesExpr(vals: List[Expr]) extends PrimitiveExpr {
     def defaultSQL = vals map (_.sql) mkString("values ", ",", "")
@@ -579,7 +581,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       else ""
   }
   class UpdateExpr(table: IdentExpr, alias: String, filter: List[Expr],
-      val cols: List[Expr], val vals: Expr) extends DeleteExpr(table, alias, filter) {
+      val cols: List[Expr], val vals: Expr, returning: Option[List[Expr]])
+    extends DeleteExpr(table, alias, filter, returning) {
     override def apply() = cols match {
       //execute only child updates since this one does not have any column
       case Nil =>
@@ -608,9 +611,10 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
           case List(f) => s" where $f"
           case _ => ""
         }
-      }
+      } + returningSql
   }
-  case class DeleteExpr(table: IdentExpr, alias: String, filter: List[Expr]) extends BaseExpr {
+  case class DeleteExpr(table: IdentExpr, alias: String, filter: List[Expr], returning: Option[List[Expr]])
+    extends BaseExpr {
     override def apply() = {
       val r = update(sql)
       //execute children only if this expression has affected some rows
@@ -623,7 +627,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       else new DeleteResult(Some(r))
     }
     protected def _sql = "delete from " + table.sql + (if (alias == null) "" else " " + alias) +
-      (if (filter == null || filter.isEmpty) "" else " where " + where)
+      (if (filter == null || filter.isEmpty) "" else " where " + where) + returningSql
     override def defaultSQL = _sql
     def where = filter match {
       case (c @ ConstExpr(x)) :: Nil => Option(alias).getOrElse(table.sql) + "." +
@@ -634,6 +638,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       case l => Option(alias).getOrElse(table.sql) + "." + env.table(table.sql).key.cols(0) + " in(" +
         (l map { _.sql }).mkString(",") + ")"
     }
+    protected def returningSql =
+      returning.map(_.map(_.sql).mkString(" returning ", ", ", "")).getOrElse("")
   }
 
   case class BracesExpr(expr: Expr) extends BaseExpr {
@@ -743,7 +749,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     })
 
   //DML statements are defined outside of buildInternal method since they are called from other QueryBuilder
-  private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: Exp) = {
+  private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: Exp,
+                          returning: Option[Cols]) = {
     new InsertExpr(IdentExpr(table.ident), alias,
       cols match {
         //get column clause from metadata
@@ -754,20 +761,23 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
           case _ => sys.error("Unexpected InsertExpr type")
         }
       }, vals match {
-      case Values(arr) => ValuesExpr(arr map {
-        buildInternal(_, VALUES_CTX) match {
-          case ArrExpr(l) => ArrExpr(patchVals(table, cols, l))
-          case null => ArrExpr(patchVals(table, cols, Nil))
-          case e => e
-        }
-      } match {
-        case Nil => patchVals(table, cols, Nil)
-        case l => l
-      })
-      case q => buildInternal(q, VALUES_CTX)
-    })
+        case Values(arr) => ValuesExpr(arr map {
+          buildInternal(_, VALUES_CTX) match {
+            case ArrExpr(l) => ArrExpr(patchVals(table, cols, l))
+            case null => ArrExpr(patchVals(table, cols, Nil))
+            case e => e
+          }
+        } match {
+          case Nil => patchVals(table, cols, Nil)
+          case l => l
+        })
+        case q => buildInternal(q, VALUES_CTX)
+      },
+      returning map (_.cols.map(buildInternal(_, RETURNING_CTX)))
+    )
   }
-  private def buildUpdate(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp) = {
+  private def buildUpdate(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp,
+                          returning: Option[Cols]) = {
     new UpdateExpr(IdentExpr(table.ident), alias, if (filter != null)
       filter.elements map { buildInternal(_, WHERE_CTX) } else null, cols match {
         //get column clause from metadata
@@ -784,12 +794,16 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case f: ValuesFromSelectExpr => f
         case null => ValuesExpr(patchVals(table, cols, Nil))
         case x => error("Knipis: " + x)
-      })
+      },
+      returning map (_.cols.map(buildInternal(_, RETURNING_CTX)))
+    )
   }
 
-  private def buildDelete(table: Ident, alias: String, filter: Arr) = {
+  private def buildDelete(table: Ident, alias: String, filter: Arr, returning: Option[Cols]) = {
     new DeleteExpr(IdentExpr(table.ident), alias,
-      if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null)
+      if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null,
+      returning map (_.cols.map(buildInternal(_, RETURNING_CTX)))
+    )
   }
   private def table(t: Ident) = env.table(t.ident.mkString("."))
   private def patchVals(table: Ident, cols: List[Col], vals: List[Expr]) = {
@@ -1079,20 +1093,20 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         //insert
         case Insert(t, a, c, v, r) => parseCtx match {
           //insert can be statement of with query, in this case it is part of this builder (sql statement)
-          case WITH_CTX => buildInsert(t, a, c, v)
-          case _ => buildWithNew(_.buildInsert(t, a, c, v))
+          case WITH_CTX => buildInsert(t, a, c, v, r)
+          case _ => buildWithNew(_.buildInsert(t, a, c, v, r))
         }
         //update
         case Update(t, a, f, c, v, r) => parseCtx match {
           //update can be statement of with query, in this case it is part of this builder (sql statement)
-          case WITH_CTX => buildUpdate(t, a, f, c, v)
-          case _ => buildWithNew(_.buildUpdate(t, a, f, c, v))
+          case WITH_CTX => buildUpdate(t, a, f, c, v, r)
+          case _ => buildWithNew(_.buildUpdate(t, a, f, c, v, r))
         }
         //delete
         case Delete(t, a, f, r) => parseCtx match {
           //delete can be statement of with query, in this case it is part of this builder (sql statement)
-          case WITH_CTX => buildDelete(t, a, f)
-          case _ => buildWithNew(_.buildDelete(t, a, f))
+          case WITH_CTX => buildDelete(t, a, f, r)
+          case _ => buildWithNew(_.buildDelete(t, a, f, r))
         }
         //recursive child query
         case UnOp("|", join: Arr) =>
