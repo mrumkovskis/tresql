@@ -471,10 +471,19 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
      } named "simple-update"
   //update table set (col1, col2) = (select col1, col2 from table 2 ...) where ...
   private def updateColsSelect: MemParser[Update] =
-    "=" ~> qualifiedIdent ~ opt(ident) ~ opt(filter) ~ columns ~ valuesSelect ~ opt(columns) ^^ {
+    "=" ~> qualifiedIdent ~ opt(ident) ~ opt(filter) ~ columns ~ valuesSelect ~ opt(columns) ^^
+      {
         case (t: Ident) ~ (a: Option[String] @unchecked) ~ f ~ c ~ v ~ maybeCols =>
           Update(t, a orNull, f orNull, c.cols, v, maybeCols)
-      } named "update-cols-select"
+      } ^?
+      ({
+        case u if u.cols.nonEmpty && u.cols.forall {
+          case Col(BinOp("=", _, _), _) => false
+          case _ => true
+        } => u
+      }, {
+        case x => s"Columns must not contain assignement operation. Instead encountered: ${x.tresql}"
+      }) named "update-cols-select"
   //update table set col1 = sel_col1, col2 = sel_col2 from (select sel_col1, sel_col2 from table2 ...) values_table where ....
   private def updateFromSelect: MemParser[Update] = "=" ~> objs ~ opt(filter) ~ columns ~ opt(columns) ^? ({
     case (tables @ Obj(updateTable @ Ident(_), alias, _, _, _) :: _) ~ f ~ c ~ maybeCols =>
