@@ -115,7 +115,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     } else try DriverManager.getConnection(dbUri, dbUser, dbPwd) catch {
       case e: Exception =>
         throw sys.error(s"Unable to connect to database: ${e.toString}.\n" +
-          "For postgres docker container try command: it:testOnly * -- -oD -Ddocker=postgres")
+          "For postgres docker container try command: it:testOnly * -- -oD -Ddocker=postgres -Dport=<port> -Dwait_after_startup_millis=<time to wait for postgres for startup>")
     }
     Env.dialect = dialects.PostgresqlDialect orElse dialects.VariableNameDialect
     Env.idExpr = s => "nextval('seq')"
