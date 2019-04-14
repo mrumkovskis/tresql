@@ -368,7 +368,6 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   case class SelectExpr(tables: List[Table], filter: Expr, cols: ColsExpr,
       distinct: Boolean, group: Expr, order: Expr,
       offset: Expr, limit: Expr, aliases: Map[String, Table], parentJoin: Option[Expr]) extends BaseExpr {
-    private val rowConverter = env.rowConverter(QueryBuilder.this.queryDepth, QueryBuilder.this.childIdx)
     override def apply() = sel(sql, cols)
     def defaultSQL = "select " + (if (distinct) "distinct " else "") +
       cols.sql +
