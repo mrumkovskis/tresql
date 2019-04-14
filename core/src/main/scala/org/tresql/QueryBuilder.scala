@@ -1237,7 +1237,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   //for debugging purposes
   def printBuilderChain: Unit = {
     println(s"$this#$envId")
-    env.provider.map {
+    env.provider.foreach {
       case b: QueryBuilder => b.printBuilderChain
       case _ =>
     }
