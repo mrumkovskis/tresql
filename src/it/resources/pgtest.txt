@@ -657,6 +657,7 @@ dept{deptno::varchar}#(1) --> [["10"], ["20"], ["30"], ["40"]]
 i(#) { +dummy{dummy} [:v] {*} } i --> v=7 --> [[7]]
 u(#) { =dummy [dummy = :v] {dummy = :v + 1} {*}} u --> v=7 --> [[8]]
 d(#) { dummy - [dummy = :v + 1] {*}} d --> v=7 --> [[8]]
+[+dummy {dummy} [7] {dummy}, =dummy[dummy = 7] {dummy = dummy + 1} {*}, dummy - [dummy = 8] {*}] --> [[[[7]], [[8]], [[8]]]]
 
 //    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] (addr a {a.addr}) a {da.addr = a.addr}").sql)(
 //      "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where da.addr_nr = a.nr")

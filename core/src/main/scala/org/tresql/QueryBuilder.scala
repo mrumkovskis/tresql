@@ -560,11 +560,12 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   class InsertExpr(table: IdentExpr, alias: String, val cols: List[Expr], val vals: Expr,
       returning: Option[ColsExpr])
     extends DeleteExpr(table, alias, null, returning) {
-    override def apply() = {
-      val r = super.apply().asInstanceOf[DMLResult]
-      //include in result id value of the inserted record if it's obtained from IdExpr
-      val id = env.currIdOption(table.defaultSQL)
-      new InsertResult(r.count, r.children, id)
+    override def apply() = super.apply() match {
+      case r: DMLResult =>
+        //include in result id value of the inserted record if it's obtained from IdExpr
+        val id = env.currIdOption(table.defaultSQL)
+        new InsertResult(r.count, r.children, id)
+      case r => r
     }
     override protected def _sql = "insert into " + table.sql + (if (alias == null) "" else " " + alias) +
       " (" + cols.map(_.sql).mkString(", ") + ")" + " " + vals.sql + returningSql
@@ -587,9 +588,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         //execute any BaseVarExpr in filter to give chance to update currId for corresponding children IdRefExpr have values
         if (filter != null) filter foreach (transform (_, {case id: BaseVarExpr => id(); id}))
         new UpdateResult(children = executeChildren)
-      case _ =>
-        val r = super.apply().asInstanceOf[DMLResult]
-        new UpdateResult(r)
+      case _ => super.apply() match { case r: DMLResult => new UpdateResult(r) case r => r }
     }
     override protected def _sql = "update " + table.sql + (if (alias == null) "" else " " + alias) +
       " set " + (vals match {
@@ -613,17 +612,20 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   }
   case class DeleteExpr(table: IdentExpr, alias: String, filter: List[Expr], returning: Option[ColsExpr])
     extends BaseExpr {
-    override def apply() = {
-      val r = update(sql)
-      //execute children only if this expression has affected some rows
-      if (r > 0)
-        if (childUpdates.isEmpty) new DeleteResult(Some(r))
-        else executeChildren match {
-          case x if x.isEmpty => new DeleteResult(Some(r))
-          case x => new DeleteResult(Some(r), x)
+    override def apply() =
+      returning
+        .map(sel(sql, _)) //in the case of returning clause execute statement as select
+        .getOrElse {
+          val r = update(sql)
+          //execute children only if this expression has affected some rows
+          if (r > 0)
+            if (childUpdates.isEmpty) new DeleteResult(Some(r))
+            else executeChildren match {
+              case x if x.isEmpty => new DeleteResult(Some(r))
+              case x => new DeleteResult(Some(r), x)
+            }
+          else new DeleteResult(Some(r))
         }
-      else new DeleteResult(Some(r))
-    }
     protected def _sql = "delete from " + table.sql + (if (alias == null) "" else " " + alias) +
       (if (filter == null || filter.isEmpty) "" else " where " + where) + returningSql
     override def defaultSQL = _sql
@@ -1094,19 +1096,19 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         //insert
         case Insert(t, a, c, v, r) => parseCtx match {
           //insert can be statement of with query, in this case it is part of this builder (sql statement)
-          case WITH_CTX | WITH_TABLE_CTX => buildInsert(t, a, c, v, r)
+          case ROOT_CTX | WITH_CTX | WITH_TABLE_CTX => buildInsert(t, a, c, v, r)
           case _ => buildWithNew(_.buildInsert(t, a, c, v, r))
         }
         //update
         case Update(t, a, f, c, v, r) => parseCtx match {
           //update can be statement of with query, in this case it is part of this builder (sql statement)
-          case WITH_CTX | WITH_TABLE_CTX => buildUpdate(t, a, f, c, v, r)
+          case ROOT_CTX | WITH_CTX | WITH_TABLE_CTX => buildUpdate(t, a, f, c, v, r)
           case _ => buildWithNew(_.buildUpdate(t, a, f, c, v, r))
         }
         //delete
         case Delete(t, a, f, r) => parseCtx match {
           //delete can be statement of with query, in this case it is part of this builder (sql statement)
-          case WITH_CTX | WITH_TABLE_CTX => buildDelete(t, a, f, r)
+          case ROOT_CTX | WITH_CTX | WITH_TABLE_CTX => buildDelete(t, a, f, r)
           case _ => buildWithNew(_.buildDelete(t, a, f, r))
         }
         //recursive child query
