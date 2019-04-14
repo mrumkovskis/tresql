@@ -24,7 +24,6 @@ object QueryBuildCtx {
   object WITH_CTX extends Ctx
   object WITH_TABLE_CTX extends Ctx
   object EXTERNAL_FUN_CTX extends Ctx
-  object RETURNING_CTX extends Ctx
 }
 
 trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.tresql.Query =>
@@ -560,7 +559,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     with WithExpr
 
   class InsertExpr(table: IdentExpr, alias: String, val cols: List[Expr], val vals: Expr,
-      returning: Option[List[Expr]])
+      returning: Option[ColsExpr])
     extends DeleteExpr(table, alias, null, returning) {
     override def apply() = {
       val r = super.apply().asInstanceOf[DMLResult]
@@ -581,7 +580,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       else ""
   }
   class UpdateExpr(table: IdentExpr, alias: String, filter: List[Expr],
-      val cols: List[Expr], val vals: Expr, returning: Option[List[Expr]])
+      val cols: List[Expr], val vals: Expr, returning: Option[ColsExpr])
     extends DeleteExpr(table, alias, filter, returning) {
     override def apply() = cols match {
       //execute only child updates since this one does not have any column
@@ -613,7 +612,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         }
       } + returningSql
   }
-  case class DeleteExpr(table: IdentExpr, alias: String, filter: List[Expr], returning: Option[List[Expr]])
+  case class DeleteExpr(table: IdentExpr, alias: String, filter: List[Expr], returning: Option[ColsExpr])
     extends BaseExpr {
     override def apply() = {
       val r = update(sql)
@@ -639,7 +638,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         (l map { _.sql }).mkString(",") + ")"
     }
     protected def returningSql =
-      returning.map(_.map(_.sql).mkString(" returning ", ", ", "")).getOrElse("")
+      returning.map(rc => s" returning ${rc.sql}").getOrElse("")
   }
 
   case class BracesExpr(expr: Expr) extends BaseExpr {
@@ -773,7 +772,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         })
         case q => buildInternal(q, VALUES_CTX)
       },
-      returning map (_.cols.map(buildInternal(_, RETURNING_CTX)))
+      returning map buildCols
     )
   }
   private def buildUpdate(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp,
@@ -795,17 +794,19 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
         case null => ValuesExpr(patchVals(table, cols, Nil))
         case x => error("Knipis: " + x)
       },
-      returning map (_.cols.map(buildInternal(_, RETURNING_CTX)))
+      returning map buildCols
     )
   }
 
   private def buildDelete(table: Ident, alias: String, filter: Arr, returning: Option[Cols]) = {
     new DeleteExpr(IdentExpr(table.ident), alias,
       if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null,
-      returning map (_.cols.map(buildInternal(_, RETURNING_CTX)))
+      returning map buildCols
     )
   }
+
   private def table(t: Ident) = env.table(t.ident.mkString("."))
+
   private def patchVals(table: Ident, cols: List[Col], vals: List[Expr]) = {
     val diff = (if (cols.isEmpty) this.table(table).cols else cols).size - vals.size
     val allExprIdx = vals.indexWhere(_.isInstanceOf[AllExpr])
@@ -823,6 +824,80 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       case al if al.nonEmpty => ArrExpr(al) case _ => null
     }
 
+  /* method is used for both select expression and dml returning column build */
+  private def buildCols(cols: Cols): ColsExpr =
+    if (cols == null)
+      ColsExpr(List(ColExpr(AllExpr(), null, Some(false))), hasAll = true, hasIdentAll = false, hasHidden = false)
+    else {
+      var (hasAll, hasIdentAll, hasHidden) = (false, false, false)
+      val colExprs = cols.cols.map(buildInternal(_, COL_CTX) match {
+        case c @ ColExpr(_: AllExpr, _, _, _) =>
+          hasAll = true
+          c
+        case c @ ColExpr(_: IdentAllExpr, _, _, _) =>
+          hasIdentAll = true
+          c
+        case c: ColExpr => c
+        case x => sys.error(s"ColExpr expected instead found: $x")
+      })
+      var aliases = colExprs flatMap {
+        case ColExpr(_, a, _, _) if a != null => List(a)
+        case ColExpr(IdentExpr(i), null, _, _) => List(i.last)
+        case _ => Nil
+      } toSet
+      var uid = 1
+      @scala.annotation.tailrec def uniqueAlias(id: Int): String = {
+        val a = "t" + id
+        if (!(aliases contains a)) {
+          aliases += a
+          uid = id + 1
+          a
+        } else uniqueAlias(id + 1)
+      }
+      val colWithHiddenExprs =
+        (if (colExprs.exists {
+          case ColExpr(FunExpr(n, _, false, _, _), _, _, _) => Env.isDefined(n)
+          case _ => false
+        }) (colExprs flatMap { //external function found
+          case ce @ ColExpr(FunExpr(n, pars, false, _, _), a, _, _) if Env.isDefined(n) && !ce.separateQuery =>
+            //checks if last parameter is resources
+            def hasResourcesParam(pt: Array[Class[_]]) = pt
+              .lastOption
+              .exists(_.isAssignableFrom(classOf[org.tresql.Resources]))
+            val m = Env.functions.flatMap(_.getClass.getMethods.find(m => m.getName == n && {
+              val pt = m.getParameterTypes
+              //parameter count must match or must be of variable count
+              val ps = pt.size - (if (hasResourcesParam(pt)) 1 else 0)
+              ps == pars.size || (ps == 1 && pt(0).isAssignableFrom(classOf[Seq[_]]))
+            })).getOrElse(
+              error("External function " + n + " with " + pars.size + " parameters not found"))
+            val parameterTypes = (m.getParameterTypes match {
+              case Array(l) if l.isAssignableFrom(classOf[Seq[_]]) =>
+                m.getGenericParameterTypes()(0).asInstanceOf[java.lang.reflect.ParameterizedType]
+                  .getActualTypeArguments()(0) match {
+                  case c: Class[_] => Array(c) //vararg parameter type
+                }
+              case l => l
+            }) toList
+            val hiddenColPars = parameterTypes.padTo(pars.size,
+              parameterTypes.headOption.orNull).zip(pars).map(tp => HiddenColRefExpr(tp._2, tp._1))
+            hasHidden = hiddenColPars.nonEmpty
+            ColExpr(
+              ExternalFunExpr(n, hiddenColPars, m, hasResourcesParam(m.getParameterTypes)), a,
+              Some(true)
+            ) :: hiddenColPars.map(ColExpr(_, uniqueAlias(uid), Some(ce.separateQuery), hidden = true))
+          case e => List(e)
+        }).groupBy(_.hidden) match { //put hidden columns at the end
+          case m: Map[Boolean @unchecked, ColExpr @unchecked] => m(false) ++ m.getOrElse(true, Nil)
+        }
+        else colExprs) ++
+          //for top level queries add hidden columns used in filters of descendant queries
+          (if (ctxStack.headOption.orNull == QUERY_CTX) {
+            hasHidden |= joinsWithChildrenColExprs.nonEmpty
+            joinsWithChildrenColExprs
+          } else Nil)
+      ColsExpr(colWithHiddenExprs, hasAll, hasIdentAll, hasHidden)
+    }
 
   private[tresql] def buildInternal(parsedExpr: Exp, parseCtx: Ctx = ROOT_CTX): Expr = {
     def buildSelect(q: QueryParser.Query) = {
@@ -936,79 +1011,6 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
       case o => error("unsupported column definition at this place: " + o)
     }
-    def buildCols(cols: Cols): ColsExpr =
-      if (cols == null)
-        ColsExpr(List(ColExpr(AllExpr(), null, Some(false))), hasAll = true, hasIdentAll = false, hasHidden = false)
-      else {
-        var (hasAll, hasIdentAll, hasHidden) = (false, false, false)
-        val colExprs = cols.cols.map(buildInternal(_, COL_CTX) match {
-          case c @ ColExpr(_: AllExpr, _, _, _) =>
-            hasAll = true
-            c
-          case c @ ColExpr(_: IdentAllExpr, _, _, _) =>
-            hasIdentAll = true
-            c
-          case c: ColExpr => c
-          case x => sys.error(s"ColExpr expected instead found: $x")
-        })
-        var aliases = colExprs flatMap {
-          case ColExpr(_, a, _, _) if a != null => List(a)
-          case ColExpr(IdentExpr(i), null, _, _) => List(i.last)
-          case _ => Nil
-        } toSet
-        var uid = 1
-        @scala.annotation.tailrec def uniqueAlias(id: Int): String = {
-          val a = "t" + id
-          if (!(aliases contains a)) {
-            aliases += a
-            uid = id + 1
-            a
-          } else uniqueAlias(id + 1)
-        }
-        val colWithHiddenExprs =
-          (if (colExprs.exists {
-            case ColExpr(FunExpr(n, _, false, _, _), _, _, _) => Env.isDefined(n)
-            case _ => false
-          }) (colExprs flatMap { //external function found
-            case ce @ ColExpr(FunExpr(n, pars, false, _, _), a, _, _) if Env.isDefined(n) && !ce.separateQuery =>
-              //checks if last parameter is resources
-              def hasResourcesParam(pt: Array[Class[_]]) = pt
-                .lastOption
-                .exists(_.isAssignableFrom(classOf[org.tresql.Resources]))
-              val m = Env.functions.flatMap(_.getClass.getMethods.find(m => m.getName == n && {
-                val pt = m.getParameterTypes
-                //parameter count must match or must be of variable count
-                val ps = pt.size - (if (hasResourcesParam(pt)) 1 else 0)
-                ps == pars.size || (ps == 1 && pt(0).isAssignableFrom(classOf[Seq[_]]))
-              })).getOrElse(
-                error("External function " + n + " with " + pars.size + " parameters not found"))
-              val parameterTypes = (m.getParameterTypes match {
-                case Array(l) if l.isAssignableFrom(classOf[Seq[_]]) =>
-                  m.getGenericParameterTypes()(0).asInstanceOf[java.lang.reflect.ParameterizedType]
-                   .getActualTypeArguments()(0) match {
-                    case c: Class[_] => Array(c) //vararg parameter type
-                  }
-                case l => l
-              }) toList
-              val hiddenColPars = parameterTypes.padTo(pars.size,
-                  parameterTypes.headOption.orNull).zip(pars).map(tp => HiddenColRefExpr(tp._2, tp._1))
-              hasHidden = hiddenColPars.nonEmpty
-              ColExpr(
-                ExternalFunExpr(n, hiddenColPars, m, hasResourcesParam(m.getParameterTypes)), a,
-                Some(true)
-              ) :: hiddenColPars.map(ColExpr(_, uniqueAlias(uid), Some(ce.separateQuery), hidden = true))
-            case e => List(e)
-          }).groupBy(_.hidden) match { //put hidden columns at the end
-            case m: Map[Boolean @unchecked, ColExpr @unchecked] => m(false) ++ m.getOrElse(true, Nil)
-          }
-          else colExprs) ++
-            //for top level queries add hidden columns used in filters of descendant queries
-            (if (ctxStack.headOption.orNull == QUERY_CTX) {
-              hasHidden |= joinsWithChildrenColExprs.nonEmpty
-              joinsWithChildrenColExprs
-            } else Nil)
-        ColsExpr(colWithHiddenExprs, hasAll, hasIdentAll, hasHidden)
-      }
     def buildFilter(pkTable: Table, filterList: List[Arr]): Expr = {
       def transformExpr(e: Expr) = e match {
         case ArrExpr(List(b @ ConstExpr(true | false))) => b
