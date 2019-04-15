@@ -454,13 +454,13 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         val vals = if (dml.vals != null) tr(BodyCtx, dml.vals) else null
         val retCols = dml.returning map buildCols
         val dmlDef = dml match {
-          case i: Insert =>
+          case _: Insert =>
             InsertDef(cols, List(table), Insert(table = null, alias = null, cols = Nil, vals = vals, None))
-          case u: Update =>
+          case _: Update =>
             UpdateDef(cols, List(table), Update(
               table = null, alias = null, cols = Nil, filter = filter, vals = vals, returning = None))
-          case d: Delete =>
-            DeleteDef(List(table), Delete(table = null, alias = null, filter = filter, None))
+          case _: Delete =>
+            DeleteDef(List(table), Delete(table = null, alias = null, filter = filter, using = vals, None))
         }
         retCols.map(rc => ReturningDMLDef(rc, List(table), dmlDef)).getOrElse(dmlDef)
       case ValuesFromSelect(sel) =>

@@ -38,7 +38,7 @@ trait ExpTransformer { this: QueryParsers =>
       case With(ts, q) => With(ts map tt, tt(q))
       case Insert(t, a, cols, vals, r) => Insert(tt(t), a, cols map tt, tt(vals), r map tt)
       case Update(t, a, filter, cols, vals, r) => Update(tt(t), a, tt(filter), cols map tt, tt(vals), r map tt)
-      case Delete(t, a, filter, r) => Delete(tt(t), a, tt(filter), r map tt)
+      case Delete(t, a, filter, u, r) => Delete(tt(t), a, tt(filter), tt(u), r map tt)
       case Arr(els) => Arr(els map tt)
       case Filters(f) => Filters(f map tt)
       case Values(v) => Values(v map tt)
@@ -101,8 +101,8 @@ trait ExpTransformer { this: QueryParsers =>
           tt(state)(vals),
           r map tt(state)
         )
-      case Delete(table, alias, filter, r) =>
-        Delete(tt(state)(table), alias, tt(state)(filter), r map tt(state))
+      case Delete(table, alias, filter, using, returning) =>
+        Delete(tt(state)(table), alias, tt(state)(filter), tt(state)(using), returning map tt(state))
       case Arr(els) => Arr(els map tt(state))
       case Filters(f) => Filters(f map tt(state))
       case Values(v) => Values(v map tt(state))
@@ -143,7 +143,7 @@ trait ExpTransformer { this: QueryParsers =>
       case With(ts, q) => tr(trl(state, ts), q)
       case Insert(_, _, cols, vals, r) => tro(tr(trl(state, cols), vals), r)
       case Update(_, _, filter, cols, vals, r) => tro(tr(trl(tr(state, filter), cols), vals), r)
-      case Delete(_, _, filter, r) => tro(tr(state, filter), r)
+      case Delete(_, _, filter, u, r) => tro(tr(tr(state, u), filter), r)
       case Arr(els) => trl(state, els)
       case Filters(f) => trl(state, f)
       case Values(v) => trl(state, v)

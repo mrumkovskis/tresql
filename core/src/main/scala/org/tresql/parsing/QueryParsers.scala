@@ -184,12 +184,17 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       if (select.tables.size > 1) select.tresql
       else ""
   }
-  case class Delete(table: Ident, alias: String, filter: Arr, returning: Option[Cols])
+  case class Delete(table: Ident, alias: String, filter: Arr, using: Exp, returning: Option[Cols])
     extends DMLExp {
     override def cols = null
-    override def vals = null
-    def tresql = "-" + table.tresql + Option(alias).map(" " + _).getOrElse("") + filter.tresql +
-      returning.map(_.tresql).getOrElse("")
+    override def vals = using
+    def tresql = {
+      val tbl =
+        if (using == null) table.tresql + Option(alias).map(" " + _).getOrElse("")
+        else using.tresql
+
+      "-" + tbl + filter.tresql + returning.map(_.tresql).getOrElse("")
+    }
   }
   case class Arr(elements: List[Exp]) extends Exp {
     def tresql = "[" + any2tresql(elements) + "]"
@@ -493,7 +498,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
         f.orNull,
         c.cols,
         ValuesFromSelect(
-          Query(tables = tables, Filters(Nil), Cols(false, List(Col(All, null))), null, null, null, null)
+          Query(tables = tables, Filters(Nil), null, null, null, null, null)
         ),
         maybeCols
       )
@@ -516,10 +521,25 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def update: MemParser[Update] = (updateColsSelect | updateFromSelect | simpleUpdate) named "update"
   //END UPDATE parsers
 
-  def delete: MemParser[Delete] = (("-" ~> qualifiedIdent ~ opt(ident) ~ filter) |
-    (((qualifiedIdent ~ opt(ident)) <~ "-") ~ filter)) ~ opt(columns) ^^ {
-      case t ~ a ~ f ~ maybeCols => Delete(t, a orNull, f, maybeCols)
-    } named "delete"
+  def delete: MemParser[Delete] = (("-" ~> objs ~ filter) |
+    ((objs <~ "-") ~ filter)) ~ opt(columns) ^? ({
+      case (tables @ Obj(delTable @ Ident(_), alias, _, _, _) :: using) ~ f ~ maybeCols =>
+        val vfs =
+          if (using.nonEmpty)
+            ValuesFromSelect(
+              Query(
+                tables = tables,
+                Filters(Nil),
+                null, null, null, null, null
+              )
+            )
+          else null
+        Delete(delTable, alias, f, vfs, maybeCols)
+    }, {
+      case (objs: List[Obj] @unchecked) ~ _ ~ _ => "Delete tables clause must as the first element have " +
+        "qualifiedIdent with optional alias as a table to be deleted from" +
+        s"Instead encountered: ${objs.map(_.tresql).mkString}"
+    }) named "delete"
   //operation parsers
   //delete must be before alternative since it can start with - sign and
   //so it is not translated into minus expression!

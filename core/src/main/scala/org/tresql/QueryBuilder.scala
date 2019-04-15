@@ -554,12 +554,12 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     extends UpdateExpr(query.table, query.alias, query.filter, query.cols, query.vals, query.returning)
     with WithExpr
   class WithDeleteExpr(val tables: List[WithTableExpr], val query: DeleteExpr)
-    extends DeleteExpr(query.table, query.alias, query.filter, query.returning)
+    extends DeleteExpr(query.table, query.alias, query.filter, query.using, query.returning)
     with WithExpr
 
   class InsertExpr(table: IdentExpr, alias: String, val cols: List[Expr], val vals: Expr,
       returning: Option[ColsExpr])
-    extends DeleteExpr(table, alias, null, returning) {
+    extends DeleteExpr(table, alias, null, null, returning) {
     override def apply() = super.apply() match {
       case r: DMLResult =>
         //include in result id value of the inserted record if it's obtained from IdExpr
@@ -575,13 +575,18 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   }
   case class ValuesFromSelectExpr(select: SelectExpr) extends PrimitiveExpr {
     // start from clause with second table (first table is updateable)
-    def defaultSQL =
-      if (select.tables.size > 1) s" from ${select.tables(1).sql}${select.join(select.tables.tail)}"
-      else ""
+    def joinToBaseTableSql = select.tables match {
+      case head :: next :: _ => Option(next sqlJoinCondition head)
+      case _ => None
+    }
+    def defaultSQL = select.tables match {
+      case head :: next :: _ => next.sql + select.join(select.tables.tail)
+      case _ => ""
+    }
   }
   class UpdateExpr(table: IdentExpr, alias: String, filter: List[Expr],
       val cols: List[Expr], val vals: Expr, returning: Option[ColsExpr])
-    extends DeleteExpr(table, alias, filter, returning) {
+    extends DeleteExpr(table, alias, filter, null, returning) {
     override def apply() = cols match {
       //execute only child updates since this one does not have any column
       case Nil =>
@@ -594,23 +599,25 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       " set " + (vals match {
         case ValuesExpr(v) => (cols zip v map { v => v._1.sql + " = " + v._2.sql }).mkString(", ")
         case q: SelectExpr => cols.map(_.sql).mkString("(", ", ", ")") + " = " + "(" + q.sql + ")"
-        case f: ValuesFromSelectExpr => cols.map(_.sql).mkString(", ") + f.sql
+        case f: ValuesFromSelectExpr =>
+          val fsql = f.sql
+          cols.map(_.sql).mkString(", ") + (if (fsql.isEmpty) "" else " from " + fsql)
         case x => error("Knipis: " + x)
       }) + {
         val filterSql = if (filter == null) null else where
         val joinWithUpdateTableSql = vals match {
-          case ValuesFromSelectExpr(sel: SelectExpr) if sel.tables.size > 1 =>
-            sel.tables(1).sqlJoinCondition(sel.tables.head)
-          case _ => null
+          case vfs: ValuesFromSelectExpr => vfs.joinToBaseTableSql
+          case _ => None
         }
-        Option(joinWithUpdateTableSql) ++ Option(filterSql) match {
+        joinWithUpdateTableSql ++ Option(filterSql) match {
           case List(j, f) => s" where ($j) and ($f)"
           case List(f) => s" where $f"
           case _ => ""
         }
       } + returningSql
   }
-  case class DeleteExpr(table: IdentExpr, alias: String, filter: List[Expr], returning: Option[ColsExpr])
+  case class DeleteExpr(table: IdentExpr, alias: String, filter: List[Expr],
+                        using: Expr, returning: Option[ColsExpr])
     extends BaseExpr {
     override def apply() =
       returning
@@ -627,7 +634,21 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
           else new DeleteResult(Some(r))
         }
     protected def _sql = "delete from " + table.sql + (if (alias == null) "" else " " + alias) +
-      (if (filter == null || filter.isEmpty) "" else " where " + where) + returningSql
+      (if (using == null) "" else {
+        val usql = using.sql
+        if (usql.isEmpty) "" else " using " + usql
+      }) + {
+        val filterSql = if (filter == null  || filter.isEmpty) null else where
+        val joinWithDeleteTableSql = using match {
+          case u: ValuesFromSelectExpr => u.joinToBaseTableSql
+          case _ => None
+        }
+        joinWithDeleteTableSql ++ Option(filterSql) match {
+          case List(j, f) => s" where ($j) and ($f)"
+          case List(f) => s" where $f"
+          case _ => ""
+        }
+      } + returningSql
     override def defaultSQL = _sql
     def where = filter match {
       case (c @ ConstExpr(x)) :: Nil => Option(alias).getOrElse(table.sql) + "." +
@@ -799,9 +820,10 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     )
   }
 
-  private def buildDelete(table: Ident, alias: String, filter: Arr, returning: Option[Cols]) = {
+  private def buildDelete(table: Ident, alias: String, filter: Arr, using: Exp, returning: Option[Cols]) = {
     new DeleteExpr(IdentExpr(table.ident), alias,
       if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null,
+      buildInternal(using, VALUES_CTX),
       returning map buildCols
     )
   }
@@ -1106,10 +1128,10 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
           case _ => buildWithNew(_.buildUpdate(t, a, f, c, v, r))
         }
         //delete
-        case Delete(t, a, f, r) => parseCtx match {
+        case Delete(t, a, f, u, r) => parseCtx match {
           //delete can be statement of with query, in this case it is part of this builder (sql statement)
-          case ROOT_CTX | WITH_CTX | WITH_TABLE_CTX => buildDelete(t, a, f, r)
-          case _ => buildWithNew(_.buildDelete(t, a, f, r))
+          case ROOT_CTX | WITH_CTX | WITH_TABLE_CTX => buildDelete(t, a, f, u, r)
+          case _ => buildWithNew(_.buildDelete(t, a, f, u, r))
         }
         //recursive child query
         case UnOp("|", join: Arr) =>
