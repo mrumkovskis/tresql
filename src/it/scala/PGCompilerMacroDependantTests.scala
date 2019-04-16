@@ -980,6 +980,7 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
             (a._1.map(_.dummy).toList, a._2.map(_.dummy).toList, a._3.map(_.dummy).toList)
           }.toList.head
       )
+      assertResult(List((0, "kiki"), (2, "kiki")))(tresql"dummy {*, 'kiki' k} #(1)".map(r => r.dummy -> r.k).toList)
 
       //type resolving when column contains select with from clause select
       //assertResult(("KING", "ACCOUNTING"))(tresql"""emp e[ename ~~ 'kin%'] {
