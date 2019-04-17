@@ -422,6 +422,8 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       join match {
         //foreign key join shortcut syntax
         case TableJoin(false, e @ IdentExpr(_), _, _) => fkAliasJoin(e)
+        //product join
+        case TableJoin(false, null, _, _) => null //no join condition
         //normal join
         case TableJoin(false, e, _, _) => e match { case ArrExpr(List(j)) => j.sql /*remove unnecessary braces*/ case _ => e.sql }
         //default join

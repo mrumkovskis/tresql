@@ -639,11 +639,18 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
                 case x => throw CompilerException(s"For updateable column clause expected assignement operation to column. Instead found: $x")
               }
               namer(colsCtx)(upd.exp.filter) //filter clause
-            case vals =>
+            case _ =>
               dml.cols foreach namer(dmlColCtx) // dml columns must come from dml table
               namer(thisCtx)(upd.exp) //filters and vals check with this context
           }
-          case del: DeleteDef => namer(thisCtx)(del.exp) // delete filter name resolving
+          case del: DeleteDef => del.exp.using match {
+            case u: ValuesFromSelectDef =>
+              namer(ctx)(u) //using clause
+              del.exp.returning.map(namer(thisCtx)) //returning clause
+              val filterCtx = thisCtx.copy(colScopes = u :: thisCtx.colScopes)
+              namer(filterCtx)(del.exp.filter) //filter clause, can have references from tables in using clause
+            case _ => namer(thisCtx)(del.exp)
+          }
         }
         //return old scope
         ctx
