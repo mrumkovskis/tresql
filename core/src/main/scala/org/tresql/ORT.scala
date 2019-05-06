@@ -24,13 +24,13 @@ trait ORT extends Query {
     (tables + options + alias + filters)r
   }
   /**
-  *  Resolvable property format:
-  *  saveable_property->saveable_column=tresql_expression
+  *  Resolvable property key value format:
+  *  key: "saveable_property->", value: "saveable_column=tresql_expression"
   *  Resolver tresqls where clause can contain placeholder _
   *  which will be replaced with bind variable ':saveable_property'.
   *  Statement must return no more than one row.
   *  Example:
-  *    dept_name->dept_id=dept[dname = _]{id}
+  *    "dept_name->" -> "dept_id=dept[dname = _]{id}"
   */
   val ResolverPropPattern = "(.*?)->"r
   val ResolverExpPattern = "([^=]+)=(.*)"r
