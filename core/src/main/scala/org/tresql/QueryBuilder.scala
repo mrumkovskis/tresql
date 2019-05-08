@@ -130,18 +130,18 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   }
 
   case class IdExpr(seqName: String) extends BaseVarExpr {
-    override def apply() = idFromEnv getOrElse env.nextId(seqName)
-    private[tresql] def idFromEnv = for {
+    override def apply() = idFromEnv(true) getOrElse env.nextId(seqName)
+    private[tresql] def idFromEnv(updateCurrId: Boolean) = for {
       keys <- env.tableOption(seqName).map(_.key.cols)
       key <- keys.headOption
       if keys.size == 1 && env.containsNearest(key) && env(key) != null
     } yield {
       //if primary key is set as an environment variable use it instead of sequence
       val id = env(key)
-      env.currId(seqName, id)
+      if (updateCurrId) env.currId(seqName, id)
       id
     }
-    override def toString = s"#$seqName = ${idFromEnv getOrElse "<sequence next value>"}"
+    override def toString = s"#$seqName = ${idFromEnv(false) getOrElse "<sequence next value>"}"
   }
 
   case class IdRefExpr(seqName: String) extends BaseVarExpr {
