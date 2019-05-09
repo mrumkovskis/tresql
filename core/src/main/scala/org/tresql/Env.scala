@@ -135,11 +135,17 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
 
   def printVariables = "\nBind variables:" +
     vars.map(_.mkString("\n ", "\n ", "\n")).getOrElse("<none>")
-  def printAllVariables = "\nBind variables:" + printVars(" ")
-  private def printVars(offset: String): String =
-    vars.map(_.mkString("\n" + offset, "\n" + offset, "\n")).
-      getOrElse("\n" + offset + "<none>\n") +
-      provider.map(_.env.printVars(offset + " ")).getOrElse("")
+  def printAllVariables = "\nBind variables:" +
+    printVals(" ", this, e => e.vars.getOrElse(Map.empty))
+  def printAllIds = "\nIds:" + printVals(" ", this, _.ids)
+  private def printVals(offset: String, env: Env, vals: Env => scala.collection.Map[String, Any]): String =
+    vals(env) match {
+      case v if v.isEmpty => s"\n$offset<none>\n"
+      case v =>
+        v.mkString("\n", "\n" + offset, "\n") +
+        env.provider.map(p => printVals(offset + " ", p.env, vals)).getOrElse("")
+    }
+
   override def toString: String = super.toString +
     provider.map(p=> s":$p#${p.env.toString}").getOrElse("<no provider>")
 

@@ -879,7 +879,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     println("----- SAVE record together with subrecord like manager togther with emp -----")
 
     obj = Map("ename" -> "Nico", "dname" -> "Services", "dname->" -> "deptno=dept[dname = _]{deptno}",
-      "emp" -> List(
+      "emp[+-=]" -> List(
         Map("ename" -> "Martin", "dname" -> "Services", "dname->" -> "deptno=dept[dname = _]{deptno}")
       )
     )
@@ -892,6 +892,33 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     obj = Map("ename" -> "Vytas", "empno" -> 10082,
       "emp[+-=]" -> List(
         Map("ename" -> "Martins", "empno" -> 10083)
+      )
+    )
+    assertResult(new UpdateResult(
+      Some(1),
+      Map("_1" -> new DeleteResult(Some(0)),
+        "emp[+-=]" -> List(new UpdateResult(Some(1)))
+      )
+    ))(ORT.update("emp", obj))
+
+    obj = Map("ename" -> "Vytas", "empno" -> 10082,
+      "emp[+-=]" -> List(
+        Map("ename" -> "Martins",
+          "dname" -> "Services", "dname->" -> "deptno=dept[dname = _]{deptno}",
+          "empno" -> 10083),
+        Map("ename" -> "Sergey",
+          "dname" -> "Services", "dname->" -> "deptno=dept[dname = _]{deptno}")
+      )
+    )
+    assertResult(new UpdateResult(
+      Some(1),
+      Map("_1" -> new DeleteResult(Some(0)), "emp[+-=]" -> List(new UpdateResult(Some(1)), new InsertResult(Some(1), id = Some(10084))))
+    ))(ORT.update("emp", obj))
+
+    obj = Map("ename" -> "Vytas", "empno" -> 10082,
+      "emp[+-=]" -> List(
+        Map("ename" -> "Martino", "empno" -> 10083),
+        Map("ename" -> "Sergio", "empno" -> 10084)
       )
     )
     assertResult(new UpdateResult(

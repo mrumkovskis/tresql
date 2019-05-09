@@ -1258,8 +1258,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   }
 
   def buildExpr(ex: String): Expr = buildExpr(parseExp(ex))
-  def buildExpr(ex: Exp): Expr = buildInternal(ex,
-    ctxStack.headOption.getOrElse(ROOT_CTX))
+  def buildExpr(ex: Exp): Expr = buildInternal(ex, ctxStack.headOption.getOrElse(ROOT_CTX))
 
   //for debugging purposes
   def printBuilderChain: Unit = {
