@@ -123,8 +123,9 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   override def metadata = provider.map(_.env.metadata).getOrElse(resources.metadata)
   override def dialect: CoreTypes.Dialect = provider.map(_.env.dialect).getOrElse(resources.dialect)
   override def idExpr = provider.map(_.env.idExpr).getOrElse(resources.idExpr)
-  override def queryTimeout = provider.map(_.env.queryTimeout).getOrElse(resources.queryTimeout)
-  override def maxResultSize = provider.map(_.env.maxResultSize).getOrElse(resources.maxResultSize)
+  override def queryTimeout: Int = provider.map(_.env.queryTimeout).getOrElse(resources.queryTimeout)
+  override def fetchSize: Int = provider.map(_.env.fetchSize).getOrElse(resources.fetchSize)
+  override def maxResultSize: Int = provider.map(_.env.maxResultSize).getOrElse(resources.maxResultSize)
 
   //meta data methods
   override def table(name: String) = metadata.table(name)
@@ -148,6 +149,8 @@ object Env extends Resources {
   private val threadConn = new ThreadLocal[java.sql.Connection]
   //query timeout
   private val query_timeout = new ThreadLocal[Int]
+  //fetch size
+  private val fetch_size = new ThreadLocal[Int]
   //this is for single thread usage
   var sharedConn: java.sql.Connection = _
   //meta data object must be thread safe!
@@ -186,6 +189,7 @@ object Env extends Resources {
   def macroMethod(name: String) = _macrosMethods.map(_(name)).get
   def cache = _cache
   override def queryTimeout = query_timeout.get
+  override def fetchSize = fetch_size.get
   override def maxResultSize = _maxResultSize
 
   def conn_=(conn: java.sql.Connection) = this.threadConn set conn
@@ -207,6 +211,7 @@ object Env extends Resources {
 
   def cache_=(cache: Cache) = this._cache = Option(cache)
   def queryTimeout_=(timeout: Int) = this.query_timeout set timeout
+  def fetchSize_=(fetchSize: Int) = this.fetch_size set fetchSize
 
   def maxResultSize_=(size: Int) = this._maxResultSize = size
 
@@ -225,6 +230,7 @@ trait Resources { self =>
     _dialect: Option[CoreTypes.Dialect] = None,
     _idExpr: Option[String => String] = None,
     _queryTimeout: Option[Int] = None,
+    _fetchSize: Option[Int] = None,
     _maxResultSize: Option[Int] = None,
     _params: Option[Map[String, Any]] = None) extends Resources {
     override def conn: java.sql.Connection = _conn getOrElse self.conn
@@ -232,11 +238,13 @@ trait Resources { self =>
     override def dialect: CoreTypes.Dialect = _dialect getOrElse self.dialect
     override def idExpr: String => String = _idExpr getOrElse self.idExpr
     override def queryTimeout: Int = _queryTimeout getOrElse self.queryTimeout
+    override def fetchSize: Int = _fetchSize getOrElse self.fetchSize
     override def maxResultSize: Int = _maxResultSize getOrElse self.maxResultSize
     override def params: Map[String, Any] = _params getOrElse self.params
     override def toString = s"Resources_(conn = $conn, " +
       s"metadata = $metadata, dialect = $dialect, idExpr = $idExpr, " +
-      s"queryTimeout = $queryTimeout, maxResultSize = $maxResultSize, params = $params)"
+      s"queryTimeout = $queryTimeout, fetchSize = $fetchSize, " +
+      s"maxResultSize = $maxResultSize, params = $params)"
   }
 
   private var _valueExprMap: Option[Map[(String, String), String]] = None
@@ -246,6 +254,7 @@ trait Resources { self =>
   def dialect: CoreTypes.Dialect = null
   def idExpr: String => String = s => "nextval('" + s + "')"
   def queryTimeout = 0
+  def fetchSize = 0
   def maxResultSize = 0
   def params: Map[String, Any] = Map()
 
@@ -266,6 +275,7 @@ trait Resources { self =>
   def withDialect(dialect: CoreTypes.Dialect): Resources = Resources_(_dialect = Option(dialect))
   def withIdExpr(idExpr: String => String): Resources = Resources_(_idExpr = Option(idExpr))
   def withQueryTimeout(queryTimeout: Int): Resources = Resources_(_queryTimeout = Option(queryTimeout))
+  def withFetchSize(fetchSize: Int): Resources = Resources_(_fetchSize = Option(fetchSize))
   def withMaxResultSize(maxResultSize: Int): Resources = Resources_(_maxResultSize = Option(maxResultSize))
   def withParams(params: Map[String, Any]): Resources = Resources_(_params = Option(params))
 }

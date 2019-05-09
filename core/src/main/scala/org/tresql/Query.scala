@@ -224,10 +224,9 @@ trait Query extends QueryBuilder with TypedQuery {
       } else env.statement
     else if (call) conn.prepareCall(sql)
     else conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)
-    if (env.queryTimeout == 0) st else {
-      st.setQueryTimeout(env.queryTimeout)
-      st
-    }
+    if (env.queryTimeout > 0) st.setQueryTimeout(env.queryTimeout)
+    if (env.fetchSize > 0) st.setFetchSize(env.fetchSize)
+    st
   }
 
   private def bindVars(st: PreparedStatement, bindVariables: List[Expr]) {
