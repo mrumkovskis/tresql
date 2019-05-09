@@ -103,6 +103,10 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   //update current id. This is called from QueryBuilder.IdExpr
   private[tresql] def currId(seqName: String, id: Any): Unit = ids(seqName) = id
 
+  /* like currId, with the difference that this.ids is not searched */
+  private[tresql] def ref(seqName: String) = provider.map(_.env.currId(seqName))
+  private[tresql] def refOption(seqName: String) = provider.flatMap(_.env.currIdOption(seqName))
+
   private[tresql] def rowCount: Int = provider.map(_.env.rowCount).getOrElse(_rowCount)
   private[tresql] def rowCount_=(rc: Int) {
     provider.map(_.env.rowCount = rc).getOrElse (_rowCount = rc)
@@ -133,18 +137,15 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   override def procedure(name: String) = metadata.procedure(name)
   override def procedureOption(name:String) = metadata.procedureOption(name)
 
-  def printVariables = "\nBind variables:" +
+  //debugging methods
+  def variables = "\nBind variables:" +
     vars.map(_.mkString("\n ", "\n ", "\n")).getOrElse("<none>")
-  def printAllVariables = "\nBind variables:" +
-    printVals(" ", this, e => e.vars.getOrElse(Map.empty))
-  def printAllIds = "\nIds:" + printVals(" ", this, _.ids)
-  private def printVals(offset: String, env: Env, vals: Env => scala.collection.Map[String, Any]): String =
-    vals(env) match {
-      case v if v.isEmpty => s"\n$offset<none>\n"
-      case v =>
-        v.mkString("\n", "\n" + offset, "\n") +
-        env.provider.map(p => printVals(offset + " ", p.env, vals)).getOrElse("")
-    }
+  def allVariables = "\nBind variables:\n" +
+    valsAsString("  ", this, e => e.vars.getOrElse(Map.empty))
+  def allIds = "\nIds:\n" + valsAsString("  ", this, _.ids)
+  private def valsAsString(offset: String, env: Env, vals: Env => scala.collection.Map[String, Any]): String =
+    vals(env).mkString(s"\n$offset<vals>\n$offset", "\n" + offset, s"\n${offset}<vals end>\n") +
+        env.provider.map(p => valsAsString(offset * 2, p.env, vals)).getOrElse("")
 
   override def toString: String = super.toString +
     provider.map(p=> s":$p#${p.env.toString}").getOrElse("<no provider>")

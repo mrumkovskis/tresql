@@ -147,7 +147,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   case class IdRefExpr(seqName: String) extends BaseVarExpr {
     override def apply() = getId(seqName).getOrElse(
         error(s"Current id not found for sequence $seqName in environment:\n$env"))
-    private def getId(name: String): Option[Any] = env.currIdOption(name).orElse {
+    private def getId(name: String): Option[Any] = env.refOption(name).orElse {
       env.tableOption(name).flatMap(t=> t.refTable.get(t.key.cols).map(getId))
     }
     override def toString = s":#$seqName = ${getId(seqName).getOrElse("?")}"
@@ -589,13 +589,15 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
   class UpdateExpr(table: IdentExpr, alias: String, filter: List[Expr],
       val cols: List[Expr], val vals: Expr, returning: Option[ColsExpr])
     extends DeleteExpr(table, alias, filter, null, returning) {
-    override def apply() = cols match {
-      //execute only child updates since this one does not have any column
-      case Nil =>
-        //execute any BaseVarExpr in filter to give chance to update currId for corresponding children IdRefExpr have values
-        if (filter != null) filter foreach (transform (_, {case id: BaseVarExpr => id(); id}))
-        new UpdateResult(children = executeChildren)
-      case _ => super.apply() match { case r: DMLResult => new UpdateResult(r) case r => r }
+    override def apply() = {
+      cols match {
+        //execute only child updates since this one does not have any column
+        case Nil =>
+          //execute any BaseVarExpr in filter to give chance to update currId for corresponding children IdRefExpr have values
+          if (filter != null) filter foreach (transform (_, {case id: BaseVarExpr => id(); id}))
+          new UpdateResult(children = executeChildren)
+        case _ => super.apply() match { case r: DMLResult => new UpdateResult(r) case r => r }
+      }
     }
     override protected def _sql = "update " + table.sql + (if (alias == null) "" else " " + alias) +
       " set " + (vals match {
@@ -1060,36 +1062,37 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
       filterExpr(filterList)
     }
     def maybeCallMacro(exp: Expr) = {
-      var varSet: Set[BaseVarExpr] = Set()
-      transform(
+      var varSet: Set[QueryBuilder#BaseVarExpr] = Set()
+      val expb = exp.builder
+      expb.transform(
         exp match {
-          case fun: FunExpr =>
+          case fun: QueryBuilder#FunExpr =>
             if (Env isMacroDefined fun.name) {
               val m = Env.macroMethod(fun.name)
               val p = m.getParameterTypes
               if (p.length > 1 && p(1).isAssignableFrom(classOf[Seq[_]]))
                 //second parameter is list of expressions
-                m.invoke(Env.macros.get, this, fun.params).asInstanceOf[Expr]
-              else m.invoke(Env.macros.get, this :: fun.params: _*).asInstanceOf[Expr]
+                m.invoke(Env.macros.get, expb, fun.params).asInstanceOf[Expr]
+              else m.invoke(Env.macros.get, expb :: fun.params: _*).asInstanceOf[Expr]
             } else if (fun.params.contains(null)) null else fun
-          case binExpr: BinExpr =>
+          case binExpr: QueryBuilder#BinExpr =>
             if (!(STANDART_BIN_OPS contains binExpr.op)) {
               val macroName = scala.reflect.NameTransformer.encode(binExpr.op)
               if (Env isMacroDefined macroName)
                 Env.macroMethod(macroName)
-                  .invoke(Env.macros.get, this, binExpr.lop, binExpr.rop)
+                  .invoke(Env.macros.get, expb, binExpr.lop, binExpr.rop)
                   .asInstanceOf[Expr]
               else binExpr
             } else binExpr
           case _ => sys.error("Unexpected exp type")
         }, {
-          case v: BaseVarExpr =>
+          case v: QueryBuilder#BaseVarExpr =>
             if (varSet(v)) {
               v match {
-                case ve: VarExpr => ve.copy()
-                case ie: IdExpr => ie.copy()
-                case re: IdRefExpr => re.copy()
-                case res: ResExpr => res.copy()
+                case ve: QueryBuilder#VarExpr => ve.copy()
+                case ie: QueryBuilder#IdExpr => ie.copy()
+                case re: QueryBuilder#IdRefExpr => re.copy()
+                case res: QueryBuilder#ResExpr => res.copy()
                 case x => x
               }
             } else {

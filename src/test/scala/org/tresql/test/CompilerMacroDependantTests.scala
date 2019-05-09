@@ -924,9 +924,12 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(new UpdateResult(
       Some(1),
       Map("_1" -> new DeleteResult(Some(0)),
-        "emp[+-=]" -> List(new UpdateResult(Some(1)))
+        "emp[+-=]" -> List(new UpdateResult(Some(1)), new UpdateResult(Some(1)))
       )
     ))(ORT.update("emp", obj))
+
+    assertResult(List(("Vytas", 10082, null), ("Martino", 10083, 10082), ("Sergio", 10084, 10082)))(
+      tresql"emp[10082, 10083, 10084]#(empno)".map(r => (r.ename, r.empno, r.mgr)).toList)
   }
 
   override def compilerMacro {
