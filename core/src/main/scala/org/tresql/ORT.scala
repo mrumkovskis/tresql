@@ -386,7 +386,7 @@ trait ORT extends Query {
           cols.mkString(s"=$tn $updateFilter {", ", ", "}") +
           vals.filter(_ != null).mkString("[", ", ", "]")
         case _ => null
-    }
+      }
     import ctx._
     val tableName = table.name
     def upd: String = save_tresql_internal(ctx, table_save_tresql, save_tresql(
