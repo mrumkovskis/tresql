@@ -345,8 +345,10 @@ trait ORT extends Query {
     (for {
       (table, ref) <- importedKeyOption(tables)
       pk <- Some(table.key.cols).filter(_.size == 1).map(_.head) orElse Some(null)
-    } yield save_tresql_func(SaveContext(name, struct, parents, filters, tables,
-      insertOption, updateOption, deleteOption, alias, parent, table, ref, pk))
+    } yield
+        save_tresql_func(SaveContext(name, struct, parents, filters, tables,
+          insertOption, updateOption, deleteOption, alias, parent, table, ref, pk)
+        )
     ).orNull
   }
 
@@ -440,14 +442,14 @@ trait ORT extends Query {
       struct: Map[String, _])(implicit resources: Resources) =
       resources.metadata.tableOption(name).filter(_.key.cols.size == 1).map {
         table =>
-        val pk = table.key.cols.headOption.filter(struct contains).orNull
-        val insert = save_tresql(name, struct, Nil, null, insert_tresql)
-        val update = save_tresql(name, struct, Nil, null, update_tresql)
-        List(
-          s":$refColName = |_lookup_edit('$refColName', ${
-            if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
-          refColName -> resources.valueExpr(name, refColName))
-    }.orNull
+          val pk = table.key.cols.headOption.filter(struct contains).orNull
+          val insert = save_tresql(name, struct, Nil, null, insert_tresql)
+          val update = save_tresql(name, struct, Nil, null, update_tresql)
+          List(
+            s":$refColName = |_lookup_edit('$refColName', ${
+              if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
+            refColName -> resources.valueExpr(name, refColName))
+      }.orNull
     def resolver_tresql(table: metadata.Table, property: String, resolverExp: String) = {
       import QueryParser._
       val ResolverPropPattern(prop) = property
