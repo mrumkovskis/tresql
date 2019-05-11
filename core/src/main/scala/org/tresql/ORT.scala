@@ -437,6 +437,7 @@ trait ORT extends Query {
       List[ParentRef] //parent chain
     ) => String)
     (implicit resources: Resources) = {
+
     def lookup_tresql(
       refColName: String,
       name: String,
@@ -461,6 +462,7 @@ trait ORT extends Query {
       }// TODO .orElse(sys.error(s"Resolver target not found for property '$prop'. Column '$col', expression '$resolverExp'"))
        .toList
     }
+
     import ctx._
     def tresql_string(
       table: metadata.Table,
@@ -505,9 +507,9 @@ trait ORT extends Query {
                 .orElse(Some(base))
             } yield tresql + tresqlColAlias).orNull
         }
+
     val md = resources.metadata
     val headTable = tables.head
-    val linkedTables = tables.tail
     def idRefId(idRef: String, id: String) = s"_id_ref_id($idRef, $id)"
     def refsAndPk(tbl: metadata.Table, refs: Set[String]): Set[(String, String)] =
       //ref table (set fk and pk)
@@ -523,14 +525,14 @@ trait ORT extends Query {
           .filterNot(tbl.name == table.name && _ == refToParent)
           .map(_ -> idRefId(headTable.table, tbl.name)))
 
-    val linkedTresqls =
-      for {
-        linkedTable <- linkedTables
-        tableDef <- md.tableOption(linkedTable.table)
-      } yield
+    md.tableOption(headTable.table).map { tableDef =>
+      val linkedTresqls =
+        for {
+          linkedTable <- tables.tail
+          tableDef <- md.tableOption(linkedTable.table)
+        } yield
           tresql_string(tableDef, alias, refsAndPk(tableDef, linkedTable.refs), Nil, "") //no children
 
-    md.tableOption(headTable.table).map { tableDef =>
       tresql_string(tableDef, alias, refsAndPk(tableDef, Set()),
         linkedTresqls.filter(_ != null), Option(parent)
           .map(_ => s" '$name'").getOrElse(""))
