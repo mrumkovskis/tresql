@@ -105,6 +105,14 @@ trait ORT extends Query {
         updateExpr() else insertExpr()
     def defaultSQL = s"InsertOrUpdateExpr($idName, $insertExpr, $updateExpr)"
   }
+  /* Expression is built from macros to ensure ORT one to one relationship setting */
+  case class UpsertExpr(updateExpr: Expr, insertExpr: Expr) extends BaseExpr {
+    override def apply() = updateExpr() match {
+      case r: DMLResult if r.count.getOrElse(0) > 0 || r.children.nonEmpty => r // return result if update affects some row
+      case _ => insertExpr() // execute insert if update affects no rows
+    }
+    def defaultSQL = s"UpsertExpr($updateExpr, $insertExpr)"
+  }
   /* Expression is built from macros to ensure ORT children editing */
   case class DeleteChildrenExpr(obj: String, table: String, expr: Expr)
   extends BaseExpr {
@@ -346,54 +354,83 @@ trait ORT extends Query {
       (table, ref) <- importedKeyOption(tables)
       pk <- Some(table.key.cols).filter(_.size == 1).map(_.head) orElse Some(null)
     } yield
-        save_tresql_func(SaveContext(name, struct, parents, filters, tables,
-          insertOption, updateOption, deleteOption, alias, parent, table, ref, pk)
+        save_tresql_func(
+          SaveContext(name, struct, parents, filters, tables,
+            insertOption, updateOption, deleteOption, alias, parent, table, ref, pk)
         )
     ).orNull
   }
 
+  private def table_insert_tresql(
+    tableName: String,
+    alias: String,
+    cols_vals: List[(String, String)],
+    refsAndPk: Set[(String, String)],
+    upsert: Boolean,
+    maybeFilters: Option[Filters]
+  ) = {
+    cols_vals ++ refsAndPk match {
+      case cols_vals =>
+        val (cols, vals) = cols_vals.unzip
+        cols.mkString(s"+$tableName {", ", ", "}") +
+          (for {
+            filters <- maybeFilters
+            filter <- filters.insert
+          } yield {
+            val toa = if (alias == null) tableName else alias
+            val cv = cols_vals filter (_._2 != null)
+            val sel = s"(null{${cv.map(c => c._2 + " " + c._1).mkString(", ")}} @(1)) $toa"
+            cv.map(c => s"$toa.${c._1}").mkString(s" $sel [$filter] {", ", ", "}")
+          }).getOrElse(vals.filter(_ != null).mkString(" [", ", ", "]"))
+    }
+  }
+
   private def insert_tresql(ctx: SaveContext)
     (implicit resources: Resources): String = {
-    def table_save_tresql(tableName: String, alias: String,
-      cols_vals: List[(String, String)],
-      refsAndPk: Set[(String, String)]) = cols_vals ++ refsAndPk match {
-        case cols_vals =>
-          val (cols, vals) = cols_vals.unzip
-          cols.mkString(s"+$tableName {", ", ", "}") +
-            (for {
-              filters <- ctx.filters
-              filter <- filters.insert
-            } yield {
-              val toa = if (alias == null) tableName else alias
-              val cv = cols_vals filter (_._2 != null)
-              val sel = s"(null{${cv.map(c => c._2 + " " + c._1).mkString(", ")}} @(1)) $toa"
-              cv.map(c => s"$toa.${c._1}").mkString(s" $sel [$filter] {", ", ", "}")
-            }).getOrElse(vals.filter(_ != null).mkString(" [", ", ", "]"))
-      }
-    save_tresql_internal(ctx, table_save_tresql,
-      save_tresql(_, _, _, null, insert_tresql)) //do not pass filter since it may come from child property
+    save_tresql_internal(ctx, table_insert_tresql(_, _, _, _, _, ctx.filters),
+      save_tresql(_, _, _,null, insert_tresql)) //do not pass filter since it may come from child property
   }
 
   private def update_tresql(ctx: SaveContext)
     (implicit resources: Resources): String = {
+
+    def stripTrailingAlias(tresql: String, alias: String) =
+      if (tresql != null && alias != null && tresql.endsWith(alias))
+        tresql.dropRight(alias.length) else tresql
+
+
     def table_save_tresql(tableName: String, alias: String,
       cols_vals: List[(String, String)],
-      refsAndPk: Set[(String, String)]) = cols_vals.unzip match {
+      refsAndPk: Set[(String, String)],
+      upsert: Boolean) = {
+      val upd_tresql = cols_vals.unzip match {
         case (cols: List[String], vals: List[String]) if cols.nonEmpty =>
           val filter = ctx.filters.flatMap(_.update).map(f => s" & ($f)").getOrElse("")
           val tn = tableName + (if (alias == null) "" else " " + alias)
           val updateFilter = refsAndPk.map(t=> s"${t._1} = ${t._2}").mkString("[", " & ", s"$filter]")
           cols.mkString(s"=$tn $updateFilter {", ", ", "}") +
-          vals.filter(_ != null).mkString("[", ", ", "]")
+            vals.filter(_ != null).mkString("[", ", ", "]")
         case _ => null
       }
+
+      Option(upd_tresql)
+        .map { ut =>
+          if (upsert) {
+            val stripped_ut = stripTrailingAlias(ut, alias)
+            val ins_tresql =
+              stripTrailingAlias(
+                table_insert_tresql(tableName, alias, cols_vals, refsAndPk, false, ctx.filters),
+                alias)
+            s"""|_upsert($stripped_ut, $ins_tresql)"""
+          } else ut
+        }
+        .orNull
+    }
+
     import ctx._
     val tableName = table.name
     def upd: String = save_tresql_internal(ctx, table_save_tresql, save_tresql(
-      _, _, _, null /* do not pass filter since it may come from child property */, update_tresql))
-    def stripTrailingAlias(tresql: String, alias: String) =
-      if (tresql != null && tresql.endsWith(alias))
-        tresql.dropRight(alias.length) else tresql
+      _, _, _,null /* do not pass filter since it may come from child property */, update_tresql))
     val delFilter = ctx.filters.flatMap(_.delete).map(f => s" & ($f)").getOrElse("")
     def delAllChildren = s"-$tableName[$refToParent = :#$parent$delFilter]"
     def delMissingChildren =
@@ -401,9 +438,11 @@ trait ORT extends Query {
         .name}[$refToParent = :#$parent & _not_delete_ids($pk !in :ids)$delFilter])"""
     val insFilter = ctx.filters.flatMap(_.insert).orNull
     def ins = save_tresql(name, struct, parents, insFilter, insert_tresql)
-    def insOrUpd = s"""|_insert_or_update('$tableName', ${
-      stripTrailingAlias(ins, s" '$name'")}, ${
-      stripTrailingAlias(upd, s" '$name'")}) '$name'"""
+    def insOrUpd = {
+      val strippedIns = stripTrailingAlias(ins, s" '$name'")
+      val strippedUpd = stripTrailingAlias(upd, s" '$name'")
+      s"""|_insert_or_update('$tableName', $strippedIns, $strippedUpd) '$name'"""
+    }
 
     if (parent == null) if (pk == null) null else upd
     else if (refToParent == pk) upd else
@@ -429,7 +468,8 @@ trait ORT extends Query {
       String, //table name
       String, //alias
       List[(String, String)], //cols vals
-      Set[(String, String)] //refsPk & values
+      Set[(String, String)], //refsPk & values
+      Boolean //upsert flag
     ) => String,
     children_save_tresql: (
       String, //table property
@@ -469,7 +509,8 @@ trait ORT extends Query {
       alias: String,
       refsAndPk: Set[(String, String)],
       children: List[String],
-      tresqlColAlias: String
+      tresqlColAlias: String,
+      upsert: Boolean
     ) = struct.flatMap {
           case (n, v) => v match {
             //children
@@ -485,7 +526,7 @@ trait ORT extends Query {
             //ordinary field
             case _ => List(table.colOption(n).map(_.name).orNull -> resources.valueExpr(table.name, n))
           }
-        }.groupBy { case _: String => "l" case _ => "b"} match {
+        }.groupBy { case _: String => "l" case _ => "b" } match {
           case m: Map[String @unchecked, List[_] @unchecked] =>
             val tableName = table.name
             //lookup edit tresql
@@ -495,10 +536,11 @@ trait ORT extends Query {
               m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]]
                 .filter(_._1 != null /*check if prop->col mapping found*/) ++
                 children.map(_ -> null) /*add same level one to one children*/
-               match {
-                 case x if x.isEmpty && refsAndPk.isEmpty => null //no columns & refs found
-                 case cols_vals => table_save_tresql(tableName, alias, cols_vals, refsAndPk)
-               }
+              match {
+                case x if x.isEmpty && refsAndPk.isEmpty => null //no columns & refs found
+                case cols_vals => table_save_tresql(tableName, alias, cols_vals, refsAndPk, upsert)
+              }
+
             (for {
               base <- Option(tresql)
               tresql <- Option(lookupTresql).map(lookup =>
@@ -531,11 +573,12 @@ trait ORT extends Query {
           linkedTable <- tables.tail
           tableDef <- md.tableOption(linkedTable.table)
         } yield
-          tresql_string(tableDef, alias, refsAndPk(tableDef, linkedTable.refs), Nil, "") //no children
+          tresql_string(tableDef, alias,
+            refsAndPk(tableDef, linkedTable.refs), Nil, "", true) //no children, set upsert flag for linked table
 
       tresql_string(tableDef, alias, refsAndPk(tableDef, Set()),
         linkedTresqls.filter(_ != null), Option(parent)
-          .map(_ => s" '$name'").getOrElse(""))
+          .map(_ => s" '$name'").getOrElse(""), false)
     }.orNull
   }
 }

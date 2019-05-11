@@ -930,6 +930,28 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
 
     assertResult(List(("Vytas", 10082, null), ("Martino", 10083, 10082), ("Sergio", 10084, 10082)))(
       tresql"emp[10082, 10083, 10084]#(empno)".map(r => (r.ename, r.empno, r.mgr)).toList)
+
+
+    println("----- UPSERT test -----")
+
+    tresql"-dept_addr[10077]"
+
+    obj = Map("deptno" -> 10077, "loc" -> "Asia", "addr" -> "Singapore")
+    assertResult(new UpdateResult(
+      Some(1), Map("_1" -> new InsertResult(Some(1), id = Some(10077)))
+    ))(ORT.updateMultiple(obj, "dept", "dept_addr")())
+
+    assertResult(List((10077, "Temp2", "Singapore", null)))(
+      tresql"dept/dept_addr![deptno = 10077]{deptno, dname, loc, addr, zip_code}#(1)"
+        .map(r => (r.deptno, r.dname, r.addr, r.zip_code)).toList)
+
+    obj = Map("deptno" -> 10077, "loc" -> "Asia", "zip_code" -> "560252")
+    assertResult(new UpdateResult(Some(1), Map("_1" -> new UpdateResult(Some(1)))))(
+      ORT.updateMultiple(obj, "dept", "dept_addr")())
+
+    assertResult(List((10077, "Temp2", "Singapore", "560252")))(
+      tresql"dept/dept_addr![deptno = 10077]{deptno, dname, loc, addr, zip_code}#(1)"
+        .map(r => (r.deptno, r.dname, r.addr, r.zip_code)).toList)
   }
 
   override def compilerMacro {

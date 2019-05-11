@@ -111,6 +111,8 @@ class Macros {
     table: QueryBuilder#ConstExpr, insertExpr: Expr, updateExpr: Expr) =
     b.InsertOrUpdateExpr(String valueOf table.value, insertExpr, updateExpr)
 
+  def _upsert(b: ORT, updateExpr: Expr, insertExpr: Expr) = b.UpsertExpr(updateExpr, insertExpr)
+
   def _delete_children(b: ORT,
     objName: QueryBuilder#ConstExpr,
     tableName: QueryBuilder#ConstExpr,
