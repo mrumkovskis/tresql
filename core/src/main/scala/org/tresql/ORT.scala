@@ -521,10 +521,15 @@ trait ORT extends Query {
           //filter pk of the linked table in case it matches refToParent
           .filterNot(tbl.name == table.name && _ == refToParent)
           .map(_ -> idRefId(headTable.table, tbl.name)))
-    val linkedTresqls = for{ linkedTable <- linkedTables
-      tableDef <- md.tableOption(linkedTable.table) } yield tresql_string(tableDef, alias,
-          refsAndPk(tableDef, linkedTable.refs), Nil, "") //no children
-    md.tableOption(headTable.table).map {tableDef =>
+
+    val linkedTresqls =
+      for {
+        linkedTable <- linkedTables
+        tableDef <- md.tableOption(linkedTable.table)
+      } yield
+          tresql_string(tableDef, alias, refsAndPk(tableDef, linkedTable.refs), Nil, "") //no children
+
+    md.tableOption(headTable.table).map { tableDef =>
       tresql_string(tableDef, alias, refsAndPk(tableDef, Set()),
         linkedTresqls.filter(_ != null), Option(parent)
           .map(_ => s" '$name'").getOrElse(""))
