@@ -404,6 +404,7 @@ trait ORT extends Query {
     def insOrUpd = s"""|_insert_or_update('$tableName', ${
       stripTrailingAlias(ins, s" '$name'")}, ${
       stripTrailingAlias(upd, s" '$name'")}) '$name'"""
+
     if (parent == null) if (pk == null) null else upd
     else if (refToParent == pk) upd else
       if (pk == null) {
