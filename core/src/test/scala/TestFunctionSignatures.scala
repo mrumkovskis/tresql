@@ -1,10 +1,10 @@
 package org.tresql.test
 
 trait TestFunctionSignatures extends org.tresql.compiling.TresqlFunctionSignatures {
-  import org.tresql.QueryCompiler._
-  def mkString(sel: SelectDefBase): String
-  def mkString(sel: SelectDefBase, colSep: String): String
-  def mkString(sel: SelectDefBase, colSep: String, rowSep: String)
+  import org.tresql.compiling.Compiler
+  def mkString(sel: Compiler#SelectDefBase): String
+  def mkString(sel: Compiler#SelectDefBase, colSep: String): String
+  def mkString(sel: Compiler#SelectDefBase, colSep: String, rowSep: String)
   def concat(string: String*): String
   def macro_interpolator_test1(exp1: Any, exp2: Any): Any
   def macro_interpolator_test2(exp1: Any, exp2: Any): Any
