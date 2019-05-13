@@ -100,9 +100,10 @@ trait ORT extends Query {
   case class InsertOrUpdateExpr(table: String, insertExpr: Expr, updateExpr: Expr)
   extends BaseExpr {
     val idName = env.table(table).key.cols.headOption.orNull
+    private val upsertExpr = UpsertExpr(updateExpr, insertExpr)
     override def apply() =
       if (idName != null && env.containsNearest(idName) && env(idName) != null)
-        updateExpr() else insertExpr()
+        upsertExpr() else insertExpr()
     def defaultSQL = s"InsertOrUpdateExpr($idName, $insertExpr, $updateExpr)"
   }
   /* Expression is built from macros to ensure ORT one to one relationship setting */
@@ -436,7 +437,19 @@ trait ORT extends Query {
     def delMissingChildren =
       s"""_delete_children('$name', '$tableName', -${table
         .name}[$refToParent = :#$parent & _not_delete_ids($pk !in :ids)$delFilter])"""
-    val insFilter = ctx.filters.flatMap(_.insert).orNull
+
+    val insFilter = {
+      val insf = ctx.filters.flatMap(_.insert)
+      (for {
+        pkstr <- Option(pk)
+        uf <- ctx.filters.flatMap(_.update)
+      } yield {
+        //if update filter is present set additional insert filter which checks if row with current sequence id does not exist
+        val pkcheck = s"!exists($tableName[$pkstr = #$tableName]{1})"
+        insf.map (f => s"($f) & $pkcheck").getOrElse(pkcheck)
+      })
+      .getOrElse(insf orNull)
+    }
     def ins = save_tresql(name, struct, parents, insFilter, insert_tresql)
     def insOrUpd = {
       val strippedIns = stripTrailingAlias(ins, s" '$name'")

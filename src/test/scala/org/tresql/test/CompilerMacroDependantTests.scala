@@ -790,7 +790,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         Map(
           "_1" -> new DeleteResult(Some(0)),
           "emp[+-=]|:filter_condition = true,:filter_condition = true,:filter_condition = true" ->
-            List(new InsertResult(Some(0), Map(), Some(10078)), new UpdateResult(Some(0))),
+            List(new InsertResult(Some(0), Map(), Some(10079)), new InsertResult(Some(0), id = Some(7369))),
           "_3" -> new UpdateResult(
             Some(1),
             Map(
@@ -853,12 +853,12 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       ORT.updateMultiple(obj, "dept")())
 
     obj = Map("dname" -> "attorney", "dname->" -> "dname=upper(_)")
-    assertResult(new InsertResult(Some(1), Map(), Some(10079)))(ORT.insert("dept", obj)())
+    assertResult(new InsertResult(Some(1), Map(), Some(10080)))(ORT.insert("dept", obj)())
 
-    obj = Map("deptno" -> 10079, "dname" -> "devop", "dname->" -> "dname=upper(_)")
+    obj = Map("deptno" -> 10080, "dname" -> "devop", "dname->" -> "dname=upper(_)")
     assertResult(new UpdateResult(Some(1)))(ORT.update("dept", obj)())
 
-    assertResult(List("DEVOP"))(tresql"dept[10079]{dname}".map(_.dname).toList)
+    assertResult(List("DEVOP"))(tresql"dept[dname = 'DEVOP']{dname}".map(_.dname).toList)
 
     println("----- SAVE to multiple tables with children having references to both parent tables -----")
 
@@ -869,10 +869,10 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       Map("_1" -> new InsertResult(
         Some(1),
         Map("emp:mgr" -> List(
-          new InsertResult(Some(1), id = Some(10081)))),
-        id = Some(10080)
+          new InsertResult(Some(1), id = Some(10082)))),
+        id = Some(10081)
       )),
-      id = Some(10080)
+      id = Some(10081)
     )) (ORT.insertMultiple(obj, "dept", "emp")())
 
 
@@ -885,13 +885,13 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     )
     assertResult(new InsertResult(
       Some(1), Map("emp[+-=]" -> List(
-        new InsertResult(Some(1), id = Some(10083))
-      )), id = Some(10082)
+        new InsertResult(Some(1), id = Some(10084))
+      )), id = Some(10083)
     ))(ORT.insert("emp", obj))
 
-    obj = Map("ename" -> "Vytas", "empno" -> 10082,
+    obj = Map("ename" -> "Vytas", "empno" -> tresql"emp[ename = 'Nico']{empno}".unique[Int],
       "emp[+-=]" -> List(
-        Map("ename" -> "Martins", "empno" -> 10083)
+        Map("ename" -> "Martins", "empno" -> tresql"emp[ename = 'Martin']{empno}".unique[Int])
       )
     )
     assertResult(new UpdateResult(
@@ -901,24 +901,24 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       )
     ))(ORT.update("emp", obj))
 
-    obj = Map("ename" -> "Vytas", "empno" -> 10082,
+    obj = Map("ename" -> "Vytas", "empno" -> tresql"emp[ename = 'Vytas']{empno}".unique[Int],
       "emp[+-=]" -> List(
         Map("ename" -> "Martins",
           "dname" -> "Services", "dname->" -> "deptno=dept[dname = _]{deptno}",
-          "empno" -> 10083),
+          "empno" -> tresql"emp[ename = 'Martins']{empno}".unique[Int]),
         Map("ename" -> "Sergey",
           "dname" -> "Services", "dname->" -> "deptno=dept[dname = _]{deptno}")
       )
     )
     assertResult(new UpdateResult(
       Some(1),
-      Map("_1" -> new DeleteResult(Some(0)), "emp[+-=]" -> List(new UpdateResult(Some(1)), new InsertResult(Some(1), id = Some(10084))))
+      Map("_1" -> new DeleteResult(Some(0)), "emp[+-=]" -> List(new UpdateResult(Some(1)), new InsertResult(Some(1), id = Some(10085))))
     ))(ORT.update("emp", obj))
 
-    obj = Map("ename" -> "Vytas", "empno" -> 10082,
+    obj = Map("ename" -> "Vytas", "empno" -> tresql"emp[ename = 'Vytas']{empno}".unique[Int],
       "emp[+-=]" -> List(
-        Map("ename" -> "Martino", "empno" -> 10083),
-        Map("ename" -> "Sergio", "empno" -> 10084)
+        Map("ename" -> "Martino", "empno" -> tresql"emp[ename = 'Martins']{empno}".unique[Int]),
+        Map("ename" -> "Sergio", "empno" -> tresql"emp[ename = 'Sergey']{empno}".unique[Int])
       )
     )
     assertResult(new UpdateResult(
@@ -928,8 +928,9 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       )
     ))(ORT.update("emp", obj))
 
-    assertResult(List(("Vytas", 10082, null), ("Martino", 10083, 10082), ("Sergio", 10084, 10082)))(
-      tresql"emp[10082, 10083, 10084]#(empno)".map(r => (r.ename, r.empno, r.mgr)).toList)
+    assertResult(List(("Vytas", null), ("Martino", "Vytas"), ("Sergio", "Vytas")))(
+      tresql"emp[ename in ('Vytas', 'Martino', 'Sergio')]{ename, (emp e[e.empno = emp.mgr] {ename}) mgr}#(empno)"
+        .map(r => (r.ename, r.mgr)).toList)
 
 
     println("----- UPSERT test -----")
