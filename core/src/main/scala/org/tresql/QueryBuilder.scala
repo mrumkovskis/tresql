@@ -466,7 +466,7 @@ trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.t
     defaultJoinCols: (key_, key_)) extends PrimitiveExpr {
     def defaultSQL = ???
     override def toString = "TableJoin(\ndefault: " + default + "\nexpr: " + expr +
-      "\nno join flag: " + noJoin + ")\n"
+      "\nno-join flag: " + noJoin + ")\n"
   }
   case class ColsExpr(cols: List[ColExpr],
       hasAll: Boolean, hasIdentAll: Boolean, hasHidden: Boolean) extends PrimitiveExpr {

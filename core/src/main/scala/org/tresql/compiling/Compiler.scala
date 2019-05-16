@@ -320,9 +320,9 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
             Join(_, _, true), _, _)) => //check if alias exists
             if (td1.view(0, idx).exists(_._1.name == alias))
               td.copy(exp = o.copy(obj = TableAlias(Ident(List(alias)))))
-            else throw CompilerException(s"No join table not defined: $alias")
+            else throw CompilerException(s"No-join table not defined: $alias")
           case TableDef(_, Obj(x, _, Join(_, _, true), _, _)) =>
-            throw CompilerException(s"Unsupported no join table: $x")
+            throw CompilerException(s"Unsupported no-join table: $x")
           case x => x //ordinary table def
         }
       }
