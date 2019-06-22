@@ -33,7 +33,7 @@ lazy val core = (project in file("core"))
       "org.scala-lang" % "scala-reflect" % scalaVersion.value
     ) ++ (
       if (scalaVersion.value.startsWith("2.10.")) Nil
-      else Seq("org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.1"))
+      else Seq("org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2"))
   ).settings(commonSettings: _*)
 
 lazy val macros = (project in file("macro"))
@@ -68,7 +68,7 @@ lazy val tresql = (project in file("."))
     sources in (Compile, doc) := (sources in (core, Compile)).value ++ (sources in (macros, Compile)).value,
 
     name := "tresql",
-    libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "3.0.0" % "test,it",
+    libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "3.0.8" % "test,it",
                                 "org.hsqldb" % "hsqldb" % "2.3.1" % "test", 
                                 "org.postgresql" % "postgresql" % "42.1.4" % "it,test"),
     initialCommands in console := "import org.tresql._; import org.tresql.implicits._; import org.scalatest._",
