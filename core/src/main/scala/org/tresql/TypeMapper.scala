@@ -17,6 +17,7 @@ trait TypeMapper {
     case "boolean" => ManifestFactory.classType(classOf[java.lang.Boolean])
     case "base64Binary" => ManifestFactory.classType(classOf[Array[Byte]])
     case "anyType" => ManifestFactory.Any
+    case _ => ManifestFactory.Any
   }
   def sql_xsd_type_map(sqlType: Int): String = sqlType match {
     case Types.ARRAY => "base64Binary"
