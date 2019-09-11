@@ -33,7 +33,9 @@ lazy val core = (project in file("core"))
       "org.scala-lang" % "scala-reflect" % scalaVersion.value
     ) ++ (
       if (scalaVersion.value.startsWith("2.10.")) Nil
-      else Seq("org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2"))
+      else Seq("org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2")
+    ),
+    skip in publish := true,
   ).settings(commonSettings: _*)
 
 lazy val macros = (project in file("macro"))
@@ -41,8 +43,9 @@ lazy val macros = (project in file("macro"))
   .dependsOn(core)
   .settings(
     name := "macro",
-    excludeFilter in unmanagedSources := (if (scalaVersion.value.startsWith("2.10.")) "*.*" else "")
-  )
+    excludeFilter in unmanagedSources := (if (scalaVersion.value.startsWith("2.10.")) "*.*" else ""),
+    skip in publish := true,
+)
   .settings(commonSettings: _*)
 
 val packageScopes = Seq(packageBin, packageSrc)
@@ -53,6 +56,10 @@ val packageMerges = for {
   project <- packageProjects
   scope <- packageScopes
 } yield mappings in(Compile, scope) := (mappings in (Compile, scope)).value ++ (mappings in (project, Compile, scope)).value
+
+
+import scala.xml.{Node => XmlNode, NodeSeq => XmlNodeSeq, _}
+import scala.xml.transform.{RewriteRule, RuleTransformer}
 
 lazy val tresql = (project in file("."))
   .disablePlugins(plugins.JUnitXmlReportPlugin)
@@ -75,6 +82,18 @@ lazy val tresql = (project in file("."))
     publishArtifact in Test := false,
     publishArtifact in Compile := true,
     pomIncludeRepository := { x => false },
+    pomPostProcess := { (node: XmlNode) =>
+      new RuleTransformer(new RewriteRule {
+        override def transform(node: XmlNode): XmlNodeSeq = node match {
+          case e: Elem if e.label == "dependency" && e.child.exists(child => child.text == "org.tresql") =>
+            val organization = e.child.filter(_.label == "groupId").flatMap(_.text).mkString
+            val artifact = e.child.filter(_.label == "artifactId").flatMap(_.text).mkString
+            val version = e.child.filter(_.label == "version").flatMap(_.text).mkString
+            Comment(s"provided dependency $organization#$artifact;$version has been omitted")
+          case _ => node
+        }
+      }).transform(node).head
+    },
     pomExtra := <url>https://github.com/mrumkovskis/tresql</url>
       <licenses>
         <license>
