@@ -3,6 +3,7 @@ package org.tresql.test;
 import java.sql.Connection;
 import java.util.*;
 
+import org.tresql.LogTopic;
 import org.tresql.SimpleCache;
 import org.tresql.java_api.*;
 
@@ -21,20 +22,18 @@ public class TresqlJavaApiTest implements Runnable {
     public void run() {
         println("");
         println("---- Testing Java API ----");
+        Env.State state = Env.saveState();
         Env.setLogger(new Logger() {
             // TODO test msg laziness
             @Override
-            public void log(LogMessage msg, int level) {
-                println("Java API logger [" + level + "]: " + msg.get());
+            public void log(LogMessage msg, LogParams params, LogTopic topic) {
+                println("Java API logger [" + topic + "]: " + msg.get() + "; params: " + params.get());
             }
         });
-        Env.getCache();
         Env.setCache(new SimpleCache(-1));
         Connection c = Env.getConnection();
         Env.setConnection(c);
-        Env.getDialect();
         Env.setDialect(Dialects.HSQL());
-        Env.getFunctions();
         Env.setFunctions(new TresqlJavaApiTestFunctions());
         println("id expr: " + Env.getIdExprFunc().getIdExpr("my_table"));
         Env.setIdExprFunc(new IdExprFunc() {
@@ -44,7 +43,6 @@ public class TresqlJavaApiTest implements Runnable {
             }
         });
         println("id expr: " + Env.getIdExprFunc().getIdExpr("my_table[2]"));
-        Env.getMetadata();
         Env.setMetadata(Metadata.JDBC(null));
 
         println("");
@@ -91,8 +89,8 @@ public class TresqlJavaApiTest implements Runnable {
 
         println("");
         for (Row r : Query.select("dept[60]{deptno, dname}")) {
-            java.util.Map<String, Object> map = r.rowToMap();
-            println("rowToMap() - " + map.get("deptno") + ": "
+            java.util.Map<String, Object> map = r.toMap();
+            println("toMap() - " + map.get("deptno") + ": "
                     + map.get("dname"));
         }
 
@@ -111,6 +109,9 @@ public class TresqlJavaApiTest implements Runnable {
         }
         println("--------------------------");
         println("");
+
+        //set back previous env values
+        Env.restoreState(state);
     }
 
     private void println(String s) {

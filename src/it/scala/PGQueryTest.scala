@@ -1,16 +1,26 @@
 package org.tresql.test
 
-import org.scalatest.{FunSuite, BeforeAndAfterAll}
+import java.io.ByteArrayOutputStream
+
+import org.scalatest.{BeforeAndAfterAllConfigMap, ConfigMap, FunSuite}
 import java.sql.DriverManager
+
 import org.tresql._
 import org.tresql.implicits._
 import org.tresql.result.Jsonizer._
-import scala.util.parsing.json._
 
+import scala.util.control.NonFatal
+import scala.util.parsing.json._
 import sys._
 
-/** To run from console {{{org.scalatest.run(new test.QueryTest)}}} */
-class QueryTest extends FunSuite with BeforeAndAfterAll {
+/** To run from console {{{new org.tresql.test.PGQueryTest().execute(configMap = ConfigMap("docker" -> "postgres", "remove" -> "false"))}}},
+  * to run from sbt - {{{it:testOnly * -- -oD -Ddocker=<docker image name> [-Dport=<posgtres host port>] [-Dwait_after_startup_millis=<wait time after postgres docker start until connection port is bound>] [-Dremove=<true|false - whether to stop docker after test are run, useful in console mode>]}}},
+  * example
+  * 1. specific postgres version - {{{it:testOnly * -- -oD -Ddocker=postgres:10.2}}}
+  * 2. latest postgres version and do not remove postgres container after test run with specific postgres host port
+  *    and wait time after docker started until jdbc connection attempt is made -
+  *   {{{it:testOnly * -- -oD -Ddocker=postgres -Dremove=false -Dport=54321 -Dwait_after_startup_millis=4000}}} */
+class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   class TestFunctions extends Functions {
     def echo(x: String) = x
     def plus(a: java.lang.Long, b: java.lang.Long) = a + b
@@ -52,41 +62,97 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       macro_"(macro_interpolator_test2($e1 * $e1, $e2 * $e2))"
   }
 
-  val executeCompilerMacroDependantTests = scala.util.Properties.versionNumberString.startsWith("2.12.")
-  val compilerMacroDependantTests =
-    if (executeCompilerMacroDependantTests)
-      Class.forName("org.tresql.test.CompilerMacroDependantTests").getDeclaredConstructor().newInstance()
-        .asInstanceOf[CompilerMacroDependantTestsApi]
+  val executePGCompilerMacroDependantTests = scala.util.Properties.versionNumberString.startsWith("2.12.")
+  val PGcompilerMacroDependantTests =
+    if (executePGCompilerMacroDependantTests)
+      Class.forName("org.tresql.test.PGCompilerMacroDependantTests").newInstance
+        .asInstanceOf[PGCompilerMacroDependantTestsApi]
     else
       null
 
-  val hsqlDialect: CoreTypes.Dialect = dialects.HSQLDialect orElse dialects.VariableNameDialect orElse {
-    case e: QueryBuilder#SelectExpr =>
-      val b = e.builder
-      e match {
-        case s @ b.SelectExpr(List(b.Table(b.ConstExpr(QueryParser.Null), _, _, _, _)), _, _, _, _, _, _, _, _, _) =>
-          s.copy(tables = List(s.tables.head.copy(table = b.IdentExpr(List("dummy"))))).sql
-        case _ => e.defaultSQL
-      }
-  }
-
-  override def beforeAll {
+  override def beforeAll(configMap: ConfigMap) {
     //initialize environment
-    Class.forName("org.hsqldb.jdbc.JDBCDriver")
-    val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
-    Env.conn = conn
-    Env.dialect = hsqlDialect
+    Class.forName("org.postgresql.Driver")
+    val jdbcPort = configMap.getOptional[String]("port").map(":" + _).getOrElse("")
+    val (dbUri, dbUser, dbPwd) = (s"jdbc:postgresql://127.0.0.1$jdbcPort/postgres", "postgres", "")
+    Env.conn = if (configMap.get("docker").isDefined) {
+      val postgresDockerImage = configMap("docker")
+      val hostPort = configMap.getOrElse("port", "5432")
+      val DockerCmd = s"docker run -d --rm --name tresql-it-tests -p $hostPort:5432 $postgresDockerImage"
+      println(s"Starting tresql test docker postgres container...")
+      val process = Runtime.getRuntime.exec(DockerCmd)
+      val baos = new ByteArrayOutputStream()
+      val errStream = process.getErrorStream
+      var i: Int = errStream.read
+      while (i != -1) {
+        i = errStream.read
+        baos.write(i)
+      }
+      process.waitFor
+      val errTip =
+        """Try to specify different test parameters as postgres port: -Dport=<port>
+          |  or increase docker startup wait time -Dwait_after_startup_millis
+          |For complete parameter list see scaladoc of PGQueryTest class.""".stripMargin
+      val exitValue = process.exitValue
+      if (exitValue != 0) {
+        println(s"Error occured during executing command:\n$DockerCmd")
+        println(baos.toString("utf8"))
+        println()
+        println(errTip)
+        println()
+        sys.error("Failure")
+      } else {
+        println("Docker started.")
+        val timeout = configMap.getOptional[String]("wait_after_startup_millis").map(_.toLong).getOrElse(2000L)
+        println(s"Wait $timeout milliseconds for db port binding")
+        Thread.sleep(timeout)
+        try DriverManager.getConnection(dbUri, dbUser, dbPwd)
+        catch {
+          case NonFatal(e) =>
+            sys.error(s"Error occurred trying to connect to database ($dbUri, $dbUser, $dbPwd) - ${e.toString}.\n" + errTip)
+        }
+      }
+    } else try DriverManager.getConnection(dbUri, dbUser, dbPwd) catch {
+      case e: Exception =>
+        throw sys.error(s"Unable to connect to database: ${e.toString}.\n" +
+          "For postgres docker container try command: it:testOnly * -- -oD -Ddocker=postgres -Dport=<port> -Dwait_after_startup_millis=<time to wait for postgres for startup>")
+    }
+    Env.dialect = dialects.PostgresqlDialect orElse dialects.VariableNameDialect
     Env.idExpr = s => "nextval('seq')"
     Env.functions = new TestFunctions
     Env.macros = Macros
     Env.cache = new SimpleCache(-1)
-    Env.logger = (msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg)
+    Env.logger = (msg, _, _) => println(msg)
     Env updateValueExprs /*value expr*/ Map(("car_usage" -> "empno") -> "(emp[empno = :empno]{empno})",
       ("car" -> "deptnr") -> "(case((dept[deptno = :deptnr] {count(deptno)}) = 1, (dept[deptno = :deptnr] {deptno}), -1))",
       ("tyres_usage" -> "carnr") -> ":#car")
     //create test db script
-    new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
-      sql => val st = conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
+    new scala.io.BufferedSource(getClass.getResourceAsStream("/pgdb.sql")).mkString.split("//").foreach {
+      sql => val st = Env.conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
+    }
+  }
+
+  override def afterAll(configMap: ConfigMap) {
+    if (configMap.contains("docker") && !configMap.get("remove").contains("false")) {
+      val DockerCmd = "docker stop tresql-it-tests"
+      print(s"Stopping tresql test docker postgres container...")
+      val process = Runtime.getRuntime.exec(DockerCmd)
+      val baos = new ByteArrayOutputStream()
+      val errStream = process.getErrorStream
+      var i: Int = errStream.read
+      while (i != -1) {
+        i = errStream.read
+        baos.write(i)
+      }
+      process.waitFor
+      val exitValue = process.exitValue
+      if (exitValue != 0) {
+        println(s"Error occured during executing command:\n$DockerCmd")
+        println(baos.toString("utf8"))
+      } else {
+        print(baos.toString("utf8"))
+        println("docker stopped.")
+      }
     }
   }
 
@@ -102,7 +168,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       var map = false
       def par(p: String): Any = p.trim match {
         case VAR(v, x) => {map = true; (v, par(x))}
-        case s if s.startsWith("'") => s.substring(1, s.length)
+        case s if (s.startsWith("'")) => s.substring(1, s.length)
         case "null" => null
         case "false" => false
         case "true" => true
@@ -124,25 +190,25 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       } else pl.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
     }
     println("\n---------------- Test TreSQL statements ----------------------\n")
-    testTresqls("/test.txt", (st, params, patternRes, nr) => {
-      println(s"Executing test #$nr:")
+    testTresqls("/pgtest.txt", (st, params, patternRes, nr) => {
+      println(s"Executing pgtest #$nr:")
       val testRes = jsonize(if (params == null) Query(st) else Query(st, parsePars(params)), Arrays)
       println("Result: " + testRes)
       assert(JSON.parseFull(testRes).get === JSON.parseFull(patternRes).get)
     })
   }
 
-  if (executeCompilerMacroDependantTests) test("API") {
-    compilerMacroDependantTests.api
+  if (executePGCompilerMacroDependantTests) test("PG API") {
+    PGcompilerMacroDependantTests.api
   }
 
-  if (executeCompilerMacroDependantTests) test("ORT") {
-    compilerMacroDependantTests.ort
+  if (executePGCompilerMacroDependantTests) test("PG ORT") {
+    PGcompilerMacroDependantTests.ort
   }
 
   test("tresql methods") {
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
-    testTresqls("/test.txt", (tresql, _, _, nr) => {
+    testTresqls("/pgtest.txt", (tresql, _, _, nr) => {
       println(s"$nr. Testing tresql method of:\n$tresql")
       QueryParser.parseExp(tresql) match {
         case e: QueryParser.Exp @unchecked => assert(e === QueryParser.parseExp(e.tresql))
@@ -157,7 +223,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
     }
     import QueryCompiler._
-    testTresqls("/test.txt", (tresql, _, _, nr) => {
+    testTresqls("/pgtest.txt", (tresql, _, _, nr) => {
       println(s"$nr. Compiling tresql:\n$tresql")
       try compile(tresql)
       catch {
@@ -174,41 +240,18 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       emp[ename ~~ 'kin%']{empno, ename} + emp[mgr = nr]kd{empno, ename}
     } kd {name}) val}""")
 
-    //with expression with asterisk resolving
-    compile("i(# *){emp e[empno = '']{*}} i{*}")
-    compile("i(# *){emp e[empno = '']{e.*}} i{*}")
-    compile("i(*){emp e[empno = '']{e.*} + i[false]emp e{e.*}} i{*}")
-    compile("e(# *){emp{empno, ename}}, t(# *){i(*){e[empno = '']{e.*} + i[false]e{e.*}}i{*}}t{*}")
-    compile("dept{(i(){emp e{ename} + i[false]emp e{i.ename}} i{ename}) x}")
-    compile("dept{(i(*){emp e{ename} + i[false]emp e{i.ename}} i{ename}) x}")
-
-    //with expression with dml statement
-    compile("d(# dname) {dept{dname}} +dept{deptno, dname} d{#dept, dname || '[reorganized]'}")
-    compile("d(# dname) {dept{dname}} =dept[d.dname = 'x']{deptno, dname} d{#dept, dname || '[reorganized]'}")
-    compile("d(# dname) {dept{dname}} =dept[dept.dname = d.dname]d[d.dname = 'x'] {deptno = #dept, dept.dname = d.dname}")
-    compile("d(# dname) {dept[deptno = 1]{dname}} dept - [deptno in d{deptno}]")
-
     //values from select compilation
     compile("=dept_addr da [da.addr_nr = a.nr] address a {da.addr = a.addr}")
-    compile("=dept_addr da [da.addr_nr = a.nr] address a {addr = a.addr}")
-    compile("=dept_addr da [da.addr_nr = a.nr] address a {addr = da.addr}")
     compile("=dept_addr da [da.addr_nr = address.nr] address {da.addr = address.addr}")
     compile("=dept_addr da [da.addr_nr = a.nr] (address a {a.nr, a.addr}) a {da.addr = a.addr}")
     compile("=dept_addr da [da.addr_nr = nr] (address a {a.nr, a.addr}) a {da.addr = a.addr}")
-    compile("=dept_addr da [da.addr_nr = nr] (address a {a.nr, a.addr}) a {da.addr = 'ADDR'}")
-    compile("=dept_addr da / address a / dept_addr da1 {da.addr = a.nr}")
 
     //postgresql style cast compilation
     compile("dummy[dummy::int = 1 & dummy::'double precision' & (dummy + dummy)::long] {dummy::int}")
 
-    //returing compilation
-    compile("i(#) { +dummy{dummy} [:v] {*} }, u(#) {=dummy [dummy = :v] {dummy = :v + 1} {*}}, d (#) {dummy - [dummy = :v] {*}} i ++ u ++ d")
-
     //values from select compilation errors
     intercept[CompilerException](compile("=dept_addr da [da.addr_nr = a.nr] (address a {a.addr}) a {da.addr = a.addr}"))
     intercept[CompilerException](compile("=dept_addr da [da.addr_nr = nrz] (address a {a.nr, a.addr}) a {da.addr = a.addr}"))
-    intercept[CompilerException](compile("=dept_addr da [da.addr_nr = a.nr] address a {addr = addr}"))
-    intercept[CompilerException](compile("=dept_addr da [da.addr_nr = a.nr] address a {1}"))
 
     intercept[CompilerException](compile("work/dept{*}"))
     intercept[CompilerException](compile("works"))
@@ -226,17 +269,13 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     intercept[CompilerException](compile("dept{group_concat(dname)#(dname)[deptno{deptno} < 30]}"))
     intercept[CompilerException](compile("{dept[10]{dnamez}}"))
     intercept[CompilerException](compile("b(# y) {a{x}}, a(# x) {dummy{dummy}} b{y}"))
-    intercept[CompilerException](compile("i(# ename){emp e[empno = '']{*}} i{*}"))
-    intercept[CompilerException](compile("d(# id) { dummy[dummy =0] }, u(# id) {dummy[dummy =2]}, upd(#) {dummy[dummy in (u.id)]{dummy} = [u.id + 1] }, remove_from(# ) { dummy - [ dummy in (d{id}) ] } remove_from{dummy}"))
-    intercept[CompilerException](compile("d(# id) { dummy[dummy =0] }, u(# id) {dummy[dummy =2]}, upd(#) {dummy[dummy in (u.id)]{dummy} = [u.id + 1] }, remove_from(# ) { dummy - [ dummy in (d{id}) ] } upd{dummy}"))
   }
 
-  if (executeCompilerMacroDependantTests) test("compiler macro") {
-    compilerMacroDependantTests.compilerMacro
+  if (executePGCompilerMacroDependantTests) test("postgres compiler macro") {
+    PGcompilerMacroDependantTests.compilerMacro
   }
 
   test("dialects") {
-    Env.dialect = dialects.PostgresqlDialect
     assertResult(Query.build("a::'b'").sql)("select * from a::b")
     assertResult(Query.build("a {1::int + 2::'double precision'}").sql)("select 1::int + 2::double precision from a")
     assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] (addr a {a.addr}) a {da.addr = a.addr}").sql)(
@@ -247,40 +286,22 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where (da.addr_nr = a.nr) and (da.addr_nr = 1 and a.addr = 'a')")
     assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] addr a [da.addr_nr = 1 & a.addr = 'a'] {da.addr = a.addr}").sql)(
       "update dept_addr da set da.addr = a.addr from addr a where (da.addr_nr = a.nr) and (da.addr_nr = 1 and a.addr = 'a')")
-    assertResult(Query.build("=dept_addr da / address a / dept_addr da1 {da.addr = 'ADDR'}").sql)(
-      "update dept_addr da set da.addr = 'ADDR' from address a left join dept_addr da1 on a.nr = da1.addr_nr where da.addr_nr = a.nr"
-    )
-    assertResult(Query.build("d(# dname) {dept{dname}} +dept{deptno, dname} d{#dept, dname || '[reorganized]'}").sql)(
-      "with d(dname) as (select dname from dept) insert into dept (deptno, dname) select ?, dname || '[reorganized]' from d")
-    assertResult(Query.build("d(# dname) {dept{dname}} =dept[d.dname = 'x']{deptno, dname} d{#dept, dname || '[reorganized]'}").sql)(
-      "with d(dname) as (select dname from dept) update dept set (deptno, dname) = (select ?, dname || '[reorganized]' from d) where d.dname = 'x'"
-    )
-    assertResult(Query.build("d(# dname) {dept{dname}} =dept[dept.dname = d.dname]d[d.dname = 'x'] {deptno = #dept, dname = d.dname}").sql)(
-      "with d(dname) as (select dname from dept) update dept set deptno = ?, dname = d.dname from d where (dept.dname = d.dname) and (d.dname = 'x')"
-    )
-    assertResult(Query.build("d(# dname) {dept[deptno = 1]{dname}} dept - [deptno in d{deptno}]").sql)(
-      "with d(dname) as (select dname from dept where deptno = 1) delete from dept where deptno in (select deptno from d)"
-    )
-
-    //restore hsql dialect
-    Env.dialect = hsqlDialect
   }
 
   test("cache") {
-    Env.cache foreach(c => println(s"\nCache size: ${c.size}\n"))
+    Env.cache map(c => println(s"\nCache size: ${c.size}\n"))
   }
 
   test("Test Java API") {
-    Class.forName("org.tresql.test.TresqlJavaApiTest").getDeclaredConstructor().newInstance()
-      .asInstanceOf[Runnable].run
+    Class.forName("org.tresql.test.TresqlJavaApiTest").newInstance.asInstanceOf[Runnable].run
   }
 
   def testTresqls(resource: String, testFunction: (String, String, String, Int) => Unit) = {
     var nr = 0
     new scala.io.BufferedSource(getClass.getResourceAsStream(resource))("UTF-8")
       .getLines.foreach {
-        case l if l.trim.startsWith("//") =>
-        case l if l.trim.length > 0 =>
+        case l if (l.trim.startsWith("//")) =>
+        case l if (l.trim.length > 0) =>
           val (st, params, patternRes) = l.split("-->") match {
             case scala.Array(s, r) => (s, null, r)
             case scala.Array(s, p, r) => (s, p, r)
