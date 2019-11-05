@@ -109,7 +109,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
 
   private[tresql] def rowCount: Int = provider.map(_.env.rowCount).getOrElse(_rowCount)
   private[tresql] def rowCount_=(rc: Int) {
-    provider.map(_.env.rowCount = rc).getOrElse (_rowCount = rc)
+    provider.map(_.env.rowCount = rc).getOrElse (this._rowCount = rc)
   }
 
   private[tresql] def rowConverter(depth: Int, child: Int): Option[RowConverter[_ <: RowLike]] =
@@ -119,7 +119,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
     provider.flatMap(_.env.rowConverters) orElse _rowConverters
   private[tresql] def rowConverters_=(rc: Map[(Int /*query depth*/,
     Int /*child idx*/), RowConverter[_ <: RowLike]]) {
-    provider.map(_.env.rowConverters = rc).getOrElse (_rowConverters = Option(rc))
+    provider.map(_.env.rowConverters = rc).getOrElse (this._rowConverters = Option(rc))
   }
 
   //resources methods

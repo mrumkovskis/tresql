@@ -1,10 +1,11 @@
-val scalaV = "2.12.8"
+val scalaV = "2.13.1"
 
 lazy val commonSettings = Seq(
   organization := "org.tresql",
   scalaVersion := scalaV,
   crossScalaVersions := Seq(
       scalaV,
+      "2.12.8",
       "2.11.8",
       "2.10.6"
     ),

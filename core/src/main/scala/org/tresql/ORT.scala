@@ -238,10 +238,7 @@ trait ORT extends Query {
     update(v._1, v._2, filter)
   }
 
-  private def tresql_structure[M <: Map[String, Any]](obj: M)(
-    /* ensure that returned map is of the same type as passed.
-     * For example in the case of ListMap when key ordering is important. */
-    implicit bf: scala.collection.generic.CanBuildFrom[Map[String, Any], (String, Any), M]): M = {
+  private def tresql_structure(obj: Map[String, Any]): Map[String, Any] = {
     def merge(lm: Seq[Map[String, Any]]): Map[String, Any] =
       lm.tail.foldLeft(tresql_structure(lm.head)) {(l, m) =>
         val x = tresql_structure(m)
@@ -258,7 +255,7 @@ trait ORT extends Query {
         }
       }
     var resolvableProps = Set[String]()
-    val struct: M = obj.map { case (key, value) =>
+    val struct: Map[String, Any] = obj.map { case (key, value) =>
       (key, value match {
         case Seq() | Array() => Map()
         case l: Seq[Map[String, _] @unchecked] => merge(l)
@@ -271,9 +268,9 @@ trait ORT extends Query {
             value
           } else "***"
       })
-    } (bf)
+    }
     if (resolvableProps.isEmpty) struct
-    else struct.flatMap { case (k, _) if resolvableProps(k) => Nil case x => List(x) } (bf)
+    else struct.flatMap { case (k, _) if resolvableProps(k) => Nil case x => List(x) }
   }
 
   def save_tresql(
