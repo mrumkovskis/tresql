@@ -390,7 +390,10 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def query: MemParser[Exp] = ((objs | NULL) ~ filters ~ opt(columns ~ opt(group)) ~ opt(order) ~
     opt(offsetLimit) | (columns ~ filters)) ^^ {
       case Null ~ Filters(Nil) ~ None ~ None ~ None => Null //null literal
-      case List(t) ~ Filters(Nil) ~ None ~ None ~ None => t
+      case List(t) ~ Filters(Nil) ~ None ~ None ~ None => t match {
+        case Obj(b: Braces, null, null, null, _) => b
+        case x => x
+      }
       case t ~ (f: Filters) ~ cgo ~ (o: Option[Ord @unchecked]) ~ (l: Option[(Exp, Exp) @unchecked]) =>
         val cg: (Cols, Grp) = cgo match {
           case Some((c: Cols) ~ Some(g: Grp)) => (c, g)
