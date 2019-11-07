@@ -81,6 +81,7 @@ lazy val tresql = (project in file("."))
         "org.postgresql" % "postgresql" % "42.1.4" % "it,test"),
     initialCommands in console := "import org.tresql._; import org.tresql.implicits._; import org.scalatest._",
     publishArtifact in Test := false,
+    //classLoaderLayeringStrategy in Test := ClassLoaderLayeringStrategy.Flat, does not help for 2.13 macro tests
     publishArtifact in Compile := true,
     pomIncludeRepository := { x => false },
     pomPostProcess := { (node: XmlNode) =>
