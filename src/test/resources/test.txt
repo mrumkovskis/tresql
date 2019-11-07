@@ -248,6 +248,7 @@ dept[?]{deptno} ++ emp[?]{empno} ++ salgrade[?]{grade} --> 10;7839;1 --> [[10], 
 
 //correct parentheses in from clause
 ((dummy#(1)) ++ (dummy#(1))) --> [[0], [0]]
+((dummy#(1)) ++ (dummy#(1))){dummy} --> [[0], [0]]
 
 //intersect
 dept{deptno} && emp{empno} --> []
