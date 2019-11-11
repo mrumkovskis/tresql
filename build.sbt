@@ -67,7 +67,9 @@ lazy val tresql = (project in file("."))
   .aggregate(core, macros)
   .settings(
     //compiler macro works only on scala 2.12.x
-    excludeFilter in (Test, unmanagedSources) := (if (!scalaVersion.value.startsWith("2.12.")) "CompilerMacroDependantTests.scala" else "")
+    excludeFilter in (Test, unmanagedSources) :=
+      (if (scalaVersion.value.startsWith("2.10") || scalaVersion.value.startsWith("2.11"))
+        "CompilerMacroDependantTests.scala" else "")
   )
   .settings(commonSettings: _*)
   .settings(packageMerges: _*)

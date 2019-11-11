@@ -54,8 +54,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
 
   val executeCompilerMacroDependantTests =
     !scala.util.Properties.versionNumberString.startsWith("2.10") &&
-    !scala.util.Properties.versionNumberString.startsWith("2.11") &&
-    !scala.util.Properties.versionNumberString.startsWith("2.13") // XXX ClassNotFoundException due to class loading error
+    !scala.util.Properties.versionNumberString.startsWith("2.11")
 
 
   val compilerMacroDependantTests =
