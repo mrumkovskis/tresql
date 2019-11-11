@@ -66,7 +66,7 @@ lazy val tresql = (project in file("."))
   .dependsOn(core % "test->test;compile->compile", macros)
   .aggregate(core, macros)
   .settings(
-    //compiler macro works only on scala 2.12.x
+    //compiler macro works only on scala 2.12.x and greater
     excludeFilter in (Test, unmanagedSources) :=
       (if (scalaVersion.value.startsWith("2.10") || scalaVersion.value.startsWith("2.11"))
         "CompilerMacroDependantTests.scala" else "")
@@ -83,7 +83,6 @@ lazy val tresql = (project in file("."))
         "org.postgresql" % "postgresql" % "42.1.4" % "it,test"),
     initialCommands in console := "import org.tresql._; import org.tresql.implicits._; import org.scalatest._",
     publishArtifact in Test := false,
-    //classLoaderLayeringStrategy in Test := ClassLoaderLayeringStrategy.Flat, does not help for 2.13 macro tests
     publishArtifact in Compile := true,
     pomIncludeRepository := { x => false },
     pomPostProcess := { (node: XmlNode) =>
