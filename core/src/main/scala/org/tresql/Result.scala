@@ -7,8 +7,8 @@ import CoreTypes.RowConverter
 
 trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T] with AutoCloseable {
 
-  def columns = 0 until columnCount map column
-  def values = (0 until columnCount).map(this(_))
+  def columns: Seq[Column] = 0 until columnCount map column
+  def values: Seq[Any] = (0 until columnCount).map(this(_))
 
   def toListOfVectors: List[Vector[Any]] = this.map(_.rowToVector).toList
   def toListOfMaps: List[Map[String, Any]] = this.map(_.toMap).toList
@@ -560,7 +560,7 @@ trait RowLike extends Typed {
       })
       i += 1
     }
-    Vector(b: _*)
+    Vector(b.toSeq: _*)
   }
   def columnCount: Int
   def column(idx: Int): Column

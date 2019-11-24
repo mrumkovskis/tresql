@@ -26,7 +26,7 @@ object QueryBuildCtx {
   object EXTERNAL_FUN_CTX extends Ctx
 }
 
-trait QueryBuilder extends EnvProvider with Transformer with Typer { this: org.tresql.Query =>
+trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { this: org.tresql.Query =>
 
   import QueryBuildCtx._
 

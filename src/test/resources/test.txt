@@ -246,6 +246,10 @@ dept[?]{deptno} ++ emp[?]{empno} ++ salgrade[?]{grade} --> 10;7839;1 --> [[10], 
 (dept{deptno} + salgrade{grade})#(~1 null) --> [[40], [30], [20], [10], [5], [4], [3], [2], [1]]
 (dept{deptno} + salgrade{grade})#(null ~1) --> [[40], [30], [20], [10], [5], [4], [3], [2], [1]]
 
+//correct parentheses in from clause
+((dummy#(1)) ++ (dummy#(1))) --> [[0], [0]]
+((dummy#(1)) ++ (dummy#(1))){dummy} --> [[0], [0]]
+
 //intersect
 dept{deptno} && emp{empno} --> []
 dept d[d.deptno = d1.deptno](dept{deptno} && emp[sal >= ?]{deptno}) d1 {d.deptno, dname} --> 5000 --> [[10, "ACCOUNTING"]]

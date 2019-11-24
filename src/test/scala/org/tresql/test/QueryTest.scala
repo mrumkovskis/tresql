@@ -52,7 +52,11 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       macro_"(macro_interpolator_test2($e1 * $e1, $e2 * $e2))"
   }
 
-  val executeCompilerMacroDependantTests = scala.util.Properties.versionNumberString.startsWith("2.12.")
+  val executeCompilerMacroDependantTests =
+    !scala.util.Properties.versionNumberString.startsWith("2.10") &&
+    !scala.util.Properties.versionNumberString.startsWith("2.11")
+
+
   val compilerMacroDependantTests =
     if (executeCompilerMacroDependantTests)
       Class.forName("org.tresql.test.CompilerMacroDependantTests").getDeclaredConstructor().newInstance()

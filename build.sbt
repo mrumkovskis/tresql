@@ -1,10 +1,11 @@
-val scalaV = "2.12.8"
+val scalaV = "2.13.1"
 
 lazy val commonSettings = Seq(
   organization := "org.tresql",
   scalaVersion := scalaV,
   crossScalaVersions := Seq(
       scalaV,
+      "2.12.8",
       "2.11.8",
       "2.10.6"
     ),
@@ -25,16 +26,15 @@ lazy val commonSettings = Seq(
   sources in (Compile, doc) := Seq.empty
 )
 
+def coreDependencies(scalaVer: String) =
+  Seq("org.scala-lang" % "scala-reflect" % scalaVer) ++
+    ( if (scalaVer.startsWith("2.10.")) Nil else Seq("org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2"))
+
 lazy val core = (project in file("core"))
   .disablePlugins(plugins.JUnitXmlReportPlugin)
   .settings(
     name := "tresql-core",
-    libraryDependencies ++= Seq(
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value
-    ) ++ (
-      if (scalaVersion.value.startsWith("2.10.")) Nil
-      else Seq("org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2")
-    ),
+    libraryDependencies ++= coreDependencies(scalaVersion.value),
     skip in publish := true,
   ).settings(commonSettings: _*)
 
@@ -66,8 +66,10 @@ lazy val tresql = (project in file("."))
   .dependsOn(core % "test->test;compile->compile", macros)
   .aggregate(core, macros)
   .settings(
-    //compiler macro works only on scala 2.12.x
-    excludeFilter in (Test, unmanagedSources) := (if (!scalaVersion.value.startsWith("2.12.")) "CompilerMacroDependantTests.scala" else "")
+    //compiler macro works only on scala 2.12.x and greater
+    excludeFilter in (Test, unmanagedSources) :=
+      (if (scalaVersion.value.startsWith("2.10") || scalaVersion.value.startsWith("2.11"))
+        "CompilerMacroDependantTests.scala" else "")
   )
   .settings(commonSettings: _*)
   .settings(packageMerges: _*)
@@ -75,9 +77,10 @@ lazy val tresql = (project in file("."))
     sources in (Compile, doc) := (sources in (core, Compile)).value ++ (sources in (macros, Compile)).value,
 
     name := "tresql",
-    libraryDependencies ++= Seq("org.scalatest" %% "scalatest" % "3.0.8" % "test,it",
-                                "org.hsqldb" % "hsqldb" % "2.3.1" % "test", 
-                                "org.postgresql" % "postgresql" % "42.1.4" % "it,test"),
+    libraryDependencies ++= coreDependencies(scalaVersion.value) ++
+      Seq("org.scalatest" %% "scalatest" % "3.0.8" % "test,it",
+        "org.hsqldb" % "hsqldb" % "2.3.1" % "test",
+        "org.postgresql" % "postgresql" % "42.1.4" % "it,test"),
     initialCommands in console := "import org.tresql._; import org.tresql.implicits._; import org.scalatest._",
     publishArtifact in Test := false,
     publishArtifact in Compile := true,
