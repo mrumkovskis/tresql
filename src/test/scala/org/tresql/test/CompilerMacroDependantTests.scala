@@ -241,6 +241,18 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     //exists method
     assertResult(true)(tresql"emp".exists)
     assertResult(false)(tresql"emp[ename = null]".exists)
+
+    //from clause consist of functions - only tresql macro cannot be used.
+    assertResult(
+      List(
+        Vector("ALLEN", "SALES"),
+        Vector("BLAKE", "SALES"),
+        Vector("JAMES", "SALES"),
+        Vector("MARTIN", "SALES"),
+        Vector("TURNER", "SALES"),
+        Vector("WARD", "SALES"))) {
+      Query("[]sql('emp')[emp.deptno = dept.deptno]sql('dept')[dname = 'SALES']{ename, dname}#(1,2)").toListOfVectors
+    }
   }
 
   override def ort {
