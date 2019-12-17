@@ -261,6 +261,13 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
      * insert, delete, update parsers must be applied before query parser */
   def operand: MemParser[Exp] = (const | ALL | withQuery | function | insert | update | variable |
     query | id | idref | result | array) named "operand"
+  /* function(<#> <arglist> <order by>). Maybe used in from clause so filter is not confused with join syntax.  */
+  def functionWithoutFilter: MemParser[Fun] = (qualifiedIdent /* name */ <~ "(") ~
+    opt("#") /* distinct */ ~ repsep(expr, ",") /* arglist */ ~
+    ")" ~ opt(order) /* aggregate order */ ^^ {
+    case Ident(n) ~ d ~ p ~ _ ~ o =>
+      Fun(n.mkString("."), p, d.isDefined, o, None)
+  }
   /* function(<#> <arglist> <order by>)<[filter]> */
   def function: MemParser[Fun] = (qualifiedIdent /* name */ <~ "(") ~
     opt("#") /* distinct */ ~ repsep(expr, ",") /* arglist */ ~
@@ -285,7 +292,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     } named "join"
   def filter: MemParser[Arr] = array named "filter"
   def filters: MemParser[Filters] = rep(filter) ^^ Filters named "filters"
-  private def objContent = const | function | variable | qualifiedIdent | braces
+  private def objContent = const | functionWithoutFilter | variable | qualifiedIdent | braces
   def obj: MemParser[Obj] = opt(join) ~ opt("?") ~ objContent ~
     opt(opt("?" | "!") ~ ident ~ opt("?" | "!")) ^^ {
     case _ ~ Some(_) ~ _ ~ Some(Some(_) ~ _ ~ _ | _ ~ _ ~ Some(_)) =>
