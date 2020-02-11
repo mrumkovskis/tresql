@@ -776,10 +776,31 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   //DML statements are defined outside of buildInternal method since they are called from other QueryBuilder
   private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: Exp,
                           returning: Option[Cols]) = {
+    lazy val insertCols = this.table(table).cols.map(c => IdentExpr(List(c.name)))
     new InsertExpr(IdentExpr(table.ident), alias,
       cols match {
         //get column clause from metadata
-        case Nil => this.table(table).cols.map(c => IdentExpr(List(c.name)))
+        case Nil => insertCols
+        case List(Col(All, _)) => vals match {
+          case q: QueryParser.Query => //adjust insertable columns to select columns
+            Option(q.cols)
+              .map {
+                _.cols.flatMap { col =>
+                  Option(col.alias).map(n => List(IdentExpr(List(n.toLowerCase)))).getOrElse {
+                    col.col match {
+                      case Ident(n) => List(IdentExpr(List(n.last.toLowerCase)))
+                      case _ => Nil
+                    }
+                  }
+                }
+              }
+              .map { selCols =>
+                val set = insertCols.toSet
+                selCols.filter(set.contains)
+              }
+              .getOrElse(insertCols)
+          case _ => insertCols
+        }
         case c => c map (buildInternal(_, COL_CTX)) filter {
           case x @ ColExpr(IdentExpr(_), _, _, _) => true
           case e: ColExpr => registerChildUpdate(e.col, e.name); false
