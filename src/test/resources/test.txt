@@ -19,8 +19,10 @@ EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [*] --> 7654; 'MARTI
 EMP + [7844, *] --> 'TURNER; 'SALESMAN;  7698; '1981-09-8; 1500; 0; 30 --> [[1]]
 EMP + [] --> 7900; 'JAMES; 'CLERK; 7698; '1981-12-3; 950; null; 30 --> [[1]]
 +EMP --> 7934; 'MILLER; 'CLERK; 7782; '1982-01-23; 1300; null; 10 --> [[1]]
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7788, "SCOTT",  "ANALYST", 7566, "1982-12-09", 3000, null, 20], [7902, "FORD", "ANALYST", 7566, "1981-12-3", 3000, null, 20] --> [[2]]
 //insert as select where insert columns columns taken from select columns
++ EMP {*} {7788 EMPNO, "SCOTT" ENAME,  "ANALYST" JOB, 7566 MGR, to_date("1982-12-09", 'YYYY-MM-DD') HIREDATE, 3000 SAL, null COMM, 20 DEPTNO} + { 7902, "FORD", "ANALYST", 7566, to_date("1981-12-3", 'YYYY-MM-DD'), 3000, null, 20 } --> [[2]]
+//trim name due to hsql wierdness
+=emp[ename = "FORD "]{ename = trim(ename)} --> [[1]]
 + EMP {*} {7876 EMPNO, "ADAMS" ENAME, "CLERK" JOB, 7788 MGR, "1983-01-12" HIREDATE, 1100 SAL, null COMM, 20 DEPTNO} --> [[1]]
 //insert table with alias
 +EMP E {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} --> 7369; 'SMITH; 'CLERK; 7902; 1980-12-17; 800; null; 20 --> [[1]]

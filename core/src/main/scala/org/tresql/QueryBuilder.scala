@@ -777,29 +777,33 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: Exp,
                           returning: Option[Cols]) = {
     lazy val insertCols = this.table(table).cols.map(c => IdentExpr(List(c.name)))
+    def queryCols(q: QueryParser.Query) =
+      Option(q.cols)
+        .map {
+          _.cols.flatMap { col =>
+            Option(col.alias).map(n => List(IdentExpr(List(n.toLowerCase)))).getOrElse {
+              col.col match {
+                case Ident(n) => List(IdentExpr(List(n.last.toLowerCase)))
+                case _ => Nil
+              }
+            }
+          }
+        }
+        .getOrElse(insertCols)
     new InsertExpr(IdentExpr(table.ident), alias,
       cols match {
         //get column clause from metadata
         case Nil => insertCols
         case List(Col(All, _)) => vals match {
-          case q: QueryParser.Query => //adjust insertable columns to select columns
-            Option(q.cols)
-              .map {
-                _.cols.flatMap { col =>
-                  Option(col.alias).map(n => List(IdentExpr(List(n.toLowerCase)))).getOrElse {
-                    col.col match {
-                      case Ident(n) => List(IdentExpr(List(n.last.toLowerCase)))
-                      case _ => Nil
-                    }
-                  }
-                }
-              }
-              .map { selCols =>
-                val set = insertCols.toSet
-                selCols.filter(set.contains)
-              }
-              .getOrElse(insertCols)
-          case _ => insertCols
+          case q: QueryParser.Query => queryCols(q)//adjust insertable columns to select columns
+          case e =>
+            def extractQuery(e: Exp): List[IdentExpr] = e match {
+              case BinOp(_, lop, _) => extractQuery(lop)
+              case q: QueryParser.Query => queryCols(q)
+              case Braces(b) => extractQuery(b)
+              case _ => insertCols
+            }
+            extractQuery(e)
         }
         case c => c map (buildInternal(_, COL_CTX)) filter {
           case x @ ColExpr(IdentExpr(_), _, _, _) => true
