@@ -67,8 +67,8 @@ package object dialects {
     def apply(e: Expr) = {
       val b = e.builder
       e match {
-        case b.ConstExpr(true) => "'Y'"
-        case b.ConstExpr(false) => "'N'"
+        case b.ConstExpr(true) => "1 = 1"
+        case b.ConstExpr(false) => "1 = 0"
         case b.FunExpr("optimizer_hint", List(b.ConstExpr(s: String)), false, None, None) => s
         case b.BinExpr("-", lop, rop) =>
           lop.sql + (if (e.exprType.getSimpleName == "SelectExpr") " minus " else " - ") + rop.sql
