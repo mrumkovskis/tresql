@@ -263,8 +263,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       "calculated_field"->333, "another_calculated_field"->"A",
       "emp" -> scala.Array(Map("empno" -> null, "ename" -> "SMITH", "deptno" -> null,
           "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")),
-          "work:empno"->List(Map("wdate"->java.sql.Date.valueOf("2012-7-9"), "empno"->null, "hours"->8, "empno_mgr"->null),
-              Map("wdate"->java.sql.Date.valueOf("2012-7-10"), "empno"->null, "hours"->8, "empno_mgr"->null))),
+          "work:empno"->List(Map("wdate"-> java.time.LocalDate.of(2012, 7, 9), "empno"->null, "hours"->8, "empno_mgr"->null),
+              Map("wdate"->java.time.LocalDate.of(2012, 7, 10), "empno"->null, "hours"->8, "empno_mgr"->null))),
         Map("empno" -> null, "ename" -> "LEWIS", "deptno" -> null,
             "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")),
             "work:empno"->List(Map("wdate"->java.sql.Date.valueOf("2012-7-9"), "empno"->null, "hours"->8, "empno_mgr"->null)))))
