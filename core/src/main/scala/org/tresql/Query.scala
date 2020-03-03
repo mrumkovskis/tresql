@@ -255,6 +255,8 @@ trait Query extends QueryBuilder with TypedQuery {
 * assume a java.sql.Date value */
         case d: java.util.Date => st.setTimestamp(idx, new java.sql.Timestamp(d.getTime))
         case c: java.util.Calendar => st.setTimestamp(idx, new java.sql.Timestamp(c.getTime.getTime))
+        case d: java.time.LocalDate => st.setDate(idx, java.sql.Date.valueOf(d))
+        case t: java.time.LocalDateTime => st.setTimestamp(idx, java.sql.Timestamp.valueOf(t))
         case b: Boolean => st.setBoolean(idx, b)
         case b: java.lang.Boolean => st.setBoolean(idx, b)
         case s: String => st.setString(idx, s)
