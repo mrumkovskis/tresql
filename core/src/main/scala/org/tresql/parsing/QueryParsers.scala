@@ -94,6 +94,15 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       s""")${aggregateOrder.map(o => " " + o.tresql).mkString}${
         aggregateWhere.map(e => s"[${e.tresql}]").mkString}"""
   }
+
+  case class TableColDef(name: String, typ: Option[String])
+  case class FunAsTable(fun: Fun, cols: Option[List[TableColDef]]) extends Exp {
+    def tresql = fun.tresql +
+      cols
+        .map(_.map(c => c.name + c.typ.map("::" + _).getOrElse("")).mkString("(", ", ", ")"))
+        .getOrElse("")
+  }
+
   case class In(lop: Exp, rop: List[Exp], not: Boolean) extends Exp {
     def tresql = any2tresql(lop) + (if (not) " !" else " ") + rop.map(any2tresql).mkString(
       "in(", ", ", ")")
@@ -293,6 +302,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def filter: MemParser[Arr] = array named "filter"
   def filters: MemParser[Filters] = rep(filter) ^^ Filters named "filters"
   private def objContent = const | functionWithoutFilter | variable | qualifiedIdent | braces
+  private def alias =
+    ident ~ opt("(" ~> rep1sep(ident ~ opt(cast), ",") <~ ")")
   def obj: MemParser[Obj] = opt(join) ~ opt("?") ~ objContent ~
     opt(opt("?" | "!") ~ ident ~ opt("?" | "!")) ^^ {
     case _ ~ Some(_) ~ _ ~ Some(Some(_) ~ _ ~ _ | _ ~ _ ~ Some(_)) =>
@@ -557,11 +568,12 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       case a ~ (b: Exp) => a.map(UnOp(_, b)).getOrElse(b)
       case x: Exp => x
     } named "unary-exp"
-  def cast: MemParser[Exp] = unaryExpr ~ opt("::" ~> (ident | stringLiteral)) ^^ {
+  private def cast = "::" ~> (ident | stringLiteral)
+  def castExpr: MemParser[Exp] = unaryExpr ~ opt(cast) ^^ {
     case e ~ Some(t) => Cast(e, t)
     case e ~ None => e
-  } named "cast" //postgresql style type conversion operator
-  def mulDiv: MemParser[Exp] = cast ~ rep("*" ~ cast | "/" ~ cast) ^^ binOp named "mul-div"
+  } named "cast-expr" //postgresql style type conversion operator
+  def mulDiv: MemParser[Exp] = castExpr ~ rep("*" ~ castExpr | "/" ~ castExpr) ^^ binOp named "mul-div"
   def plusMinus: MemParser[Exp] = mulDiv ~ rep(("++" | "+" | "-" | "&&" | "||") ~ mulDiv) ^^ binOp named "plus-minus"
   def comp: MemParser[Exp] = plusMinus ~ rep(comp_op ~ plusMinus) ^? (
       {
