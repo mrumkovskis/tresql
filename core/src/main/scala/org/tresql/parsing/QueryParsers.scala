@@ -303,13 +303,22 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   def filters: MemParser[Filters] = rep(filter) ^^ Filters named "filters"
   private def objContent = const | functionWithoutFilter | variable | qualifiedIdent | braces
   private def alias =
-    ident ~ opt("(" ~> rep1sep(ident ~ opt(cast), ",") <~ ")")
+    ident ~ opt("(" ~> rep1sep(ident ~ opt(cast), ",") <~ ")") ^^ {
+      case id ~ maybeColdefs => (id, maybeColdefs.map(_.map { case cn ~ typ => TableColDef(cn, typ) }))
+    }
   def obj: MemParser[Obj] = opt(join) ~ opt("?") ~ objContent ~
-    opt(opt("?" | "!") ~ ident ~ opt("?" | "!")) ^^ {
+    opt(opt("?" | "!") ~ alias ~ opt("?" | "!")) ^^ {
     case _ ~ Some(_) ~ _ ~ Some(Some(_) ~ _ ~ _ | _ ~ _ ~ Some(_)) =>
       sys.error("Cannot be right and left join at the same time")
     case join ~ rightoj ~ o ~ Some(leftoj ~ alias ~ leftoj1) =>
-      Obj(o, alias, join.orNull,
+      def processAlias(coldefs: Option[List[TableColDef]]) = {
+        o match {
+          case f: Fun => FunAsTable(f, coldefs)
+          case x if coldefs == None => x
+          case x => sys.error(s"Table definition is allowed only after function. Instead found: ${x.tresql}")
+        }
+      }
+      Obj(processAlias(alias._2), alias._1, join.orNull,
         rightoj.map(x => "r") orElse (leftoj orElse leftoj1).map(j => if(j == "?") "l" else "i") orNull,
         (leftoj orElse leftoj1).exists(_ == "?"))
     case join ~ rightoj ~ o ~ None => Obj(o, null, join orNull, rightoj.map(x => "r") orNull)

@@ -93,6 +93,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case TableDef(n, Obj(TableObj(s: SelectDefBase), _, _, _, _)) =>
         Option(table_from_selectdef(n, s))
       case TableDef(_, Obj(TableObj(_: Null), _, _, _,_)) => Option(table_alias(null))
+      //case TableDef(_, Obj(FunAsTable))
       case x => throw CompilerException(
         s"Unrecognized table clause: '${x.tresql}'. Try using Query(...)")
     }

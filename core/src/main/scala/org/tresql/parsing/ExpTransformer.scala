@@ -21,6 +21,7 @@ trait ExpTransformer { this: QueryParsers =>
       case e: IdentAll => e
       case e: Variable => e
       case Fun(n, pars, d, o, f) => Fun(n, pars map tt, d, o map tt, f map tt)
+      case FunAsTable(f, cds) => FunAsTable(tt(f), cds)
       case Cast(e, t) => Cast(tt(e), t)
       case UnOp(o, op) => UnOp(o, tt(op))
       case BinOp(o, lop, rop) => BinOp(o, tt(lop), tt(rop))
@@ -67,6 +68,7 @@ trait ExpTransformer { this: QueryParsers =>
       case e: Variable => e
       case Fun(n, pars, d, o, f) =>
         Fun(n, pars map tt(state), d, o map tt(state), f map tt(state))
+      case FunAsTable(f, cds) => FunAsTable(tt(state)(f), cds)
       case Cast(e, t) => Cast(tt(state)(e), t)
       case UnOp(o, op) => UnOp(o, tt(state)(op))
       case BinOp(o, lop, rop) => BinOp(o, tt(state)(lop), tt(state)(rop))
@@ -126,6 +128,7 @@ trait ExpTransformer { this: QueryParsers =>
         val ps = trl(state, pars)
         val os = o.map(tr(ps, _)).getOrElse(ps)
         f.map(tr(os, _)).getOrElse(os)
+      case FunAsTable(f, _) => tr(state, f)
       case Cast(e, _) => tr(state, e)
       case UnOp(_, operand) => tr(state, operand)
       case BinOp(_, lop, rop) => tr(tr(state, lop), rop)
