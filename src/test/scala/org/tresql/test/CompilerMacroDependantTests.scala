@@ -225,13 +225,6 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(List((10, "ACCOUNTING"), (20, "RESEARCH")))(
       tresql"dept{deptno, dname}#(1)@(2)".list[Int, String])
 
-
-    //table as function
-    assertResult(List(List(Vector(0)), List(Vector(0)), List(Vector(0)))) {
-      List(Query("[]dummy_table()"), Query("[]dummy_table(){*}"), Query("[]dummy_table()[dummy = 0]{*}"))
-        .map(_.toListOfVectors)
-    }
-
     //Resources convenience methods test
     val mr = Env.maxResultSize
     val qt = Env.queryTimeout

@@ -97,10 +97,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
 
   case class TableColDef(name: String, typ: Option[String])
   case class FunAsTable(fun: Fun, cols: Option[List[TableColDef]]) extends Exp {
-    def tresql = fun.tresql +
-      cols
-        .map(_.map(c => c.name + c.typ.map("::" + _).getOrElse("")).mkString("(", ", ", ")"))
-        .getOrElse("")
+    def tresql = fun.tresql
   }
 
   case class In(lop: Exp, rop: List[Exp], not: Boolean) extends Exp {
@@ -130,9 +127,17 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
 
   case class Obj(obj: Exp, alias: String, join: Join, outerJoin: String, nullable: Boolean = false)
       extends Exp {
-    def tresql = (if (join != null) join.tresql else "") + (if (outerJoin == "r") "?" else "") +
+    def tresql = {
+      (if (join != null) join.tresql else "") + (if (outerJoin == "r") "?" else "") +
       obj.tresql + (if (outerJoin == "l") "?" else if (outerJoin == "i") "!" else "") +
-      (if (alias != null) " " + alias else "")
+        (obj match {
+          case FunAsTable(_, cols) =>
+            cols
+              .map(_.map(c => c.name + c.typ.map("::" + _).getOrElse("")).mkString("(", ", ", ")"))
+              .getOrElse("") + " " + alias
+          case _ => if (alias == null) "" else " " + alias
+        })
+    }
   }
   case class Col(col: Exp, alias: String) extends Exp {
     def tresql = any2tresql(col) + (if (alias != null) " " + alias else "")
