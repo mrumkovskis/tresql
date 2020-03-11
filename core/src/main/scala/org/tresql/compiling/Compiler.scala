@@ -66,6 +66,9 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       (!procedure.hasRepeatedPar && exp.parameters.size != procedure.pars.size))
       throw CompilerException(s"Function '$name' has wrong number of parameters: ${exp.parameters.size}")
   }
+  case class FunAsTableDef[T](exp: FunDef[T], cols: Option[List[TableColDef]]) extends Exp {
+    def tresql = FunAsTable(exp.exp, cols).tresql
+  }
   case class RecursiveDef(exp: Exp, scope: Scope = null) extends TypedExp[RecursiveDef]
   with Scope {
     val typ: Manifest[RecursiveDef] = ManifestFactory.classType(this.getClass)
@@ -93,7 +96,15 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case TableDef(n, Obj(TableObj(s: SelectDefBase), _, _, _, _)) =>
         Option(table_from_selectdef(n, s))
       case TableDef(_, Obj(TableObj(_: Null), _, _, _,_)) => Option(table_alias(null))
-      //case TableDef(_, Obj(FunAsTable))
+      case TableDef(_, Obj(TableObj(FunAsTableDef(_, Some(cols))), alias, _, _, _)) =>
+        Option(Table(alias,
+          cols.map(c =>
+            org.tresql.metadata.Col(name = c.name,
+              true, -1,
+              scalaType =
+                c.typ
+                  .map(metadata.xsd_scala_type_map)
+                  .getOrElse(ManifestFactory.Any))), null, Map()))
       case x => throw CompilerException(
         s"Unrecognized table clause: '${x.tresql}'. Try using Query(...)")
     }
@@ -384,6 +395,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           aggregateWhere = f.aggregateWhere.map(tr(ctx, _))
         ), retType, p)
       }.getOrElse(throw CompilerException(s"Unknown function: ${f.name}"))
+      case ftd: FunAsTable => FunAsTableDef(tr(ctx, ftd.fun).asInstanceOf[FunDef[_]], ftd.cols)
       case c: Col =>
         val alias = if (c.alias != null) c.alias else c.col match {
           case Obj(Ident(name), _, _, _, _) => name.last //use last part of qualified ident as name
@@ -815,6 +827,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case cd: ColDef[_] => cd.copy(col = tt(cd.col))
       case cd: ChildDef => cd.copy(exp = tt(cd.exp))
       case fd: FunDef[_] => fd.copy(exp = tt(fd.exp))
+      case ftd: FunAsTableDef[_] => ftd.copy(exp = tt(ftd.exp))
       case td: TableDef => td.copy(exp = tt(td.exp))
       case to: TableObj => to.copy(obj = tt(to.obj))
       case ta: TableAlias => ta.copy(obj = tt(ta.obj))
@@ -869,6 +882,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case cd: ColDef[_] => cd.copy(col = tt(state)(cd.col))
       case cd: ChildDef => cd.copy(exp = tt(state)(cd.exp))
       case fd: FunDef[_] => fd.copy(exp = tt(state)(fd.exp))
+      case ftd: FunAsTableDef[_] => ftd.copy(exp = tt(state)(ftd.exp))
       case td: TableDef => td.copy(exp = tt(state)(td.exp))
       case to: TableObj => to.copy(obj = tt(state)(to.obj))
       case ta: TableAlias => ta.copy(obj = tt(state)(ta.obj))
@@ -924,6 +938,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case cd: ColDef[_] => tr(state, cd.col)
       case cd: ChildDef => tr(state, cd.exp)
       case fd: FunDef[_] => tr(state, fd.exp)
+      case ftd: FunAsTableDef[_] => tr(state, ftd.exp)
       case td: TableDef => tr(state, td.exp)
       case to: TableObj => tr(state, to.obj)
       case ta: TableAlias => tr(state, ta.obj)

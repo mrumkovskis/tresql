@@ -545,6 +545,11 @@ dept[10]{dname, ((wq(# x) {{1}} wq{x}){x}) x, |emp{ename}#(1)} --> [["ACCOUNTING
 dept[(dept_addr[deptnr = deptno]{deptnr})]{dname}#(1) --> []
 dept[(dept_addr[deptnr = dept.deptno]{deptnr})]{dname}#(1) --> []
 
+//table as function
+//[]dummy_table() a(dummy::int) --> []
+//[]dummy_table() a(dummy::int) {*} --> []
+//[]dummy_table() a(dummy::int) [a.dummy = 0]{*} --> []
+
 //table as function in from clause
 (dummy() ++ dummy){dummy} --> [[0], [0]]
 (dummy ++ dummy()){dummy} --> [[0], [0]]
