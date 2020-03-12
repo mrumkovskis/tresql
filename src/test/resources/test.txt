@@ -546,9 +546,12 @@ dept[(dept_addr[deptnr = deptno]{deptnr})]{dname}#(1) --> []
 dept[(dept_addr[deptnr = dept.deptno]{deptnr})]{dname}#(1) --> []
 
 //table as function
-//[]dummy_table() a(dummy::int) --> []
-//[]dummy_table() a(dummy::int) {*} --> []
-//[]dummy_table() a(dummy::int) [a.dummy = 0]{*} --> []
+[]unnest(sequence_array(10, 12, 1)) a(x::int) --> [[10], [11], [12]]
+[]unnest(sequence_array(10, 12, 1)) a(x::int) { x } --> [[10], [11], [12]]
+[]unnest(sequence_array(10, 12, 1)) a(x::int) { a.x } --> [[10], [11], [12]]
+[]unnest(sequence_array(10, 12, 1)) a(x::int) [x = 10] { a.x } --> [[10]]
+[]dummy_table() d(dummy){*} --> [[0]]
+[]dummy_table() d(d){d.d} --> [[0]]
 
 //table as function in from clause
 (dummy() ++ dummy){dummy} --> [[0], [0]]
