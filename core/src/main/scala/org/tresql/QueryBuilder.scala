@@ -320,6 +320,15 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
   }
 
+  case class FunAsTableExpr(expr: Expr, colsDefs: Option[List[TableColDefExpr]]) extends PrimitiveExpr {
+    override def defaultSQL: String = expr.sql
+    def colsSql: String = colsDefs.map(_.map(_.sql).mkString("(", ", ", ")")).getOrElse("")
+  }
+
+  case class TableColDefExpr(name: String, typ: Option[String]) extends PrimitiveExpr {
+    override def defaultSQL: String = name
+  }
+
   case class ExternalFunExpr(name: String, params: List[Expr],
     method: java.lang.reflect.Method, hasResourcesParam: Boolean) extends BaseExpr {
     override def apply() = {
@@ -373,7 +382,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       cols.sql +
       (tables match {
         case List(Table(ConstExpr(Null), _, _, _, _)) => ""
-        case _ => " from " + tables.head.sqlName + join(tables)
+        case _ => " from " + tables.head.sql + join(tables)
       }) +
       //(filter map where).getOrElse("")
       Option(where).map(" where " + _).getOrElse("") +
@@ -406,7 +415,6 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   case class Table(table: Expr, alias: String, join: TableJoin, outerJoin: String, nullable: Boolean)
   extends PrimitiveExpr {
     def name = table.sql
-    def sqlName = name + (if (alias != null) " " + alias else "")
     def aliasOrName = if (alias != null) alias else name
     def sqlJoinCondition(joinTable: Table) = {
       def fkAliasJoin(i: IdentExpr) = (if (i.name.size < 2 && joinTable.alias != null)
@@ -454,13 +462,19 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         //no join (used for table alias join)
         case TableJoin(_, _, true, _) => ""
         //product join
-        case TableJoin(false, ArrExpr(Nil) | null, _, _) => s"join $sqlName on true"
+        case TableJoin(false, ArrExpr(Nil) | null, _, _) => s"join $sql on true"
         case null => error(s"Cannot build sql query, join not specified between tables '$joinTable' and '$this'.")
         //other types of join
-        case _ => joinPrefix(true) + sqlName + " on " + sqlJoinCondition(joinTable)
+        case _ => joinPrefix(true) + sql + " on " + sqlJoinCondition(joinTable)
       }
     }
-    override def defaultSQL = table.sql + Option(alias).map(" " + _).mkString
+    override def defaultSQL = {
+      table.sql + Option(alias).map(" " + _).mkString +
+        (table match {
+          case fat: FunAsTableExpr => fat.colsSql
+          case _ => ""
+        })
+    }
   }
   case class TableJoin(default: Boolean, expr: Expr, noJoin: Boolean,
     defaultJoinCols: (key_, key_)) extends PrimitiveExpr {
@@ -1251,6 +1265,9 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           val order = o.map(buildInternal(_, FUN_CTX))
           val filter = f.map(buildInternal(_, FUN_CTX))
           maybeCallMacro(FunExpr(n, pars, d, order, filter))
+        case FunAsTable(f, cds) =>
+          FunAsTableExpr(buildInternal(f, parseCtx)
+            , cds.map(_.map(c => TableColDefExpr(c.name, c.typ))))
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => IdentAllExpr(i.ident)
         case a: Arr => parseCtx match {

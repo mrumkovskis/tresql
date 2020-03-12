@@ -132,9 +132,10 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
       obj.tresql + (if (outerJoin == "l") "?" else if (outerJoin == "i") "!" else "") +
         (obj match {
           case FunAsTable(_, cols) =>
+            " " + alias +
             cols
               .map(_.map(c => c.name + c.typ.map("::" + _).getOrElse("")).mkString("(", ", ", ")"))
-              .getOrElse("") + " " + alias
+              .getOrElse("")
           case _ => if (alias == null) "" else " " + alias
         })
     }

@@ -33,4 +33,6 @@ trait TestFunctionSignatures extends org.tresql.compiling.TresqlFunctionSignatur
   def round(a: BigDecimal, i: java.lang.Integer): BigDecimal
   def date_part(field: Any, source: Any): Any
   def isfinite(field: Any): Any
+  def unnest(arr: Any): Any
+  def sequence_array(el: Any*): Any
 }
