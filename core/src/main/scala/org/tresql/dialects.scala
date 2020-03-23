@@ -17,7 +17,10 @@ package object dialects {
   }
 
   val VariableNameDialect: CoreTypes.Dialect = {
-    case v: QueryBuilder#VarExpr => v.defaultSQL + s"/*${v.name}*/"
+    case v: QueryBuilder#VarExpr => v.defaultSQL match {
+      case s if """.*\?\s*,.*""".r.matches(s) => s"/*${v.name}[*/$s/*]${v.name}*/"
+      case s => s + s"/*${v.name}*/"
+    }
     case r: QueryBuilder#ResExpr => r.defaultSQL + s"/*${r.name}*/"
   }
 
