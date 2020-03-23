@@ -274,9 +274,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         })
       case _ => error("unknown operation " + op)
     }
-    override def exprType: Class[_] = if (List("&&", "++", "+", "-", "*", "/") contains op) {
-      if (lop.exprType == rop.exprType) lop.exprType else super.exprType
-    } else classOf[ConstExpr]
+    override def exprType: Class[_] =
+      if (List("&&", "++", "+", "-", "*", "/") contains op) {
+        if (lop.exprType == rop.exprType) lop.exprType else super.exprType
+      }
+      else classOf[ConstExpr]
   }
 
   case class FunExpr(
