@@ -15,6 +15,7 @@ trait Transformer { self: QueryBuilder =>
       case cols: ColsExpr => cols.copy(cols = (cols.cols map cf).asInstanceOf[List[ColExpr]])
       case ExternalFunExpr(n, p, m, hrp) => ExternalFunExpr(n, p map cf, m, hrp)
       case FunExpr(n, p, d, o, f) => FunExpr(n, p map cf, d, o map cf, f map cf)
+      case FunAsTableExpr(e, cd) => FunAsTableExpr(cf(e), cd)
       case Group(e, h) => Group(e map cf, cf(h))
       case HiddenColRefExpr(e, typ) => HiddenColRefExpr(cf(e), typ)
       case InExpr(lop, rop, not) => InExpr(cf(lop), rop map cf, not)
