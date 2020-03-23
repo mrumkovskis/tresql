@@ -109,7 +109,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       if (!binded) QueryBuilder.this._bindVariables += this
       val s = if (!env.reusableExpr && (env contains name) && (members == null | members == Nil)) {
         apply() match {
-          case l: scala.collection.Traversable[_] =>
+          case l: scala.collection.Iterable[_] =>
             if (l.nonEmpty) "?," * (l size) dropRight 1 else {
               //return null for empty collection (not to fail in 'in' operator)
               "null"
