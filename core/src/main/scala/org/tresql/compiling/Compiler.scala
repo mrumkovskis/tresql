@@ -141,7 +141,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case _ => true
     }.groupBy(_.name).filter(_._2.size > 1) match {
       case d => if(d.nonEmpty) throw CompilerException(
-        s"Duplicate table names: ${d.mkString(", ")}")
+        s"Duplicate table name(s): ${d.keys.mkString(", ")}")
     }
   }
 
@@ -306,11 +306,15 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case scope :: tail => col.lastIndexOf('.') match {
         case -1 =>
           scope.tableNames
-            .map(declaredTable(scopes)(_)(md).flatMap(_.colOption(col)))
-            .collect { case col @ Some(_) => col } match {
-              case List(col) => col
+            .map(tn => tn -> declaredTable(scopes)(tn)(md).flatMap(_.colOption(col)))
+            .collect { case (tn, col @ Some(_)) => (tn, col) } match {
+              case List((_, c)) => c
               case Nil => column(tail)(col)(md)
-              case x => throw CompilerException(s"Ambiguous columns: $x")
+              case x => throw CompilerException(
+                s"Ambiguous columns: ${x.map { case (t, c) =>
+                  s"$t.${c.map(_.name).iterator.mkString}"
+                }.mkString(", ")}"
+              )
             }
         case x => declaredTable(scopes)(col.substring(0, x))(md).flatMap(_.colOption(col.substring(x + 1)))
       }
