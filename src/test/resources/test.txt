@@ -579,3 +579,6 @@ dept{cast(deptno, 'integer')}#(1) --> [[10], [20], [30], [40]]
 
 //string literal apostrophe escape
 dummy {"let's go"} --> [["let's go"]]
+
+//queries with minus not except (using cast)
+dummy{ ((dummy{sum(dummy)})::int - (dummy{dummy}@(1))::int) x} --> [[0]]
