@@ -73,6 +73,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
           s.copy(tables = List(s.tables.head.copy(table = b.IdentExpr(List("dummy"))))).sql
         case _ => e.defaultSQL
       }
+    case c: QueryBuilder#CastExpr => c.exp.sql
   }
 
   override def beforeAll {
