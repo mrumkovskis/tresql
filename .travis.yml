@@ -12,7 +12,7 @@ jdk:
   - openjdk11
   - openjdk8
 addons:
-  postgresql: 10.2
+  postgresql: 10
 notifications:
   email:
     - martins@uniso.lv
