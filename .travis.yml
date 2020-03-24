@@ -13,6 +13,8 @@ jdk:
   - openjdk8
 addons:
   postgresql: 10.2
+before_script:
+  - psql -c 'create database tresql_test;' -U postgres
 notifications:
   email:
     - martins@uniso.lv

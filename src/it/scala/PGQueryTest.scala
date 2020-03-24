@@ -115,7 +115,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
             sys.error(s"Error occurred trying to connect to database ($dbUri, $dbUser, $dbPwd) - ${e.toString}.\n" + errTip)
         }
       }
-    } else try DriverManager.getConnection(dbUri, dbUser, dbPwd) catch {
+    } else try DriverManager.getConnection("jdbc:postgresql://localhost/tresql_test", dbUser, dbPwd) catch {
       case e: Exception =>
         throw sys.error(s"Unable to connect to database: ${e.toString}.\n" +
           "For postgres docker container try command: it:testOnly * -- -oD -Ddocker=postgres -Dport=<port> -Dwait_after_startup_millis=<time to wait for postgres for startup>")
