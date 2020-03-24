@@ -664,6 +664,10 @@ d(#) { dummy - [dummy = :v + 1] {*}} d --> v=7 --> [[8]]
 dummy d[]dummy a - [d.dummy = 7] {*} --> []
 dummy d[]dummy a - [d.dummy = a.dummy & d.dummy = 7] {d.dummy} --> []
 
+//queries with minus not except (using cast)
+dummy{ ((dummy{sum(dummy)})::int - (dummy{dummy}@(1))::int) x} --> [[0]]
+
+
 //    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] (addr a {a.addr}) a {da.addr = a.addr}").sql)(
 //      "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where da.addr_nr = a.nr")
 //    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] addr a {da.addr = a.addr}").sql)(
