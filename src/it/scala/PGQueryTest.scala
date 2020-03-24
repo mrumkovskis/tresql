@@ -62,7 +62,10 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
       macro_"(macro_interpolator_test2($e1 * $e1, $e2 * $e2))"
   }
 
-  val executePGCompilerMacroDependantTests = scala.util.Properties.versionNumberString.startsWith("2.12.")
+  val executePGCompilerMacroDependantTests =
+    !scala.util.Properties.versionNumberString.startsWith("2.10") &&
+    !scala.util.Properties.versionNumberString.startsWith("2.11")
+
   val PGcompilerMacroDependantTests =
     if (executePGCompilerMacroDependantTests)
       Class.forName("org.tresql.test.PGCompilerMacroDependantTests").newInstance
@@ -133,7 +136,8 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   }
 
   override def afterAll(configMap: ConfigMap) {
-    if (configMap.contains("docker") && !configMap.get("remove").contains("false")) {
+    if (configMap.contains("docker") &&
+      !configMap.get("remove").filter(_ == "false").isDefined) {
       val DockerCmd = "docker stop tresql-it-tests"
       print(s"Stopping tresql test docker postgres container...")
       val process = Runtime.getRuntime.exec(DockerCmd)
