@@ -74,7 +74,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     //initialize environment
     Class.forName("org.postgresql.Driver")
     val jdbcPort = configMap.getOptional[String]("port").map(":" + _).getOrElse("")
-    val (dbUri, dbUser, dbPwd) = (s"jdbc:postgresql://127.0.0.1$jdbcPort/postgres", "postgres", "")
+    val (dbUri, dbUser, dbPwd) = (s"jdbc:postgresql://localhost$jdbcPort/postgres", "postgres", "")
     Env.conn = if (configMap.get("docker").isDefined) {
       val postgresDockerImage = configMap("docker")
       val hostPort = configMap.getOrElse("port", "5432")
