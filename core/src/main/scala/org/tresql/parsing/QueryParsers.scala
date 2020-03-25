@@ -188,15 +188,21 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   }
   case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp, returning: Option[Cols])
     extends DMLExp {
-    def tresql = "=" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
-      (if (filter != null) filter.tresql else "") +
-      (if (cols.nonEmpty) cols.map(_.tresql).mkString("{", ",", "}") else "") +
-      (if (vals != null) any2tresql(vals) else "") +
-      returning.map(_.tresql).getOrElse("")
+    def tresql = {
+      val filterTresql = if (filter != null) filter.tresql else ""
+      val colsTresql = if (cols.nonEmpty) cols.map(_.tresql).mkString("{", ",", "}") else ""
+      val valsTresql = if (vals != null) any2tresql(vals) else ""
+      "=" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
+        (vals match {
+          case vfs: ValuesFromSelect => valsTresql + filterTresql + colsTresql
+          case _ => filterTresql + colsTresql + valsTresql
+        }) +
+        returning.map(_.tresql).getOrElse("")
+    }
   }
   case class ValuesFromSelect(select: Query) extends Exp {
     def tresql =
-      if (select.tables.size > 1) select.tresql
+      if (select.tables.size > 1) select.copy(tables = select.tables.tail).tresql
       else ""
   }
   case class Delete(table: Ident, alias: String, filter: Arr, using: Exp, returning: Option[Cols])
