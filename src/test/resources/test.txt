@@ -550,6 +550,7 @@ dept[(dept_addr[deptnr = dept.deptno]{deptnr})]{dname}#(1) --> []
 []unnest(sequence_array(10, 12, 1)) a(x::int) { x } --> [[10], [11], [12]]
 []unnest(sequence_array(10, 12, 1)) a(x::int) { a.x } --> [[10], [11], [12]]
 []unnest(sequence_array(10, 12, 1)) a(x::int) [x = 10] { a.x } --> [[10]]
+[]unnest(sequence_array(10, 12, 1)) a(x::int)[a.x = b.x]unnest(sequence_array(12, 13, 1)) b(x::int) { a.x, b.x } --> [[12, 12]]
 []dummy_table() d(dummy){*} --> [[0]]
 []dummy_table() d(d){d.d} --> [[0]]
 
