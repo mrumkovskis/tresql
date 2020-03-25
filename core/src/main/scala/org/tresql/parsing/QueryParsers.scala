@@ -211,8 +211,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
     override def vals = using
     def tresql = {
       val tbl =
-        if (using == null) table.tresql + Option(alias).map(" " + _).getOrElse("")
-        else using.tresql
+        table.tresql + Option(alias).map(" " + _).getOrElse("") + (if (using == null) "" else using.tresql)
 
       "-" + tbl + filter.tresql + returning.map(_.tresql).getOrElse("")
     }
