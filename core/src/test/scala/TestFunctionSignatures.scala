@@ -36,4 +36,6 @@ trait TestFunctionSignatures extends org.tresql.compiling.TresqlFunctionSignatur
   def unnest(arr: Any): Any
   def sequence_array(el: Any*): Any
   def generate_series(args: Any*): Any
+  def substring(str: String, from: Int, length: Int): String
+  def position(pos: Any): Int
 }
