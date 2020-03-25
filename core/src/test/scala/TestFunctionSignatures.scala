@@ -35,4 +35,5 @@ trait TestFunctionSignatures extends org.tresql.compiling.TresqlFunctionSignatur
   def isfinite(field: Any): Any
   def unnest(arr: Any): Any
   def sequence_array(el: Any*): Any
+  def generate_series(args: Any*): Any
 }

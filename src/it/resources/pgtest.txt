@@ -667,6 +667,12 @@ dummy d[]dummy a - [d.dummy = a.dummy & d.dummy = 7] {d.dummy} --> []
 //queries with minus not except (using cast)
 dummy{ ((dummy{sum(dummy)})::int - (dummy{dummy}@(1))::int) x} --> [[0]]
 
+//table as function
+[]generate_series(1, 2) a(x::int) --> [[1], [2]]
+[]generate_series(1, 2) a(x::int) { x } --> [[1], [2]]
+[]generate_series(1, 2) a(x::int) { a.x } --> [[1], [2]]
+[]generate_series(1, 2) a(x::int) [x = 2] { a.x } --> [[2]]
+[]generate_series(1, 3) a(x::int)[a.x = b.x]generate_series(3, 4) b(x::int) { a.x, b.x } --> [[3, 3]]
 
 //    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] (addr a {a.addr}) a {da.addr = a.addr}").sql)(
 //      "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where da.addr_nr = a.nr")
