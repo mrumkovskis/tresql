@@ -279,19 +279,6 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     PGcompilerMacroDependantTests.compilerMacro
   }
 
-  test("dialects") {
-    assertResult(Query.build("a::'b'").sql)("select * from a::b")
-    assertResult(Query.build("a {1::int + 2::'double precision'}").sql)("select 1::int + 2::double precision from a")
-    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] (addr a {a.addr}) a {da.addr = a.addr}").sql)(
-      "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where da.addr_nr = a.nr")
-    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] addr a {da.addr = a.addr}").sql)(
-      "update dept_addr da set da.addr = a.addr from addr a where da.addr_nr = a.nr")
-    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] (addr a {a.addr}) a [da.addr_nr = 1 & a.addr = 'a'] {da.addr = a.addr}").sql)(
-      "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where (da.addr_nr = a.nr) and (da.addr_nr = 1 and a.addr = 'a')")
-    assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] addr a [da.addr_nr = 1 & a.addr = 'a'] {da.addr = a.addr}").sql)(
-      "update dept_addr da set da.addr = a.addr from addr a where (da.addr_nr = a.nr) and (da.addr_nr = 1 and a.addr = 'a')")
-  }
-
   test("cache") {
     Env.cache map(c => println(s"\nCache size: ${c.size}\n"))
   }

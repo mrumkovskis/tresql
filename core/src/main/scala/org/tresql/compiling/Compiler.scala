@@ -800,7 +800,10 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
           wdmld.copy(exp = exp, withTables = wtables)
         case dml: DMLDefBase if ctx.isEmpty || ctx.head != dml => type_resolver(dml :: ctx)(dml)
         case rdml: ReturningDMLDef =>
-          rdml.copy(cols = (rdml.cols map type_resolver(rdml :: ctx)).asInstanceOf[List[ColDef[_]]])
+          //resolve column types for potential from clause select definitions
+          val nrdml = rdml.copy(tables = (rdml.tables map type_resolver(rdml :: ctx)).asInstanceOf[List[TableDef]])
+          //resolve types for column defs
+          nrdml.copy(cols = (nrdml.cols map type_resolver(nrdml :: ctx)).asInstanceOf[List[ColDef[_]]])
         case ColDef(n, ChildDef(ch), t) => ColDef(n, ChildDef(type_resolver(ctx)(ch)), t)
         case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
           val nexp = type_resolver(ctx)(exp) //resolve expression in the case it contains select
