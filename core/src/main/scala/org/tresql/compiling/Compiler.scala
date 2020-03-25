@@ -64,7 +64,8 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
     extends TypedExp[T] {
     if((procedure.hasRepeatedPar && exp.parameters.size < procedure.pars.size - 1) ||
       (!procedure.hasRepeatedPar && exp.parameters.size != procedure.pars.size))
-      throw CompilerException(s"Function '$name' has wrong number of parameters: ${exp.parameters.size}")
+      throw CompilerException(
+        s"Function '$name' has wrong number of parameters: ${exp.parameters.size} instead of ${procedure.pars.size}")
   }
   case class FunAsTableDef[T](exp: FunDef[T], cols: Option[List[TableColDef]]) extends Exp {
     def tresql = FunAsTable(exp.exp, cols).tresql
