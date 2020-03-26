@@ -603,6 +603,18 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         case wdmld: WithDMLDef =>
           val (exp, wtables) = resolveWithQuery[DMLDefBase](wdmld)
           wdmld.copy(exp, wtables)
+        case ins @ InsertDef(List(ColDef(_, All, _)), _, exp) =>
+          val nexp = resolver(scopes)(exp).asInstanceOf[Insert]
+          nexp.vals match {
+            case s: SQLDefBase =>
+              val cols = s.cols map { c =>
+                if (c.name == null)
+                  throw CompilerException("Null column name in select for insert with asterisk columns")
+                else ColDef(c.name, Ident(List(c.name)), ManifestFactory.Any)
+              }
+              ins.copy(cols = cols, exp = nexp)
+            case _ => ins.copy(exp = nexp)
+          }
       }
     }
     resolver(Nil)(exp)

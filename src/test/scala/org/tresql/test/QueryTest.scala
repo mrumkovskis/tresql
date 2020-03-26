@@ -244,6 +244,9 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     intercept[CompilerException](qcompile("d1(# *) { dummy a[]dummy b { b.dummy col }}, d2(# *) { d1[]dummy? {dummy.dummy d, d1.col c} }, i(# *) { +dummy {dummy} d1[col = 1]{col} {dummy} }, u(# *) { =dummy[dummy = d2.c]d2 {dummy = d2.c} {d2.c u, d1.col } } u"))
     intercept[CompilerException](qcompile("d(# dname) {dept{dname}} =dept[d.dname = 'x']{deptno, dname} d{#dept, dname || '[reorganized]'}"))
     intercept[CompilerException](qcompile("[]dummy_table() d(d){d.x}"))
+
+    //insert with asterisk column
+    intercept[CompilerException](qcompile("+dummy{*} dummy{dummy kiza}"))
   }
 
   if (executeCompilerMacroDependantTests) test("compiler macro") {
