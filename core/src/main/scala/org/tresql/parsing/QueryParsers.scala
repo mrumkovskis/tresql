@@ -483,8 +483,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers {
   }) named "with-query"
 
   def values: MemParser[Values] = rep1sep(array, ",") ^^ Values named "values"
-  def valuesSelect: MemParser[Exp] = queryWithCols ~ rep(
-    ("++" | "+" | "-" | "&&") ~ queryWithCols) ^^ binOp named "values-select"
+  def valuesSelect: MemParser[Exp] = (withQuery | queryWithCols) ~ rep(
+    ("++" | "+" | "-" | "&&") ~ (withQuery | queryWithCols)) ^^ binOp named "values-select"
 
   def insert: MemParser[Insert] =
     (("+" ~> qualifiedIdent ~ opt(ident) ~ opt(columns) ~ opt(valuesSelect | repsep(array, ","))) |

@@ -583,3 +583,9 @@ dummy {"let's go"} --> [["let's go"]]
 
 //queries with minus not except (using cast)
 dummy{ ((dummy{sum(dummy)})::int - (dummy{dummy}@(1))::int) x} --> [[0]]
+
+//insert with columns as asterisk tests
++dummy{*} dummy[dummy = 10]{dummy} --> [[0]]
++dummy{*} dummy[dummy = 10]{dummy dummy} --> [[0]]
++dummy{*} d(#) { dummy[dummy = 10] } d{dummy} --> [[0]]
++dummy{*} d(#) { dummy[dummy = 10] } d{dummy} ++ dummy[dummy = 10]{dummy} --> [[0]]

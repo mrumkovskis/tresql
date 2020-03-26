@@ -685,3 +685,9 @@ dummy{ ((dummy{sum(dummy)})::int - (dummy{dummy}@(1))::int) x} --> [[0]]
 d(# dname) {dept{dname}} +dept{deptno, dname} d[dname = 'SALES']{sql('row_number() over ()') + 333, dname || '[x]'} {deptno, dname} --> [[334.0, "SALES[x]"]]
 d(# dname) {dept{dname}} =dept[d.dname = dept.dname] d [d.dname ~ '%[x]'] {dname = substring(d.dname, 1, position('[x]' in d.dname) - 1) || '[y]'} {dept.deptno, dept.dname} --> [[334.0, "SALES[y]"]]
 d(# deptno, dname) {dept[dname = 'SALES[y]']{deptno, dname}} dept - [deptno in d{deptno}] {dname} --> [["SALES[y]"]]
+
+//insert with columns as asterisk tests
++dummy{*} dummy[dummy = 10]{dummy} --> [[0]]
++dummy{*} dummy[dummy = 10]{dummy dummy} --> [[0]]
++dummy{*} d(#) { dummy[dummy = 10] } d{dummy} --> [[0]]
++dummy{*} d(#) { dummy[dummy = 10] } d{dummy} ++ dummy[dummy = 10]{dummy} --> [[0]]

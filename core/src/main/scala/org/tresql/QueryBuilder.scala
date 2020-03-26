@@ -793,14 +793,16 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: Exp,
                           returning: Option[Cols]) = {
     lazy val insertCols = this.table(table).cols.map(c => IdentExpr(List(c.name)))
-    def queryCols(q: QueryParser.Query) =
+    def resolveAsterisk(q: QueryParser.Query) =
       Option(q.cols)
         .map {
-          _.cols.flatMap { col =>
-            Option(col.alias).map(n => List(IdentExpr(List(n.toLowerCase)))).getOrElse {
+          _.cols.zipWithIndex.map { case (col, idx) =>
+            Option(col.alias).map(n => IdentExpr(List(n.toLowerCase))).getOrElse {
               col.col match {
-                case Ident(n) => List(IdentExpr(List(n.last.toLowerCase)))
-                case _ => Nil
+                case Obj(Ident(n), _, _, _, _) =>
+                  IdentExpr(List(n.last.toLowerCase))
+                case _ =>
+                  sys.error(s"Bad column - '${col.tresql}' at index $idx. Please specify alias.")
               }
             }
           }
@@ -811,12 +813,13 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         //get column clause from metadata
         case Nil => insertCols
         case List(Col(All, _)) => vals match {
-          case q: QueryParser.Query => queryCols(q)//adjust insertable columns to select columns
+          case q: QueryParser.Query => resolveAsterisk(q)//adjust insertable columns to select columns
           case e =>
             def extractQuery(e: Exp): List[IdentExpr] = e match {
               case BinOp(_, lop, _) => extractQuery(lop)
-              case q: QueryParser.Query => queryCols(q)
+              case q: QueryParser.Query => resolveAsterisk(q)
               case Braces(b) => extractQuery(b)
+              case With(_, e) => extractQuery(e)
               case _ => insertCols
             }
             extractQuery(e)
