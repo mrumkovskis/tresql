@@ -180,12 +180,6 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   }
 
   case class UnExpr(op: String, operand: Expr) extends BaseExpr {
-    override def apply() = op match {
-      case "-" => -operand().asInstanceOf[Number]
-      case "!" => !operand().asInstanceOf[Boolean]
-      case "|" => operand()
-      case _ => error("unknown unary operation " + op)
-    }
     def defaultSQL = op match {
       case "-" => "-" + operand.sql
       case "!" =>
@@ -212,30 +206,21 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       }
       c(lop)
     }
+
     override def apply() =
       op match {
-        case "*" => lop * rop
-        case "/" => lop / rop
-        case "||" => lop + rop
         case "&&" => sel(sql, cols)
         case "++" => sel(sql, cols)
-        case "+" => if (exprType == classOf[SelectExpr]) sel(sql, cols) else lop + rop
-        case "-" => if (exprType == classOf[SelectExpr]) sel(sql, cols) else lop - rop
+        case "+" => if (exprType == classOf[SelectExpr]) sel(sql, cols) else super.apply()
+        case "-" => if (exprType == classOf[SelectExpr]) sel(sql, cols) else super.apply()
         case "=" => lop match {
           //assign expression
           case VarExpr(variable, _, _) =>
             env(variable) = rop()
             env(variable)
-          case x => x == rop
+          case x => super.apply()
         }
-        case "!=" => lop != rop
-        case "<" => lop < rop
-        case ">" => lop > rop
-        case "<=" => lop <= rop
-        case ">=" => lop >= rop
-        case "&" => lop & rop
-        case "|" => lop | rop
-        case _ => error("unknown operation " + op)
+        case x => super.apply()
       }
 
     def defaultSQL = op match {
@@ -719,6 +704,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     override def apply(params: Map[String, Any]): Any = {
       env update params
       apply()
+    }
+    override def apply(): Any = {
+      SelectExpr(List(Table(ConstExpr(Null), null, null, null, true)),
+        null, ColsExpr(List(ColExpr(this, null)), false, false, false),
+        false, null, null, null, null, Map(), None).apply()
     }
     override def close = {
       env.closeStatement
