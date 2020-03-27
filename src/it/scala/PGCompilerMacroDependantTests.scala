@@ -981,6 +981,7 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
           }.toList.head
       )
       assertResult(List((0, "kiki"), (2, "kiki")))(tresql"dummy {*, 'kiki' k} #(1)".map(r => r.dummy -> r.k).toList)
+      assertResult(List((10033, "Riga, LV")))(tresql"=dept_addr [addr_nr = a.nr] (address a {a.nr, a.addr}) a [a.addr ~ 'Riga%'] {addr = a.addr} {dept_addr.addr_nr, a.addr}".map(r => r.addr_nr -> r.addr).toList)
 
       //type resolving when column contains select with from clause select
       //assertResult(("KING", "ACCOUNTING"))(tresql"""emp e[ename ~~ 'kin%'] {
