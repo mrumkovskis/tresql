@@ -832,11 +832,19 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
   }
 
   def compile(exp: Exp) = {
+    val normalized = exp match {
+      case _: Const | _: UnOp | _: BinOp =>
+        try {
+          intermediateResults.get.clear
+          query(new scala.util.parsing.input.CharSequenceReader(s"{${exp.tresql}}")).get
+        } finally intermediateResults.get.clear
+      case _ => exp
+    }
     resolveColTypes(
       resolveNamesAndJoins(
         resolveColAsterisks(
           buildTypedDef(
-            exp))))
+            normalized))))
   }
 
   override def transformer(fun: Transformer): Transformer = {
