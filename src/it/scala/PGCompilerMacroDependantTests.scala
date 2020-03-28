@@ -984,6 +984,8 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
     assertResult(List((10033, "Riga, LV")))(tresql"=dept_addr [addr_nr = a.nr] (address a {a.nr, a.addr}) a [a.addr ~ 'Riga%'] {addr = a.addr} {dept_addr.addr_nr, a.addr}".map(r => r.addr_nr -> r.addr).toList)
 
     //expressions without select
+    assertResult(1)(tresql"1".apply("value"))
+    assertResult(List((1,2,3)))(tresql"1, 2, 3".map(r => (r._1, r._2, r._3)).toList)
     assertResult(List(2.34))(tresql"round(2.33555, 2)".map(_._1).toList)
     assertResult(List((List(2.34),List(3),14)))(tresql"round(2.33555, 2), round(3.1,0), 5 + 9".map(r => (r._1.map(_._1).toList, r._2.map(_._1).toList, r._3.map(_._1).toList.head)).toList)
     assertResult(7.3)(tresql"1 + 4 - 0 + round(2.3, 5)".map(_._1).toList.head)

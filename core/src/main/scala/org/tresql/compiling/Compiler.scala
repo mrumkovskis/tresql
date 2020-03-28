@@ -834,7 +834,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
 
   def compile(exp: Exp) = {
     def normalized(e: Exp): Exp = e match {
-      case _: Const | _: UnOp | _: BinOp | _: Fun | _: Cast =>
+      case _: UnOp | _: BinOp | _: Fun | _: Cast =>
         try {
           intermediateResults.get.clear
           query(new scala.util.parsing.input.CharSequenceReader(s"{${e.tresql}}")).get
