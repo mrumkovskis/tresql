@@ -1085,8 +1085,9 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       assertResult(List(3, 9))(tresql"dummy{dummy nr, dummy + 1 nr, dummy + 2 nr}"
         .map(r => r.nr + r.nr1 + r.nr2).toList.sorted)
 
-      assertResult(List(7.3, 7.3))(tresql"1 + 4 - 0 + round(2.3, 5)".map(_._1).toList)
-      assertResult(List((7.3,14)))(tresql"1 + 4 - 0 + round(2.3, 5), 5+9"
-        .map(r => r._1.map(_._1).toList.head -> r._2.map(_._1).toList.head).toList)
+    //expressions without select
+    assertResult(List(2.34))(tresql"round(2.33555, 2)".map(_._1).toList)
+    assertResult(List((List(2.34),List(3),14)))(tresql"round(2.33555, 2), round(3.1,0), 5 + 9".map(r => (r._1.map(_._1).toList, r._2.map(_._1).toList, r._3.map(_._1).toList.head)).toList)
+    assertResult(7.3)(tresql"1 + 4 - 0 + round(2.3, 5)".map(_._1).toList.head)
   }
 }

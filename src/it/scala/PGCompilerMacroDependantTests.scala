@@ -983,6 +983,33 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
       assertResult(List((0, "kiki"), (2, "kiki")))(tresql"dummy {*, 'kiki' k} #(1)".map(r => r.dummy -> r.k).toList)
       assertResult(List((10033, "Riga, LV")))(tresql"=dept_addr [addr_nr = a.nr] (address a {a.nr, a.addr}) a [a.addr ~ 'Riga%'] {addr = a.addr} {dept_addr.addr_nr, a.addr}".map(r => r.addr_nr -> r.addr).toList)
 
+      //expressions without select
+      assertResult(List(2.34))(tresql"round(2.33555, 2)".map(_._1).toList)
+      assertResult(List((List(2.34),List(3),14)))(tresql"round(2.33555, 2), round(3.1,0), 5 + 9".map(r => (r._1.map(_._1).toList, r._2.map(_._1).toList, r._3.map(_._1).toList.head)).toList)
+      assertResult(7.3)(tresql"1 + 4 - 0 + round(2.3, 5)".map(_._1).toList.head)
+      assertResult(List("2.34"))(tresql"round(2.33555, 2)::string".map(_._1).toList)
+      assertResult(List(2))(tresql"2.3::int".map(_._1).toList)
+      assertResult(List(2.3))(tresql"'2.3'::decimal".map(_._1).toList)
+      assertResult(List(java.sql.Date.valueOf("2000-01-01")))(tresql"'2000/01/01'::date".map(_._1).toList)
+      assertResult(List(java.sql.Timestamp.valueOf("2000-01-01 00:00:00.0")))(tresql"'2000/01/01'::timestamp".map(_._1).toList)
+      assertResult(List(2))(tresql"round(2.3, 1)::int".map(_._1).toList)
+      assertResult(List((2,
+        2.3, java.sql.Date.valueOf("2000-01-01"),
+        java.sql.Timestamp.valueOf("2000-01-01 00:00:00.0"))))(tresql"2.3::int, '2.3'::decimal, '2000/01/01'::date, '2000/01/01'::timestamp"
+        .map(r =>
+          (r._1.map(_._1).toList.head,
+            r._2.map(_._1).toList.head,
+            r._3.map(_._1).toList.head,
+            r._4.map(_._1).toList.head))
+        .toList)
+      assertResult(List((3,5)))(tresql"(1 + 2)::int, (2 + 3)::int"
+        .map(r => r._1.map(_._1).toList.head -> r._2.map(_._1).toList.head).toList)
+      assertResult(List(2.3)) {
+        val x = 1;
+        tresql"round(2.33555, $x)".map(_._1).toList
+      }
+
+
       //type resolving when column contains select with from clause select
       //assertResult(("KING", "ACCOUNTING"))(tresql"""emp e[ename ~~ 'kin%'] {
       //  ename, ((dept d[e.deptno = d.deptno]{dname}) {dname}) dname}"""

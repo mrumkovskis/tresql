@@ -175,7 +175,10 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     }
   }
 
-  case class CastExpr(exp: Expr, typ: String) extends PrimitiveExpr {
+  case class CastExpr(exp: Expr, typ: String) extends BaseExpr {
+    override def apply() = {
+      super.apply()
+    }
     def defaultSQL = exp.sql + "::" + typ
   }
 
@@ -707,7 +710,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     }
     override def apply(): Any = {
       SelectExpr(List(Table(ConstExpr(Null), null, null, null, true)),
-        null, ColsExpr(List(ColExpr(this, null)), false, false, false),
+        null, ColsExpr(List(ColExpr(this, null, Some(false))), false, false, false),
         false, null, null, null, null, Map(), None).apply()
     }
     override def close = {
@@ -1231,9 +1234,12 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case UnOp(op, oper) =>
           val o = buildInternal(oper, parseCtx)
           if (o == null) null else UnExpr(op, o)
-        case Cast(exp, typ) => buildInternal(exp, parseCtx) match {
-          case null => null
-          case e => CastExpr(e, typ)
+        case c @ Cast(exp, typ) => parseCtx match {
+          case ARR_CTX => buildWithNew(_.buildInternal(c, QUERY_CTX))
+          case ctx => buildInternal(exp, ctx) match {
+            case null => null
+            case e => CastExpr(e, typ)
+          }
         }
         case e @ BinOp(op, lop, rop) => parseCtx match {
           case ROOT_CTX if op != "=" /*do not create new query for assignment or equals operation*/=>
@@ -1255,11 +1261,14 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
             val r = rop.map(buildInternal(_, parseCtx)).filter(_ != null)
             if (r.isEmpty) null else InExpr(l, r, not)
           }
-        case Fun(n, pl: List[_], d, o, f) =>
-          val pars = pl map { buildInternal(_, FUN_CTX) }
-          val order = o.map(buildInternal(_, FUN_CTX))
-          val filter = f.map(buildInternal(_, FUN_CTX))
-          maybeCallMacro(FunExpr(n, pars, d, order, filter))
+        case fun @ Fun(n, pl: List[_], d, o, f) => parseCtx match  {
+          case ARR_CTX => buildWithNew(_.buildInternal(fun, FUN_CTX))
+          case _ =>
+            val pars = pl map { buildInternal(_, FUN_CTX) }
+            val order = o.map(buildInternal(_, FUN_CTX))
+            val filter = f.map(buildInternal(_, FUN_CTX))
+            maybeCallMacro(FunExpr(n, pars, d, order, filter))
+        }
         case FunAsTable(f, cds) =>
           FunAsTableExpr(buildInternal(f, parseCtx)
             , cds.map(_.map(c => TableColDefExpr(c.name, c.typ))))

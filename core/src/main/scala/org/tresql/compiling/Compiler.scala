@@ -785,6 +785,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
         if (f.typ != null && f.typ != Manifest.Nothing) type_from_const(f.typ)
         else if (f.procedure.returnTypeParIndex == -1) type_from_const(Manifest.Any)
         else type_from_exp(ctx, f.exp.parameters(f.procedure.returnTypeParIndex))
+      case Cast(_, typ) => Ctx(Nil, metadata.xsd_scala_type_map(typ))
     })
     lazy val type_resolver: TransformerWithState[List[Scope]] = transformerWithState { ctx =>
       def resolveWithQuery[T <: SQLDefBase](withQuery: WithQuery): (T, List[WithTableDef]) = {
@@ -833,7 +834,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
 
   def compile(exp: Exp) = {
     def normalized(e: Exp): Exp = e match {
-      case _: Const | _: UnOp | _: BinOp =>
+      case _: Const | _: UnOp | _: BinOp | _: Fun | _: Cast =>
         try {
           intermediateResults.get.clear
           query(new scala.util.parsing.input.CharSequenceReader(s"{${e.tresql}}")).get

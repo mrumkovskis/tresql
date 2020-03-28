@@ -12,7 +12,7 @@ trait TypeMapper {
     case "short" | "int" => ManifestFactory.classType(classOf[java.lang.Integer])
     case "float" | "double" | "decimal" => ManifestFactory.classType(classOf[BigDecimal])
     case "date" => ManifestFactory.classType(classOf[java.sql.Date])
-    case "time" | "dateTime" => ManifestFactory.classType(classOf[java.sql.Timestamp])
+    case "time" | "dateTime" | "timestamp" => ManifestFactory.classType(classOf[java.sql.Timestamp])
     case "string" => ManifestFactory.classType(classOf[String])
     case "boolean" => ManifestFactory.classType(classOf[java.lang.Boolean])
     case "base64Binary" => ManifestFactory.classType(classOf[Array[Byte]])
