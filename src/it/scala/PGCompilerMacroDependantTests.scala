@@ -870,153 +870,153 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
     assertResult(List("ATTORNEY"))(tresql"dept[10042]{dname}".map(_.dname).toList)
   }
   override def compilerMacro {
-      println("\n-------------- TEST compiler macro ----------------\n")
+    println("\n-------------- TEST compiler macro ----------------\n")
 
-      assertResult(("ACCOUNTING",
-      //List(("CLARK",List()), ("KING",List(3, 4)), ("Lara",List()), ("Nicky",List()))))(
-      List(("CLARK",List()), ("KING",List(3, 4)))))(
-          tresql"dept{dname, |emp {ename, |[empno]work {hours}#(1)}#(1)}#(1)"
-            .map(d => d.dname -> d._2
-              .map(e => e.ename -> e._2
-                .map(w => w.hours).toList).toList).toList.head)
+    assertResult(("ACCOUNTING",
+    //List(("CLARK",List()), ("KING",List(3, 4)), ("Lara",List()), ("Nicky",List()))))(
+    List(("CLARK",List()), ("KING",List(3, 4)))))(
+        tresql"dept{dname, |emp {ename, |[empno]work {hours}#(1)}#(1)}#(1)"
+          .map(d => d.dname -> d._2
+            .map(e => e.ename -> e._2
+              .map(w => w.hours).toList).toList).toList.head)
 
-      assertResult("A B")(tresql"{concat('A', ' ', 'B')}".head._1)
+    assertResult("A B")(tresql"{concat('A', ' ', 'B')}".head._1)
 
-      assertResult(15)(tresql"{inc_val_5(10)}".head._1)
+    assertResult(15)(tresql"{inc_val_5(10)}".head._1)
 
-      assertResult(List(1,1,1))(tresql"dummy + [10], dummy[dummy = 10] = [11], dummy - [dummy = 11]")
+    assertResult(List(1,1,1))(tresql"dummy + [10], dummy[dummy = 10] = [11], dummy - [dummy = 11]")
 
-      //braces test
-      //assertResult(List(0, 0, 2, 2))(tresql"((dummy)d2 ++ ((dummy)d1)d3)d4#(1)".map(_.dummy).toList)
-      assertResult(List(0, 0, 2, 2))(tresql"((dummy)d2 ++ ((dummy)d1)d3)d4#(1)".map(_.dummy).toList)
+    //braces test
+    //assertResult(List(0, 0, 2, 2))(tresql"((dummy)d2 ++ ((dummy)d1)d3)d4#(1)".map(_.dummy).toList)
+    assertResult(List(0, 0, 2, 2))(tresql"((dummy)d2 ++ ((dummy)d1)d3)d4#(1)".map(_.dummy).toList)
 
-      assertResult(Vector("AMY", "DEVELOPMENT", 2))(
-        tresql"work w[empno]emp/dept{ename, dname, hours}#(1, 2, 3)".toListOfVectors.head)
+    assertResult(Vector("AMY", "DEVELOPMENT", 2))(
+      tresql"work w[empno]emp/dept{ename, dname, hours}#(1, 2, 3)".toListOfVectors.head)
 
-      //assertResult(13)(tresql"work w[empno]emp/dept{count(*) cnt}".head.cnt)
-      assertResult(12)(tresql"work w[empno]emp/dept{count(*) cnt}".head.cnt)
+    //assertResult(13)(tresql"work w[empno]emp/dept{count(*) cnt}".head.cnt)
+    assertResult(12)(tresql"work w[empno]emp/dept{count(*) cnt}".head.cnt)
 
-      //assertResult(2)(tresql"(dummy d3 ++ dummy d2){count(# dummy) d1}".head._1)
+    //assertResult(2)(tresql"(dummy d3 ++ dummy d2){count(# dummy) d1}".head._1)
 
-      assertResult((("A B", 15)))(tresql"{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}".head match {
-        case x => (x._1.head.concat, x._2.head.inc)
-      })
+    assertResult((("A B", 15)))(tresql"{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}".head match {
+      case x => (x._1.head.concat, x._2.head.inc)
+    })
 
-      assertResult((("A B", 15)))(tresql"[{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}]".head match {
-        case x => (x._1.head.concat, x._2.head.inc)
-      })
+    assertResult((("A B", 15)))(tresql"[{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}]".head match {
+      case x => (x._1.head.concat, x._2.head.inc)
+    })
 
-      assertResult((java.sql.Date.valueOf("1980-12-17"), java.sql.Date.valueOf("1983-01-12"),
-        850.00, 5000.00))(
-          tresql"emp{min(hiredate) minh, max(hiredate) maxh, min(sal) mins, max(sal) maxs}".map { r =>
-            import r._
-            (minh, maxh, mins, maxs)
-          }.toList.head)
+    assertResult((java.sql.Date.valueOf("1980-12-17"), java.sql.Date.valueOf("1983-01-12"),
+      850.00, 5000.00))(
+        tresql"emp{min(hiredate) minh, max(hiredate) maxh, min(sal) mins, max(sal) maxs}".map { r =>
+          import r._
+          (minh, maxh, mins, maxs)
+        }.toList.head)
 
-      //assertResult((("ACCOUNTING", "CLARK, KING, Lara, Nicky")))(
-      assertResult((("ACCOUNTING", "CLARK, KING")))(
-        tresql"dept {dname, |emp{ename}#(1) emps}#(1)"
-          .map {d => d.dname -> d.emps.map(_.ename).mkString(", ")}.toList.head
-      )
+    //assertResult((("ACCOUNTING", "CLARK, KING, Lara, Nicky")))(
+    assertResult((("ACCOUNTING", "CLARK, KING")))(
+      tresql"dept {dname, |emp{ename}#(1) emps}#(1)"
+        .map {d => d.dname -> d.emps.map(_.ename).mkString(", ")}.toList.head
+    )
 
-      //resources with params
-      {
-        val dn = "acc"
-        val params = Map("ename" -> "cl%")
-        assertResult(List(Vector("ACCOUNTING", "CLARK")))(
-          tresql"emp/dept[dname ~~ $dn || '%' & ename ~~ :ename]{dname, ename}#(1, 2)"(
-            Env.withParams(params)).toListOfVectors)
-      }
+    //resources with params
+    {
+      val dn = "acc"
+      val params = Map("ename" -> "cl%")
+      assertResult(List(Vector("ACCOUNTING", "CLARK")))(
+        tresql"emp/dept[dname ~~ $dn || '%' & ename ~~ :ename]{dname, ename}#(1, 2)"(
+          Env.withParams(params)).toListOfVectors)
+    }
 
-      //column type checking
-      {
-        val prefix = "Dept: "
-        assertResult("ACCOUNTING")(tresql"dept{$prefix || dname}#(1)".head._1.substring(6))
-        assertResult("ACCOUNTING")(tresql"dept{dname || $prefix}#(1)".head._1.substring(0, 10))
-      }
+    //column type checking
+    {
+      val prefix = "Dept: "
+      assertResult("ACCOUNTING")(tresql"dept{$prefix || dname}#(1)".head._1.substring(6))
+      assertResult("ACCOUNTING")(tresql"dept{dname || $prefix}#(1)".head._1.substring(0, 10))
+    }
 
-      //function calls
-      assertResult(12)(tresql"inc_val_5(7)".head[Integer])
-      assertResult((10, "ACCOUNTING", "NEW YORK"))(
-        tresql"sql_concat(sql('select * from dept where deptno = 10'))".head[Int, String, String])
+    //function calls
+    assertResult(12)(tresql"inc_val_5(7)".head[Integer])
+    assertResult((10, "ACCOUNTING", "NEW YORK"))(
+      tresql"sql_concat(sql('select * from dept where deptno = 10'))".head[Int, String, String])
 
-      //recursive queries
-      //assertResult((7839, "KING", -1, null, 1))(
-      //  tresql"""kings_descendants(nr, name, mgrnr, mgrname, level) {
-      //      emp [ename ~~ 'kin%']{empno, ename, -1, null, 1} +
-      //      emp[emp.mgr = kings_descendants.nr]kings_descendants;emp/emp mgr{
-      //        emp.empno, emp.ename, emp.mgr, mgr.ename, level + 1}
-      //    } kings_descendants{ nr, name, mgrnr, mgrname, level}#(level, mgrnr, nr)""".map(h =>
-      //    (h.nr, h.name, h.mgrnr, h.mgrname, h.level)).toList.head)
-      //  assertResult((7566, "JONES", 7839, "KING", 2))(
-      //    tresql"""kings_descendants(nr, name, mgrnr, mgrname, level) {
-      //        emp [ename ~~ 'kin%']{empno, ename, -1, null, 1} +
-      //        emp[emp.mgr = kings_descendants.nr]kings_descendants;emp/emp mgr{
-      //          emp.empno, emp.ename, emp.mgr, mgr.ename, level + 1}
-      //     } kings_descendants{ nr, name, mgrnr, mgrname, level}#(level, mgrnr, nr)""".map(h =>
-      //     (h.nr, h.name, h.mgrnr, h.mgrname, h.level)).toList.tail.head)
-      assertResult((10, "ACCOUNTING"))(tresql"""dept[deptno in (emps(enr, mgr, dnr) {
-          emp[ename ~~ 'kin%']{empno, mgr, deptno} + emps[enr = emp.mgr]emp {empno, emp.mgr, deptno}
-        } emps{dnr})]{deptno, dname}#(1)""".map(h => (h.deptno, h.dname)).toList.head)
-      assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} + t[t.empno = e.mgr]emp e{e.empno}}
-        t{empno}#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
-        t[t.empno = e.mgr]emp e{e.empno}} t#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
-        t[t.empno = e.mgr]emp e{e.empno}} t {*}#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
-        t[t.empno = e.mgr]emp e{e.empno}} t {t.*}#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
-        t[t.empno = e.mgr]emp e{e.empno}} t a#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
-        t[t.empno = e.mgr]emp e{e.empno}} t a{*}#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
-        t[t.empno = e.mgr]emp e{e.empno}} t a{a.*}#(1)""".map(_.empno).toList.head)
-      assertResult((List(7),List(8),List(8)))(
-        tresql"""[+dummy {dummy} [7] {dummy},
-                =dummy[dummy = 7] {dummy = dummy + 1} {*},
-                dummy - [dummy = 8] {*}]"""
-          .map { a =>
-            (a._1.map(_.dummy).toList, a._2.map(_.dummy).toList, a._3.map(_.dummy).toList)
-          }.toList.head
-      )
-      assertResult(List((0, "kiki"), (2, "kiki")))(tresql"dummy {*, 'kiki' k} #(1)".map(r => r.dummy -> r.k).toList)
-      assertResult(List((10033, "Riga, LV")))(tresql"=dept_addr [addr_nr = a.nr] (address a {a.nr, a.addr}) a [a.addr ~ 'Riga%'] {addr = a.addr} {dept_addr.addr_nr, a.addr}".map(r => r.addr_nr -> r.addr).toList)
+    //recursive queries
+    //assertResult((7839, "KING", -1, null, 1))(
+    //  tresql"""kings_descendants(nr, name, mgrnr, mgrname, level) {
+    //      emp [ename ~~ 'kin%']{empno, ename, -1, null, 1} +
+    //      emp[emp.mgr = kings_descendants.nr]kings_descendants;emp/emp mgr{
+    //        emp.empno, emp.ename, emp.mgr, mgr.ename, level + 1}
+    //    } kings_descendants{ nr, name, mgrnr, mgrname, level}#(level, mgrnr, nr)""".map(h =>
+    //    (h.nr, h.name, h.mgrnr, h.mgrname, h.level)).toList.head)
+    //  assertResult((7566, "JONES", 7839, "KING", 2))(
+    //    tresql"""kings_descendants(nr, name, mgrnr, mgrname, level) {
+    //        emp [ename ~~ 'kin%']{empno, ename, -1, null, 1} +
+    //        emp[emp.mgr = kings_descendants.nr]kings_descendants;emp/emp mgr{
+    //          emp.empno, emp.ename, emp.mgr, mgr.ename, level + 1}
+    //     } kings_descendants{ nr, name, mgrnr, mgrname, level}#(level, mgrnr, nr)""".map(h =>
+    //     (h.nr, h.name, h.mgrnr, h.mgrname, h.level)).toList.tail.head)
+    assertResult((10, "ACCOUNTING"))(tresql"""dept[deptno in (emps(enr, mgr, dnr) {
+        emp[ename ~~ 'kin%']{empno, mgr, deptno} + emps[enr = emp.mgr]emp {empno, emp.mgr, deptno}
+      } emps{dnr})]{deptno, dname}#(1)""".map(h => (h.deptno, h.dname)).toList.head)
+    assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} + t[t.empno = e.mgr]emp e{e.empno}}
+      t{empno}#(1)""".map(_.empno).toList.head)
+    assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      t[t.empno = e.mgr]emp e{e.empno}} t#(1)""".map(_.empno).toList.head)
+    assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      t[t.empno = e.mgr]emp e{e.empno}} t {*}#(1)""".map(_.empno).toList.head)
+    assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      t[t.empno = e.mgr]emp e{e.empno}} t {t.*}#(1)""".map(_.empno).toList.head)
+    assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      t[t.empno = e.mgr]emp e{e.empno}} t a#(1)""".map(_.empno).toList.head)
+    assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      t[t.empno = e.mgr]emp e{e.empno}} t a{*}#(1)""".map(_.empno).toList.head)
+    assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      t[t.empno = e.mgr]emp e{e.empno}} t a{a.*}#(1)""".map(_.empno).toList.head)
+    assertResult((List(7),List(8),List(8)))(
+      tresql"""[+dummy {dummy} [7] {dummy},
+              =dummy[dummy = 7] {dummy = dummy + 1} {*},
+              dummy - [dummy = 8] {*}]"""
+        .map { a =>
+          (a._1.map(_.dummy).toList, a._2.map(_.dummy).toList, a._3.map(_.dummy).toList)
+        }.toList.head
+    )
+    assertResult(List((0, "kiki"), (2, "kiki")))(tresql"dummy {*, 'kiki' k} #(1)".map(r => r.dummy -> r.k).toList)
+    assertResult(List((10033, "Riga, LV")))(tresql"=dept_addr [addr_nr = a.nr] (address a {a.nr, a.addr}) a [a.addr ~ 'Riga%'] {addr = a.addr} {dept_addr.addr_nr, a.addr}".map(r => r.addr_nr -> r.addr).toList)
 
-      //expressions without select
-      assertResult(List(2.34))(tresql"round(2.33555, 2)".map(_._1).toList)
-      assertResult(List((List(2.34),List(3),14)))(tresql"round(2.33555, 2), round(3.1,0), 5 + 9".map(r => (r._1.map(_._1).toList, r._2.map(_._1).toList, r._3.map(_._1).toList.head)).toList)
-      assertResult(7.3)(tresql"1 + 4 - 0 + round(2.3, 5)".map(_._1).toList.head)
-      assertResult(List("2.34"))(tresql"round(2.33555, 2)::string".map(_._1).toList)
-      assertResult(List(2))(tresql"2.3::int".map(_._1).toList)
-      assertResult(List(2.3))(tresql"'2.3'::decimal".map(_._1).toList)
-      assertResult(List(java.sql.Date.valueOf("2000-01-01")))(tresql"'2000/01/01'::date".map(_._1).toList)
-      assertResult(List(java.sql.Timestamp.valueOf("2000-01-01 00:00:00.0")))(tresql"'2000/01/01'::timestamp".map(_._1).toList)
-      assertResult(List(2))(tresql"round(2.3, 1)::int".map(_._1).toList)
-      assertResult(List((2,
-        2.3, java.sql.Date.valueOf("2000-01-01"),
-        java.sql.Timestamp.valueOf("2000-01-01 00:00:00.0"))))(tresql"2.3::int, '2.3'::decimal, '2000/01/01'::date, '2000/01/01'::timestamp"
-        .map(r =>
-          (r._1.map(_._1).toList.head,
-            r._2.map(_._1).toList.head,
-            r._3.map(_._1).toList.head,
-            r._4.map(_._1).toList.head))
-        .toList)
-      assertResult(List((3,5)))(tresql"(1 + 2)::int, (2 + 3)::int"
-        .map(r => r._1.map(_._1).toList.head -> r._2.map(_._1).toList.head).toList)
-      assertResult(List(2.3)) {
-        val x = 1;
-        tresql"round(2.33555, $x)".map(_._1).toList
-      }
+    //expressions without select
+    assertResult(List(2.34))(tresql"round(2.33555, 2)".map(_._1).toList)
+    assertResult(List((List(2.34),List(3),14)))(tresql"round(2.33555, 2), round(3.1,0), 5 + 9".map(r => (r._1.map(_._1).toList, r._2.map(_._1).toList, r._3.map(_._1).toList.head)).toList)
+    assertResult(7.3)(tresql"1 + 4 - 0 + round(2.3, 5)".map(_._1).toList.head)
+    assertResult(List("2.34"))(tresql"round(2.33555, 2)::string".map(_._1).toList)
+    assertResult(List(2))(tresql"2.3::int".map(_._1).toList)
+    assertResult(List(2.3))(tresql"'2.3'::decimal".map(_._1).toList)
+    assertResult(List(java.sql.Date.valueOf("2000-01-01")))(tresql"'2000/01/01'::date".map(_._1).toList)
+    assertResult(List(java.sql.Timestamp.valueOf("2000-01-01 00:00:00.0")))(tresql"'2000/01/01'::timestamp".map(_._1).toList)
+    assertResult(List(2))(tresql"round(2.3, 1)::int".map(_._1).toList)
+    assertResult(List((2,
+      2.3, java.sql.Date.valueOf("2000-01-01"),
+      java.sql.Timestamp.valueOf("2000-01-01 00:00:00.0"))))(tresql"2.3::int, '2.3'::decimal, '2000/01/01'::date, '2000/01/01'::timestamp"
+      .map(r =>
+        (r._1.map(_._1).toList.head,
+          r._2.map(_._1).toList.head,
+          r._3.map(_._1).toList.head,
+          r._4.map(_._1).toList.head))
+      .toList)
+    assertResult(List((3,5)))(tresql"(1 + 2)::int, (2 + 3)::int"
+      .map(r => r._1.map(_._1).toList.head -> r._2.map(_._1).toList.head).toList)
+    assertResult(List(2.3)) {
+      val x = 1;
+      tresql"round(2.33555, $x)".map(_._1).toList
+    }
 
 
-      //type resolving when column contains select with from clause select
-      //assertResult(("KING", "ACCOUNTING"))(tresql"""emp e[ename ~~ 'kin%'] {
-      //  ename, ((dept d[e.deptno = d.deptno]{dname}) {dname}) dname}"""
-      //  .map(r => r.ename -> r.dname).toList.head)
+    //type resolving when column contains select with from clause select
+    assertResult(("KING", "ACCOUNTING"))(tresql"""emp e[ename ~~ 'kin%'] {
+      ename, ((dept d[e.deptno = d.deptno]{dname}) x {dname}) dname}"""
+        .map(r => r.ename -> r.dname).toList.head)
 
-      //repeating column names
-      //assertResult(List(3, 9))(tresql"dummy{dummy nr, dummy + 1 nr, dummy + 2 nr}"
-      //  .map(r => r.nr + r.nr1 + r.nr2).toList.sorted)
+    //repeating column names
+    assertResult(List(3, 9))(tresql"dummy{dummy nr, dummy + 1 nr, dummy + 2 nr}"
+      .map(r => r.nr + r.nr1 + r.nr2).toList.sorted)
   }
 }
