@@ -176,9 +176,6 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   }
 
   case class CastExpr(exp: Expr, typ: String) extends BaseExpr {
-    override def apply() = {
-      super.apply()
-    }
     def defaultSQL = exp.sql + "::" + typ
   }
 
@@ -194,7 +191,6 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   }
 
   case class InExpr(lop: Expr, rop: List[Expr], not: Boolean) extends BaseExpr {
-    override def apply = if (not) lop notIn rop else lop in rop
     def defaultSQL = lop.sql + (if (not) " not" else "") + rop.map(_.sql).mkString(" in(", ", ", ")")
     override def exprType = classOf[ConstExpr]
   }
@@ -1322,51 +1318,16 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
 
 }
 
-sealed abstract class Expr extends (() => Any) with Ordered[Expr] {
-
-  type Number = BigDecimal
-
-  def *(e: Expr) = this() match {
-    case x: Number => x * e().asInstanceOf[Number]
-  }
-  def /(e: Expr) = this() match {
-    case x: Number => x / e().asInstanceOf[Number]
-  }
-  def +(e: Expr) = this() match {
-    case x: Number => x + e().asInstanceOf[Number]
-    case x: String => x + e().asInstanceOf[String]
-  }
-  def -(e: Expr) = this() match {
-    case x: Number => x - e().asInstanceOf[Number]
-  }
-  def &(e: Expr) = this() match {
-    case x: Boolean => x & e().asInstanceOf[Boolean]
-  }
-  def |(e: Expr) = this() match {
-    case x: Boolean => x | e().asInstanceOf[Boolean]
-  }
-  def compare(that: Expr) = {
-    this() match {
-      case x: Number => x.compare(that().asInstanceOf[Number])
-      case x: String => x.compare(that().asInstanceOf[String])
-      case null => if (that() == null) 0 else -1
-      case x: Boolean => if (x == that()) 0 else -1
-      case x: Expr => if (super.equals(that)) 0 else -1
-    }
-  }
-
-  def in(inList: List[Expr]) = inList.contains(this)
-  def notIn(inList: List[Expr]) = !inList.contains(this)
-
+sealed abstract class Expr extends (() => Any) {
   def defaultSQL: String
   def builder: QueryBuilder
-  def sql = if (builder.env.dialect != null) builder.env.dialect(this) else defaultSQL
+  def sql: String = if (builder.env.dialect != null) builder.env.dialect(this) else defaultSQL
 
-  def apply(): Any = this
-  def apply(params: Seq[Any]): Any = apply(org.tresql.Query.normalizePars(params))
-  def apply(params: Map[String, Any]): Any = this
-
+  def apply: Any = ???
+  def apply(params: Map[String, Any]): Any = ???
   def close: Unit = ???
+
+  def apply(params: Seq[Any]): Any = apply(org.tresql.Query.normalizePars(params))
   def exprType: Class[_] = this.getClass
   //overrides function toString method since it is of no use
   override def toString = defaultSQL
