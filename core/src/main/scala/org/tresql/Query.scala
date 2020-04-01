@@ -322,7 +322,6 @@ trait Query extends QueryBuilder with TypedQuery {
       case obj => st.registerOutParameter(idx, OTHER)
     }
   }
-
 }
 
 /** Out parameter box for callable statement */
