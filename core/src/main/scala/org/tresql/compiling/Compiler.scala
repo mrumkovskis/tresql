@@ -414,6 +414,7 @@ trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
       case c: Col =>
         val alias = if (c.alias != null) c.alias else c.col match {
           case Obj(Ident(name), _, _, _, _) => name.last //use last part of qualified ident as name
+          case Cast(Obj(Ident(name), _, _, _, _), _) => name.last //use last part of qualified ident as name
           case _ => null
         }
         ColDef[Nothing](
