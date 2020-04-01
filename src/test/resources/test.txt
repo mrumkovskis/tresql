@@ -416,40 +416,11 @@ salgrade[?] {grade} + dummy, "A" + " " + "B", dept[dname ~~ ?]{deptno} + dummy, 
 //----Scala and DB PROCEDURE CALL
 inc_val_5(5) --> [[10]]
 inc_val_5(?) --> 10 --> [[15]]
-mkString(emp{ename}#(ename), " ", ",") --> [["ADAMS,ALLEN,BLAKE,CLARK,FORD,JAMES,JONES,KING,MARTIN,MILLER,SCOTT,SMITH,TURNER,WARD"]]
-dept {dname, mkString(|emp{ename}#(1), ",", ",")}#(1) --> [["ACCOUNTING", "CLARK,KING,MILLER"], ["OPERATIONS", ""], ["RESEARCH", "ADAMS,FORD,JONES,SCOTT,SMITH"], ["SALES", "ALLEN,BLAKE,JAMES,MARTIN,TURNER,WARD"]]
 
 //sequence test
 nextval("seq") --> [[10000]]
 
 EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [9999, "MĀRTIŅŠ ŽVŪKŠĶIS",  "CLERK", 7788, "1983-01-12", 1100, null, 20] --> [[1]]
-
-//external function test
-emp{ename, job, |concat(:1(1), ' ', :1(2))}#(1,2) --> [["ADAMS", "CLERK", "ADAMS CLERK"], ["ALLEN", "SALESMAN", "ALLEN SALESMAN"], ["BLAKE", "MANAGER", "BLAKE MANAGER"], ["CLARK", "MANAGER", "CLARK MANAGER"], ["FORD", "ANALYST", "FORD ANALYST"], ["JAMES", "CLERK", "JAMES CLERK"], ["JONES", "MANAGER", "JONES MANAGER"], ["KING", "PRESIDENT", "KING PRESIDENT"], ["MARTIN", "SALESMAN", "MARTIN SALESMAN"], ["MILLER", "CLERK", "MILLER CLERK"], ["MĀRTIŅŠ ŽVŪKŠĶIS", "CLERK", "MĀRTIŅŠ ŽVŪKŠĶIS CLERK"], ["SCOTT", "ANALYST", "SCOTT ANALYST"], ["SMITH", "CLERK", "SMITH CLERK"], ["TURNER", "SALESMAN", "TURNER SALESMAN"], ["WARD", "SALESMAN", "WARD SALESMAN"]]
-emp[deptno = 10]{ename, |echo(:1(1))}#(1) --> [["CLARK", "CLARK"], ["KING", "KING"], ["MILLER", "MILLER"]]
-salgrade {losal, hisal, |plus(:1(1), :1(2))}#(1,2) --> [[700, 1200, 1900], [1201, 1400, 2601], [1401, 2000, 3401], [2001, 3000, 5001], [10000, 11000, 21000]]
-salgrade {grade, plus(losal, hisal)}#(1) --> [[1, 1900], [2, 2601], [3, 3401], [4, 5001], [6, 21000]]
-salgrade {plus(losal, hisal), grade}#(1) --> [[1900, 1], [2601, 2], [3401, 3], [5001, 4], [21000, 6]]
-salgrade {grade, plus(losal, hisal), average(losal, hisal)}#(1) --> [[1, 1900, 950], [2, 2601, 1300.5], [3, 3401, 1700.5], [4, 5001, 2500.5], [6, 21000, 10500]]
-salgrade {grade, losal, hisal, plus(losal, hisal), average(losal, hisal)}#(1) --> [[1, 700, 1200, 1900, 950], [2, 1201, 1400, 2601, 1300.5], [3, 1401, 2000, 3401, 1700.5], [4, 2001, 3000, 5001, 2500.5], [6, 10000, 11000, 21000, 10500]]
-salgrade {plus(losal, hisal), grade, average(losal, hisal), losal, hisal}#(2) --> [[1900, 1, 950, 700, 1200], [2601, 2, 1300.5, 1201, 1400], [3401, 3, 1700.5, 1401, 2000], [5001, 4, 2500.5, 2001, 3000], [21000, 6, 10500, 10000, 11000]]
-salgrade {plus(losal * 2, hisal / 2), grade, average(losal + 1000, hisal - 1000), losal, hisal}#(2) --> [[2000, 1, 950, 700, 1200], [3102, 2, 1300.5, 1201, 1400], [3802, 3, 1700.5, 1401, 2000], [5502, 4, 2500.5, 2001, 3000], [25500, 6, 10500, 10000, 11000]]
-dept[10] {nopars(), dname} --> [["ok", "ACCOUNTING"]]
-dept[10] {dname, nopars()} --> [["ACCOUNTING", "ok"]]
-dummy{concat('a', 'b', 'c')} --> [["abc"]]
-dummy{concat(1, 2, 3)} --> [["123"]]
-dummy {dummy, dummy t1, dummy t3, concat(dummy, ' ', dummy)} --> [[0, 0, 0, "0 0"]]
-salgrade s1 {exists(salgrade s2[s1.losal < s2.losal]) e, plus(losal, hisal) sum}#(losal, hisal) --> [[true, 1900], [true, 2601], [true, 3401], [true, 5001], [false, 21000]]
-
-//external function + column query +  child query
-dept d [?]{dept_desc(dname, (emp e[d.deptno = e.deptno] {count(*)})) desc, |emp{ename}#(1)} --> 10 --> [["ACCOUNTING (3)", [["CLARK"], ["KING"], ["MILLER"]]]]
-dept d [?]{|emp{ename}#(1), dept_desc(dname, (emp e[d.deptno = e.deptno] {count(*)})) desc} --> 10 --> [[[["CLARK"], ["KING"], ["MILLER"]], "ACCOUNTING (3)"]]
-dept d [?]{|emp{ename}#(1), dept_desc(dname, (emp e[d.deptno = e.deptno] {count(*)})) desc, deptno} --> 10 --> [[[["CLARK"], ["KING"], ["MILLER"]], "ACCOUNTING (3)", 10]]
-
-//external function with resources
-dummy{dummy, dept_count() dc} --> [[0, 4]]
-dept{dname, dept_desc_with_empc(dname)}#(1) --> [["ACCOUNTING", "ACCOUNTING emp count - 3"], ["OPERATIONS", "OPERATIONS emp count - 0"], ["RESEARCH", "RESEARCH emp count - 6"], ["SALES", "SALES emp count - 6"]]
-dummy{vararg_with_resources(dummy, dummy, dummy)} --> [["0, 0, 0 - 1"]]
 
 //insert with select instead of values
 +dummy{dummy} dummy{dummy + 1} --> [[1]]

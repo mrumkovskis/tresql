@@ -11,19 +11,6 @@ import sys._
 
 /** To run from console {{{org.scalatest.run(new test.QueryTest)}}} */
 class QueryTest extends FunSuite with BeforeAndAfterAll {
-  class TestFunctions extends Functions {
-    def echo(x: String) = x
-    def plus(a: java.lang.Long, b: java.lang.Long) = a + b
-    def average(a: BigDecimal, b: BigDecimal) = (a + b) / 2
-    def dept_desc(d: String, ec: String) = d + " (" + ec + ")"
-    def nopars() = "ok"
-    import CoreTypes._
-    def dept_count(implicit res: Resources) = Query("dept{count(*)}")(res).unique[Int]
-    def dept_desc_with_empc(d: String)(implicit res: Resources) =
-      d + " emp count - " + Query("emp[deptno = (dept[dname = ?]{deptno})]{count(*)}", d)(res).unique[String]
-    def vararg_with_resources(s: String*)(implicit res: Resources) =
-      s.mkString("", ", ", " - ") + Query("dummy{count(dummy)}")(res).unique[String]
-  }
   object Macros extends org.tresql.Macros {
     import macro_._
     /**
@@ -83,7 +70,6 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     Env.conn = conn
     Env.dialect = hsqlDialect
     Env.idExpr = s => "nextval('seq')"
-    Env.functions = new TestFunctions
     Env.macros = Macros
     Env.cache = new SimpleCache(-1)
     Env.logger = (msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg)

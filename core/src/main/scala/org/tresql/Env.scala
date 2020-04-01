@@ -164,10 +164,6 @@ object Env extends Resources {
   private var _metadata: Option[Metadata] = Some(org.tresql.metadata.JDBCMetadata())
   private var _dialect: Option[CoreTypes.Dialect] = None
   private var _idExpr: Option[String => String] = None
-  //available functions
-  private var _functions: Option[Any] = None
-  private var _functionMethods: Option[Map[String, java.lang.reflect.Method]] = None
-  functions = new Functions //invoke setter to set function names
   //macros
   private var _macros: Option[Any] = None
   private var _macrosMethods: Option[Map[String, java.lang.reflect.Method]] = None
@@ -188,9 +184,6 @@ object Env extends Resources {
   override def metadata = _metadata.get
   override def dialect = _dialect.getOrElse(super.dialect)
   override def idExpr = _idExpr.getOrElse(super.idExpr)
-  def functions = _functions
-  def isDefined(functionName: String) = _functionMethods.exists(_.contains(functionName))
-  def function(name: String) = _functionMethods.map(_(name)).get
   def macros = _macros
   def isMacroDefined(macroName: String) = _macrosMethods.exists(_.contains(macroName))
   def macroMethod(name: String) = _macrosMethods.map(_(name)).get
@@ -204,10 +197,6 @@ object Env extends Resources {
   def dialect_=(dialect: CoreTypes.Dialect) = this._dialect =
     Option(dialect).map(_.orElse {case e=> e.defaultSQL})
   def idExpr_=(idExpr: String => String) = this._idExpr = Option(idExpr)
-  def functions_=(funcs: Any) = {
-    this._functions = Option(funcs)
-    this._functionMethods = functions.flatMap(f => Option(f.getClass.getMethods.map(m => m.getName -> m).toMap))
-  }
   def macros_=(macr: Any) = {
     this._macros = Option(macr)
     this._macrosMethods = macros.flatMap(f => Option(f.getClass.getMethods.map(m => m.getName -> m).toMap))

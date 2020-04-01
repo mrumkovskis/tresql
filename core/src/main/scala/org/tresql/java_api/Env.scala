@@ -29,8 +29,6 @@ object Env {
   def setConnection(c: Connection) { env.conn = c }
   def getDialect: Dialect = env.dialect
   def setDialect(d: Dialect) { env.dialect = d }
-  def getFunctions: Object = env.functions.map(_.asInstanceOf[AnyRef]).orNull
-  def setFunctions(funcs: Object): Unit = { env.functions = funcs }
   def getIdExprFunc: IdExprFunc = new IdExprFunc {
     override def getIdExpr(table: String) = env.idExpr(table)
   }
@@ -57,7 +55,6 @@ object Env {
     cache: Option[Cache],
     conn: Connection,
     dialect: Dialect,
-    functions: Object,
     idExpr: String => String,
     metadata: Metadata,
     logger: (=> String, => Map[String, Any], LogTopic) => Unit
@@ -66,7 +63,6 @@ object Env {
     cache = env.cache,
     conn = env.conn,
     dialect = env.dialect,
-    functions = env.functions,
     idExpr = env.idExpr,
     metadata = env.metadata,
     logger = env.logger
@@ -76,7 +72,6 @@ object Env {
     env.cache = cache.orNull
     env.conn = conn
     env.dialect = dialect
-    env.functions = functions
     env.idExpr = idExpr
     env.metadata = metadata
     env.logger = logger

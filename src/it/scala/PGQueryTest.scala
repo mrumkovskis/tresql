@@ -21,19 +21,6 @@ import sys._
   *    and wait time after docker started until jdbc connection attempt is made -
   *   {{{it:testOnly * -- -oD -Ddocker=postgres -Dremove=false -Dport=54321 -Dwait_after_startup_millis=4000}}} */
 class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
-  class TestFunctions extends Functions {
-    def echo(x: String) = x
-    def plus(a: java.lang.Long, b: java.lang.Long) = a + b
-    def average(a: BigDecimal, b: BigDecimal) = (a + b) / 2
-    def dept_desc(d: String, ec: String) = d + " (" + ec + ")"
-    def nopars() = "ok"
-    import CoreTypes._
-    def dept_count(implicit res: Resources) = Query("dept{count(*)}")(res).unique[Int]
-    def dept_desc_with_empc(d: String)(implicit res: Resources) =
-      d + " emp count - " + Query("emp[deptno = (dept[dname = ?]{deptno})]{count(*)}", d)(res).unique[String]
-    def vararg_with_resources(s: String*)(implicit res: Resources) =
-      s.mkString("", ", ", " - ") + Query("dummy{count(dummy)}")(res).unique[String]
-  }
   object Macros extends org.tresql.Macros {
     import macro_._
     /**
@@ -122,7 +109,6 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     }
     Env.dialect = dialects.PostgresqlDialect orElse dialects.VariableNameDialect
     Env.idExpr = s => "nextval('seq')"
-    Env.functions = new TestFunctions
     Env.macros = Macros
     Env.cache = new SimpleCache(-1)
     Env.logger = (msg, _, _) => println(msg)

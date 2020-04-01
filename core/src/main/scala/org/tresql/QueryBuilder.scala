@@ -23,7 +23,6 @@ object QueryBuildCtx {
   object FUN_CTX extends Ctx
   object WITH_CTX extends Ctx
   object WITH_TABLE_CTX extends Ctx
-  object EXTERNAL_FUN_CTX extends Ctx
 }
 
 trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { this: org.tresql.Query =>
@@ -276,27 +275,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     aggregateWhere: Option[Expr] = None
   ) extends BaseExpr {
     override def apply() = {
-      val p = params map (_())
-      val ts = p map {
-        case null => classOf[Any]
-        case x => x.getClass
-      }
-      if (Env.isDefined(name)) {
-        try {
-          Env log ts.mkString("Trying to call locally defined function: " + name + "(", ", ", ")")
-          Env.functions.map(f => f.getClass.getMethod(name, ts: _*).invoke(
-            f, p.asInstanceOf[List[Object]]: _*)).get
-        } catch {
-          case ex: NoSuchMethodException => {
-            Env.functions.flatMap(f => f.getClass.getMethods.find(m =>
-              m.getName == name && (m.getParameterTypes match {
-                case Array(par) => par.isAssignableFrom(classOf[Seq[_]])
-                case _ => false
-              })).map(_.invoke(f, List(p).asInstanceOf[List[Object]]: _*)).orElse(Some(
-              call("{call " + sql + "}")))).get
-          }
-        }
-      } else call("{call " + sql + "}")
+      call("{call " + sql + "}")
     }
     def defaultSQL = {
       val order = aggregateOrder.map(_.sql).map(" order by " + _).mkString
@@ -316,25 +295,6 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
 
   case class TableColDefExpr(name: String, typ: Option[String]) extends PrimitiveExpr {
     override def defaultSQL: String = name
-  }
-
-  case class ExternalFunExpr(name: String, params: List[Expr],
-    method: java.lang.reflect.Method, hasResourcesParam: Boolean) extends BaseExpr {
-    override def apply() = {
-      val p = params map (_())
-      val parTypes = method.getParameterTypes
-      val ps = parTypes.size - (if (hasResourcesParam) 1 else 0)
-      val varargs = ps == 1 && parTypes(0).isAssignableFrom(classOf[Seq[_]])
-      if (ps != params.size && !varargs) error("Wrong parameter count for method "
-        + method + " " + ps + " != " + params.size)
-      val invokePars =
-        if(hasResourcesParam) if(varargs) List(p, env) else p :+ env
-        else if (varargs) List(p) else p
-      Env.functions.map(method.invoke(_, invokePars.asInstanceOf[List[Object]]: _*))
-        .getOrElse("Functions not defined in Env!")
-    }
-    def defaultSQL = ???
-    override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
   }
 
   case class RecursiveExpr(exp: QueryParser.Query) extends BaseExpr {
@@ -909,63 +869,14 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case c: ColExpr => c
         case x => sys.error(s"ColExpr expected instead found: $x")
       })
-      var aliases = colExprs flatMap {
-        case ColExpr(_, a, _, _) if a != null => List(a)
-        case ColExpr(IdentExpr(i), null, _, _) => List(i.last)
-        case _ => Nil
-      } toSet
-      var uid = 1
-      @scala.annotation.tailrec def uniqueAlias(id: Int): String = {
-        val a = "t" + id
-        if (!(aliases contains a)) {
-          aliases += a
-          uid = id + 1
-          a
-        } else uniqueAlias(id + 1)
-      }
-      val colWithHiddenExprs =
-        (if (colExprs.exists {
-          case ColExpr(FunExpr(n, _, false, _, _), _, _, _) => Env.isDefined(n)
-          case _ => false
-        }) (colExprs flatMap { //external function found
-          case ce @ ColExpr(FunExpr(n, pars, false, _, _), a, _, _) if Env.isDefined(n) && !ce.separateQuery =>
-            //checks if last parameter is resources
-            def hasResourcesParam(pt: Array[Class[_]]) = pt
-              .lastOption
-              .exists(_.isAssignableFrom(classOf[org.tresql.Resources]))
-            val m = Env.functions.flatMap(_.getClass.getMethods.find(m => m.getName == n && {
-              val pt = m.getParameterTypes
-              //parameter count must match or must be of variable count
-              val ps = pt.size - (if (hasResourcesParam(pt)) 1 else 0)
-              ps == pars.size || (ps == 1 && pt(0).isAssignableFrom(classOf[Seq[_]]))
-            })).getOrElse(
-              error("External function " + n + " with " + pars.size + " parameters not found"))
-            val parameterTypes = (m.getParameterTypes match {
-              case Array(l) if l.isAssignableFrom(classOf[Seq[_]]) =>
-                m.getGenericParameterTypes()(0).asInstanceOf[java.lang.reflect.ParameterizedType]
-                  .getActualTypeArguments()(0) match {
-                  case c: Class[_] => Array(c) //vararg parameter type
-                }
-              case l => l
-            }) toList
-            val hiddenColPars = parameterTypes.padTo(pars.size,
-              parameterTypes.headOption.orNull).zip(pars).map(tp => HiddenColRefExpr(tp._2, tp._1))
-            hasHidden = hiddenColPars.nonEmpty
-            ColExpr(
-              ExternalFunExpr(n, hiddenColPars, m, hasResourcesParam(m.getParameterTypes)), a,
-              Some(true)
-            ) :: hiddenColPars.map(ColExpr(_, uniqueAlias(uid), Some(ce.separateQuery), hidden = true))
-          case e => List(e)
-        }).groupBy(_.hidden) match { //put hidden columns at the end
-          case m: Map[Boolean @unchecked, ColExpr @unchecked] => m(false) ++ m.getOrElse(true, Nil)
-        }
-        else colExprs) ++
-          //for top level queries add hidden columns used in filters of descendant queries
-          (if (ctxStack.headOption.orNull == QUERY_CTX) {
-            hasHidden |= joinsWithChildrenColExprs.nonEmpty
-            joinsWithChildrenColExprs
-          } else Nil)
-      ColsExpr(colWithHiddenExprs, hasAll, hasIdentAll, hasHidden)
+      val colsWithLinksToChildren =
+        colExprs ++
+        //for top level queries add hidden columns used in filters of descendant queries
+        (if (ctxStack.headOption.orNull == QUERY_CTX) {
+          hasHidden |= joinsWithChildrenColExprs.nonEmpty
+          joinsWithChildrenColExprs
+        } else Nil)
+      ColsExpr(colsWithLinksToChildren, hasAll, hasIdentAll, hasHidden)
     }
 
   private[tresql] def buildInternal(parsedExpr: Exp, parseCtx: Ctx = ROOT_CTX): Expr = {

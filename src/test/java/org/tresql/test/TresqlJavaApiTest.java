@@ -9,16 +9,6 @@ import org.tresql.java_api.*;
 
 public class TresqlJavaApiTest implements Runnable {
 
-    public static class TresqlJavaApiTestFunctions {
-        public String echo(String s) {
-            return s;
-        }
-
-        public Long plus(Long a, Long b) {
-            return a + b;
-        }
-    }
-
     public void run() {
         println("");
         println("---- Testing Java API ----");
@@ -34,7 +24,6 @@ public class TresqlJavaApiTest implements Runnable {
         Connection c = Env.getConnection();
         Env.setConnection(c);
         Env.setDialect(Dialects.HSQL());
-        Env.setFunctions(new TresqlJavaApiTestFunctions());
         println("id expr: " + Env.getIdExprFunc().getIdExpr("my_table"));
         Env.setIdExprFunc(new IdExprFunc() {
             @Override
@@ -103,10 +92,6 @@ public class TresqlJavaApiTest implements Runnable {
         println("column count: " + res.columnCount() + " ("
                 + res.columns().size() + ", actually)");
 
-        println("");
-        for (Row r : Query.select("dummy {plus(1, 2)}")) {
-            println("" + r.l(0));
-        }
         println("--------------------------");
         println("");
 
