@@ -32,6 +32,9 @@ trait BasicDBFunctionSignatures {
   def group_concat(what: Any): String
   //postgres group_concat replacement is string_agg
   def string_agg(expr: Any*): Any
+  def current_date(): java.sql.Date
+  def current_time(): java.sql.Timestamp
+  def now(): java.sql.Timestamp
 }
 
 trait BasicDialectFunctionSignatures {

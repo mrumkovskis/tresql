@@ -76,14 +76,17 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   /*****************************************************************************/
 
   case class ConstExpr(value: Any) extends BaseExpr {
-    override def apply() = value
+    override def apply() = value match {
+      case Null | NullUpdate => null
+      case _ => value
+    }
     def defaultSQL = value match {
       case v: Int => v.toString
       case v: Number => v.toString
       case v: String => "'" + v.replace("'", "''") + "'"
       case v: Boolean => v.toString
-      case _: Null => "null"
       case null => "null"
+      case e: Exp => e.tresql
       case x => String.valueOf(x)
     }
   }
@@ -351,7 +354,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
 
   case class ArrExpr(elements: List[Expr]) extends BaseExpr {
     override def apply() = {
-      val result = elements map (_())
+      val result = elements map {
+        case e: ConstExpr => executeAsSelect(e)
+        case e: VarExpr => executeAsSelect(e)
+        case e => e()
+      }
       env.rowConverter(queryDepth, childIdx).map { conv =>
         new CompiledArrayResult(result, conv)
       }.getOrElse(new DynamicArrayResult(result))
@@ -704,11 +711,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       env update params
       apply()
     }
-    override def apply(): Any = {
-      SelectExpr(List(Table(ConstExpr(Null), null, null, null, true)),
-        null, ColsExpr(List(ColExpr(this, null, Some(false))), false, false, false),
-        false, null, null, null, null, Map(), None).apply()
-    }
+    override def apply(): Any = executeAsSelect(this)
     override def close = {
       env.closeStatement
       childUpdates foreach { t => t._1.close }
@@ -723,6 +726,12 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     _childUpdatesBuildTime += {
       (child, if (name == null) s"_${_childUpdatesBuildTime.size + 1}" else name)
     }
+  }
+
+  private def executeAsSelect(expr: Expr) = {
+    SelectExpr(List(Table(ConstExpr(Null), null, null, null, true)),
+      null, ColsExpr(List(ColExpr(expr, null, Some(false))), false, false, false),
+      false, null, null, null, null, Map(), None)()
   }
 
   private def executeChildren: Map[String, Any] = {
@@ -1251,12 +1260,15 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
             else null
         }
         case t: TerOp => buildInternal(t.content, parseCtx)
-        case In(lop, rop, not) =>
-          val l = buildInternal(lop, parseCtx)
-          if (l == null) null else {
-            val r = rop.map(buildInternal(_, parseCtx)).filter(_ != null)
-            if (r.isEmpty) null else InExpr(l, r, not)
-          }
+        case in @ In(lop, rop, not) => parseCtx match {
+          case ARR_CTX => buildWithNew(_.buildInternal(in, QUERY_CTX))
+          case _ =>
+            val l = buildInternal(lop, parseCtx)
+            if (l == null) null else {
+              val r = rop.map(buildInternal(_, parseCtx)).filter(_ != null)
+              if (r.isEmpty) null else InExpr(l, r, not)
+            }
+        }
         case fun @ Fun(n, pl: List[_], d, o, f) => parseCtx match  {
           case ARR_CTX => buildWithNew(_.buildInternal(fun, FUN_CTX))
           case _ =>

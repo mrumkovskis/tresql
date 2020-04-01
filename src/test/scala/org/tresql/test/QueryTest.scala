@@ -254,6 +254,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
   }
 
   test("dialects") {
+    println("\n------------------ Test dialects -----------------\n")
     Env.dialect = dialects.PostgresqlDialect
     assertResult(Query.build("a::'b'").sql)("select * from a::b")
     assertResult(Query.build("a {1::int + 2::'double precision'}").sql)("select 1::int + 2::double precision from a")

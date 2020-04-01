@@ -200,8 +200,9 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
         .head.emps.map(_.ename).mkString(", "))
     assertResult((List(Vector(0), Vector(10)),List(Vector(0)))){
       val (a, b) = ("acc%", -1)
-      val r = tresql"/(dept[dname ~~ $a]{deptno} + dummy) a#(1), salgrade[$b] {grade} + dummy".head
-      (r._1.toListOfVectors, r._2.toListOfVectors)
+      tresql"/(dept[dname ~~ $a]{deptno} + dummy) a#(1), salgrade[$b] {grade} + dummy" match {
+        case (r1, r2) => r1.toListOfVectors -> r2.toListOfVectors
+      }
     }
 
     var name = "S%"
@@ -884,7 +885,7 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
 
     assertResult(15)(tresql"{inc_val_5(10)}".head._1)
 
-    assertResult(List(1,1,1))(tresql"dummy + [10], dummy[dummy = 10] = [11], dummy - [dummy = 11]")
+    assertResult((1,1,1))(tresql"dummy + [10], dummy[dummy = 10] = [11], dummy - [dummy = 11]")
 
     //braces test
     //assertResult(List(0, 0, 2, 2))(tresql"((dummy)d2 ++ ((dummy)d1)d3)d4#(1)".map(_.dummy).toList)
@@ -898,12 +899,12 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
 
     //assertResult(2)(tresql"(dummy d3 ++ dummy d2){count(# dummy) d1}".head._1)
 
-    assertResult((("A B", 15)))(tresql"{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}".head match {
-      case x => (x._1.head.concat, x._2.head.inc)
+    assertResult((("A B", 15)))(tresql"{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}" match {
+      case (x, y) => (x.head.concat, y.head.inc)
     })
 
-    assertResult((("A B", 15)))(tresql"[{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}]".head match {
-      case x => (x._1.head.concat, x._2.head.inc)
+    assertResult((("A B", 15)))(tresql"[{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}]" match {
+      case (x, y) => (x.head.concat, y.head.inc)
     })
 
     assertResult((java.sql.Date.valueOf("1980-12-17"), java.sql.Date.valueOf("1983-01-12"),
@@ -936,7 +937,7 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
     }
 
     //function calls
-    assertResult(12)(tresql"inc_val_5(7)".head[Integer])
+    assertResult(12)(tresql"inc_val_5(7)")
     assertResult((10, "ACCOUNTING", "NEW YORK"))(
       tresql"sql_concat(sql('select * from dept where deptno = 10'))".head[Int, String, String])
 
@@ -975,40 +976,31 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
     assertResult((List(7),List(8),List(8)))(
       tresql"""[+dummy {dummy} [7] {dummy},
               =dummy[dummy = 7] {dummy = dummy + 1} {*},
-              dummy - [dummy = 8] {*}]"""
-        .map { a =>
-          (a._1.map(_.dummy).toList, a._2.map(_.dummy).toList, a._3.map(_.dummy).toList)
-        }.toList.head
+              dummy - [dummy = 8] {*}]""" match { case (a, b, c) =>
+          (a.map(_.dummy).toList, b.map(_.dummy).toList, c.map(_.dummy).toList)
+        }
     )
     assertResult(List((0, "kiki"), (2, "kiki")))(tresql"dummy {*, 'kiki' k} #(1)".map(r => r.dummy -> r.k).toList)
     assertResult(List((10033, "Riga, LV")))(tresql"=dept_addr [addr_nr = a.nr] (address a {a.nr, a.addr}) a [a.addr ~ 'Riga%'] {addr = a.addr} {dept_addr.addr_nr, a.addr}".map(r => r.addr_nr -> r.addr).toList)
 
     //expressions without select
-    assertResult(1)(tresql"1".apply("value"))
-    assertResult(List((1,2,3)))(tresql"1, 2, 3".map(r => (r._1, r._2, r._3)).toList)
-    assertResult(List(2.34))(tresql"round(2.33555, 2)".map(_._1).toList)
-    assertResult(List((List(2.34),List(3),14)))(tresql"round(2.33555, 2), round(3.1,0), 5 + 9".map(r => (r._1.map(_._1).toList, r._2.map(_._1).toList, r._3.map(_._1).toList.head)).toList)
-    assertResult(7.3)(tresql"1 + 4 - 0 + round(2.3, 5)".map(_._1).toList.head)
-    assertResult(List("2.34"))(tresql"round(2.33555, 2)::string".map(_._1).toList)
-    assertResult(List(2))(tresql"2.3::int".map(_._1).toList)
-    assertResult(List(2.3))(tresql"'2.3'::decimal".map(_._1).toList)
-    assertResult(List(java.sql.Date.valueOf("2000-01-01")))(tresql"'2000/01/01'::date".map(_._1).toList)
-    assertResult(List(java.sql.Timestamp.valueOf("2000-01-01 00:00:00.0")))(tresql"'2000/01/01'::timestamp".map(_._1).toList)
-    assertResult(List(2))(tresql"round(2.3, 1)::int".map(_._1).toList)
-    assertResult(List((2,
-      2.3, java.sql.Date.valueOf("2000-01-01"),
-      java.sql.Timestamp.valueOf("2000-01-01 00:00:00.0"))))(tresql"2.3::int, '2.3'::decimal, '2000/01/01'::date, '2000/01/01'::timestamp"
-      .map(r =>
-        (r._1.map(_._1).toList.head,
-          r._2.map(_._1).toList.head,
-          r._3.map(_._1).toList.head,
-          r._4.map(_._1).toList.head))
-      .toList)
-    assertResult(List((3,5)))(tresql"(1 + 2)::int, (2 + 3)::int"
-      .map(r => r._1.map(_._1).toList.head -> r._2.map(_._1).toList.head).toList)
-    assertResult(List(2.3)) {
+    assertResult(1)(tresql"1")
+    assertResult((1,2,3))(tresql"1, 2, 3")
+    assertResult(2.34)(tresql"round(2.33555, 2)")
+    assertResult((2.34, 3 ,14))(tresql"round(2.33555, 2), round(3.1,0), 5 + 9")
+    assertResult(7.3)(tresql"1 + 4 - 0 + round(2.3, 5)")
+    assertResult("2.34")(tresql"round(2.33555, 2)::string")
+    assertResult(2)(tresql"2.3::int")
+    assertResult(2.3)(tresql"'2.3'::decimal")
+    assertResult(java.sql.Date.valueOf("2000-01-01"))(tresql"'2000/01/01'::date")
+    assertResult(java.sql.Timestamp.valueOf("2000-01-01 00:00:00.0"))(tresql"'2000/01/01'::timestamp")
+    assertResult(2)(tresql"round(2.3, 1)::int")
+    assertResult((2, 2.3, java.sql.Date.valueOf("2000-01-01"), java.sql.Timestamp.valueOf("2000-01-01 00:00:00.0")))(
+      tresql"2.3::int, '2.3'::decimal, '2000/01/01'::date, '2000/01/01'::timestamp")
+    assertResult((3,5))(tresql"(1 + 2)::int, (2 + 3)::int")
+    assertResult(2.3) {
       val x = 1;
-      tresql"round(2.33555, $x)".map(_._1).toList
+      tresql"round(2.33555, $x)"
     }
 
 

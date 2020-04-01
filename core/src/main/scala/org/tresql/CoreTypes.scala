@@ -3,7 +3,7 @@ package org.tresql
 abstract class CoreTypes {
   type Dialect = PartialFunction[Expr, String]
 
-  type RowConverter[T <: RowLike] = RowLike => T //is used in macro for selects to generate typed row objects
+  type RowConverter[T] = RowLike => T //is used in macro for selects to generate typed row objects
 
   //converters
   type Converter[T] = (RowLike, Manifest[T]) => T

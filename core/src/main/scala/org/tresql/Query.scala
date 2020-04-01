@@ -11,7 +11,8 @@ trait Query extends QueryBuilder with TypedQuery {
 
   def compiledResult[T <: RowLike](expr: String, params: Any*)(
     implicit resources: Resources = Env): CompiledResult[T] = {
-    exec(expr, normalizePars(params: _*), resources).asInstanceOf[CompiledResult[T]]
+    val r = exec(expr, normalizePars(params: _*), resources)//.asInstanceOf[CompiledResult[T]]
+    r.asInstanceOf[CompiledResult[T]]
   }
 
   private[tresql] def converters: Map[(Int, Int), RowConverter[_ <: RowLike]] = null
@@ -20,7 +21,7 @@ trait Query extends QueryBuilder with TypedQuery {
     expr: String,
     params: Map[String, Any],
     resources: Resources
-  ): Result[_] = {
+  ): Result[_ <: RowLike] = {
     val builtExpr = build(expr, params, false)(resources)
     builtExpr() match {
       case r: CompiledResult[_] => r

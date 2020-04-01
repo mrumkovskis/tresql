@@ -199,7 +199,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         .head.emps.map(_.ename).mkString(", "))
     assertResult((List(Vector(0), Vector(10)),List(Vector(0)))){
       val (a, b) = ("acc%", -1)
-      val r = tresql"/(dept[dname ~~ $a]{deptno} + dummy) a#(1), salgrade[$b] {grade} + dummy".head
+      val r = tresql"/(dept[dname ~~ $a]{deptno} + dummy) a#(1), salgrade[$b] {grade} + dummy"
       (r._1.toListOfVectors, r._2.toListOfVectors)
     }
 
@@ -990,7 +990,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
 
       assertResult(15)(tresql"{inc_val_5(10)}".head._1)
 
-      assertResult(List(1,1,1))(tresql"dummy + [10], dummy[dummy = 10] = [11], dummy - [dummy = 11]")
+      assertResult((1,1,1))(tresql"dummy + [10], dummy[dummy = 10] = [11], dummy - [dummy = 11]")
 
       //braces test
       assertResult(List(0, 0, 2, 2))(tresql"((dummy)d2 ++ ((dummy)d1)d3)d4#(1)".map(_.dummy).toList)
@@ -1002,12 +1002,12 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
 
       assertResult(2)(tresql"(dummy ++ dummy){count(# dummy)}".head._1)
 
-      assertResult((("A B", 15)))(tresql"{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}".head match {
-        case x => (x._1.head.concat, x._2.head.inc)
+      assertResult((("A B", 15)))(tresql"{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}" match {
+        case (x, y) => (x.head.concat, y.head.inc)
       })
 
-      assertResult((("A B", 15)))(tresql"[{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}]".head match {
-        case x => (x._1.head.concat, x._2.head.inc)
+      assertResult((("A B", 15)))(tresql"[{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}]" match {
+        case (x, y) => (x.head.concat, y.head.inc)
       })
 
       assertResult((java.sql.Date.valueOf("1980-12-17"), java.sql.Date.valueOf("1983-01-12"),
@@ -1039,7 +1039,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       }
 
       //function calls
-      assertResult(12)(tresql"inc_val_5(7)".head[Integer])
+      assertResult(12)(tresql"inc_val_5(7)")
       assertResult((10, "ACCOUNTING", "NEW YORK"))(
         tresql"sql_concat(sql('select * from dept where deptno = 10'))".head[Int, String, String])
 
@@ -1086,8 +1086,26 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         .map(r => r.nr + r.nr1 + r.nr2).toList.sorted)
 
     //expressions without select
-    assertResult(List(2.34))(tresql"round(2.33555, 2)".map(_._1).toList)
-    assertResult(List((List(2.34),List(3),14)))(tresql"round(2.33555, 2), round(3.1,0), 5 + 9".map(r => (r._1.map(_._1).toList, r._2.map(_._1).toList, r._3.map(_._1).toList.head)).toList)
-    assertResult(7.3)(tresql"1 + 4 - 0 + round(2.3, 5)".map(_._1).toList.head)
+    assertResult(2.34)(tresql"round(2.33555, 2)")
+    assertResult((2.34, 3, 14))(tresql"round(2.33555, 2), round(3.1,0), 5 + 9")
+    assertResult(7.3)(tresql"1 + 4 - 0 + round(2.3, 5)")
+    assertResult((3,3,2,(2,2))) {
+      val x = 1
+      ( tresql"1 + $x" + 1,
+        tresql"$x + 1" + 1,
+        tresql"$x + $x" , // cannot add 1 (compiler error) because variable expression type is Any
+        tresql"1 + $x, $x + 1")
+    }
+    assertResult((true,false)) {
+      val (x, y) = (1, 2)
+      (tresql"1 in (1,2)" && true, tresql"$x in ($y)" && false)
+    }
+    assertResult((0,"null",'x',4,false,true)){
+      val x = 1
+      tresql"1, null, 'x', 1 + $x, $x in (1), $x in (2)" match {
+        case (i, n, s, p, i1, i2) =>
+          (i - 1, String.valueOf(n), s.charAt(0), p * 2, !i1, !i2)
+      }
+    }
   }
 }
