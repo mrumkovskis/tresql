@@ -981,15 +981,10 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       if (t.join != null) TableJoin(t.join.default, buildInternal(t.join.expr, JOIN_CTX),
         t.join.noJoin, null)
       else null, t.outerJoin, t.nullable)
-    def buildColumnIdentOrBracesExpr(c: Obj) = c match {
-      case Obj(Ident(i), _, _, _, _) => IdentExpr(i)
-      case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
-      case o => error("unsupported column definition at this place: " + o)
-    }
     def buildIdentOrBracesExpr(i: Obj) = i match {
       case Obj(Ident(i), null, _, _, _) => IdentExpr(i)
       case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
-      case o => error("unsupported column definition at this place: " + o)
+      case o => error("unsupported expression at this place: " + o)
     }
     def buildFilter(pkTable: Table, filterList: List[Arr]): Expr = {
       def transformExpr(e: Expr) = e match {
@@ -1121,7 +1116,6 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           }
           //table in from clause of top level query or in any other subquery
           case FROM_CTX | TABLE_CTX | WITH_CTX | WITH_TABLE_CTX => buildSelectFromObj(t)
-          case COL_CTX => buildColumnIdentOrBracesExpr(t)
           case _ => buildIdentOrBracesExpr(t)
         }
         case q: QueryParser.Query => parseCtx match {
