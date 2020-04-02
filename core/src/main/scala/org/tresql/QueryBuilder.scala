@@ -7,11 +7,9 @@ import metadata.key_
 
 object QueryBuildCtx {
   trait Ctx
-  object ROOT_CTX extends Ctx
   object ARR_CTX extends Ctx
   object QUERY_CTX extends Ctx
   object FROM_CTX extends Ctx
-  object TABLE_CTX extends Ctx
   object JOIN_CTX extends Ctx
   object WHERE_CTX extends Ctx
   object COL_CTX extends Ctx
@@ -879,7 +877,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       ColsExpr(colsWithLinksToChildren, hasAll, hasIdentAll, hasHidden)
     }
 
-  private[tresql] def buildInternal(parsedExpr: Exp, parseCtx: Ctx = ROOT_CTX): Expr = {
+  private[tresql] def buildInternal(parsedExpr: Exp, parseCtx: Ctx = QUERY_CTX): Expr = {
     def buildSelect(q: QueryParser.Query) = {
       val tablesAndAliases = buildTables(q.tables)
       if (ctxStack.head == QUERY_CTX && this.tableDefs == Nil) this.tableDefs = defs(tablesAndAliases._1)
@@ -976,8 +974,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case (tables: List[Table], aliases: Map[String, Table]) => (tables.reverse, aliases)
       }
     }
-    def buildTable(t: Obj) = Table(buildInternal(t.obj,
-      if (ctxStack.head == QUERY_CTX) FROM_CTX else TABLE_CTX), t.alias,
+    def buildTable(t: Obj) = Table(buildInternal(t.obj, FROM_CTX), t.alias,
       if (t.join != null) TableJoin(t.join.default, buildInternal(t.join.expr, JOIN_CTX),
         t.join.noJoin, null)
       else null, t.outerJoin, t.nullable)
@@ -1071,19 +1068,19 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         //insert
         case Insert(t, a, c, v, r) => parseCtx match {
           //insert can be statement of with query, in this case it is part of this builder (sql statement)
-          case ROOT_CTX | WITH_CTX | WITH_TABLE_CTX => buildInsert(t, a, c, v, r)
+          case QUERY_CTX | WITH_CTX | WITH_TABLE_CTX => buildInsert(t, a, c, v, r)
           case _ => buildWithNew(_.buildInsert(t, a, c, v, r))
         }
         //update
         case Update(t, a, f, c, v, r) => parseCtx match {
           //update can be statement of with query, in this case it is part of this builder (sql statement)
-          case ROOT_CTX | WITH_CTX | WITH_TABLE_CTX => buildUpdate(t, a, f, c, v, r)
+          case QUERY_CTX | WITH_CTX | WITH_TABLE_CTX => buildUpdate(t, a, f, c, v, r)
           case _ => buildWithNew(_.buildUpdate(t, a, f, c, v, r))
         }
         //delete
         case Delete(t, a, f, u, r) => parseCtx match {
           //delete can be statement of with query, in this case it is part of this builder (sql statement)
-          case ROOT_CTX | WITH_CTX | WITH_TABLE_CTX => buildDelete(t, a, f, u, r)
+          case QUERY_CTX | WITH_CTX | WITH_TABLE_CTX => buildDelete(t, a, f, u, r)
           case _ => buildWithNew(_.buildDelete(t, a, f, u, r))
         }
         //recursive child query
@@ -1106,8 +1103,6 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         //child query
         case UnOp("|", oper) => buildWithNew(_.buildInternal(oper, QUERY_CTX))
         case t: Obj => parseCtx match {
-          case ROOT_CTX =>
-            buildInternal(t, QUERY_CTX)
           case ARR_CTX =>
             buildWithNew(_.buildInternal(t, QUERY_CTX)) //may have other elements in array
           case QUERY_CTX => t match { //top level query
@@ -1115,18 +1110,16 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
             case _ => buildSelectFromObj(t)
           }
           //table in from clause of top level query or in any other subquery
-          case FROM_CTX | TABLE_CTX | WITH_CTX | WITH_TABLE_CTX => buildSelectFromObj(t)
+          case FROM_CTX | WITH_CTX | WITH_TABLE_CTX => buildSelectFromObj(t)
           case _ => buildIdentOrBracesExpr(t)
         }
         case q: QueryParser.Query => parseCtx match {
-          case ROOT_CTX => buildInternal(q, QUERY_CTX)
           case ARR_CTX => buildWithNew(_.buildInternal(q, QUERY_CTX)) //may have other elements in array
           case _ =>
             if (recursiveQueryExp == null) recursiveQueryExp = q //set for potential use in RecursiveExpr
             buildSelect(q)
         }
         case wq @ With(tables, query) => parseCtx match {
-          case ROOT_CTX => buildInternal(wq, QUERY_CTX)
           case ARR_CTX => buildWithNew(_.buildInternal(wq, QUERY_CTX)) //may have other elements in array
           case _ =>
             val withTables = tables.map(buildInternal(_, parseCtx).asInstanceOf[WithTableExpr])
@@ -1152,8 +1145,6 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           }
         }
         case e @ BinOp(op, lop, rop) => parseCtx match {
-          case ROOT_CTX if op != "=" /*do not create new query for assignment or equals operation*/=>
-            buildInternal(e, QUERY_CTX)
           case ARR_CTX if op != "=" /*do not create new query builder for assignment or equals operation*/=>
             buildWithNew(_.buildInternal(e, QUERY_CTX))
           case ctx =>
@@ -1189,7 +1180,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case IdentAll(i) => IdentAllExpr(i.ident)
         case a: Arr => parseCtx match {
           case ARR_CTX => buildWithNew(_.buildArray(a))
-          case ROOT_CTX => buildArray(a)
+          case QUERY_CTX => buildArray(a)
           case ctx => buildArray(a, ctx)
         }
         case Variable("?", _, o) =>
@@ -1220,7 +1211,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   }
 
   def buildExpr(ex: String): Expr = buildExpr(parseExp(ex))
-  def buildExpr(ex: Exp): Expr = buildInternal(ex, ctxStack.headOption.getOrElse(ROOT_CTX))
+  def buildExpr(ex: Exp): Expr = buildInternal(ex, ctxStack.headOption.getOrElse(QUERY_CTX))
 
   //for debugging purposes
   def printBuilderChain: Unit = {
