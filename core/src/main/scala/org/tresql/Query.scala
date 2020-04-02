@@ -26,7 +26,6 @@ trait Query extends QueryBuilder with TypedQuery {
   ): Result[_ <: RowLike] = {
     val builtExpr = build(expr, params, false)(resources)
     builtExpr() match {
-      case r: CompiledResult[_] => r
       case r: Result[_] => r
       case x  => SingleValueResult(x)
     }
