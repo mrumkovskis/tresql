@@ -62,9 +62,6 @@ trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T]
     case false => None
   } finally close
 
-  /** Shortcut method for {{{headOption != None}}}*/
-  def exists = headOption.isDefined
-
   /** needs to be overriden since super class implementation calls hasNext method */
   override def toString = getClass.toString + ":" + columns.mkString(",")
 }

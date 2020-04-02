@@ -239,8 +239,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     Env.queryTimeout = qt
 
     //exists method
-    assertResult(true)(tresql"emp".exists)
-    assertResult(false)(tresql"emp[ename = null]".exists)
+    assertResult(true)(tresql"exists(emp {*})")
+    assertResult(false)(tresql"exists(emp[ename = null])")
 
     //from clause consist of functions - only tresql macro cannot be used.
     assertResult(

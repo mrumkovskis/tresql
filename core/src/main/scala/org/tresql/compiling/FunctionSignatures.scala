@@ -28,7 +28,7 @@ trait BasicDBFunctionSignatures {
   def insert (str1: String, offset: Int, length: Int, str2: String): String
   def to_date(date: String, format: String): java.sql.Date
   def trim(string: String): String
-  def exists(cond: Compiler#SelectDefBase): Boolean
+  def exists(cond: Compiler#SelectDefBase): java.lang.Boolean
   def group_concat(what: Any): String
   //postgres group_concat replacement is string_agg
   def string_agg(expr: Any*): Any

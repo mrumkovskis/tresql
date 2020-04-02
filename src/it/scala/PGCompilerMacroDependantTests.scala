@@ -239,10 +239,6 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
     assertResult((555, 333)) {(e2.maxResultSize, e2.queryTimeout)}
     Env.maxResultSize = mr
     Env.queryTimeout = qt
-
-    //exists method
-    assertResult(true)(tresql"emp".exists)
-    assertResult(false)(tresql"emp[ename = null]".exists)
   }
 
   override def ort {
