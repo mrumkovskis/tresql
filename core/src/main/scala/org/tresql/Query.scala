@@ -11,9 +11,11 @@ trait Query extends QueryBuilder with TypedQuery {
 
   def compiledResult[T <: RowLike](expr: String, params: Any*)(
     implicit resources: Resources = Env): CompiledResult[T] = {
-    val r = exec(expr, normalizePars(params: _*), resources)//.asInstanceOf[CompiledResult[T]]
-    r.asInstanceOf[CompiledResult[T]]
-  }
+    exec(expr, normalizePars(params: _*), resources) match {
+      case r: CompiledResult[T] => r
+      case x => sys.error(s"Expected `org.tresql.CompiledResult[_]`, but got ${
+                          x.getClass}. Try call using Query(...)")
+    }}
 
   private[tresql] def converters: Map[(Int, Int), RowConverter[_ <: RowLike]] = null
 
@@ -25,16 +27,8 @@ trait Query extends QueryBuilder with TypedQuery {
     val builtExpr = build(expr, params, false)(resources)
     builtExpr() match {
       case r: CompiledResult[_] => r
-      case r: Result[_] =>
-        val builder = builtExpr.builder
-        builder.env.rowConverter(builder.queryDepth, builder.childIdx).map { conv =>
-          /*Convert result if converter is found and wrap it into {{{SingleValueResult}}}.
-          For example this may happen when procedure is called directly (outside of select statement)
-          and returns {{{org.tresql.Result}}} where instead some single value is expected
-          (judging by function's signature)*/
-          SingleValueResult(conv(r))
-        } getOrElse r
-      case x => SingleValueResult(x)
+      case r: Result[_] => r
+      case x  => SingleValueResult(x)
     }
   }
 
@@ -133,9 +127,9 @@ trait Query extends QueryBuilder with TypedQuery {
     }
   }
 
-  private[tresql] def call(sql: String) = {
+  private[tresql] def call(sql: String): Result[RowLike] = {
     val st = statement(sql, env, true).asInstanceOf[CallableStatement]
-    var result: Any = null
+    var result: Result[RowLike] = null
     var outs: List[Any] = null
     try {
       bindVars(st, bindVariables)
@@ -165,7 +159,7 @@ trait Query extends QueryBuilder with TypedQuery {
         env.result = res
         result = res
       }
-      outs = bindVariables map (_()) filter (_.isInstanceOf[OutPar]) map { x =>
+      outs = bindVariables map (_()) collect { case x: OutPar =>
         val p = x.asInstanceOf[OutPar]
         p.value = p.value match {
           case null => st.getObject(p.idx)
@@ -195,13 +189,8 @@ trait Query extends QueryBuilder with TypedQuery {
       st.close
       env.statement = null
     }
-    result :: outs match {
-      case null :: Nil => ()
-      case List(r: Result[_]) => r
-      case l @ List(r: Result[_], x, _*) => l
-      case null :: l => l
-      case x => error("Knipis: " + x)
-    }
+    if (outs.isEmpty) result
+    else new DynamicArrayResult(if (result== null) outs else result :: outs)
   }
 
   private def statement(sql: String, env: Env, call: Boolean = false) = {

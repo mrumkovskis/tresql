@@ -50,7 +50,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
 
     var op = OutPar()
 
-    assertResult(List(Vector(List(10, "x"))))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x")
+    assertResult(List(Vector(10, "x")))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x")
         .toListOfVectors)
     assertResult("x")(op.value)
     assertResult(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)", 10, "ACC%"))
