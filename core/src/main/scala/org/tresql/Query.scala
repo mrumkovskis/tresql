@@ -10,12 +10,12 @@ trait Query extends QueryBuilder with TypedQuery {
     exec(expr, normalizePars(params: _*), resources).asInstanceOf[DynamicResult]
 
   def compiledResult[T <: RowLike](expr: String, params: Any*)(
-    implicit resources: Resources = Env): CompiledResult[T] = {
+    implicit resources: Resources = Env): CompiledResult[T] =
     exec(expr, normalizePars(params: _*), resources) match {
       case r: CompiledResult[T] => r
       case x => sys.error(s"Expected `org.tresql.CompiledResult[_]`, but got ${
                           x.getClass}. Try call using Query(...)")
-    }}
+    }
 
   private[tresql] def converters: Map[(Int, Int), RowConverter[_ <: RowLike]] = null
 
