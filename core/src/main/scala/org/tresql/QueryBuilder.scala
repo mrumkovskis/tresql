@@ -1067,21 +1067,18 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case NullUpdate => ConstExpr(NullUpdate)
         //insert
         case Insert(t, a, c, v, r) => parseCtx match {
-          //insert can be statement of with query, in this case it is part of this builder (sql statement)
-          case QUERY_CTX | WITH_CTX | WITH_TABLE_CTX => buildInsert(t, a, c, v, r)
-          case _ => buildWithNew(_.buildInsert(t, a, c, v, r))
+          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(_.buildInsert(t, a, c, v, r))
+          case _ => buildInsert(t, a, c, v, r)
         }
         //update
         case Update(t, a, f, c, v, r) => parseCtx match {
-          //update can be statement of with query, in this case it is part of this builder (sql statement)
-          case QUERY_CTX | WITH_CTX | WITH_TABLE_CTX => buildUpdate(t, a, f, c, v, r)
-          case _ => buildWithNew(_.buildUpdate(t, a, f, c, v, r))
+          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(_.buildUpdate(t, a, f, c, v, r))
+          case _ => buildUpdate(t, a, f, c, v, r)
         }
         //delete
         case Delete(t, a, f, u, r) => parseCtx match {
-          //delete can be statement of with query, in this case it is part of this builder (sql statement)
-          case QUERY_CTX | WITH_CTX | WITH_TABLE_CTX => buildDelete(t, a, f, u, r)
-          case _ => buildWithNew(_.buildDelete(t, a, f, u, r))
+          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(_.buildDelete(t, a, f, u, r))
+          case _ => buildDelete(t, a, f, u, r)
         }
         //recursive child query
         case UnOp("|", join: Arr) =>
