@@ -979,6 +979,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
   override def compilerMacro {
       println("\n-------------- TEST compiler macro ----------------\n")
 
+      assertResult(())(tresql"")
+
       assertResult(("ACCOUNTING",
       List(("CLARK",List()), ("KING",List(3, 4)), ("Lara",List()), ("Nicky",List()))))(
           tresql"dept{dname, |emp {ename, |[empno]work {hours}#(1)}#(1)}#(1)"
