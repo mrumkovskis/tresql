@@ -1103,7 +1103,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           case ARR_CTX =>
             buildWithNew(_.buildInternal(t, QUERY_CTX)) //may have other elements in array
           case QUERY_CTX => t match { //top level query
-            case Obj(b @ Braces(_), _, join, _, _) => {
+            case Obj(b @ Braces(_), alias, join, _, _) if alias == null => {
               if (join == null) buildInternal(b, parseCtx) //unwrap braces expression
               else {
                 lazy val tr: PartialFunction[Exp, Exp] = transformer { //unwrap braces expression and embed join to parent in leftmost obj
@@ -1138,7 +1138,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
               case i: InsertExpr => new WithInsertExpr(withTables, i)
               case u: UpdateExpr => new WithUpdateExpr(withTables, u)
               case d: DeleteExpr => new WithDeleteExpr(withTables, d)
-              case x => sys.error(s"""Currently unsupported after "WITH" query: ${query.tresql}""")
+              case x => sys.error(s"""Currently unsupported after "WITH" query: `${query.tresql}`, ${x.getClass}""")
             }
         }
         case WithTable(name, cols, recursive, query) =>

@@ -55,6 +55,7 @@ dummy --> [[0]]
 //distinct count
 (dummy ++ dummy){count(# dummy)} --> [[1]]
 (dummy{dummy d} + dummy{dummy}) d{d} --> [[0]]
+(dummy) tmp --> [[0]]
 
 //alias
 dummy {1 int} --> [[1]]
@@ -520,6 +521,7 @@ dept[10]{dname, ((wq(# x) {{1}} wq{x}){x}) x} --> [["ACCOUNTING", 1]]
 dept[10]{dname, |[dept.deptno = e.dn](e(# dn, n) {emp{deptno, ename}#(1)} e{dn, n}) e{e.n}} --> [["ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
 dept[10]{dname, ((wq(# x) {{1}} wq{x}){x}) x, |emp{ename}#(1)} --> [["ACCOUNTING", 1, [["CLARK"], ["KING"], ["MILLER"]]]]
 e(#){emp{ename::string}} e{ename}#(1) --> [["ADAMS"], ["ALLEN"], ["BLAKE"], ["CLARK"], ["FORD"], ["JAMES"], ["JONES"], ["KING"], ["MARTIN"], ["MILLER"], ["MĀRTIŅŠ ŽVŪKŠĶIS"], ["SCOTT"], ["SMITH"], ["TURNER"], ["WARD"]]
+e(#){emp} ({'done'}) x --> [["done"]]
 
 //test for compiler - where clause select references parent select column
 dept[(dept_addr[deptnr = deptno]{deptnr})]{dname}#(1) --> []

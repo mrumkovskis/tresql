@@ -233,6 +233,9 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
 
     //insert with asterisk column
     intercept[CompilerException](qcompile("+dummy{*} dummy{dummy kiza}"))
+
+    //two aliases
+    intercept[Exception](qcompile("dummy {dummy a b}"))
   }
 
   if (executeCompilerMacroDependantTests) test("compiler macro") {

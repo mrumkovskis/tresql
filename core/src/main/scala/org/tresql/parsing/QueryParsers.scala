@@ -378,6 +378,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   def column: MemParser[Col] = (qualifiedIdentAll | (expr ~ opt(stringLiteral | qualifiedIdent))) ^^ {
     case i: IdentAll => Col(i, null)
     //move object alias to column alias
+    case (o @ Obj(_, a, _, _, _)) ~ (Some(ca)) if a != null =>
+      sys.error(s"Column cannot have two aliases: `$a`, `$ca`")
     case (o @ Obj(_, a, _, _, _))  ~ None => Col(o.copy(alias = null), a)
     case (e: Exp @unchecked) ~ (a: Option[_]) => Col(e, a map {
       case Ident(i) => i.mkString; case s => "\"" + s + "\""
