@@ -1109,7 +1109,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
                 lazy val tr: PartialFunction[Exp, Exp] = transformer { //unwrap braces expression and embed join to parent in leftmost obj
                   case Braces(e) => tr(e)
                   case With(wt, q) => With(wt, tr(q))
-                  case q: Query =>
+                  case q: QueryParser.Query =>
                     q.copy(tables = q.tables.updated(0, tr(q.tables.head).asInstanceOf[Obj]))
                   case o: Obj => o.copy(join = join) //set join to parent
                 }
