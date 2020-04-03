@@ -40,7 +40,7 @@ trait BasicDBFunctionSignatures {
 trait BasicDialectFunctionSignatures {
   //dialect
   def `case`[T](when: Any, `then`: T, rest: Any*): T
-  def nextval(seq: String): Any
+  def nextval(seq: String): java.lang.Long
   def cast(exp: Any, typ: String): Any
 }
 

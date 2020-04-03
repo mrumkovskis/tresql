@@ -117,6 +117,7 @@ package object dialects {
     case c: QueryBuilder#ColExpr if c.alias != null => c.col.sql + " as " + c.alias
     case c: QueryBuilder#CastExpr => c.exp.sql + "::" + (c.typ match {
       case "string" => "text"
+      case "long" => "bigint"
       case x => x
     })
   }
