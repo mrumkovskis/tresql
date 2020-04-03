@@ -1103,7 +1103,19 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           case ARR_CTX =>
             buildWithNew(_.buildInternal(t, QUERY_CTX)) //may have other elements in array
           case QUERY_CTX => t match { //top level query
-            case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx) //unwrap braces expression
+            case Obj(b @ Braces(_), _, join, _, _) => {
+              if (join == null) buildInternal(b, parseCtx) //unwrap braces expression
+              else {
+                lazy val tr: PartialFunction[Exp, Exp] = transformer { //unwrap braces expression and embed join to parent in leftmost obj
+                  case Braces(e) => tr(e)
+                  case With(wt, q) => With(wt, tr(q))
+                  case q: Query =>
+                    q.copy(tables = q.tables.updated(0, tr(q.tables.head).asInstanceOf[Obj]))
+                  case o: Obj => o.copy(join = join) //set join to parent
+                }
+                buildInternal(tr(b), parseCtx)
+              }
+            }
             case _ => buildSelectFromObj(t)
           }
           //table in from clause of top level query or in any other subquery
@@ -1120,7 +1132,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           case ARR_CTX => buildWithNew(_.buildInternal(wq, QUERY_CTX)) //may have other elements in array
           case _ =>
             val withTables = tables.map(buildInternal(_, parseCtx).asInstanceOf[WithTableExpr])
-            buildInternal(query, WITH_CTX) match {
+            buildInternal(query, if (parseCtx == QUERY_CTX) QUERY_CTX else WITH_CTX) match {
               case s: SelectExpr => WithSelectExpr(withTables, s)
               case b: BinExpr if b.exprType == classOf[SelectExpr] => WithBinExpr(withTables, b)
               case i: InsertExpr => new WithInsertExpr(withTables, i)

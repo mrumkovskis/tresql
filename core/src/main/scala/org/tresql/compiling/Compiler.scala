@@ -5,7 +5,7 @@ import org.tresql.parsing._
 import org.tresql.metadata._
 import scala.reflect.ManifestFactory
 
-trait Compiler extends QueryParsers with ExpTransformer { thisCompiler =>
+trait Compiler extends QueryParsers { thisCompiler =>
 
   case class CompilerException(
     message: String,

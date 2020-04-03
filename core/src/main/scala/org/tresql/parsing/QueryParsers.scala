@@ -2,7 +2,7 @@ package org.tresql.parsing
 
 import scala.util.parsing.combinator.JavaTokenParsers
 
-trait QueryParsers extends JavaTokenParsers with MemParsers {
+trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer {
 
   val reserved = Set("in", "null", "false", "true")
 
