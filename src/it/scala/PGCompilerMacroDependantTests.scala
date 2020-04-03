@@ -1002,7 +1002,10 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
       tresql"""sql("(date '2001-10-01' - date '2001-09-28')")::int""")
     assertResult(java.time.LocalDateTime.parse("2001-09-28T01:00"))(
       tresql"""sql("(date '2001-09-28' + interval '1 hour')")::timestamp""".toLocalDateTime)
-
+    assertResult(true) {
+      val x = 0
+      tresql"$x in(dummy)"
+    }
 
     //type resolving when column contains select with from clause select
     assertResult(("KING", "ACCOUNTING"))(tresql"""emp e[ename ~~ 'kin%'] {

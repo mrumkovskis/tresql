@@ -1110,5 +1110,9 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       }
     }
     assertResult(true)(tresql"1" + tresql"2 + 3" == tresql"6")
+    assertResult(true) {
+      val x = 0
+      tresql"$x in(dummy)"
+    }
   }
 }
