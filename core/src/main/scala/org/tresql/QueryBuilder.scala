@@ -201,17 +201,28 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case e: SelectExpr => e.cols
         case e: BinExpr => c(e.lop)
         case e: BracesExpr => c(e.expr)
-        case _ => sys.error("Unexpected ColExpr type")
+        case e: DeleteExpr if e.returning.nonEmpty => e.returning.get
+        case WithSelectExpr(_, e) => e.cols
+        case WithBinExpr(_, e) => c(e)
+        case x => sys.error(s"Unexpected ColExpr type: `${x.getClass}`")
       }
       c(lop)
+    }
+    def isQuery = exprType == classOf[SelectExpr]
+    def isQueryOrReturning(e: Expr): Boolean = e match {
+      case BinExpr(_, lop, rop) => isQueryOrReturning(lop) && isQueryOrReturning(rop)
+      case _: SelectExpr | _: WithSelectExpr | _: WithBinExpr => true
+      case e: DeleteExpr => e.returning.nonEmpty
+      case BracesExpr(e) => isQueryOrReturning(e)
+      case _ => false
     }
 
     override def apply() =
       op match {
         case "&&" => sel(sql, cols)
         case "++" => sel(sql, cols)
-        case "+" => if (exprType == classOf[SelectExpr]) sel(sql, cols) else super.apply()
-        case "-" => if (exprType == classOf[SelectExpr]) sel(sql, cols) else super.apply()
+        case "+" => if (isQueryOrReturning(this)) sel(sql, cols) else super.apply()
+        case "-" => if (isQueryOrReturning(this)) sel(sql, cols) else super.apply()
         case "=" => lop match {
           //assign expression
           case VarExpr(variable, _, _) =>
@@ -228,8 +239,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       case "||" => lop.sql + " || " + rop.sql
       case "++" => lop.sql + " union all " + rop.sql
       case "&&" => lop.sql + " intersect " + rop.sql
-      case "+" => lop.sql + (if (exprType == classOf[SelectExpr]) " union " else " + ") + rop.sql
-      case "-" => lop.sql + (if (exprType == classOf[SelectExpr]) " except " else " - ") + rop.sql
+      case "+" => lop.sql + (if (isQueryOrReturning(this)) " union " else " + ") + rop.sql
+      case "-" => lop.sql + (if (isQueryOrReturning(this)) " except " else " - ") + rop.sql
       case "=" => rop match {
         case ConstExpr(Null) => lop.sql + " is " + rop.sql
         case _: ArrExpr => lop.sql + " in " + rop.sql
@@ -244,11 +255,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       case ">" => lop.sql + " > " + rop.sql
       case "<=" => lop.sql + " <= " + rop.sql
       case ">=" => lop.sql + " >= " + rop.sql
-      case "&" => (if (lop.exprType == classOf[SelectExpr]) "exists " else "") +
-        lop.sql + " and " + (if (rop.exprType == classOf[SelectExpr]) "exists " else "") +
+      case "&" => (if (isQuery) "exists " else "") +
+        lop.sql + " and " + (if (isQuery) "exists " else "") +
         rop.sql
-      case "|" => (if (lop.exprType == classOf[SelectExpr]) "exists " else "") + lop.sql +
-        " or " + (if (rop.exprType == classOf[SelectExpr]) "exists " else "") + rop.sql
+      case "|" => (if (isQuery) "exists " else "") + lop.sql +
+        " or " + (if (isQuery) "exists " else "") + rop.sql
       case "~" => lop.sql + " like " + rop.sql
       case "!~" => lop.sql + " not like " + rop.sql
       case s @ ("in" | "!in") => lop.sql + (if (s.startsWith("!")) " not" else "") + " in " +
