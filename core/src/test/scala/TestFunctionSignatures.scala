@@ -25,4 +25,5 @@ trait TestFunctionSignatures extends org.tresql.compiling.TresqlFunctionSignatur
   def generate_series(args: Any*): Any
   def substring(str: String, from: Int, length: Int): String
   def position(pos: Any): Int
+  def in_out(a: Int, b: String, c: String): Unit
 }

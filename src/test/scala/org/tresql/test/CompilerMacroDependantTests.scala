@@ -48,11 +48,13 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assert(intercept[MissingBindVariableException](Query("emp[?]")).name === "1")
     assert(intercept[MissingBindVariableException](Query("emp[:nr]")).name === "nr")
 
-    var op = OutPar()
-
-    assertResult(List(Vector(10, "x")))(Query("in_out(?, ?, ?)", InOutPar(5), op, "x")
+    {
+      val (op, iop) = OutPar() -> InOutPar(5)
+      assertResult(List(Vector(10, "x")))(Query("in_out(?, ?, ?)", iop, op, "x")
         .toListOfVectors)
-    assertResult("x")(op.value)
+      assertResult("x")(op.value)
+      assertResult(())(tresql"in_out($iop, $op, 'x')")
+    }
     assertResult(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)", 10, "ACC%"))
     assertResult(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)",
         Map("1" -> 10, "2" -> "ACC%")))

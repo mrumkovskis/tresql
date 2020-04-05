@@ -1,7 +1,6 @@
 package org.tresql.compiling
 
-import org.tresql.{Metadata, Env}
-import org.tresql.metadata.{Procedure, Par}
+import org.tresql.metadata.{Par, Procedure}
 
 import scala.reflect.{Manifest, ManifestFactory}
 import java.lang.reflect._
@@ -9,6 +8,19 @@ import java.lang.reflect._
 trait CompilerFunctionMetadata extends org.tresql.Metadata {
 
   def compilerFunctionSignatures: Class[_]
+
+  private val primitiveClassAnyValMap: Map[Class[_], Manifest[_]] =
+    Map(
+      java.lang.Byte.TYPE -> ManifestFactory.Byte,
+      java.lang.Short.TYPE  -> ManifestFactory.Short,
+      java.lang.Character.TYPE  -> ManifestFactory.Char,
+      java.lang.Integer.TYPE -> ManifestFactory.Int,
+      java.lang.Long.TYPE -> ManifestFactory.Long,
+      java.lang.Float.TYPE -> ManifestFactory.Float,
+      java.lang.Double.TYPE -> ManifestFactory.Double,
+      java.lang.Boolean.TYPE -> ManifestFactory.Boolean,
+      java.lang.Void.TYPE -> ManifestFactory.Unit
+    )
 
   private val procedures: Map[String, List[Procedure[_]]] = compilerFunctionSignatures
     .getMethods.map { method => method.getName -> proc_from_meth(method) }
@@ -36,10 +48,10 @@ trait CompilerFunctionMetadata extends org.tresql.Metadata {
     }.toList
     val returnType = m.getGenericReturnType match {
       case par: ParameterizedType => sys.error(s"Parametrized return type not supported! Method: $m, parameter: $par")
-      case c: Class[_] => ManifestFactory.classType(c)
+      case c: Class[_] => primitiveClassAnyValMap.getOrElse(c, ManifestFactory.classType(c))
       case x => ManifestFactory.singleType(x)
     }
-    Procedure[Nothing](m.getName, null, -1, pars, -1, null, returnType, repeatedPars)
+    Procedure(m.getName, null, -1, pars, -1, null, returnType, repeatedPars)
   }
 
   override def procedure(name: String): Procedure[_] =

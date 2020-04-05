@@ -191,7 +191,9 @@ trait Query extends QueryBuilder with TypedQuery {
       env.statement = null
     }
     if (outs.isEmpty) result
-    else new DynamicArrayResult(if (result== null) outs else result :: outs)
+    else env.rowConverter(queryDepth, childIdx).map { conv =>
+      new CompiledArrayResult(if (result== null) outs else result :: outs, conv)
+    }.getOrElse(new DynamicArrayResult(if (result== null) outs else result :: outs))
   }
 
   private def statement(sql: String, env: Env, call: Boolean = false) = {
