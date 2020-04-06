@@ -26,4 +26,5 @@ trait TestFunctionSignatures extends org.tresql.compiling.TresqlFunctionSignatur
   def substring(str: String, from: Int, length: Int): String
   def position(pos: Any): Int
   def in_out(a: Int, b: String, c: String): Unit
+  def date_add(d: java.util.Date, interval: Any): java.util.Date
 }
