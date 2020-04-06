@@ -7,7 +7,7 @@ import scala.reflect.{Manifest, ManifestFactory}
 trait TypeMapper {
   def sql_scala_type_map(sqlType: Int): Manifest[_] = xsd_scala_type_map(sql_xsd_type_map(sqlType))
   def xsd_scala_type_map(xsdType: String): Manifest[_] = xsdType match {
-    case "integer" => ManifestFactory.classType(classOf[BigInt])
+    case "integer" => ManifestFactory.classType(classOf[java.lang.Long])
     case "long" => ManifestFactory.classType(classOf[java.lang.Long])
     case "short" | "int" => ManifestFactory.classType(classOf[java.lang.Integer])
     case "float" | "double" | "decimal" => ManifestFactory.classType(classOf[BigDecimal])

@@ -1008,6 +1008,8 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
     }
     assertResult(List(0, 2))(tresql"dummy{dummy::long}#(1)".map(_.dummy).toList)
 
+    assertResult(10)(tresql"dept{min(deptno)::integer}".unique[Long])
+
     //type resolving when column contains select with from clause select
     assertResult(("KING", "ACCOUNTING"))(tresql"""emp e[ename ~~ 'kin%'] {
       ename, ((dept d[e.deptno = d.deptno]{dname}) x {dname}) dname}"""
