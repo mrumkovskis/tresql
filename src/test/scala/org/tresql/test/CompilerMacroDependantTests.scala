@@ -1116,7 +1116,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       val x = 0
       tresql"$x in(dummy)"
     }
-    assertResult(1235253600000L)(
-      tresql"""date_add ( sql("date '2008-11-22'"), sql("interval 3 month"))""".getTime)
+    assertResult(java.sql.Timestamp.valueOf("2009-02-22 00:00:00.0"))(
+      tresql"""date_add ( sql("date '2008-11-22'"), sql("interval 3 month"))""")
   }
 }
