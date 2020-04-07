@@ -208,7 +208,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       }
       c(lop)
     }
-    def isQuery = exprType == classOf[SelectExpr]
+    def isQuery(e: Expr) = e.exprType == classOf[SelectExpr]
     def isQueryOrReturning(e: Expr): Boolean = e match {
       case BinExpr(_, lop, rop) => isQueryOrReturning(lop) && isQueryOrReturning(rop)
       case _: SelectExpr | _: WithSelectExpr | _: WithBinExpr => true
@@ -255,11 +255,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       case ">" => lop.sql + " > " + rop.sql
       case "<=" => lop.sql + " <= " + rop.sql
       case ">=" => lop.sql + " >= " + rop.sql
-      case "&" => (if (isQuery) "exists " else "") +
-        lop.sql + " and " + (if (isQuery) "exists " else "") +
+      case "&" => (if (isQuery(lop)) "exists " else "") +
+        lop.sql + " and " + (if (isQuery(rop)) "exists " else "") +
         rop.sql
-      case "|" => (if (isQuery) "exists " else "") + lop.sql +
-        " or " + (if (isQuery) "exists " else "") + rop.sql
+      case "|" => (if (isQuery(lop)) "exists " else "") + lop.sql +
+        " or " + (if (isQuery(rop)) "exists " else "") + rop.sql
       case "~" => lop.sql + " like " + rop.sql
       case "!~" => lop.sql + " not like " + rop.sql
       case s @ ("in" | "!in") => lop.sql + (if (s.startsWith("!")) " not" else "") + " in " +

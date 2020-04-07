@@ -176,6 +176,8 @@ dept [deptno in (emp[ename ~~ ?]{deptno}) | deptno = 40]#(deptno) --> 'KIN% --> 
 
 //exists correlated subselect
 dept d[(emp e[e.deptno = d.deptno])]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
+dept d[(dept[deptno = 10 & d.deptno = dept.deptno]) & (dept[d.dname = 'ACCOUNTING' & d.deptno = dept.deptno])]{dname} --> [["ACCOUNTING"]]
+dept d[(dept[deptno = 10 & d.deptno = dept.deptno]) | (dept[d.dname = 'SALES' & d.deptno = dept.deptno])]{dname}#(1) --> [["ACCOUNTING"], ["SALES"]]
 
 //from clause select
 dept[deptno in ((dept[:id]){deptno})]{deptno}#(1) --> id=10 --> [[10]]
