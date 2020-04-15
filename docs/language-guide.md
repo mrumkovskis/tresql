@@ -1,4 +1,4 @@
-TreSQL Language Guide
+tresql language guide
 ===================
 
 Contents
@@ -8,7 +8,7 @@ Contents
 * [Data manipulation](#data-manipulation)  
 * [Appendix Data](#appendix-data)  
 
-TreSQL provides syntax for both data manipulation (INSERT, UPDATE) and querying (SELECT) as well as more rarely used SQL clauses (GROUP BY, INTERSECT etc.). Once the database structure is defined, it can fulfill all the SQL needs for your application.  
+tresql provides syntax for both data manipulation (INSERT, UPDATE) and querying (SELECT) as well as more rarely used SQL clauses (GROUP BY, INTERSECT etc.). Once the database structure is defined, it can fulfill all the SQL needs for your application.
 
 The sample data used by the following examples is described in [Appendix Data](#appendix-data).  
  

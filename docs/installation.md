@@ -1,25 +1,31 @@
-Compiling and installing
+Installing and usage
 ==============================
 
-To configure db connection, compile and run with Jetty application server:  
+### Dependency in your project
+To use tresql, add the module to your project
 
-1. Add your jdbc driver jar to `service/lib`
-2. Configure db connection by setting JAVA_OPTS environment variable:  
-   `JAVA_OPTS=-Djdbc.drivers=... -Dtresql.query.driver=... -Dtresql.query.db=... -Dtresql.query.user=... -Dtresql.query.password=... -Dtresql.query.schema=...`
-   For example:   
-   `set JAVA_OPTS=-Dtresql.query.driver=org.postgresql.Driver  -Dtresql.query.db=jdbc:postgresql://192.168.1.1/mydb -Dtresql.query.user=dbuser -Dtresql.query.password=dbuserpass -Dtresql.query.schema=public`
-3. Execute `sbt update ~jetty-run`. This downloads Scala and all necessary packages from maven repositories, compiles source and runs application on Jetty server on default port 8080.  
-4. Browse to http://localhost:8080.  
+For sbt project add to your build.sbt file - `libraryDependencies += "org.tresql" %% "tresql" % "9.3.2"`
 
-Notes:  
+### Try tresql using sbt console with test database
 
-* For get and post examples, browse to http://localhost:8080/get and http://localhost:8080/post.  
-* Named query parameters are not supported by examples, but are supported by query server API.  
-* For more info on gets and posts, see scaladoc for QueryServer. To create scaladoc, execute `sbt doc`.  
-* To create core jar and service war, execute `sbt package`. To just compile, use `sbt compile`
-* Compiled and generated files (jars, wars, classes, docs) are found in core/target and service/target.  
+1. Clone tresql project from github `git clone https://github.com/mrumkovskis/tresql.git && cd tresql`
+2. Start sbt `sbt test:console`
+3. Run tests to create in memory [hsqldb](http://hsqldb.org) database with test data `run (new test.QueryTest)`
+4. Try your tresql statements like `tresql"dept[dname = 'RESEARCH']".toListOfMaps`
+5. Database structure see [db.sql](/mrumkovskis/tresql/blob/develop/src/test/resources/db.sql)
 
-TreSQL can also be configured to run on Tomcat or other appserver. Just compile TreSQL using `sbt package` and copy to create web application on Tomcat.   
-Database connection can be specified using standard JNDI resource locator. The default resource name should be `jdbc/tresql/query`. In this case, database schema "public" is assumed. Databse connection can also be configured using JAVA_OPTS variable as described above.
+### Try using postgres test database
+_Prerequisite - you need docker to be installed on your system._
 
+1. Clone tresql project from github `git clone https://github.com/mrumkovskis/tresql.git && cd tresql`
+2. Start sbt `sbt it:console`
+3. Run tests to create [postgresql](https://www.postgresql.org) database with test data
+   `new org.tresql.test.PGQueryTest().execute(configMap = ConfigMap("docker" -> "postgres:10.2", "remove" -> "false"))`.
+   Parameter `"remove" -> false` prevents docker from dropping postgres container after tests are executed.
 
+   > NOTE: after exiting console postgres docker container can be removed with `docker stop tresql-it-tests`.
+   If running of tests fails due to connection error. Stop container and rerun tests with increased waiting time for docker startup like
+   `new org.tresql.test.PGQueryTest().execute(configMap = ConfigMap("docker" -> "postgres:10.2", "remove" -> "false", "wait_after_startup_millis" -> "5000"))`
+   Or if default postgres port is busy specify other like `"port" -> "54321"`
+4. Try your tresql statements like `tresql"dept[dname = 'RESEARCH']".toListOfMaps`
+5. Database structure see [pgdb.sql](/mrumkovskis/tresql/blob/develop/src/it/resources/pgdb.sql)
