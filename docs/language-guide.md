@@ -8,42 +8,45 @@ Contents
 * [Data manipulation](#data-manipulation)  
 * [Appendix Data](#appendix-data)  
 
-tresql provides syntax for both data manipulation (INSERT, UPDATE) and querying (SELECT) as well as more rarely used SQL clauses (GROUP BY, INTERSECT etc.). Once the database structure is defined, it can fulfill all the SQL needs for your application.
+tresql provides syntax for both querying (SELECT) and data manipulation (INSERT, UPDATE) as well as more complicated SQL constructs like Common Table Expressions (CTE aka WITH queries).
 
 The sample data used by the following examples is described in [Appendix Data](#appendix-data).  
  
-<a name="wiki-syntax-quickchart"/> Syntax quickchart 
+Syntax quickchart 
 ------------------
 ```
-{}      Selection set (columns or sub-selects). Similar to JSON notation for objects properties.
-[]      WHERE conditions
-/       Follow the foreign key to parent table: similar to Xpath
+{}      Selection set (columns clause).
+[]      WHERE or join conditions
+/       Shortcut join between tables (referential constraint defined).
 :foo    Named binding variable foo.
-:m(N)   Special binding variable, binds to Nth column of m-th parent select. 
 ?       Unnamed binding variable
 +       INSERT
 =       UPDATE 
 -       DELETE
 &       AND
 |       OR, also nested query
+!       NOT
 ++      UNION
 &&      INTERSECT
 ,       Delimiter for columns and statements
+()      GROUB BY
+^()     HAVING
 #       ORDER BY (ascending), DISTINCT
 ~#      ORDER BY DESCENDING
 ~       LIKE
-~~      LIKE (case-insensitive)     
+~~      ILIKE (case-insensitive)
+@()     OFFSET, LIMIT     
 ```
 
-<a name="wiki-data-selection"/>Data selection 
+Data selection 
 --------------
 
-[Simple SELECTs ](#simple-selects)  
-[Joins (inner and outer) ](#joins-inner-and-outer)  
+[Simple SELECTs](#simple-selects)  
+[Joins (inner and outer)](#joins-inner-and-outer)  
+[Nesting selects with IN and EXISTS](#nesting-selects-with-in)  
 [Nesting objects](#nesting-objects)  
 [Shortcut for joins](#shortcut-for-joins)  
 [ORDER, DISTINCT, GROUP BY, HAVING](#order)  
-[Nesting selects with IN and EXISTS](#nesting-selects-with-in)  
 [Combining boolean conditions (AND, OR, NOT) in WHERE clauses](#boolean)  
 [UNION, INTERSECT, product](#union)  
 [Binding variables](#binding-variables)  
@@ -52,23 +55,21 @@ The sample data used by the following examples is described in [Appendix Data](#
 [Array binding](#array-binding)
 [Check your knowledge - examples](#check-your-knowledge)  
 
-### <a name="wiki-simple-selects"/> Simple SELECTs 
+### Simple SELECTs 
 
-Examples:
+Select all records from table `emp` with all columns:
+`emp` or `emp {*}`
+```sql
+select * from emp
+```
 
-Select all records from table EMP with all columns:  
-`EMP`
+Select some columns with WHERE condition:
+`emp [ empno = 7369] { ename, job }`
+```sql
+select ename, job from emp where empno = 7369
+```
 
-Select by primary key:  
-`EMP [ EMPNO = 7369]`
-
-This is the same as simply:  
-`EMP [7369]`
-
-Select some columns with WHERE condition:  
-`EMP [ EMPNO = 7369] { ENAME, JOB }`
-
-### <a name="wiki-joins-inner-and-outer"/>Joins (inner and outer) 
+### Joins (inner and outer) 
 
 Join EMP and DEPT tables. This is an inner join:
 ```
@@ -101,6 +102,20 @@ EMP E
   [E.DEPTNO = D.DEPTNO] DEPT D
   [E.MGR = E2.EMPNO] EMP ? E2
   { E.ENAME, E.JOB, D.DNAME, E2.ENAME MANAGER }
+```
+
+### <a name="wiki-nesting-selects-with-in"/> Subqueries IN and EXISTS
+`dept [ deptno in (emp [sal >= 5000]  {deptno}) ] {dname}`
+```sql
+select dname from dept where deptno in(select deptno from emp where sal >= 5000)
+```
+
+`dept d [exists(emp e[e.deptno = d.deptno])]`
+or exists can be omitted
+`dept d [(emp e[e.deptno = d.deptno])]`
+
+```sql
+select * from dept d where exists(select * from emp e where e.deptno = d.deptno)
 ```
 
 ### <a name="wiki-nesting-objects"/> Nesting objects
@@ -192,23 +207,6 @@ translates into SQL:
 group by grade, hisal, losal having count(*) > 1
 ```
 
-### <a name="wiki-nesting-selects-with-in"/> Nesting selects with IN and EXISTS
-You can specify a nested IN query in TreSQL, just as you would specify a nested IN query in SQL WHERE clause:
-```
-dept [
-      deptno in (
-        emp [sal >= 5000]  {deptno}
-      )
-     ] {dname}
-```
-
-You can specify a nested EXISTS query using parenthesis () in WHERE condition. The following query selects departments where employees exist:
-```
-dept d [
-  (emp e[e.deptno = d.deptno])
-  ] 
-```
-
 ### <a name="wiki-boolean"/>Combining boolean conditions (AND, OR, NOT) in WHERE clauses
 TreSQL uses the syntax:
 <pre>
@@ -220,19 +218,25 @@ You can also use parentheses, it's rather straightforward. Try the following exa
 
 Select employees in salary grades:
 ```
-salgrade
-  {grade, hisal, losal, 
-     |emp [sal >= :1(2) & sal <= :1(3) ] {ename, sal}
-  }
+salgrade sg [grade in(3,4)]
+  { grade, losal, hisal, |[sal >= sg.losal & sal <= sg.hisal ]emp {ename, sal} }
 ```
+```sql
+select grade, losal, hisal, sg.losal sg_losal_, sg.hisal sg_hisal_ from salgrade sg where grade in(3, 4)
+    select ename, sal from emp where (sal >= ?/*1(sg_losal_)*/ and sal <= ?/*1(sg_hisal_)*/)
+    /*Bind vars: 1(sg_losal_) = 1401, 1(sg_hisal_) = 2000*/
+    select ename, sal from emp where (sal >= ?/*1(sg_losal_)*/ and sal <= ?/*1(sg_hisal_)*/)
+    /*Bind vars: 1(sg_losal_) = 2001, 1(sg_hisal_) = 3000*/
+```
+Result
+grade | losal | hisal | ename | sal
+:----:|------:|------:|:------|---:
+3     |1401   | 2000  | ALLEN SMITH | 1600.00
+4     |2001   | 3000  | JONES       | 2975.00
+|||| BLAKE       | 2850.00
+|||| CLARK       | 2450.00
+|||| FORD        | 3000.00
 
-Select employees outside of salary grades:
-```
-salgrade
-  {grade, hisal, losal, 
-     |emp [sal <= :1(2) | sal >= :1(3)] {ename, sal}
-  }
-```
 
 Another turn-around way to select employees in salary grades:
 ```
