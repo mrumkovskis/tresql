@@ -26,6 +26,12 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     //option binding
     assertResult("ACCOUNTING")(Query.unique[String]("dept[?]{dname}#(deptno)", Some(10)))
     assertResult("1981-11-17")(Query.unique[java.sql.Date]("emp[sal = 5000]{hiredate}").toString)
+    assertResult(java.time.LocalDate.of(1981, 11, 17))(Query.unique[java.time.LocalDate]("emp[sal = 5000]{hiredate}"))
+    assertResult("KING" -> java.time.LocalDate.of(1981, 11, 17))(Query.unique[String, java.time.LocalDate]("emp[sal = 5000]{ename, hiredate}"))
+    assertResult(java.time.LocalDateTime.of(2009, 2, 22, 0, 0, 0))(
+      Query("""date_add ( sql("date '2008-11-22'"), sql("interval 3 month"))""").head[java.time.LocalDateTime])
+    assertResult("ABC" -> java.time.LocalDateTime.of(2009, 2, 22, 0, 0, 0))(
+      Query("""{ 'ABC', date_add ( sql("date '2008-11-22'"), sql("interval 3 month")) }""").head[String, java.time.LocalDateTime])
     assertResult(BigDecimal(10))(Query.unique[BigDecimal]("dept[10]{deptno}#(deptno)"))
     assertResult(5)(Query.unique[Int]("inc_val_5(?)", 0))
     assertResult(20)(Query.unique[Int]("inc_val_5(inc_val_5(?))", 10))
