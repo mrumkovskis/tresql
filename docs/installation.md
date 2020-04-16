@@ -19,7 +19,7 @@ _Prerequisite - you need docker to be installed on your system._
 
 1. Clone tresql project from github `git clone https://github.com/mrumkovskis/tresql.git && cd tresql`
 2. Start sbt `sbt it:console`
-3. Run tests to create [postgresql](https://www.postgresql.org) database with test data
+3. Run tests to create postgresql (https://www.postgresql.org) database with test data
    `new org.tresql.test.PGQueryTest().execute(configMap = ConfigMap("docker" -> "postgres:10.2", "remove" -> "false"))`.
    Parameter `"remove" -> false` prevents docker from dropping postgres container after tests are executed.
 
