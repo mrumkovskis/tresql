@@ -12,7 +12,7 @@ For sbt project add to your build.sbt file - `libraryDependencies += "org.tresql
 2. Start sbt `sbt test:console`
 3. Run tests to create in memory [hsqldb](http://hsqldb.org) database with test data `run (new test.QueryTest)`
 4. Try your tresql statements like `tresql"dept[dname = 'RESEARCH']".toListOfMaps`
-5. Database structure see [db.sql](/mrumkovskis/tresql/blob/develop/src/test/resources/db.sql)
+5. Database structure see [db.sql](/src/test/resources/db.sql)
 
 ### Try using postgres test database
 _Prerequisite - you need docker to be installed on your system._
@@ -28,4 +28,4 @@ _Prerequisite - you need docker to be installed on your system._
    `new org.tresql.test.PGQueryTest().execute(configMap = ConfigMap("docker" -> "postgres:10.2", "remove" -> "false", "wait_after_startup_millis" -> "5000"))`
    Or if default postgres port is busy specify other like `"port" -> "54321"`
 4. Try your tresql statements like `tresql"dept[dname = 'RESEARCH']".toListOfMaps`
-5. Database structure see [pgdb.sql](/mrumkovskis/tresql/blob/develop/src/it/resources/pgdb.sql)
+5. Database structure see [pgdb.sql](/src/it/resources/pgdb.sql)
