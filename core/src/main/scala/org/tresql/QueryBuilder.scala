@@ -1006,16 +1006,17 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case ArrExpr(List(f)) => f
         case null => null
       }
-      def filterExpr(fl: List[Arr]): Expr = fl match {
+      def filterExprArr(fl: List[Arr]): Expr = fl match {
         case Nil => null
-        case a :: Nil => transformExpr(buildInternal(a, WHERE_CTX))
-        case a :: t => transformExpr(buildInternal(a, WHERE_CTX)) match {
-          case null => filterExpr(t) case x => filterExpr(t) match {
-            case null => x case y => BinExpr("&", BracesExpr(x), BracesExpr(y))
-          }
+        case a :: t => (transformExpr(buildInternal(a, WHERE_CTX)), filterExprArr(t)) match { case (x, y) =>
+          def b(e: Expr) = e match { case _: BracesExpr => e case _ => BracesExpr(e) }
+          if (x == null) y else if (y == null) b(x) else BinExpr("&", b(x), y)
         }
       }
-      filterExpr(filterList)
+      filterList match {
+        case f :: Nil => transformExpr(buildInternal(f, WHERE_CTX))
+        case l => filterExprArr(l)
+      }
     }
     def maybeCallMacro(exp: Expr) = {
       var varSet: Set[QueryBuilder#BaseVarExpr] = Set()
