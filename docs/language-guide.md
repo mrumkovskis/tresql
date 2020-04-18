@@ -17,9 +17,15 @@ The sample data used by the following examples is described in [Appendix Data](#
 Data selection 
 --------------
 
-[Simple SELECTs](#simple-selects)  
+[Simple SELECTs](#simple-selects) 
 [Binding variables](#binding-variables)  
 [Table joins](#table-joins)  
+  * [Inner joint](#inner-join)
+  * [Outer join](#outer-join)
+  * [Shortcuts](#join-shortcuts)
+  * [Implicit outer, explicit inner joins](#implicit-left-join-explicit-inner-join-on-shortcut-syntax)
+  * [Product join](#product)
+  
 [Subqueries IN and EXISTS](#subqueries-in-and-exists)  
 [ORDER, DISTINCT, GROUP BY, HAVING](#order-distinct-group-by-having)  
 [LIMIT, OFFSET](#limit-offset)  
