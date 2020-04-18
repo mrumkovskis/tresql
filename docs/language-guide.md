@@ -19,8 +19,8 @@ Data selection
 
 [Simple SELECTs](#simple-selects)  
 [Binding variables](#binding-variables)  
-[Table joins](#joins)  
-[Subqueries IN and EXISTS](#subqueries-in-exists)  
+[Table joins](#table-joins)  
+[Subqueries IN and EXISTS](#subqueries-in-and-exists)  
 [ORDER, DISTINCT, GROUP BY, HAVING](#order-distinct-group-by-having)  
 [LIMIT, OFFSET](#limit-offset)  
 [UNION, INTERSECT, EXCEPT](#union-intersect-except)  
