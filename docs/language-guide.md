@@ -21,12 +21,12 @@ Data selection
 [Binding variables](#binding-variables)  
 [Table joins](#joins)  
 [Subqueries IN and EXISTS](#subqueries-in-exists)  
-[ORDER, DISTINCT, GROUP BY, HAVING](#order-distinct-group-by-having)
-[LIMIT, OFFSET](#limit-offset)
-[UNION, INTERSECT, EXCEPT](#union-intersect-except)
-[Aggregate expressions](#aggregate-expressions)
-[Common Table Expressions - CTE (WITH queries)](#common-table-expressions---cte-with-queries)
-[Hierarchical queries](#hierarchical-queries)
+[ORDER, DISTINCT, GROUP BY, HAVING](#order-distinct-group-by-having)  
+[LIMIT, OFFSET](#limit-offset)  
+[UNION, INTERSECT, EXCEPT](#union-intersect-except)  
+[Aggregate expressions](#aggregate-expressions)  
+[Common Table Expressions - CTE (WITH queries)](#common-table-expressions---cte-with-queries)  
+[Hierarchical queries](#hierarchical-queries)  
 
 ### Simple SELECTs 
 
