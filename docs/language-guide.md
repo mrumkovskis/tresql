@@ -3,40 +3,16 @@ tresql language guide
 
 Contents
 --------
-* [Syntax quickchart](#syntax-quickchart)  
 * [Data selection](#data-selection)  
-* [Data manipulation](#data-manipulation)  
+* [Data manipulation](#data-manipulation)
+* [Expression list](#expression-list)  
 * [Sample database structure](#sample-database-structure)  
+* [Syntax quickchart](#syntax-quickchart)  
 
-tresql provides syntax for both querying (SELECT) and data manipulation (INSERT, UPDATE) as well as more complicated SQL constructs like Common Table Expressions (CTE aka WITH queries).
+tresql provides syntax for both querying (SELECT) and data manipulation (INSERT, UPDATE)
+as well as more complicated SQL constructs like Common Table Expressions (CTE aka WITH queries).
 
 The sample data used by the following examples is described in [Appendix Data](#appendix-data).  
- 
-Syntax quickchart 
-------------------
-```
-{}      Selection set (columns clause).
-[]      WHERE or join conditions
-/       Shortcut join between tables (referential constraint defined).
-:foo    Named binding variable foo.
-?       Unnamed binding variable
-+       INSERT
-=       UPDATE 
--       DELETE
-&       AND
-|       OR, also nested query
-!       NOT
-++      UNION
-&&      INTERSECT
-,       Delimiter for columns and statements
-()      GROUB BY
-^()     HAVING
-#       ORDER BY (ascending), DISTINCT
-~#      ORDER BY DESCENDING
-~       LIKE
-~~      ILIKE (case-insensitive)
-@()     OFFSET, LIMIT     
-```
 
 Data selection 
 --------------
@@ -45,10 +21,11 @@ Data selection
 [Binding variables](#binding-variables)  
 [Table joins](#joins)  
 [Subqueries IN and EXISTS](#subqueries-in-exists)  
-[ORDER, DISTINCT, GROUP BY, HAVING](#order)  
-[UNION, INTERSECT, EXCEPT](#union-intersect-except)  
-[Combining several queries in a batch](#combining-queries)  
-[LIKE comparison](#like-comparison)  
+[ORDER, DISTINCT, GROUP BY, HAVING](#order-distinct-group-by-having)
+[LIMIT, OFFSET](#limit-offset)
+[UNION, INTERSECT, EXCEPT](#union-intersect-except)
+[Aggregate expressions](#aggregate-expressions)
+[Common Table Expressions - CTE (WITH queries)](#common-table-expressions---cte-with-queries)
 [Hierarchical queries](#hierarchical-queries)
 
 ### Simple SELECTs 
@@ -73,6 +50,51 @@ select ename, sal from emp where sal > 1000 and sal < 2000
 `emp [ 1000 < sal < 2000 ] {ename, sal}`
 ```sql
 select ename, sal from emp where 1000 < sal and sal < 2000
+```
+
+`dept [deptno in (10, 20)]`
+
+```sql
+select * from dept where deptno in(10, 20)
+```
+
+#### LIKE comparison
+In WHERE conditions, tilde "~" stands for LIKE comparison, and "~~" for case-insensitive LIKE comparison:
+
+`emp [ job ~ '%LYST'] {ename, job}`
+
+```sql
+select ename, job from emp where job like '%LYST'
+```
+
+ILIKE operator depends on database dialect, since it is not SQL standard. For hsqldb sql is like this:
+
+`emp [ job ~~ '%LYST'] {ename, job}`
+
+```sql
+select ename, job from emp where lcase(job) like lcase('%LYST')
+```
+
+#### CAST operator
+
+This is postgresql style "::" operator that can be added after expression.
+
+`dept{deptno::varchar}#(1)`
+
+```sql
+select deptno::varchar from dept order by 1 asc
+```
+
+> NOTE: CAST operator will not work on hsqldb
+
+#### Table less query
+
+You can omit table clause or put "null" in table clause to produce table less query:
+
+`{1, 'a'}` or `null {1, 'a'}`
+
+```sql
+select 1, 'a'
 ```
 
 ### Binding variables
@@ -131,14 +153,17 @@ select dname from dept
 
 ### Table joins 
 
-Inner join:
+#### Inner join
+
 `emp [emp.deptno = dept.deptno] dept { ename, job, dname }`
 
 ```sql
 select ename, job, dname from emp join dept on emp.deptno = dept.deptno
 ```
 
-Outer join. Left outer join is denoted by question mark "?" after table name being joined:
+#### Outer join.
+
+Left outer join is denoted by question mark "?" after table name being joined:
 
 `emp e [e.deptno = d.deptno] dept d[e.mgr = e2.mgr] emp e2? { e.ename, e.job, d.dname, e2.ename manager }`
 
@@ -149,11 +174,13 @@ select e.ename, e.job, d.dname, e2.ename manager
 
 Right outer join is denoted by question mark "?" before table name being joined:
 
-`emp e/?dept d`
+`emp e[e.deptno = d.deptno]?dept d`
 
 ```sql
 select * from emp e right join dept d on e.deptno = d.deptno
 ```
+
+#### Join shortcuts
 
 tresql provides slash "/" as a shortcut syntax for joins. It infers the relationship between the two tables if
 there is just 1 foreign key joining them. The following query joins EMP and DEPT tables:  
@@ -182,7 +209,6 @@ select hours, ename, dname from emp e
   join dept on e.deptno = dept.deptno where ename = 'SCOTT'
 ```
 
-
 Foreign key join shortcut syntax. If table has more then one foreign key reference to other table one can specify only foreign key column name,
 or list of foreign column names if table is to be joined more than one time.
 
@@ -200,7 +226,9 @@ select e.ename, m.ename, hours
 where m.ename is not null
 ```
 
-Implicit left join on shortcut syntax. Explicit inner join. If join column for the left table is primary key or nullable foreign key
+#### Implicit left join, explicit inner join on shortcut syntax
+
+If join column for the left table is primary key or nullable foreign key
 shortcut syntax joins are translated to sql as left joins. If inner join is required put ! mark after table name or alias. 
 
 Implicit outer join:
@@ -235,6 +263,8 @@ select * from dept join emp on dept.deptno = emp.deptno
 select * from work join emp e on empno = e.empno join emp m on empno_mgr = m.empno
 ```
 
+#### Product
+
 To create product i.e. no join use empty square brackets []:
 
 `dept[]salgrade`
@@ -250,129 +280,187 @@ select dname from dept where deptno in(select deptno from emp where sal >= 5000)
 ```
 
 `dept d [exists(emp e[e.deptno = d.deptno])]`
+
 or exists can be omitted
+
 `dept d [(emp e[e.deptno = d.deptno])]`
 
 ```sql
 select * from dept d where exists(select * from emp e where e.deptno = d.deptno)
 ```
 
-### <a name="wiki-order"/>ORDER, DISTINCT, GROUP BY, HAVING
+### ORDER, DISTINCT, GROUP BY, HAVING
 #### ORDER BY
-Order employees by ename:  
+Sort employees by ename in ascending order:  
+
 `emp { ename, sal } #(ename)`
 
- `#(ename)` sorts employee records in ASCENDING order by ename.   
-` ~#(ename)` sorts in DESCENDING order.
+```sql
+select ename, sal from emp order by ename asc
+```
 
-ORDER BY descending by department name and employee name:  
-`emp e/dept d { d.dname, e.ename, e.sal } ~#(d.dname)~#(e.ename)`
+Sort employees by ename in descending order:
+
+`emp { ename, sal } #(~ename)`
+
+```sql
+select ename, sal from emp order by ename desc
+```
+ 
+Sort descending by department name and ascending by employee name:  
+`emp e/dept d { d.dname, e.ename, e.sal } #(~d.dname, e.ename)`
+
+```sql
+select d.dname, e.ename, e.sal from emp e join dept d on e.deptno = d.deptno
+  order by d.dname desc, e.ename asc
+```
+
+NULL FIRST, NULLS LAST clause
+
+`dept/emp{dname, ename, mgr}#(dname, mgr null, null ~ename)`
+
+```sql
+select dname, ename, mgr from dept left join emp on dept.deptno = emp.deptno
+  order by dname asc, mgr asc nulls last, ename desc nulls first
+```
 
 #### DISTINCT 
 DISTINCT is denoted by "#" sign before column list. The following query selects distinct departments from EMP table:   
+
 `emp #{ deptno }`
 
-You can combine DISTINCT with ORDER BY:  
-`emp e/dept d #{ d.deptno, d.dname } #(d.dname)`
+```sql
+select distinct deptno from emp
+```
+
+DSTINCT in aggregate function
+
+`emp{count(# deptno)}`
+
+```sql
+select count(distinct deptno) from emp
+```
 
 #### GROUP BY:
 ```
-emp e 
-  [e.sal >= s.hisal & e.sal <= s.losal] salgrade s 
-  {grade, hisal, losal, count(empno)} 
-  (grade, hisal, losal) 
-  #(grade)
+emp e [s.losal <= e.sal < s.hisal] salgrade s 
+  {grade, hisal, losal, count(empno)}
+  (grade, hisal, losal) #(grade)
 ```
 
 This query groups employees by salary grades. The GROUP BY columns are specified in round brackets: (grade, hisal, losal). This produces following SELECT statement:
 ```sql
-select grade,hisal,losal,count(empno) from emp e join salgrade s 
-on e.sal >= s.hisal and e.sal <= s.losal group by grade,hisal,losal order by grade asc
+select grade, hisal, losal, count(empno) from emp e join salgrade s on s.losal <= e.sal and e.sal < s.hisal
+  group by grade,hisal,losal order by grade asc
 ```
 
 #### GROUP BY with HAVING
-Select employees only in those salary grades where employee count >1. HAVING is specified by ^ operator:
+Select employees only in those salary grades where employee count > 1. HAVING is specified by ^ operator:
+
 ```
-emp 
-  [sal >= hisal & sal <= losal] salgrade 
-  {grade, hisal, losal, count(*)} 
-  (grade, hisal, losal)^(count(*) > 1)#(grade)
-```
-Here the clause 
-    (grade, hisal, losal)^(count(*) > 1) 
-translates into SQL: 
-```sql
-group by grade, hisal, losal having count(*) > 1
+emp e [s.losal <= e.sal < s.hisal] salgrade s  {grade, hisal, losal, count(empno)} (grade, hisal, losal)^(count(*) > 1) #(grade)
 ```
 
-### <a name="wiki-union"/>UNION, INTERSECT, product
-UNION is specified by "++" :
+```sql
+select grade, hisal, losal, count(empno)
+  from emp e join salgrade s on s.losal <= e.sal and e.sal < s.hisal
+  group by grade,hisal,losal having count(*) > 1 order by grade asc
 ```
-   emp [deptno = 10] { deptno, ename} 
-++ emp [deptno = 20] { deptno, ename} 
-++ emp [deptno = 30] { deptno, ename} 
+
+### LIMIT, OFFSET
+
+Only LIMIT clause
+
+`dept#(deptno)@(1)`
+
+```sql
+select * from dept order by deptno asc limit 1
+```
+
+Only OFFSET clause
+
+`dept#(deptno)@(3, )`
+
+```sql
+select * from dept order by deptno asc offset 3
+```
+
+Both clauses
+
+`dept#(deptno)@(1 2)`
+
+```sql
+select * from dept order by deptno asc offset 1 limit 2
+```
+
+### UNION, INTERSECT, EXCEPT
+UNION is specified by "+" operator between queries:
+
+`emp [deptno = 10] { deptno, ename} + emp [deptno = 20] { deptno, ename} + emp [deptno = 30] { deptno, ename}`
+
+```sql
+select deptno, ename from emp where deptno = 10 union
+select deptno, ename from emp where deptno = 20 union
+select deptno, ename from emp where deptno = 30
+```
+
+UNION ALL is specified by "++" operator between queries:
+
+`emp [deptno = 10] { deptno, ename} ++ emp [deptno = 10] { deptno, ename}`
+
+```sql
+select deptno, ename from emp where deptno = 10 union all select deptno, ename from emp where deptno = 10
 ```
 
 INTERSECT is specified by "&&" :  
+
 `emp[sal >= 1000] {empno, ename} && emp[sal <= 3000] {empno, ename}`
 
-There is special notation for product of two tables (join  without condition). You have to explicitly specify empty join condition as []. The reason for this is to produce an error if join condition was omitted by mistake.
-```
-dept [] salgrade
-{dname, grade}
+```sql
+select empno, ename from emp where sal >= 1000 intersect select empno, ename from emp where sal <= 3000
 ```
 
-### <a name="wiki-combining-queries"/>Combining several queries in a batch
-Like data manipulation statements (see [Data manipulation](#data-manipulation) chapter), you can combine several queries in a batch if you separate them with commas ",". Query results are combined together into one JSON array.
-```
-emp [ job = "ANALYST"] {ename},
-dept { dname }
-```
+EXCEPT is specified by "-" operator between queries:
 
-### <a name="wiki-like-comparison"/>LIKE comparison
-In WHERE conditions, tilde "~" stands for LIKE comparison, and "~~" for case-insensitive LIKE comparison:
-```
-emp [ job ~ "%LYST"] {ename, job}
-emp [ job ~~ "%lyST"] {ename, job}
+Select departments which do not have any employees
+
+`dept{deptno} - dept/emp?[ename != null]{dept.deptno}`
+
+```sql
+select deptno from dept except
+select dept.deptno from dept left join emp on dept.deptno = emp.deptno where ename is not null
 ```
 
-<a name="wiki-data-manipulation"/>Data manipulation 
------------------
+If you would like "+" or "-" operation between queries to be treated as plus or minus you should cast query expression like in
+example below queries in the column clause are cast to "decimal" type:
 
-[INSERT statement](#insert-statement)  
-[UPDATE statement](#update-statement)  
-[DELETE statement](#delete-statement)  
-[Combining several statements in a batch](#combining-dml)  
+`dept d { (emp e[d.deptno = e.deptno]{sum(sal)})::decimal - (emp e[d.deptno = e.deptno]{sum(comm)})::decimal diff }`
 
-### <a name="wiki-insert-statement"/>INSERT statement
-
-Example:  
-`DEPT {DEPTNO, DNAME, LOC} + [10, "ACCOUNTING", "NEW YORK"]`  
-(Note that columns are specified in figure brackets and values in square brackets).
-
-Or using unnamed binding variables (for binding variables, values should be provided, either by API or when calling from web service):  
-`DEPT {DEPTNO, DNAME, LOC} + [?, ?, ?]`
-
-Or named variables:  
-`DEPT {DEPTNO, DNAME, LOC} + [:DEPTNO, :DNAME, :LOC]`
-
-### <a name="wiki-update-statement"/>UPDATE statement
-Example (named binding variables):  
-`DEPT [:DEPTNO] { DNAME } = [ :DNAME ]`
-
-Increment salary of employees hired between given hiredates (for :
-```
-emp [hiredate >= ? & hiredate <= ?] 
-  {sal} = [sal + 100]
+```sql
+select
+  (select sum(sal) from emp e where d.deptno = e.deptno)::decimal -
+  (select sum(comm) from emp e where d.deptno = e.deptno)::decimal diff
+from dept d
 ```
 
-### <a name="wiki-delete-statement"/>DELETE statement
-Use minus sign "-" for DELETE.
-DELETE FROM SALGRADE WHERE GRADE = 5:  
-`salgrade - [grade = 5]`
+### Aggregate expressions
 
-or shorthand:  
-`salgrade - [5]`
+Aggregate expressions depend on the database. Syntax is like function call optionally followed by filter and/or order
+expressions.
+
+`dept{group_concat(dname)#(dname)}`
+
+```sql
+select group_concat(dname order by dname asc) from dept
+```
+
+`dept{group_concat(dname)#(dname)[deptno < 30]}`
+
+```sql
+select group_concat(dname order by dname asc) filter (where deptno < 30) from dept
+```
+
+### Common Table Expressions - CTE (WITH queries)
 
 ### Hierarchical queries
 This topic explains how single tresql query can generate multiple parent-child connected sql queries returning non tabular (nested) result structure. 
@@ -399,11 +487,11 @@ For each department row employees query is performed with current department num
 
 ```sql
 select deptno, dname, dept.deptno dept_deptno_ from dept
-select empno, ename from emp where (deptno = ?/*1(dept_deptno_)*/)
-/*Bind vars: 1(dept_deptno_) = 10*/
-select empno, ename from emp where (deptno = ?/*1(dept_deptno_)*/)
-/*Bind vars: 1(dept_deptno_) = 20*/
-/* ... */
+  select empno, ename from emp where (deptno = ?/*1(dept_deptno_)*/)
+  /*Bind vars: 1(dept_deptno_) = 10*/
+  select empno, ename from emp where (deptno = ?/*1(dept_deptno_)*/)
+  /*Bind vars: 1(dept_deptno_) = 20*/
+  /* ... */
 ```
 
 Result
@@ -456,7 +544,7 @@ The pipe "|" syntax specifies a query for nested object. This enclosed query fol
 It has to reference parent query, and this is specified by filtering condition in square brackets "[]" immediately after pipe "|"
 Filtering condition has to reference some `table.column` from parent query.
 
-Another three level example:
+Three level example:
 
 ```
 dept [deptno in (10, 20)]
@@ -471,11 +559,11 @@ dept [deptno in (10, 20)]
 
 ```sql
 select deptno, dname from dept where deptno in(10, 20)
-select empno, ename, mgr from emp where (deptno = ?/*1(1)*/)
-/*Bind vars: 1(1) = 10*/
-select ename manager from emp mgr where (mgr.empno = ?/*1(1)*/ and mgr.deptno = ?/*2(1)*/)
-/*Bind vars: 1(1) = 10055, 2(1) = 10*/
-/* ... */
+  select empno, ename, mgr from emp where (deptno = ?/*1(1)*/)
+  /*Bind vars: 1(1) = 10*/
+    select ename manager from emp mgr where (mgr.empno = ?/*1(1)*/ and mgr.deptno = ?/*2(1)*/)
+    /*Bind vars: 1(1) = 10055, 2(1) = 10*/
+  /* ... */
 ```
 
 Result
@@ -555,10 +643,10 @@ salgrade sg [grade in(3,4)]
 ```
 ```sql
 select grade, losal, hisal, sg.losal sg_losal_, sg.hisal sg_hisal_ from salgrade sg where grade in(3, 4)
-    select ename, sal from emp where (sal >= ?/*1(sg_losal_)*/ and sal <= ?/*1(sg_hisal_)*/)
-    /*Bind vars: 1(sg_losal_) = 1401, 1(sg_hisal_) = 2000*/
-    select ename, sal from emp where (sal >= ?/*1(sg_losal_)*/ and sal <= ?/*1(sg_hisal_)*/)
-    /*Bind vars: 1(sg_losal_) = 2001, 1(sg_hisal_) = 3000*/
+  select ename, sal from emp where (sal >= ?/*1(sg_losal_)*/ and sal <= ?/*1(sg_hisal_)*/)
+  /*Bind vars: 1(sg_losal_) = 1401, 1(sg_hisal_) = 2000*/
+  select ename, sal from emp where (sal >= ?/*1(sg_losal_)*/ and sal <= ?/*1(sg_hisal_)*/)
+  /*Bind vars: 1(sg_losal_) = 2001, 1(sg_hisal_) = 3000*/
 ```
 Result
 grade | losal | hisal | ename | sal
@@ -583,18 +671,18 @@ dept d1
 
 ```sql
 select deptno, dname, d1.deptno d1_deptno_ from dept d1 order by deptno asc
-select grade, hisal, losal, count(empno) emp_count, salgrade.losal salgrade_losal_, salgrade.hisal salgrade_hisal_
-  from emp join salgrade on sal >= losal and sal <= hisal
-    where emp.deptno = ?/*1(d1_deptno_)*/ group by grade,hisal,losal order by 1 asc
-/*Bind vars: 1(d1_deptno_) = 10*/
-select grade, hisal, losal, count(empno) emp_count, salgrade.losal salgrade_losal_, salgrade.hisal salgrade_hisal_
-  from emp join salgrade on sal >= losal and sal <= hisal where emp.deptno = ?/*1(d1_deptno_)*/
-  group by grade,hisal,losal order by 1 asc
-/*Bind vars: 1(d1_deptno_) = 20*/
-select ename, dept.deptno, dname, sal from emp join dept on emp.deptno = dept.deptno
-  where (sal >= ?/*1(salgrade_losal_)*/ and sal <= ?/*1(salgrade_hisal_)*/ and dept.deptno = ?/*2(d1_deptno_)*/)
-  order by empno asc
-/*Bind vars: 1(salgrade_losal_) = 700, 1(salgrade_hisal_) = 1200, 2(d1_deptno_) = 20*/
+  select grade, hisal, losal, count(empno) emp_count, salgrade.losal salgrade_losal_, salgrade.hisal salgrade_hisal_
+    from emp join salgrade on sal >= losal and sal <= hisal
+      where emp.deptno = ?/*1(d1_deptno_)*/ group by grade,hisal,losal order by 1 asc
+  /*Bind vars: 1(d1_deptno_) = 10*/
+  select grade, hisal, losal, count(empno) emp_count, salgrade.losal salgrade_losal_, salgrade.hisal salgrade_hisal_
+    from emp join salgrade on sal >= losal and sal <= hisal
+      where emp.deptno = ?/*1(d1_deptno_)*/ group by grade,hisal,losal order by 1 asc
+  /*Bind vars: 1(d1_deptno_) = 20*/
+    select ename, dept.deptno, dname, sal from emp join dept on emp.deptno = dept.deptno
+      where (sal >= ?/*1(salgrade_losal_)*/ and sal <= ?/*1(salgrade_hisal_)*/ and dept.deptno = ?/*2(d1_deptno_)*/)
+        order by empno asc
+    /*Bind vars: 1(salgrade_losal_) = 700, 1(salgrade_hisal_) = 1200, 2(d1_deptno_) = 20*/
 /* ... */
 ```
 
@@ -682,7 +770,97 @@ Result
         sal: 2850
 ```
 
+Data manipulation 
+-----------------
+
+[INSERT statement](#insert-statement)  
+[UPDATE statement](#update-statement)  
+[DELETE statement](#delete-statement)  
+[Combining several statements in a batch](#combining-dml)  
+
+### <a name="wiki-insert-statement"/>INSERT statement
+
+Example:  
+`DEPT {DEPTNO, DNAME, LOC} + [10, "ACCOUNTING", "NEW YORK"]`  
+(Note that columns are specified in figure brackets and values in square brackets).
+
+Or using unnamed binding variables (for binding variables, values should be provided, either by API or when calling from web service):  
+`DEPT {DEPTNO, DNAME, LOC} + [?, ?, ?]`
+
+Or named variables:  
+`DEPT {DEPTNO, DNAME, LOC} + [:DEPTNO, :DNAME, :LOC]`
+
+### <a name="wiki-update-statement"/>UPDATE statement
+Example (named binding variables):  
+`DEPT [:DEPTNO] { DNAME } = [ :DNAME ]`
+
+Increment salary of employees hired between given hiredates (for :
+```
+emp [hiredate >= ? & hiredate <= ?] 
+  {sal} = [sal + 100]
+```
+
+### <a name="wiki-delete-statement"/>DELETE statement
+Use minus sign "-" for DELETE.
+DELETE FROM SALGRADE WHERE GRADE = 5:  
+`salgrade - [grade = 5]`
+
+or shorthand:  
+`salgrade - [5]`
+
+
+Expression list
+---------------
+You can combine several expressions in comma separated list. For every element sql statement will be issued.
+
+```
+emp [ job = "ANALYST"] {ename},
+dept { dname }
+```
+
+`round(1.55, 1), 1 + 9`
+
 Sample database structure
 -------------------------
 
 Database structure see [db.sql](/src/test/resources/db.sql)
+
+Syntax quickchart 
+------------------
+```
+{}      Selection set (columns clause).
+[]      WHERE or join conditions
+/       Shortcut join between tables (referential constraint defined), division operator
+:foo    Named binding variable foo.
+?       Unnamed binding variable, outer join
++       INSERT, plus operator
+=       UPDATE, equals operator
+-       DELETE, minus operator
+&       AND
+|       OR, also nested query
+!       NOT, explicit inner join
+++      UNION
+&&      INTERSECT
+,       Delimiter for columns and statements
+()      GROUB BY
+^()     HAVING
+#       ORDER BY, DISTINCT
+~       LIKE, descending order
+~~      ILIKE (case-insensitive)
+@()     OFFSET, LIMIT
+;       join separator
+fun()   function
+::      cast operator
+```
+
+### SELECT statement structure
+
+`<from>[<where>][<columns>][<group by> [<having>]][<order>][<offset> [<limit>]`
+
+FROM
+
+`<table expr>[<join><table expr> ...]`
+
+Example:
+
+`table1[join cond]table2[where]{columns} (group cols)^(having expr) #(order) (offset limit)`
