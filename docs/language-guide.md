@@ -283,11 +283,12 @@ select * from dept join salgrade on true
 You can use data generation functions in table clause with optional WITH ORDINALITY clause
 denoted by '#' symbol before column declarations (see database documentation for details).
 
-```dept
-   [deptno = x] unnest(sequence_array(10, 20, 10)) a(# x::int, i::int)
-   [a.i = b.i]  unnest(sql('sequence_array(current_date, current_date + 1 day, 1 day)'))
-     b(# date::date, i::int)
-   {a.i, dname, date}
+```
+dept
+  [deptno = x] unnest(sequence_array(10, 20, 10)) a(# x::int, i::int)
+  [a.i = b.i]  unnest(sql('sequence_array(current_date, current_date + 1 day, 1 day)'))
+    b(# date::date, i::int)
+  {a.i, dname, date}
 ```
 
 ```sql
@@ -296,6 +297,11 @@ select a.i, dname, date from dept
   join unnest(sequence_array(current_date, current_date + 1 day, 1 day))
     with ordinality b(date, i) on a.i = b.i
 ```
+
+Function `sql(...)` in tresql above is macro function which is used to embed in resulting sql fragments not supported by tresql.
+In this case tresql syntax does not support date manipulation construction like `current_date + 1 day`
+For tresql macro details see [tresql API doc](api.md#tresql-macro).
+
 
 ### Subqueries IN and EXISTS
 `dept [ deptno in (emp [sal >= 5000]  {deptno}) ] {dname}`
