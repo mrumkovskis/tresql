@@ -12,19 +12,18 @@ Contents
 tresql provides syntax for both querying (SELECT) and data manipulation (INSERT, UPDATE)
 as well as more complicated SQL constructs like Common Table Expressions (CTE aka WITH queries).
 
-The sample data used by the following examples is described in [Appendix Data](#appendix-data).  
-
 Data selection 
 --------------
 
-[Simple SELECTs](#simple-selects) 
+[Simple SELECTs](#simple-selects)  
 [Binding variables](#binding-variables)  
 [Table joins](#table-joins)  
-  * [Inner joint](#inner-join)
+  * [Inner join](#inner-join)
   * [Outer join](#outer-join)
   * [Shortcuts](#join-shortcuts)
   * [Implicit outer, explicit inner joins](#implicit-left-join-explicit-inner-join-on-shortcut-syntax)
   * [Product join](#product)
+  * [Table as function WITH ORDINALITY](#table-as-function-with-ordinality)
   
 [Subqueries IN and EXISTS](#subqueries-in-and-exists)  
 [ORDER, DISTINCT, GROUP BY, HAVING](#order-distinct-group-by-having)  
@@ -277,6 +276,25 @@ To create product i.e. no join use empty square brackets []:
 
 ```sql
 select * from dept join salgrade on true
+```
+
+#### Table as function WITH ORDINALITY
+
+You can use data generation functions in table clause with optional WITH ORDINALITY clause
+denoted by '#' symbol before column declarations (see database documentation for details).
+
+```dept
+   [deptno = x] unnest(sequence_array(10, 20, 10)) a(# x::int, i::int)
+   [a.i = b.i]  unnest(sql('sequence_array(current_date, current_date + 1 day, 1 day)'))
+     b(# date::date, i::int)
+   {a.i, dname, date}
+```
+
+```sql
+select a.i, dname, date from dept
+  join unnest(sequence_array(10,20,10)) with ordinality a(x, i) on deptno = x
+  join unnest(sequence_array(current_date, current_date + 1 day, 1 day))
+    with ordinality b(date, i) on a.i = b.i
 ```
 
 ### Subqueries IN and EXISTS
@@ -850,7 +868,7 @@ Syntax quickchart
 ,       Delimiter for columns and statements
 ()      GROUB BY
 ^()     HAVING
-#       ORDER BY, DISTINCT
+#       ORDER BY, DISTINCT, WITH ORDINALITY
 ~       LIKE, descending order
 ~~      ILIKE (case-insensitive)
 @()     OFFSET, LIMIT
