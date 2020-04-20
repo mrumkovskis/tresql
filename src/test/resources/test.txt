@@ -540,6 +540,8 @@ dept[(dept_addr[deptnr = dept.deptno]{deptnr})]{dname}#(1) --> []
 []unnest(sequence_array(10, 12, 1)) a(x::int)[a.x = b.x]unnest(sequence_array(12, 13, 1)) b(x::int) { a.x, b.x } --> [[12, 12]]
 []dummy_table() d(dummy){*} --> [[0]]
 []dummy_table() d(d){d.d} --> [[0]]
+//table as function with ordinality
+dept[deptno = x]unnest(sequence_array(10, 20, 10)) a(# x::int, i::int)[a.i = b.i]unnest(sequence_array(100, 101, 1)) b(# y::int, i::int) {dname, a.i, y}#(dname) -->  [["ACCOUNTING", 1, 100], ["RESEARCH", 2, 101]]
 
 //table as function in from clause
 (dummy() ++ dummy){dummy} --> [[0], [0]]

@@ -657,6 +657,8 @@ dummy{ ((dummy{sum(dummy)})::int - (dummy{dummy}@(1))::int) x} --> [[0]]
 []generate_series(1, 2) a(x::int) { a.x } --> [[1], [2]]
 []generate_series(1, 2) a(x::int) [x = 2] { a.x } --> [[2]]
 []generate_series(1, 3) a(x::int)[a.x = b.x]generate_series(3, 4) b(x::int) { a.x, b.x } --> [[3, 3]]
+//table as function with ordinality
+[]generate_series(1, 2) a(#x::int, i::int) [x = 2] { a.x, a.i } --> [[2, 2]]
 
 //update from join with other tables values (update from)
 =dept_addr [addr_nr = a.nr] (address a {a.nr, a.addr}) a [a.addr ~ 'Riga%'] {addr = a.addr} {dept_addr.addr_nr} --> []

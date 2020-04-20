@@ -67,8 +67,8 @@ trait Compiler extends QueryParsers { thisCompiler =>
       throw CompilerException(
         s"Function '$name' has wrong number of parameters: ${exp.parameters.size} instead of ${procedure.pars.size}")
   }
-  case class FunAsTableDef[T](exp: FunDef[T], cols: Option[List[TableColDef]]) extends Exp {
-    def tresql = FunAsTable(exp.exp, cols).tresql
+  case class FunAsTableDef[T](exp: FunDef[T], cols: Option[List[TableColDef]], withOrdinality: Boolean) extends Exp {
+    def tresql = FunAsTable(exp.exp, cols, withOrdinality).tresql
   }
   case class RecursiveDef(exp: Exp, scope: Scope = null) extends TypedExp[RecursiveDef]
   with Scope {
@@ -107,7 +107,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
       case TableDef(n, Obj(TableObj(s: SelectDefBase), _, _, _, _)) =>
         Option(table_from_selectdef(n, s))
       case TableDef(_, Obj(TableObj(_: Null), _, _, _,_)) => Option(table_alias(null))
-      case TableDef(_, Obj(TableObj(FunAsTableDef(_, Some(cols))), alias, _, _, _)) =>
+      case TableDef(_, Obj(TableObj(FunAsTableDef(_, Some(cols), _)), alias, _, _, _)) =>
         Option(Table(alias,
           cols.map(c =>
             org.tresql.metadata.Col(name = c.name,
@@ -410,7 +410,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
           aggregateWhere = f.aggregateWhere.map(tr(ctx, _))
         ), retType, p)
       }.getOrElse(throw CompilerException(s"Unknown function: ${f.name}"))
-      case ftd: FunAsTable => FunAsTableDef(tr(ctx, ftd.fun).asInstanceOf[FunDef[_]], ftd.cols)
+      case ftd: FunAsTable => FunAsTableDef(tr(ctx, ftd.fun).asInstanceOf[FunDef[_]], ftd.cols, ftd.withOrdinality)
       case c: Col =>
         val alias = if (c.alias != null) c.alias else c.col match {
           case Obj(Ident(name), _, _, _, _) => name.last //use last part of qualified ident as name

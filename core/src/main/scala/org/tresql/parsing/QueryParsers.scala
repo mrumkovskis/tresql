@@ -96,7 +96,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   }
 
   case class TableColDef(name: String, typ: Option[String])
-  case class FunAsTable(fun: Fun, cols: Option[List[TableColDef]]) extends Exp {
+  case class FunAsTable(fun: Fun, cols: Option[List[TableColDef]], withOrdinality: Boolean) extends Exp {
     def tresql = fun.tresql
   }
 
@@ -131,10 +131,11 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       (if (join != null) join.tresql else "") + (if (outerJoin == "r") "?" else "") +
       obj.tresql + (if (outerJoin == "l") "?" else if (outerJoin == "i") "!" else "") +
         (obj match {
-          case FunAsTable(_, cols) =>
+          case FunAsTable(_, cols, ord) =>
             " " + alias +
             cols
-              .map(_.map(c => c.name + c.typ.map("::" + _).getOrElse("")).mkString("(", ", ", ")"))
+              .map(_.map(c => c.name + c.typ.map("::" + _).getOrElse(""))
+                .mkString(if (ord) "(# " else "(", ", ", ")"))
               .getOrElse("")
           case _ => if (alias == null) "" else " " + alias
         })
@@ -314,22 +315,24 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   def filters: MemParser[Filters] = rep(filter) ^^ Filters named "filters"
   private def objContent = const | functionWithoutFilter | variable | qualifiedIdent | braces
   private def alias =
-    ident ~ opt("(" ~> rep1sep(ident ~ opt(cast), ",") <~ ")") ^^ {
-      case id ~ maybeColdefs => (id, maybeColdefs.map(_.map { case cn ~ typ => TableColDef(cn, typ) }))
+    ident ~ opt("(" ~> opt("#") ~ rep1sep(ident ~ opt(cast), ",") <~ ")") ^^ {
+      case id ~ Some(mbOrd ~ colDefs) =>
+        (id, Some(colDefs.map { case cn ~ typ => TableColDef(cn, typ) }), mbOrd.isDefined)
+      case id ~ None => (id, None, false)
     }
   def obj: MemParser[Obj] = opt(join) ~ opt("?") ~ objContent ~
     opt(opt("?" | "!") ~ alias ~ opt("?" | "!")) ^^ {
     case _ ~ Some(_) ~ _ ~ Some(Some(_) ~ _ ~ _ | _ ~ _ ~ Some(_)) =>
       sys.error("Cannot be right and left join at the same time")
     case join ~ rightoj ~ o ~ Some(leftoj ~ alias ~ leftoj1) =>
-      def processAlias(coldefs: Option[List[TableColDef]]) = {
+      def processAlias(coldefs: Option[List[TableColDef]], ord: Boolean) = {
         o match {
-          case f: Fun => FunAsTable(f, coldefs)
+          case f: Fun => FunAsTable(f, coldefs, ord)
           case x if coldefs == None => x
           case x => sys.error(s"Table definition is allowed only after function. Instead found: ${x.tresql}")
         }
       }
-      Obj(processAlias(alias._2), alias._1, join.orNull,
+      Obj(processAlias(alias._2, alias._3), alias._1, join.orNull,
         rightoj.map(x => "r") orElse (leftoj orElse leftoj1).map(j => if(j == "?") "l" else "i") orNull,
         (leftoj orElse leftoj1).exists(_ == "?"))
     case join ~ rightoj ~ o ~ None => Obj(o, null, join orNull, rightoj.map(x => "r") orNull)

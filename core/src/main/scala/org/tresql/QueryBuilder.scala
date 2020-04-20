@@ -297,7 +297,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
   }
 
-  case class FunAsTableExpr(expr: Expr, colsDefs: Option[List[TableColDefExpr]]) extends PrimitiveExpr {
+  case class FunAsTableExpr(expr: Expr, colsDefs: Option[List[TableColDefExpr]], withOrdinality: Boolean)
+    extends PrimitiveExpr {
     override def defaultSQL: String = expr.sql
     def colsSql: String = colsDefs.map(_.map(_.sql).mkString("(", ", ", ")")).getOrElse("")
   }
@@ -431,11 +432,13 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       }
     }
     override def defaultSQL = {
-      table.sql + Option(alias).map(" " + _).mkString +
-        (table match {
-          case fat: FunAsTableExpr => fat.colsSql
-          case _ => ""
-        })
+      table.sql + Option(alias).map { al =>
+        table match {
+          case fat: FunAsTableExpr =>
+            (if (fat.withOrdinality) " with ordinality" else "") + " " + al + fat.colsSql
+          case _ => " " + al
+        }
+      }.getOrElse("")
     }
   }
   case class TableJoin(default: Boolean, expr: Expr, noJoin: Boolean,
@@ -1194,9 +1197,9 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
             val filter = f.map(buildInternal(_, FUN_CTX))
             maybeCallMacro(FunExpr(n, pars, d, order, filter))
         }
-        case FunAsTable(f, cds) =>
+        case FunAsTable(f, cds, ord) =>
           FunAsTableExpr(buildInternal(f, parseCtx)
-            , cds.map(_.map(c => TableColDefExpr(c.name, c.typ))))
+            , cds.map(_.map(c => TableColDefExpr(c.name, c.typ))), ord)
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => IdentAllExpr(i.ident)
         case a: Arr => parseCtx match {

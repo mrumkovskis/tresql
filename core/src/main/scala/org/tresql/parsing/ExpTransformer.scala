@@ -20,8 +20,9 @@ trait ExpTransformer { this: QueryParsers =>
       case e: Res => e
       case e: IdentAll => e
       case e: Variable => e
+      case e: TableColDef => e
       case Fun(n, pars, d, o, f) => Fun(n, pars map tt, d, o map tt, f map tt)
-      case FunAsTable(f, cds) => FunAsTable(tt(f), cds)
+      case FunAsTable(f, cds, ord) => FunAsTable(tt(f), cds, ord)
       case Cast(e, t) => Cast(tt(e), t)
       case UnOp(o, op) => UnOp(o, tt(op))
       case BinOp(o, lop, rop) => BinOp(o, tt(lop), tt(rop))
@@ -66,9 +67,10 @@ trait ExpTransformer { this: QueryParsers =>
       case e: Res => e
       case e: IdentAll => e
       case e: Variable => e
+      case e: TableColDef => e
       case Fun(n, pars, d, o, f) =>
         Fun(n, pars map tt(state), d, o map tt(state), f map tt(state))
-      case FunAsTable(f, cds) => FunAsTable(tt(state)(f), cds)
+      case FunAsTable(f, cds, ord) => FunAsTable(tt(state)(f), cds, ord)
       case Cast(e, t) => Cast(tt(state)(e), t)
       case UnOp(o, op) => UnOp(o, tt(state)(op))
       case BinOp(o, lop, rop) => BinOp(o, tt(state)(lop), tt(state)(rop))
@@ -123,12 +125,12 @@ trait ExpTransformer { this: QueryParsers =>
     def trl(r: T, l: List[Exp]) = l.foldLeft(r) { (fr, el) => tr(fr, el) }
     def tro(r: T, o: Option[Exp]) = o.map(tr(r, _)).getOrElse(r)
     def traverse(state: T): PartialFunction[Exp, T] = {
-      case _: Ident | _: Id | _: IdRef | _: Res | All | _: IdentAll | _: Variable | _: Null | _: Const | null => state
+      case _: Ident | _: Id | _: IdRef | _: Res | All | _: IdentAll | _: Variable | _: Null | _: Const | _: TableColDef | null => state
       case Fun(_, pars, _, o, f) =>
         val ps = trl(state, pars)
         val os = o.map(tr(ps, _)).getOrElse(ps)
         f.map(tr(os, _)).getOrElse(os)
-      case FunAsTable(f, _) => tr(state, f)
+      case FunAsTable(f, _, _) => tr(state, f)
       case Cast(e, _) => tr(state, e)
       case UnOp(_, operand) => tr(state, operand)
       case BinOp(_, lop, rop) => tr(tr(state, lop), rop)
