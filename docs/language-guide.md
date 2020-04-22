@@ -957,7 +957,37 @@ Sometimes it is useful to obtain data from modified rows while they are being ma
 avoid performing an extra database query to collect the data and when otherwise would be difficult to identify the modified rows reliably.
 For details see (https://www.postgresql.org/docs/12/dml-returning.html)
 
-To 
+To specify RETURNING columns use comma separated column list in curly braces at the end of DML expression
+
+INSERT
+
+`+dept {deptno, dname, loc} [nextval('seq'), 'Development', 'London'] {*}`
+
+```sql
+insert into dept (deptno, dname, loc) values (nextval('seq'), 'Development', 'London') returning *
+```
+
+`+dept {deptno, dname, loc} [nextval('seq'), 'Development', 'London'] {deptno}`
+
+```sql
+insert into dept (deptno, dname, loc) values (nextval('seq'), 'Development', 'London') returning deptno
+```
+
+UPDATE
+
+`=dept [dname = 'Development'] { loc } ['Paris'] {deptno, loc}`
+
+```sql
+update dept set loc = 'Paris' where dname = 'Development' returning deptno, loc
+```
+
+DELETE
+
+`-dept [dname = 'Development'] {deptno}`
+
+```sql
+delete from dept where dname = 'Development' returning deptno
+```
 
 Expression list
 ---------------
