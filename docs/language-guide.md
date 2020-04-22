@@ -12,6 +12,9 @@ Contents
 tresql provides syntax for both querying (SELECT) and data manipulation (INSERT, UPDATE)
 as well as more complicated SQL constructs like Common Table Expressions (CTE aka WITH queries).
 
+For other many other examples see also hsqldb [test satements](/src/test/resources/test.txt) and
+postgresql [test statements](/src/it/resources/pgtest.txt)
+
 Data selection 
 --------------
 
@@ -804,40 +807,157 @@ Data manipulation
 -----------------
 
 [INSERT statement](#insert-statement)  
-[UPDATE statement](#update-statement)  
-[DELETE statement](#delete-statement)  
-[Combining several statements in a batch](#combining-dml)  
+[UPDATE statement](#update-statement)
+  * [Update with FROM list](#update-with-from-list)
+  
+[DELETE statement](#delete-statement)
+  * [Delete with USING list](#delete-with-using-list)  
 
-### <a name="wiki-insert-statement"/>INSERT statement
+[Returning Data From Modified Rows](#returning-data-from-modified-rows)
 
-Example:  
-`DEPT {DEPTNO, DNAME, LOC} + [10, "ACCOUNTING", "NEW YORK"]`  
+### INSERT statement
+
+`dept {deptno, dname, loc} + [10, "ACCOUNTING", "NEW YORK"]`  
 (Note that columns are specified in figure brackets and values in square brackets).
 
+Plus sign may be put also to the left of expression:
+
+`+ dept {deptno, dname, loc} [10, "ACCOUNTING", "NEW YORK"]`
+
+```sql
+insert into dept (deptno, dname, loc) values (10, 'ACCOUNTING', 'NEW YORK')
+```
+
 Or using unnamed binding variables (for binding variables, values should be provided, either by API or when calling from web service):  
-`DEPT {DEPTNO, DNAME, LOC} + [?, ?, ?]`
+
+`dept {deptno, dname, loc} + [?, ?, ?]`
+
+```sql
+insert into dept (deptno, dname, loc) values (?/*1*/, ?/*2*/, ?/*3*/)
+```
 
 Or named variables:  
-`DEPT {DEPTNO, DNAME, LOC} + [:DEPTNO, :DNAME, :LOC]`
 
-### <a name="wiki-update-statement"/>UPDATE statement
-Example (named binding variables):  
-`DEPT [:DEPTNO] { DNAME } = [ :DNAME ]`
+`dept {deptno, dname, loc} + [:deptno, :dname, :loc]`
 
-Increment salary of employees hired between given hiredates (for :
-```
-emp [hiredate >= ? & hiredate <= ?] 
-  {sal} = [sal + 100]
+```sql
+insert into dept (deptno, dname, loc) values (?/*deptno*/, ?/*dname*/, ?/*loc*/)
 ```
 
-### <a name="wiki-delete-statement"/>DELETE statement
+Insert as select instead of values:
+
+`+ dept {deptno, dname, loc} dept [deptno = 10] {nextval('seq'), dname || ' NEW', loc || ' NEW'}`
+
+```sql
+insert into dept (deptno, dname, loc)
+  select next value for seq, dname || ' NEW', loc || ' NEW' from dept where deptno = 10
+```
+
+Or you can use shortcut syntax if values select has column names identical to the insert table's.
+Specify '*' in insert table column clause:
+
+`+ dept {*} dept [deptno = 10] {nextval('seq') deptno, dname || ' NEW' dname }`
+
+```sql
+insert into dept (deptno, dname)
+  select next value for seq deptno, dname || ' NEW' dname from dept where deptno = 10
+```
+
+### UPDATE statement
+
+`dept [deptno = :deptno] {loc} = [:loc]`
+
+Equals sign can be put also to the left of the expression:
+
+`= dept [deptno = :deptno] {loc} [:loc]`
+
+```sql
+update dept set loc = ?/*loc*/ where deptno = ?/*deptno*/
+```
+
+Increment salary of employees hired between given hiredates:
+
+`emp [:from <= hiredate < :to] {sal} = [sal + 100]`
+
+```sql
+update emp set sal = sal + 100 where ?/*from*/ <= hiredate and hiredate < ?/*to*/
+```
+
+Update with select instead of values:
+
+```tresql
+= emp[deptno = 10]{deptno} dept[deptno = 20] {deptno}
+```
+
+```sql
+update emp set (deptno) = (select deptno from dept where deptno = 20) where deptno = 10
+```
+
+You can update also multiple columns with single select:
+
+`= emp[deptno = 10]{deptno, comm} dept[deptno = 20] {deptno, 10}`
+
+```sql
+update emp set (deptno, comm) = (select deptno, 10 from dept where deptno = 20) where deptno = 10
+```
+
+#### Update with FROM list
+
+Update with FROM list looks like SELECT query with the difference that first table in FROM clause is updatable table
+and column clause consists of assignment expressions the left side of which contains column from updatable table.
+This does not work with hsql db.
+
+Example:
+
+Update commission to that of the manager for the certain department:
+
+`= emp/emp mgr[emp.deptno = 10] {comm = mgr.comm}`
+
+```sql
+update emp set comm = mgr.comm from emp mgr where (emp.mgr = mgr.empno) and (emp.deptno = 10)
+```
+
+### DELETE statement
 Use minus sign "-" for DELETE.
-DELETE FROM SALGRADE WHERE GRADE = 5:  
+
 `salgrade - [grade = 5]`
 
-or shorthand:  
-`salgrade - [5]`
+Minus can be put also at the left side of the expression:
 
+`- salgrade [grade = 5]`
+
+```sql
+delete from salgrade where grade = 5
+```
+
+#### Delete with USING list
+
+Delete with USING list looks like SELECT query with the difference that first table in FROM clause is deletable table
+and statement does not have column clause.
+This does not work with hsql db.
+
+For details see (https://www.postgresql.org/docs/12/sql-delete.html)
+
+Example - delete from departments where there are no employees:
+
+`- dept[dept.deptno = d.deptno]dept d/emp[emp.ename = null]`
+
+or the same:
+
+`dept[dept.deptno = d.deptno]dept d/emp - [emp.ename = null]`
+
+```sql
+delete from dept using dept d left join emp on d.deptno = emp.deptno
+  where (dept.deptno = d.deptno) and (emp.ename is null)
+```
+
+### Returning Data From Modified Rows
+
+Sometimes it is useful to obtain data from modified rows while they are being manipulated to
+avoid performing an extra database query to collect the data and when otherwise would be difficult to identify the modified rows reliably.
+For details see (https://www.postgresql.org/docs/12/dml-returning.html)
+
+To 
 
 Expression list
 ---------------
@@ -863,13 +983,13 @@ Syntax quickchart
 /       Shortcut join between tables (referential constraint defined), division operator
 :foo    Named binding variable foo.
 ?       Unnamed binding variable, outer join
-+       INSERT, plus operator
++       INSERT, plus operator, UNION
 =       UPDATE, equals operator
 -       DELETE, minus operator
 &       AND
 |       OR, also nested query
 !       NOT, explicit inner join
-++      UNION
+++      UNION ALL
 &&      INTERSECT
 ,       Delimiter for columns and statements
 ()      GROUB BY
