@@ -957,7 +957,7 @@ Sometimes it is useful to obtain data from modified rows while they are being ma
 avoid performing an extra database query to collect the data and when otherwise would be difficult to identify the modified rows reliably.
 For details see (https://www.postgresql.org/docs/12/dml-returning.html)
 
-To specify RETURNING columns use comma separated column list in curly braces at the end of DML expression
+To specify RETURNING columns use comma separated column list in curly braces at the end of DML expression.
 
 INSERT
 
@@ -1008,7 +1008,7 @@ Database structure see [db.sql](/src/test/resources/db.sql)
 Syntax quickchart 
 ------------------
 ```
-{}      Selection set (columns clause).
+{}      Selection set (columns clause). CTE with query. DML returning columns.
 []      WHERE or join conditions
 /       Shortcut join between tables (referential constraint defined), division operator
 :foo    Named binding variable foo.
@@ -1029,7 +1029,7 @@ Syntax quickchart
 ~~      ILIKE (case-insensitive)
 @()     OFFSET, LIMIT
 ;       join separator
-fun()   function
+fun()   function, CTE with query cursor name and columns.
 ::      cast operator
 ```
 
