@@ -495,6 +495,58 @@ select group_concat(dname order by dname asc) filter (where deptno < 30) from de
 
 ### Common Table Expressions - CTE (WITH queries)
 
+Common table expression has following structure:
+
+`with_query_name([#]<column list>, ...) { <with query> } [, <other with query> ...] <query>`
+
+> NOTE: Column list must begin with `#` symbol if with query is not recursive.
+
+For CTE details see (https://www.postgresql.org/docs/12/queries-with.html)
+
+`t(# deptno) { emp[ename ~~'kin%'] {deptno} } t[t.deptno = d.deptno]dept d {d.deptno}`
+
+```sql
+with t(deptno) as (select deptno from emp where lower(ename) like lower('kin%'))
+  select d.deptno from t join dept d on t.deptno = d.deptno
+```
+
+`kd(nr, name) { emp[ename ~~ 'kin%'] {empno, ename} + emp[mgr = nr]kd {empno, ename} } kd {nr, name}#(1)`
+
+```sql
+with recursive kd(nr, name) as
+  (select empno, ename from emp where lower(ename) like lower('kin%') union
+  select empno, ename from emp join kd on mgr = nr)
+select nr, name from kd order by 1 asc
+```
+
+`d(# name) {dept{dname}}, e(# name) { emp{ename} } (d + e) f #(1)`
+
+```sql
+with
+  d(name) as (select dname from dept),
+  e(name) as (select ename from emp)
+select * from (select * from d union select * from e) f order by 1 asc
+```
+
+Recursive CTE.
+
+```
+kings_descendants(nr, name, mgrnr, mgrname, level) {
+  emp [ename ~~ 'kin%'] {empno, ename, -1, null::varchar, 1} +
+  emp[emp.mgr = kings_descendants.nr]kings_descendants;emp/emp mgr 
+    { emp.empno, emp.ename, emp.mgr, mgr.ename::varchar, level + 1 }
+}
+kings_descendants { nr, name, mgrnr, mgrname::varchar, level} #(level, mgrnr, nr)
+```
+
+```sql
+with recursive kings_descendants(nr, name, mgrnr, mgrname, level) as
+  (select empno, ename, -1, null::varchar, 1 from emp where lower(ename) like lower('kin%') union
+  select emp.empno, emp.ename, emp.mgr, mgr.ename::varchar, level + 1 from emp
+    join kings_descendants on emp.mgr = kings_descendants.nr left join emp mgr on emp.mgr = mgr.empno)
+select nr, name, mgrnr, mgrname::varchar, level from kings_descendants order by level asc, mgrnr asc, nr asc
+```
+
 ### Hierarchical queries
 This topic explains how single tresql query can generate multiple parent-child connected sql queries returning non tabular (nested) result structure. 
 
@@ -814,6 +866,7 @@ Data manipulation
   * [Delete with USING list](#delete-with-using-list)  
 
 [Returning Data From Modified Rows](#returning-data-from-modified-rows)
+[Common table expressions - CTE (with queries with DML)](#common-table-expressions---cte-with-queries-with-dml)
 
 ### INSERT statement
 
@@ -987,6 +1040,47 @@ DELETE
 
 ```sql
 delete from dept where dname = 'Development' returning deptno
+```
+
+### Common table expressions - CTE (with queries with DML)
+
+You can use DML statements in CTE.
+
+INSERT
+
+```
+d(# dname) { dept{dname} }
+  + dept{deptno, dname} d[dname = 'SALES'] { sql('row_number() over ()') + 333, dname || '[x]' } {deptno, dname}
+```
+
+```sql
+with d(dname) as (select dname from dept)
+insert into dept (deptno, dname) select row_number() over () + 333, dname || '[x]' from d where dname = 'SALES'
+  returning deptno, dname
+```
+
+UPDATE
+
+```d(# dname) { dept{dname} }
+=dept[d.dname = dept.dname] d [d.dname ~ '%[x]']
+  { dname = substring(d.dname, 1, position('[x]' in d.dname) - 1) || '[y]' }
+  {dept.deptno, dept.dname}
+```
+
+```sql
+with d(dname) as (select dname from dept)
+update dept set dname = substring(d.dname,1,position('[x]' in (d.dname)) - 1) || '[y]'
+  from d where (d.dname = dept.dname) and (d.dname like '%[x]')
+  returning dept.deptno, dept.dname
+```
+
+DELETE
+
+`d(# deptno, dname) {dept[dname = 'SALES[y]']{deptno, dname}} dept - [deptno in d{deptno}] {dname}`
+
+```sql
+with d(deptno, dname) as (select deptno, dname from dept where dname = 'SALES[y]')
+delete from dept where deptno in (select deptno from d) returning dname
 ```
 
 Expression list
