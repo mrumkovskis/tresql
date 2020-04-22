@@ -18,6 +18,7 @@ postgresql [test statements](/src/it/resources/pgtest.txt)
 Data selection 
 --------------
 
+[SELECT statement structure](#select-statement-structure)  
 [Simple SELECTs](#simple-selects)  
 [Binding variables](#binding-variables)  
 [Table joins](#table-joins)  
@@ -35,6 +36,16 @@ Data selection
 [Aggregate expressions](#aggregate-expressions)  
 [Common Table Expressions - CTE (WITH queries)](#common-table-expressions---cte-with-queries)  
 [Hierarchical queries](#hierarchical-queries)  
+
+### SELECT statement structure
+
+SELECT statement has following structure
+
+`<from>[<where>][<columns>][<group by> [<having>]][<order>][<offset> [<limit>]`
+
+FROM
+
+`<table expr>[<join><table expr> ...]`
 
 ### Simple SELECTs 
 
@@ -865,7 +876,7 @@ Data manipulation
 [DELETE statement](#delete-statement)
   * [Delete with USING list](#delete-with-using-list)  
 
-[Returning Data From Modified Rows](#returning-data-from-modified-rows)
+[Returning Data From Modified Rows](#returning-data-from-modified-rows)  
 [Common table expressions - CTE (with queries with DML)](#common-table-expressions---cte-with-queries-with-dml)
 
 ### INSERT statement
@@ -1126,15 +1137,3 @@ Syntax quickchart
 fun()   function, CTE with query cursor name and columns.
 ::      cast operator
 ```
-
-### SELECT statement structure
-
-`<from>[<where>][<columns>][<group by> [<having>]][<order>][<offset> [<limit>]`
-
-FROM
-
-`<table expr>[<join><table expr> ...]`
-
-Example:
-
-`table1[join cond]table2[where]{columns} (group cols)^(having expr) #(order) (offset limit)`
