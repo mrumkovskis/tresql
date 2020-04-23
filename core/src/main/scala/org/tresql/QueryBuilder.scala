@@ -1027,7 +1027,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       expb.transform(
         exp match {
           case fun: QueryBuilder#FunExpr =>
-            if (Env isMacroDefined fun.name) {
+            if (Env isBuilderMacroDefined fun.name) {
               val m = Env.macroMethod(fun.name)
               val p = m.getParameterTypes
               if (p.length > 1 && p(1).isAssignableFrom(classOf[Seq[_]]))
@@ -1038,7 +1038,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           case binExpr: QueryBuilder#BinExpr =>
             if (!(STANDART_BIN_OPS contains binExpr.op)) {
               val macroName = scala.reflect.NameTransformer.encode(binExpr.op)
-              if (Env isMacroDefined macroName)
+              if (Env isBuilderMacroDefined macroName)
                 Env.macroMethod(macroName)
                   .invoke(Env.macros.get, expb, binExpr.lop, binExpr.rop)
                   .asInstanceOf[Expr]

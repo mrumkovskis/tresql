@@ -185,9 +185,24 @@ object Env extends Resources {
   override def metadata = _metadata.get
   override def dialect = _dialect.getOrElse(super.dialect)
   override def idExpr = _idExpr.getOrElse(super.idExpr)
+
   def macros = _macros
-  def isMacroDefined(macroName: String) = _macrosMethods.exists(_.contains(macroName))
+  def isMacroDefined(macroName: String) = _macrosMethods
+    .exists(_.get(macroName).exists { m =>
+      val pars = m.getParameterTypes
+      pars.nonEmpty &&
+      classOf[parsing.QueryParsers].isAssignableFrom(pars(0)) &&
+      classOf[parsing.QueryParsers#Exp].isAssignableFrom(m.getReturnType)
+    })
+  def isBuilderMacroDefined(macroName: String) = _macrosMethods
+    .exists(_.get(macroName).exists { m =>
+      val pars = m.getParameterTypes
+      pars.nonEmpty &&
+        classOf[QueryBuilder].isAssignableFrom(pars(0)) &&
+        classOf[Expr].isAssignableFrom(m.getReturnType)
+    })
   def macroMethod(name: String) = _macrosMethods.map(_(name)).get
+
   def cache = _cache
   override def queryTimeout = query_timeout.get
   override def fetchSize = fetch_size.get

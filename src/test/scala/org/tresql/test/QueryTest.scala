@@ -30,7 +30,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       else b.SQLExpr(sqlSnippet, vars)
     }
     def in_twice(implicit b: QueryBuilder, expr: Expr, in: Expr) = macro_"$expr in ($in, $in)"
-    def null_macros(b: QueryBuilder) = null
+    def null_macros(b: QueryBuilder): Expr = null
     def dummy(b: QueryBuilder) = b.buildExpr("dummy")
     def dummy_table(b: QueryBuilder) = b.IdentExpr(List("dummy"))
     def macro_interpolator_test1(implicit b: QueryBuilder, e1: Expr, e2: Expr) = macro_"($e1 + $e2)"

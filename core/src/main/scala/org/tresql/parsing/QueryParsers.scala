@@ -1,5 +1,7 @@
 package org.tresql.parsing
 
+import org.tresql.Env
+
 import scala.util.parsing.combinator.JavaTokenParsers
 
 trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer {
@@ -290,7 +292,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       Fun(n.mkString("."), p, d.isDefined, o, None)
   }
   /* function(<#> <arglist> <order by>)<[filter]> */
-  def function: MemParser[Fun] = (qualifiedIdent /* name */ <~ "(") ~
+  def function: MemParser[Exp] = (qualifiedIdent /* name */ <~ "(") ~
     opt("#") /* distinct */ ~ repsep(expr, ",") /* arglist */ ~
     ")" ~ opt(order) /* aggregate order */ ~ opt(filter) /* aggregate filter */ ^?({
     case Ident(n) ~ d ~ p ~ _ ~ o ~ f if f.map(_.elements.size).getOrElse(0) <= 1 =>
@@ -298,7 +300,16 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   }, {
     case _ ~ _ ~ _ ~ _ ~ _ ~ f => s"Aggregate function filter must contain only one elements, instead of ${
       f.map(_.elements.size).getOrElse(0)}"
-  }) named "function"
+  }) ^^ { case f: Fun =>
+    if (Env.isMacroDefined(f.name)) {
+      val m = Env.macroMethod(f.name)
+      val p = m.getParameterTypes
+      if (p.length > 1 && p(1).isAssignableFrom(classOf[Seq[_]])) {
+        //parameter is list of expressions
+        m.invoke(Env.macros, this, f.parameters).asInstanceOf[Exp]
+      } else m.invoke(Env.macros, this :: f.parameters: _*).asInstanceOf[Exp]
+    } else f
+  } named "function"
   def array: MemParser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ Arr named "array"
 
   //query parsers
@@ -467,20 +478,11 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       case q @ Query(objs, _, cols, _, _, _, _) if cols != null => q
     }, {case x => "Query must contain column clause: " + x}) named "query-with-cols"
 
-  def withTable: MemParser[WithTable] = (function <~ "{") ~ (expr <~ "}") ^? ({
-    case f ~ (q: Exp @unchecked) if f.parameters.forall {
-      case Obj(Ident(List(_)), _, _, _, _) => true
-      case x => false
-    } || f.parameters == List(All) =>
-      WithTable(
-        f.name,
-        f.parameters.flatMap { case Obj(Ident(l @ List(_)), _, _, _, _) => l case _ => Nil },
-        !f.distinct,
-        q
-      )
-  }, {
-    case x ~ q => s"with table definition must contain simple column names as strings, instead - ${x.tresql}"
-  }) named "with-table"
+  def withTable: MemParser[WithTable] =
+    ((ident <~ "(") ~ opt("#") ~ (ALL | repsep(ident, ",")) <~ (")" ~ "{")) ~ (expr <~ "}") ^^ {
+      case name ~ distinct ~ (cols: List[String]) ~ exp => WithTable(name, cols, distinct.isEmpty, exp)
+      case name ~ distinct ~ All ~ exp => WithTable(name, Nil, distinct.isEmpty, exp)
+    } named "with-table"
   def withQuery: MemParser[With] = rep1sep(withTable, ",") ~ expr ^? ({
     case wts ~ (q: Exp @unchecked) => With(wts, q)
   }, {
