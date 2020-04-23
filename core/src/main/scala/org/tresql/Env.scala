@@ -3,7 +3,7 @@ package org.tresql
 import sys._
 import CoreTypes.RowConverter
 
-/* Environment for expression building and execution */
+/** Environment for expression building and execution */
 class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolean)
   extends Resources with Metadata {
 
@@ -152,6 +152,7 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
 
 }
 
+/** Static implemention of [[Resources]]. */
 object Env extends Resources {
   private val threadConn = new ThreadLocal[java.sql.Connection]
   //query timeout
@@ -219,6 +220,7 @@ object Env extends Resources {
   def bindVarLogFilter_=(filter: PartialFunction[Expr, String]) = Option(filter)
 }
 
+/** Resources and configuration for query execution like database connection, metadata, database dialect etc. */
 trait Resources { self =>
   private case class Resources_(
     _conn: Option[java.sql.Connection] = None,
