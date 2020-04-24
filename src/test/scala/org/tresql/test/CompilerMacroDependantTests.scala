@@ -1124,5 +1124,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     }
     assertResult(java.sql.Timestamp.valueOf("2009-02-22 00:00:00.0"))(
       tresql"""date_add ( sql("date '2008-11-22'"), sql("interval 3 month"))""")
+
+    assertResult("ACCOUNTING")(tresql"macro_interpolator_test4(dept, dname)".map(_.dname).toList.head)
   }
 }

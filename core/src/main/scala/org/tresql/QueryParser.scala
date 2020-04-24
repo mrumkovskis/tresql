@@ -2,7 +2,7 @@ package org.tresql
 
 object QueryParser extends parsing.QueryParsers with parsing.ExpTransformer {
 
-  def parseExp(expr: String): Exp = {
+  override def parseExp(expr: String): Exp = {
     Env.cache.flatMap(_.get(expr)).getOrElse {
       try {
         intermediateResults.get.clear

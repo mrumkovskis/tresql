@@ -2,31 +2,12 @@ package org.tresql
 
 import scala.annotation.tailrec
 
+import parsing.QueryParsers
+
 package object macro_ {
   implicit class TresqlMacroInterpolator(val sc: StringContext) extends AnyVal {
-    def macro_(args: Expr*)(implicit b: QueryBuilder): Expr = {
-      def unusedName(name: String, usedNames: collection.Set[String]): String = {
-        @tailrec
-        def unusedName(index: Int): String =
-          if (!(usedNames contains (name + index))) name + index
-          else unusedName(index + 1)
-        if (!usedNames.contains(name)) name else unusedName(2)
-      }
-      var usedNames: Set[String] = Set()
-      b.transform(b.buildExpr(sc.standardInterpolator(identity, args.map(a => ":x"))), {
-        case v @ b.VarExpr(name, _, _) => usedNames += name; v
-      })
-      val zipped = args.zipWithIndex.map { kv =>
-        val name = unusedName(s"_arg_${kv._2}_", usedNames)
-        usedNames += name
-        name -> kv._1
-      }
-      val params = zipped.toMap
-      val expr = sc.standardInterpolator(identity, zipped.map(":" + _._1))
-      b.transform(b.buildExpr(expr), {
-        case v @ b.VarExpr(name, _, _) =>
-          params.getOrElse(name, v)
-      })
+    def macro_(args: QueryParsers#Exp*)(implicit p: QueryParsers): QueryParsers#Exp = {
+      p.parseExp(sc.standardInterpolator(identity, args.map(_.tresql)))
     }
   }
 }

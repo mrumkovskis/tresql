@@ -6,6 +6,8 @@ import scala.util.parsing.combinator.JavaTokenParsers
 
 trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer {
 
+  def parseExp(exp: String): Exp
+
   val reserved = Set("in", "null", "false", "true")
 
   //comparison operator regular expression
@@ -301,13 +303,15 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     case _ ~ _ ~ _ ~ _ ~ _ ~ f => s"Aggregate function filter must contain only one elements, instead of ${
       f.map(_.elements.size).getOrElse(0)}"
   }) ^^ { case f: Fun =>
-    if (Env.isMacroDefined(f.name)) {
+    if (f.aggregateOrder.isEmpty && f.aggregateWhere.isEmpty && Env.isMacroDefined(f.name)) {
       val m = Env.macroMethod(f.name)
       val p = m.getParameterTypes
       if (p.length > 1 && p(1).isAssignableFrom(classOf[Seq[_]])) {
         //parameter is list of expressions
-        m.invoke(Env.macros, this, f.parameters).asInstanceOf[Exp]
-      } else m.invoke(Env.macros, this :: f.parameters: _*).asInstanceOf[Exp]
+        m.invoke(Env.macros.get, QueryParsers.this, f.parameters).asInstanceOf[Exp]
+      } else {
+        m.invoke(Env.macros.get, QueryParsers.this :: f.parameters: _*).asInstanceOf[Exp]
+      }
     } else f
   } named "function"
   def array: MemParser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ Arr named "array"
@@ -626,7 +630,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
 
   private def binOp(p: Exp ~ List[String ~ Exp]): Exp = p match {
     case lop ~ Nil => lop
-    case lop ~ ((o ~ rop) :: l) => BinOp(o, lop, binOp(this.~(rop, l)))
+    case lop ~ ((o ~ rop) :: l) => BinOp(o, lop, binOp(QueryParsers.this.~(rop, l)))
   }
 
   /** Copied from scala.util.parsing.combinator.SubSequence since it cannot be instantiated. */

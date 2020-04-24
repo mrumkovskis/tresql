@@ -214,7 +214,7 @@ object Env extends Resources {
     Option(dialect).map(_.orElse {case e=> e.defaultSQL})
   def idExpr_=(idExpr: String => String) = this._idExpr = Option(idExpr)
   def macros_=(macr: Any) = {
-    this._macros = Option(macr)
+    this._macros = macr match { case mo: Option[_] => mo case _ => Option(macr) }
     this._macrosMethods = macros.flatMap(f => Option(f.getClass.getMethods.map(m => m.getName -> m).toMap))
   }
 

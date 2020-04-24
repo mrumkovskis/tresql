@@ -21,34 +21,6 @@ import sys._
   *    and wait time after docker started until jdbc connection attempt is made -
   *   {{{it:testOnly * -- -oD -Ddocker=postgres -Dremove=false -Dport=54321 -Dwait_after_startup_millis=4000}}} */
 class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
-  object Macros extends org.tresql.Macros {
-    import macro_._
-    /**
-     * Dumb regexp to find bind variables (tresql syntax) in sql string.
-     * Expects whitespace, colon, identifier, optional question mark.
-     * Whitespace before colon is a workaround to ignore postgresql typecasts.
-     */
-    private val varRegex = "\\s:[_a-zA-Z]\\w*\\??"r
-    override def sql(b: QueryBuilder, const: QueryBuilder#ConstExpr): b.SQLExpr = {
-      val value = String.valueOf(const.value)
-      val vars = varRegex.findAllIn(value).toList
-        .map(_ substring 2)
-        .map(v => b.VarExpr(v.replace("?", ""), Nil, v endsWith "?"))
-      val sqlSnippet = varRegex.replaceAllIn(value, " ?")
-      if (vars.exists(v => v.opt && !(b.env contains v.name)))
-        b.SQLExpr("null", Nil)
-      else b.SQLExpr(sqlSnippet, vars)
-    }
-    def in_twice(implicit b: QueryBuilder, expr: Expr, in: Expr) = macro_"$expr in ($in, $in)"
-    def null_macros(b: QueryBuilder): Expr = null
-    def dummy(b: QueryBuilder) = b.buildExpr("dummy")
-    def macro_interpolator_test1(implicit b: QueryBuilder, e1: Expr, e2: Expr) = macro_"($e1 + $e2)"
-    def macro_interpolator_test2(implicit b: QueryBuilder, e1: Expr, e2: Expr) =
-      macro_"(macro_interpolator_test1($e1, $e1) + macro_interpolator_test1($e2, $e2))"
-    def macro_interpolator_test3(implicit b: QueryBuilder, e1: Expr, e2: Expr) =
-      macro_"(macro_interpolator_test2($e1 * $e1, $e2 * $e2))"
-  }
-
   val executePGCompilerMacroDependantTests =
     !scala.util.Properties.versionNumberString.startsWith("2.10") &&
     !scala.util.Properties.versionNumberString.startsWith("2.11")

@@ -11,39 +11,9 @@ import sys._
 
 /** To run from console {{{org.scalatest.run(new test.QueryTest)}}} */
 class QueryTest extends FunSuite with BeforeAndAfterAll {
-  object Macros extends org.tresql.Macros {
-    import macro_._
-    /**
-     * Dumb regexp to find bind variables (tresql syntax) in sql string.
-     * Expects whitespace, colon, identifier, optional question mark.
-     * Whitespace before colon is a workaround to ignore postgresql typecasts.
-     */
-    private val varRegex = "\\s:[_a-zA-Z]\\w*\\??"r
-    override def sql(b: QueryBuilder, const: QueryBuilder#ConstExpr): b.SQLExpr = {
-      val value = String.valueOf(const.value)
-      val vars = varRegex.findAllIn(value).toList
-        .map(_ substring 2)
-        .map(v => b.VarExpr(v.replace("?", ""), Nil, v endsWith "?"))
-      val sqlSnippet = varRegex.replaceAllIn(value, " ?")
-      if (vars.exists(v => v.opt && !(b.env contains v.name)))
-        b.SQLExpr("null", Nil)
-      else b.SQLExpr(sqlSnippet, vars)
-    }
-    def in_twice(implicit b: QueryBuilder, expr: Expr, in: Expr) = macro_"$expr in ($in, $in)"
-    def null_macros(b: QueryBuilder): Expr = null
-    def dummy(b: QueryBuilder) = b.buildExpr("dummy")
-    def dummy_table(b: QueryBuilder) = b.IdentExpr(List("dummy"))
-    def macro_interpolator_test1(implicit b: QueryBuilder, e1: Expr, e2: Expr) = macro_"($e1 + $e2)"
-    def macro_interpolator_test2(implicit b: QueryBuilder, e1: Expr, e2: Expr) =
-      macro_"(macro_interpolator_test1($e1, $e1) + macro_interpolator_test1($e2, $e2))"
-    def macro_interpolator_test3(implicit b: QueryBuilder, e1: Expr, e2: Expr) =
-      macro_"(macro_interpolator_test2($e1 * $e1, $e2 * $e2))"
-  }
-
   val executeCompilerMacroDependantTests =
     !scala.util.Properties.versionNumberString.startsWith("2.10") &&
     !scala.util.Properties.versionNumberString.startsWith("2.11")
-
 
   val compilerMacroDependantTests =
     if (executeCompilerMacroDependantTests)
@@ -230,6 +200,8 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     intercept[CompilerException](qcompile("d1(# *) { dummy a[]dummy b { b.dummy col }}, d2(# *) { d1[]dummy? {dummy.dummy d, d1.col c} }, i(# *) { +dummy {dummy} d1[col = 1]{col} {dummy} }, u(# *) { =dummy[dummy = d2.c]d2 {dummy = d2.c} {d2.c u, d1.col } } u"))
     intercept[CompilerException](qcompile("d(# dname) {dept{dname}} =dept[d.dname = 'x']{deptno, dname} d{#dept, dname || '[reorganized]'}"))
     intercept[CompilerException](qcompile("[]dummy_table() d(d){d.x}"))
+    intercept[CompilerException](qcompile("macro_interpolator_test4(dname, dept)"))
+    intercept[CompilerException](qcompile("macro_interpolator_test4(dept, name)"))
 
     //insert with asterisk column
     intercept[CompilerException](qcompile("+dummy{*} dummy{dummy kiza}"))
