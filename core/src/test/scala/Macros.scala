@@ -1,5 +1,6 @@
 package org.tresql.test
 
+import org.tresql.parsing.QueryParsers
 import org.tresql.{Expr, QueryBuilder, macro_, parsing}
 
 class Macros extends org.tresql.Macros {
@@ -41,6 +42,12 @@ class Macros extends org.tresql.Macros {
                                table: parsing.QueryParsers#Exp,
                                col: parsing.QueryParsers#Exp) =
     macro_"$table { $table.$col }#(1)"
+  def macro_interpolator_null_test(implicit p: parsing.QueryParsers,
+                                   from: parsing.QueryParsers#Exp,
+                                   leftOp: parsing.QueryParsers#Exp,
+                                   rightOp: parsing.QueryParsers#Exp,
+                                   col: parsing.QueryParsers#Exp) =
+    macro_"$from[$leftOp = $rightOp]{$col}#(1)"
 }
 
 object Macros extends Macros

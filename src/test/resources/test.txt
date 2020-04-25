@@ -487,6 +487,8 @@ dummy {macro_interpolator_test1((dept{count(*)}) + 0, (emp{count(*)}) + 0)} --> 
 {macro_interpolator_test2(1, 2)} --> [[6]]
 {macro_interpolator_test3(1, 2)} --> [[10]]
 macro_interpolator_test4(dept, dname) --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
+macro_interpolator_null_test(dept, dname, 'SALES', loc) --> [["CHICAGO"]]
+macro_interpolator_null_test(emp, mgr, null, ename) --> [["KING"]]
 
 //whitespace test
 emp /*comment*/[/**/ename /****/ ~~ /***/ /*another comment*/'sc%'/* comment */] //comment --> [[7788, "SCOTT", "ANALYST", 7566, "1982-12-09", 4000.35, null, 20]]
