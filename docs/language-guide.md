@@ -19,7 +19,10 @@ Data selection
 --------------
 
 [SELECT statement structure](#select-statement-structure)  
-[Simple SELECTs](#simple-selects)  
+[Simple SELECTs](#simple-selects)
+  * [LIKE comparison](#like-comparison)  
+  * [CAST operator](#cast-operator)  
+
 [Binding variables](#binding-variables)  
 [Table joins](#table-joins)  
   * [Inner join](#inner-join)
@@ -103,6 +106,15 @@ This is postgresql style "::" operator that can be added after expression.
 ```sql
 select deptno::varchar from dept order by 1 asc
 ```
+
+If type consists of more than one word use '':
+
+`emp{ename, sal::'double precision'}`
+
+```sql
+select ename, sal::double precision from emp
+```
+
 
 > NOTE: CAST operator will not work on hsqldb
 
