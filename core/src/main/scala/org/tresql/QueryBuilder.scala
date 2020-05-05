@@ -707,13 +707,17 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   }
 
   private def executeChildren: Map[String, Any] = {
+    def exec(name: String, e: Expr, pars: Option[Map[String, Any]]) =
+      try pars.map(e(_)).getOrElse(e()) catch { case e: Exception =>
+        throw new Exception(s"property $name, ${e.getMessage}", e)
+      }
     childUpdates.map {
-      case (ex, n) if !env.contains(n) => (n, ex())
+      case (ex, n) if !env.contains(n) => (n, exec(n, ex, None))
       case (ex, n) => (n, env(n) match {
-        case m: Map[String @unchecked, _] => ex(m)
-        case t: scala.collection.Traversable[Map[String, _] @unchecked] => t.map(ex(_))
-        case a: Array[Map[String, _] @unchecked] => (a map { ex(_) }).toList
-        case x => ex()
+        case m: Map[String @unchecked, Any] => exec(n, ex, Some(m))
+        case t: scala.collection.Traversable[Map[String, _] @unchecked] => t.map(m => exec(n, ex, Some(m)))
+        case a: Array[Map[String, _] @unchecked] => (a map {m => exec(n, ex, Some(m)) }).toList
+        case _ => exec(n, ex, None)
       })
     }.foldLeft(scala.collection.immutable.ListMap[String, Any]()) {_ + _} //use list map to preserve children order
   }
