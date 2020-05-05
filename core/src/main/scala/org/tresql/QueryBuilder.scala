@@ -709,7 +709,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   private def executeChildren: Map[String, Any] = {
     def exec(name: String, e: Expr, pars: Option[Map[String, Any]]) =
       try pars.map(e(_)).getOrElse(e()) catch { case e: Exception =>
-        throw new Exception(s"property $name, ${e.getMessage}", e)
+        throw new RuntimeException(s"property $name, ${e.getMessage}", e)
       }
     childUpdates.map {
       case (ex, n) if !env.contains(n) => (n, exec(n, ex, None))
