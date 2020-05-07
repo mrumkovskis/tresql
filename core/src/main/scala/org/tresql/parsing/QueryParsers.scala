@@ -449,7 +449,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     opt(offsetLimit) | (columns ~ filters)) ^^ {
       case Null ~ Filters(Nil) ~ None ~ None ~ None => Null //null literal
       case List(t) ~ Filters(Nil) ~ None ~ None ~ None => t match {
-        case Obj(b: Braces, null, null, null, _) => b
+        case Obj(b: Braces, null, j, null, _) =>
+          //transform potential join to parent into query
+          Option(j).map(transformHeadJoin(_)(b)).getOrElse(b)
         case x => x
       }
       case t ~ (f: Filters) ~ cgo ~ (o: Option[Ord @unchecked]) ~ (l: Option[(Exp, Exp) @unchecked]) =>
@@ -488,15 +490,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       case name ~ distinct ~ All ~ exp => WithTable(name, Nil, distinct.isEmpty, exp)
     } named "with-table"
   def withQuery: MemParser[With] = opt(join) ~ rep1sep(withTable, ",") ~ expr ^? ({
-    case optJoin ~ wts ~ (q: Exp @unchecked) =>
-      def transformHeadJoin(join: Join): Transformer = transformer {
-        case Braces(e) => transformHeadJoin(join)(e)
-        case With(wt, q) => With(wt, transformHeadJoin(join)(q))
-        case q: Query =>
-          q.copy(tables = q.tables.updated(0, transformHeadJoin(join)(q.tables.head).asInstanceOf[Obj]))
-        case o: Obj => o.copy(join = join) //set join to parent
-      }
-      With(wts, optJoin.map(transformHeadJoin(_)(q)).getOrElse(q))
+    case optJoin ~ wts ~ (q: Exp @unchecked) => With(wts, optJoin.map(transformHeadJoin(_)(q)).getOrElse(q))
   }, {
     case wts ~ q => s"Unsupported with query: $q"
   }) named "with-query"
@@ -639,6 +633,14 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   private def binOp(p: Exp ~ List[String ~ Exp]): Exp = p match {
     case lop ~ Nil => lop
     case lop ~ ((o ~ rop) :: l) => BinOp(o, lop, binOp(QueryParsers.this.~(rop, l)))
+  }
+
+  private def transformHeadJoin(join: Join): Transformer = transformer {
+    case Braces(e) => Braces(transformHeadJoin(join)(e))
+    case With(wt, q) => With(wt, transformHeadJoin(join)(q))
+    case q: Query =>
+      q.copy(tables = q.tables.updated(0, transformHeadJoin(join)(q.tables.head).asInstanceOf[Obj]))
+    case o: Obj => o.copy(join = join) //set join to parent
   }
 
   /** Copied from scala.util.parsing.combinator.SubSequence since it cannot be instantiated. */
