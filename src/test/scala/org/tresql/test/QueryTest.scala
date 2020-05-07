@@ -202,6 +202,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     intercept[CompilerException](qcompile("[]dummy_table() d(d){d.x}"))
     intercept[CompilerException](qcompile("macro_interpolator_test4(dname, dept)"))
     intercept[CompilerException](qcompile("macro_interpolator_test4(dept, name)"))
+    intercept[CompilerException](qcompile("e(*){emp{ename}}, d(*) {dept{dname}}"))
 
     //insert with asterisk column
     intercept[CompilerException](qcompile("+dummy{*} dummy{dummy kiza}"))

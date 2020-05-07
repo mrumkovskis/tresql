@@ -489,10 +489,14 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       case name ~ distinct ~ (cols: List[String]) ~ exp => WithTable(name, cols, distinct.isEmpty, exp)
       case name ~ distinct ~ All ~ exp => WithTable(name, Nil, distinct.isEmpty, exp)
     } named "with-table"
-  def withQuery: MemParser[With] = opt(join) ~ rep1sep(withTable, ",") ~ expr ^? ({
-    case optJoin ~ wts ~ (q: Exp @unchecked) => With(wts, optJoin.map(transformHeadJoin(_)(q)).getOrElse(q))
+  def withQuery: MemParser[With] = opt(join) ~ rep1sep(withTable, ",") ~ opt(expr) ^? ({
+    case optJoin ~ (wts @ List(wt)) ~ None =>
+      val q = parseExp(wt.name)
+      With(wts, optJoin.map(transformHeadJoin(_)(q)).getOrElse(q))
+    case optJoin ~ wts ~ Some(q) => With(wts, optJoin.map(transformHeadJoin(_)(q)).getOrElse(q))
   }, {
-    case wts ~ q => s"Unsupported with query: $q"
+    case _ ~ wts ~ _ => s"If query is omitted only one with cursor definition is allowed, instead found: ${
+      wts.map(_.tresql).mkString(",")}"
   }) named "with-query"
 
   def values: MemParser[Values] = rep1sep(array, ",") ^^ Values named "values"

@@ -551,6 +551,14 @@ with
 select * from (select * from d union select * from e) f order by 1 asc
 ```
 
+In the case of only one WITH cursor declaration you can omit final query i.e:
+
+`d(# name) {dept{dname}}`
+
+```sql
+with d(name) as (select dname from dept) select * from d
+```
+
 Recursive CTE.
 
 ```

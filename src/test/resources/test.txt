@@ -508,7 +508,7 @@ null[true]{1, 'x', true, null} --> [[1, "x", true, null]]
 null[false]{1, 'x', true, null} --> []
 {1, 'x', true, null}[false] --> []
 
-// WITH Queries (Common Table Expressions)
+// WITH Queries - CTE (Common Table Expressions)
 //with recursive
 kings_descendants(nr, name, mgrnr, mgrname, level) { emp [ename ~~ 'kin%']{empno, ename, -1, null, 1} + emp[emp.mgr = kings_descendants.nr]kings_descendants;emp/emp mgr{emp.empno, emp.ename, emp.mgr, mgr.ename, level + 1} } kings_descendants{ nr, name, mgrnr, mgrname, level}#(level, mgrnr, nr) --> [[7839, "KING", -1, null, 1], [7566, "JONES", 7839, "KING", 2], [7698, "BLAKE", 7839, "KING", 2], [7782, "CLARK", 7839, "KING", 2], [7788, "SCOTT", 7566, "JONES", 3], [7902, "FORD", 7566, "JONES", 3], [7499, "ALLEN", 7698, "BLAKE", 3], [7521, "WARD", 7698, "BLAKE", 3], [7654, "MARTIN", 7698, "BLAKE", 3], [7844, "TURNER", 7698, "BLAKE", 3], [7900, "JAMES", 7698, "BLAKE", 3], [7934, "MILLER", 7782, "CLARK", 3], [7876, "ADAMS", 7788, "SCOTT", 4], [9999, "MĀRTIŅŠ ŽVŪKŠĶIS", 7788, "SCOTT", 4], [7369, "SMITH", 7902, "FORD", 4]]
 dept[deptno in (emps(enr, mgr, dnr) { emp[ename ~~ 'kin%']{empno, mgr, deptno} + emps[enr = emp.mgr]emp {empno, emp.mgr, deptno} } emps{dnr})]{deptno, dname}#(1) --> [[10, "ACCOUNTING"], [20, "RESEARCH"], [30, "SALES"]]
@@ -535,6 +535,7 @@ dept[10]{dname, ((wq(# x) {{1}} wq{x}){x}) x} --> [["ACCOUNTING", 1]]
 dept[10]{dname, |[dept.deptno = e.dn](e(# dn, n) {emp{deptno, ename}#(1)} e{dn, n}) e{e.n}} --> [["ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
 dept[10]{dname, ((wq(# x) {{1}} wq{x}){x}) x, |emp{ename}#(1)} --> [["ACCOUNTING", 1, [["CLARK"], ["KING"], ["MILLER"]]]]
 e(#){emp{ename::string}} e{ename}#(1) --> [["ADAMS"], ["ALLEN"], ["BLAKE"], ["CLARK"], ["FORD"], ["JAMES"], ["JONES"], ["KING"], ["MARTIN"], ["MILLER"], ["MĀRTIŅŠ ŽVŪKŠĶIS"], ["SCOTT"], ["SMITH"], ["TURNER"], ["WARD"]]
+e(#){emp[ename = 'KING']{ename::string}} --> [["KING"]]
 e(#){emp} ({'done'}) x --> [["done"]]
 
 //test for compiler - where clause select references parent select column
