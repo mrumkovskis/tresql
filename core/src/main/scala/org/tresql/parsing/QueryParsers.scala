@@ -491,7 +491,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     } named "with-table"
   def withQuery: MemParser[With] = opt(join) ~ rep1sep(withTable, ",") ~ opt(expr) ^? ({
     case optJoin ~ (wts @ List(wt)) ~ None =>
-      val q = parseExp(wt.name)
+      val q = Obj(Ident(List(wt.name)), null, null, null, false) // select * from <wt.name>
       With(wts, optJoin.map(transformHeadJoin(_)(q)).getOrElse(q))
     case optJoin ~ wts ~ Some(q) => With(wts, optJoin.map(transformHeadJoin(_)(q)).getOrElse(q))
   }, {
