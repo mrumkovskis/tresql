@@ -253,10 +253,10 @@ dept[?]{loc, |emp {ename, job, |[empno_mgr]work {hours}#(1) controlled_hours}#(1
 //hierarchical queries with CTE (WITH queries)
 d(#) {dept[10]} d{deptno, dname, |[]emp e[deptno = :1(deptno)] {ename}#(ename)} --> [[10, "ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
 d(#) {dept[10]} d{deptno, dname, |[d.deptno = e.deptno]emp e {ename}#(ename)} --> [[10, "ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
-dept d[10] { deptno, dname, |[](e(#) {emp e} e[e.deptno = :1(deptno)] {ename}#(ename)) } --> [[10, "ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
-dept d[10] { deptno, dname, |[d.deptno = e.deptno](e(#) {emp e} e {ename}#(ename)) } --> [[10, "ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
-d(#) {dept[10]} d{deptno, dname, |[](e(#) {emp [deptno = :1(deptno)]} e {ename}#(ename))} --> [[10, "ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
-d(#) {dept[10]} d{deptno, dname, |[d.deptno = e.deptno](e(#) {emp} e {ename}#(ename))} --> [[10, "ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
+dept d[10] { deptno, dname, |[] e(#) {emp e} e[e.deptno = :1(deptno)] {ename}#(ename) } --> [[10, "ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
+dept d[10] { deptno, dname, |[d.deptno = e.deptno] e(#) {emp e} e {ename}#(ename) } --> [[10, "ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
+d(#) {dept[10]} d{deptno, dname, |[]e(#) {emp [deptno = :1(deptno)]} e {ename}#(ename)} --> [[10, "ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
+d(#) {dept[10]} d{deptno, dname, |[d.deptno = e.deptno] e(#) {emp} e {ename}#(ename)} --> [[10, "ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
 
 //union
 dept[?]{deptno} ++ emp[?]{empno} ++ salgrade[?]{grade} --> 10;7839;1 --> [[10], [7839], [1]]

@@ -474,7 +474,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
           case Obj(_, null, DefaultJoin, null, _) | Obj(_, null, null, null, _) => true
           case _ => false
         } => toDivChain(objs)
-        case q: Exp @unchecked => q
+        case q: Exp => q
       }
     } named "query"
 
@@ -487,8 +487,16 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       case name ~ distinct ~ (cols: List[String]) ~ exp => WithTable(name, cols, distinct.isEmpty, exp)
       case name ~ distinct ~ All ~ exp => WithTable(name, Nil, distinct.isEmpty, exp)
     } named "with-table"
-  def withQuery: MemParser[With] = rep1sep(withTable, ",") ~ expr ^? ({
-    case wts ~ (q: Exp @unchecked) => With(wts, q)
+  def withQuery: MemParser[With] = opt(join) ~ rep1sep(withTable, ",") ~ expr ^? ({
+    case optJoin ~ wts ~ (q: Exp @unchecked) =>
+      def transformHeadJoin(join: Join): Transformer = transformer {
+        case Braces(e) => transformHeadJoin(join)(e)
+        case With(wt, q) => With(wt, transformHeadJoin(join)(q))
+        case q: Query =>
+          q.copy(tables = q.tables.updated(0, transformHeadJoin(join)(q.tables.head).asInstanceOf[Obj]))
+        case o: Obj => o.copy(join = join) //set join to parent
+      }
+      With(wts, optJoin.map(transformHeadJoin(_)(q)).getOrElse(q))
   }, {
     case wts ~ q => s"Unsupported with query: $q"
   }) named "with-query"

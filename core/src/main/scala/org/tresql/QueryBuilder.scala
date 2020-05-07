@@ -1121,24 +1121,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case t: Obj => parseCtx match {
           case ARR_CTX =>
             buildWithNew(_.buildInternal(t, QUERY_CTX)) //may have other elements in array
-          case QUERY_CTX => t match { //top level query
-            case Obj(b @ Braces(_), alias, join, _, _) if alias == null => {
-              if (join == null) buildInternal(b, parseCtx) //unwrap braces expression
-              else {
-                lazy val tr: PartialFunction[Exp, Exp] = transformer { //unwrap braces expression and embed join to parent in leftmost obj
-                  case Braces(e) => tr(e)
-                  case With(wt, q) => With(wt, tr(q))
-                  case q: QueryParser.Query =>
-                    q.copy(tables = q.tables.updated(0, tr(q.tables.head).asInstanceOf[Obj]))
-                  case o: Obj => o.copy(join = join) //set join to parent
-                }
-                buildInternal(tr(b), parseCtx)
-              }
-            }
-            case _ => buildSelectFromObj(t)
-          }
           //table in from clause of top level query or in any other subquery
-          case FROM_CTX | WITH_CTX | WITH_TABLE_CTX => buildSelectFromObj(t)
+          case QUERY_CTX | FROM_CTX | WITH_CTX | WITH_TABLE_CTX => buildSelectFromObj(t)
           case _ => buildIdentOrBracesExpr(t)
         }
         case q: QueryParser.Query => parseCtx match {
