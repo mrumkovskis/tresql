@@ -333,8 +333,8 @@ package object tresql extends CoreTypes {
           .asInstanceOf[compiling.CompilerMetadataFactory]
       )
     }.getOrElse(
-      sys.error(s"Tresql interpolator not available. Scala macro compiler setting missing - 'metadataFactoryClass'." +
-        s"Try to set -Xmacro-settings: scala compiler option.\n" +
+      sys.error(s"Tresql interpolator not available. Scala macro compiler setting missing - 'metadataFactoryClass'. " +
+        s"Try to set -Xmacro-settings scala compiler option. " +
         s"Example: -Xmacro-settings:metadataFactoryClass=org.tresql.compiling.CompilerJDBCMetadataFactory")
     )
   }
