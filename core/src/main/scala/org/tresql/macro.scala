@@ -15,11 +15,17 @@ package object macro_ {
 class Macros {
   def sql(b: QueryBuilder, const: QueryBuilder#ConstExpr) = b.SQLExpr(String valueOf const.value, Nil)
 
-  def if_defined(b: QueryBuilder, v: QueryBuilder#VarExpr, e: Expr) =
-    if (v != null && (b.env contains v.name)) e else null
+  def if_defined(b: QueryBuilder, v: Expr, e: Expr) = v match {
+    case ve: QueryBuilder#VarExpr => if (b.env contains ve.name) e else null
+    case null => null
+    case _ => e
+  }
 
-  def if_missing(b: QueryBuilder, v: QueryBuilder#VarExpr, e: Expr) =
-    if (v != null && (b.env contains v.name)) null else e
+  def if_missing(b: QueryBuilder, v: Expr, e: Expr) = v match {
+    case ve: QueryBuilder#VarExpr => if (b.env contains ve.name) null else e
+    case null => e
+    case _ => null
+  }
 
   def if_all_defined(b: QueryBuilder, e: Expr*) = {
     if (e.size < 2) sys.error("if_all_defined macro must have at least two arguments")
@@ -28,7 +34,7 @@ class Macros {
     if (vars forall {
       case v: QueryBuilder#VarExpr => b.env contains v.name
       case null => false
-      case x => sys.error(s"Unexpected parameter type in if_all_defined macro, expecting VarExpr: $x")
+      case _ => true
     }) expr
     else null
   }
@@ -40,7 +46,7 @@ class Macros {
     if (vars exists {
       case v: QueryBuilder#VarExpr => b.env contains v.name
       case null => false
-      case x => sys.error(s"Unexpected parameter type in if_any_defined macro, expecting VarExpr: $x")
+      case _ => true
     }) expr
     else null
   }
@@ -52,7 +58,7 @@ class Macros {
     if (vars forall {
       case v: QueryBuilder#VarExpr => !(b.env contains v.name)
       case null => true
-      case x => sys.error(s"Unexpected parameter type in if_all_missing macro, expecting VarExpr: $x")
+      case _ => false
     }) expr
     else null
   }
@@ -64,7 +70,7 @@ class Macros {
     if (vars exists {
       case v: QueryBuilder#VarExpr => !(b.env contains v.name)
       case null => true
-      case x => sys.error(s"Unexpected parameter type in if_any_missing macro, expecting VarExpr: $x")
+      case _ => false
     }) expr
     else null
   }
