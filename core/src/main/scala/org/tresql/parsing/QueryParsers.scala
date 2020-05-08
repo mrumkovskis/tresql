@@ -11,7 +11,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   val reserved = Set("in", "null", "false", "true")
 
   //comparison operator regular expression
-  val comp_op = """!?in\b|[<>=!~%$]+"""r
+  val comp_op = """!?in\b|[<>=!~%$]+|`[^`]+`"""r
 
   private val simple_ident_regex = "^[_\\p{IsLatin}][_\\p{IsLatin}0-9]*$".r
 

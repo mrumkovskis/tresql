@@ -43,6 +43,7 @@ package object dialects {
         case b.FunExpr("translate", List(_, b.ConstExpr(from: String),
           b.ConstExpr(to: String)), false, None, None) if from.length == to.length => true
         case b.FunExpr("nextval", List(b.ConstExpr(_)), false, None, None) => true
+        case b.BinExpr("`~`", _, _) => true
         case _ => false
       }
     }
@@ -54,6 +55,7 @@ package object dialects {
           b.ConstExpr(to: String)), false, None, None) if from.length == to.length =>
           (from zip to).foldLeft(col.sql)((s, a) => "replace(" + s + ", '" + a._1 + "', '" + a._2 + "')")
         case b.FunExpr("nextval", List(b.ConstExpr(seq)), false, None, None) => "next value for " + seq
+        case b.BinExpr("`~`", lop, rop) => s"regexp_matches(${lop.sql}, ${rop.sql})"
       }
     }
   }

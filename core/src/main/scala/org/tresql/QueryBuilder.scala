@@ -267,6 +267,9 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           case _: BracesExpr | _: ArrExpr => rop.sql
           case _ => "(" + rop.sql + ")"
         })
+      case x if x.startsWith("`") && x.endsWith("`") =>
+        //sql operator escape syntax
+        lop.sql + x.replace('`', ' ') + rop.sql
       case _ => error("unknown operation " + op)
     }
     override def exprType: Class[_] =

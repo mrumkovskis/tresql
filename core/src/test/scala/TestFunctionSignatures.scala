@@ -28,4 +28,6 @@ trait TestFunctionSignatures extends org.tresql.compiling.TresqlFunctionSignatur
   def position(pos: Any): Int
   def in_out(a: Int, b: String, c: String): Unit
   def date_add(d: java.util.Date, interval: Any): java.util.Date
+  //hsqldb
+  def regexp_matches(s:String, regex: String): Boolean
 }

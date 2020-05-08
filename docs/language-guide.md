@@ -21,7 +21,8 @@ Data selection
 [SELECT statement structure](#select-statement-structure)  
 [Simple SELECTs](#simple-selects)
   * [LIKE comparison](#like-comparison)  
-  * [CAST operator](#cast-operator)  
+  * [CAST operator](#cast-operator) 
+  * [Escape to sql operator](#escape-to-sql-operator) 
 
 [Binding variables](#binding-variables)  
 [Table joins](#table-joins)  
@@ -115,8 +116,21 @@ If type consists of more than one word use '':
 select ename, sal::double precision from emp
 ```
 
-
 > NOTE: CAST operator will not work on hsqldb
+
+#### Escape to sql operator
+
+In order to pass operator directly to sql use backticks:
+
+```
+emp[ename `~` '^K.*']{ename}#(1)
+```
+
+```sql
+select ename from emp where ename ~ '^K.*' order by 1 asc
+```
+
+> NOTE: This operator works on postgres
 
 #### Table less query
 
