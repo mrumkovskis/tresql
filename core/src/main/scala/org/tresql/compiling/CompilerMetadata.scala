@@ -19,7 +19,7 @@ private[tresql] object MetadataCache {
     conf: Map[String, String],
     factory: CompilerMetadataFactory
   ): CompilerMetadata = {
-    if (md == null) md = factory.create(conf)
+    if (md == null) md = factory.create(conf) else Env.log(s"Returning cached metadata")
     md
   }
   private[this] var md: CompilerMetadata = null
@@ -35,11 +35,13 @@ class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
     val functions = conf.getOrElse("functionSignatures", null)
     val macrosClass = conf.get("macros")
 
-    Env.logger = (msg, _, _) => println(msg)
+    Env.log(s"Creating database metadata from: $url")
+
     Class.forName(driverClassName)
     val conn =
       if (user == null) DriverManager.getConnection(url)
       else DriverManager.getConnection(url, user, password)
+    Env.log(s"Compiling using jdbc connection: $conn")
     Env.sharedConn = conn
     if (dbCreateScript != null) {
       Env.log(s"Creating database for compiler from script $dbCreateScript...")

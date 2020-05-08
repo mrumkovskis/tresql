@@ -259,8 +259,15 @@ package object tresql extends CoreTypes {
       }
       val macroSettings = settings(c.settings)
       val verbose = macroSettings.contains("verbose")
+      if (verbose) {
+        Env.logger = (msg, params, _) => {
+          println(msg)
+          if (params != null && params.nonEmpty) println(s" Params: $params")
+        }
+        Env.log("Verbose flag set")
+      }
       def info(msg: Any) = if (verbose) c.info(c.enclosingPosition, String.valueOf(msg), false)
-      info(s"Macro compiler settings:\n$macroSettings")
+      Env.log(s"Macro compiler settings:\n$macroSettings")
       val q"org.tresql.`package`.Tresql(scala.StringContext.apply(..$parts)).tresql(..$pars)($res)" =
         c.macroApplication
       val tresqlString = parts.map { case Literal(Constant(x)) => x } match {
@@ -326,7 +333,9 @@ package object tresql extends CoreTypes {
           .asInstanceOf[compiling.CompilerMetadataFactory]
       )
     }.getOrElse(
-      sys.error(s"metadataFactoryClass macro compiler setting missing. Try to set -Xmacro-settings: scala compiler option.")
+      sys.error(s"Tresql interpolator not available. Scala macro compiler setting missing - 'metadataFactoryClass'." +
+        s"Try to set -Xmacro-settings: scala compiler option.\n" +
+        s"Example: -Xmacro-settings:metadataFactoryClass=org.tresql.compiling.CompilerJDBCMetadataFactory")
     )
   }
 
