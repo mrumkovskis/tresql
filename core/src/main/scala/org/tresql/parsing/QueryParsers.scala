@@ -57,6 +57,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   case class Const(value: Any) extends Exp {
     def tresql = any2tresql(value)
   }
+  case class Sql(sql: String) extends Exp {
+    def tresql = s"`$sql`"
+  }
   case class Ident(ident: List[String]) extends Exp {
     def tresql = ident.mkString(".")
   }
@@ -260,6 +263,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
 
 
   def const: MemParser[Const] = (TRUE | FALSE | decimalNr | stringLiteral) ^^ Const named "const"
+  def sql: MemParser[Sql] = "`" ~> ("[^`]+"r) <~ "`" ^^ Sql named "sql"
   def qualifiedIdent: MemParser[Ident] = rep1sep(ident, ".") ^^ Ident named "qualified-ident"
   def qualifiedIdentAll: MemParser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
   def variable: MemParser[Variable] = ((":" ~> ((ident | stringLiteral) ~
@@ -285,7 +289,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
      * of the query.
      * insert, delete, update parsers must be applied before query parser */
   def operand: MemParser[Exp] = (const | ALL | withQuery | function | insert | update | variable |
-    query | id | idref | result | array) named "operand"
+    query | id | idref | result | array | sql) named "operand"
   /* function(<#> <arglist> <order by>). Maybe used in from clause so filter is not confused with join syntax.  */
   def functionWithoutFilter: MemParser[Fun] = (qualifiedIdent /* name */ <~ "(") ~
     opt("#") /* distinct */ ~ repsep(expr, ",") /* arglist */ ~

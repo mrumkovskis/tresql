@@ -14,6 +14,7 @@ trait ExpTransformer { this: QueryParsers =>
       case All => All
       case n: Null => n
       case c: Const => c
+      case s: Sql => s
       case e: Ident => e
       case e: Id => e
       case e: IdRef => e
@@ -61,6 +62,7 @@ trait ExpTransformer { this: QueryParsers =>
       case All => All
       case n: Null => n
       case c: Const => c
+      case s: Sql => s
       case e: Ident => e
       case e: Id => e
       case e: IdRef => e
@@ -125,7 +127,8 @@ trait ExpTransformer { this: QueryParsers =>
     def trl(r: T, l: List[Exp]) = l.foldLeft(r) { (fr, el) => tr(fr, el) }
     def tro(r: T, o: Option[Exp]) = o.map(tr(r, _)).getOrElse(r)
     def traverse(state: T): PartialFunction[Exp, T] = {
-      case _: Ident | _: Id | _: IdRef | _: Res | All | _: IdentAll | _: Variable | _: Null | _: Const | _: TableColDef | null => state
+      case _: Ident | _: Id | _: IdRef | _: Res | All | _: IdentAll | _: Variable | _: Null | _: Const |
+           _: TableColDef | _: Sql | null => state
       case Fun(_, pars, _, o, f) =>
         val ps = trl(state, pars)
         val os = o.map(tr(ps, _)).getOrElse(ps)

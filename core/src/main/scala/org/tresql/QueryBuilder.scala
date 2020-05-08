@@ -1085,6 +1085,9 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     try {
       parsedExpr match {
         case Const(x) => ConstExpr(x)
+        case Sql(sqlStr) =>
+          //fallback to sql macro
+          buildInternal(Fun("sql", List(Const(sqlStr)),false,None,None) , parseCtx)
         case Null => ConstExpr(Null)
         case NullUpdate => ConstExpr(NullUpdate)
         //insert

@@ -22,7 +22,9 @@ Data selection
 [Simple SELECTs](#simple-selects)
   * [LIKE comparison](#like-comparison)  
   * [CAST operator](#cast-operator) 
-  * [Escape to sql operator](#escape-to-sql-operator) 
+  * [Escape to sql operator](#escape-to-sql-operator)
+  * [Escape to sql](#escape-to-sql) 
+  * [Table less query](#table-less-query)
 
 [Binding variables](#binding-variables)  
 [Table joins](#table-joins)  
@@ -131,6 +133,18 @@ select ename from emp where ename ~ '^K.*' order by 1 asc
 ```
 
 > NOTE: This operator works on postgres
+
+#### Escape to sql
+
+To pass expression directly to sql also as in the case of operator use backticks:
+
+```
+{`date '2012-02-29' + 1 month`}
+```
+
+```sql
+select date '2012-02-29' + 1 month
+```
 
 #### Table less query
 
