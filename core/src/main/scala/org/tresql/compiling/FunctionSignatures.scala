@@ -12,6 +12,7 @@ trait DBAggregateFunctionSignatures {
 trait TresqlMacroFunctionSignatures {
   //macros
   def if_defined[T](variable: Any, exp: T): T
+  def if_defined_or_else[T](variable: Any, exp1: T, exp2: T): T
   def if_missing[T](variable: Any, exp: T): T
   def if_any_defined(exp: Any*): Any
   def if_all_defined(exp: Any*): Any

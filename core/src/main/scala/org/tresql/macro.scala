@@ -21,6 +21,9 @@ class Macros {
     case _ => e
   }
 
+  def if_defined_or_else(b: QueryBuilder, v: Expr, e1: Expr, e2: Expr) =
+    Option(if_defined(b, v, e1)).getOrElse(e2)
+
   def if_missing(b: QueryBuilder, v: Expr, e: Expr) = v match {
     case ve: QueryBuilder#VarExpr => if (b.env contains ve.name) null else e
     case null => e
