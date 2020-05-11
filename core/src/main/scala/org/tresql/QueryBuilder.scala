@@ -3,6 +3,7 @@ package org.tresql
 import sys._
 import scala.util.Try
 import QueryParser._
+import parsing.Exp
 import metadata.key_
 
 object QueryBuildCtx {

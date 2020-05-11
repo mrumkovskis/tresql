@@ -1,11 +1,10 @@
 package org.tresql.test
 
 import org.tresql._
+import org.tresql.parsing.Exp
 
 class Macros extends org.tresql.Macros {
   import macro_._
-
-  type Exp = parsing.QueryParsers#Exp
 
   /**
    * Dumb regexp to find bind variables (tresql syntax) in sql string.

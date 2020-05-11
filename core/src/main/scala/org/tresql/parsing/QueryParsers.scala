@@ -4,6 +4,10 @@ import org.tresql.Env
 
 import scala.util.parsing.combinator.JavaTokenParsers
 
+trait Exp {
+  def tresql: String
+}
+
 trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer {
 
   def parseExp(exp: String): Exp
@@ -40,10 +44,6 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     else
       offset
   //
-
-  trait Exp {
-    def tresql: String
-  }
 
   trait DMLExp extends Exp {
     def table: Ident

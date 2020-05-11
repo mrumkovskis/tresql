@@ -2,11 +2,11 @@ package org.tresql
 
 import scala.annotation.tailrec
 
-import parsing.QueryParsers
+import parsing.{QueryParsers, Exp}
 
 package object macro_ {
   implicit class TresqlMacroInterpolator(val sc: StringContext) extends AnyVal {
-    def macro_(args: QueryParsers#Exp*)(implicit p: QueryParsers): QueryParsers#Exp = {
+    def macro_(args: Exp*)(implicit p: QueryParsers): Exp = {
       p.parseExp(sc.standardInterpolator(identity, args.map(_.tresql)))
     }
   }

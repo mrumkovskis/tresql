@@ -192,7 +192,7 @@ object Env extends Resources {
       val pars = m.getParameterTypes
       pars.nonEmpty &&
       classOf[parsing.QueryParsers].isAssignableFrom(pars(0)) &&
-      classOf[parsing.QueryParsers#Exp].isAssignableFrom(m.getReturnType)
+      classOf[parsing.Exp].isAssignableFrom(m.getReturnType)
     })
   def isBuilderMacroDefined(macroName: String) = _macrosMethods
     .exists(_.get(macroName).exists { m =>

@@ -107,7 +107,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     testTresqls("/test.txt", (tresql, _, _, nr) => {
       println(s"$nr. Testing tresql method of:\n$tresql")
       QueryParser.parseExp(tresql) match {
-        case e: QueryParser.Exp @unchecked => assert(e === QueryParser.parseExp(e.tresql))
+        case e: parsing.Exp @unchecked => assert(e === QueryParser.parseExp(e.tresql))
       }
     })
   }

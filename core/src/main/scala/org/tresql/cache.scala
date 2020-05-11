@@ -3,7 +3,7 @@ package org.tresql
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.mutable.WeakHashMap
 import scala.collection.JavaConverters._
-import QueryParser._
+import parsing.Exp
 
 /** Cache for parsed expressions */
 trait Cache extends CacheBase[Exp]

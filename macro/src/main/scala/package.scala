@@ -94,7 +94,7 @@ package object tresql extends CoreTypes {
         colType: Tree, //filled by ColDef, may be used in result converter
         resultConverter: Option[(String, c.Tree)] //function in form (functionName -> CompiledResult[_] -> T)
       )
-      def resultClassTree(exp: Exp): Ctx = {
+      def resultClassTree(exp: parsing.Exp): Ctx = {
         def uniqueName(prefix: String, names: Set[String]) = if (names(prefix)) {
           prefix + Stream.from(1).filterNot(i => names(prefix + i)).head
         } else prefix

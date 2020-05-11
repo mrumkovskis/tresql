@@ -173,7 +173,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     testTresqls("/pgtest.txt", (tresql, _, _, nr) => {
       println(s"$nr. Testing tresql method of:\n$tresql")
       QueryParser.parseExp(tresql) match {
-        case e: QueryParser.Exp @unchecked => assert(e === QueryParser.parseExp(e.tresql))
+        case e: parsing.Exp @unchecked => assert(e === QueryParser.parseExp(e.tresql))
       }
     })
   }
