@@ -236,7 +236,7 @@ object Env extends Resources {
 }
 
 /** Resources and configuration for query execution like database connection, metadata, database dialect etc. */
-trait Resources { self =>
+sealed trait Resources { self =>
   private case class Resources_(
     _conn: Option[java.sql.Connection] = None,
     _metadata: Option[Metadata] = None,
