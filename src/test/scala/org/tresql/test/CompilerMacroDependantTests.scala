@@ -596,23 +596,23 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           "tyres[+=]" -> List(
             Map("brand" -> "BRIDGESTONE", "season" -> "S",
               "tyres_usage[+=]" -> List(
-                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-04-25"),
-                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-05-01"))),
+                Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-04-25"),
+                Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-05-01"))),
             Map("brand" -> "COPARTNER", "season" -> "W",
               "tyres_usage[+=]" -> List(
-                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-09-25"),
-                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-10-01"))))
+                Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-09-25"),
+                Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-10-01"))))
        ),
        Map("name" -> "TATA",
           "tyres[+=]" -> List(
            Map("brand" -> "METRO TYRE", "season" -> "S",
              "tyres_usage[+=]" -> List(
-               Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-04-25"),
-               Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-05-01"))),
+               Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-04-25"),
+               Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-05-01"))),
            Map("brand" -> "GRL", "season" -> "W",
              "tyres_usage[+=]" -> List(
-               Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-09-25"),
-               Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-10-01")))))))
+               Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-09-25"),
+               Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-10-01")))))))
     assertResult(((1,List(
         List(((1,List(List(((1,List(List(1, 1))),10058), ((1,List(List(1, 1))),10059)))),10057),
              ((1,List(List(((1,List(List(1, 1))),10061), ((1,List(List(1, 1))),10062)))),10060))
@@ -624,21 +624,21 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           "tyres[+=]" -> List(
             Map("nr" -> 10058, "brand" -> "BRIDGESTONE", "season" -> "S",
               "tyres_usage[+=]" -> List(
-                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-04-01"))),
+                Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-04-01"))),
             Map("nr" -> null, "brand" -> "ADDO", "season" -> "W",
               "tyres_usage[+=]" -> List(
-                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-09-25"),
-                Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2016-10-01"))))),
+                Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-09-25"),
+                Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-10-01"))))),
         Map("nr" -> 10060, "name" -> "TATA MOTORS",
           "tyres[+=]" -> List(
            Map("nr" -> 10061, "brand" -> "METRO TYRE", "season" -> "S",
              "tyres_usage[+=]" -> List(
-               Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-04-25"),
-               Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-05-01"))),
+               Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-04-25"),
+               Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-05-01"))),
            Map("nr" -> 10062, "brand" -> "GRL", "season" -> "W",
              "tyres_usage[+=]" -> List(
-               Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-09-25"),
-               Map("carnr" -> null /*value expr is used from env*/, "date_from" -> "2015-10-01")))))))
+               Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-09-25"),
+               Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-10-01")))))))
       assertResult((1,List(List((1,List(List((1,List(List(1))), ((1,List(List(1, 1))),10063)))),
           (1,List(List((1,List(List(1, 1))), (1,List(List(1, 1))))))))))(ORT.update("dept", obj))
 

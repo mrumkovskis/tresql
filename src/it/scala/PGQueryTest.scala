@@ -84,9 +84,6 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     Env.macros = Macros
     Env.cache = new SimpleCache(-1)
     Env.logger = (msg, _, _) => println(msg)
-    Env updateValueExprs /*value expr*/ Map(("car_usage" -> "empno") -> "(emp[empno = :empno]{empno})",
-      ("car" -> "deptnr") -> "(case((dept[deptno = :deptnr] {count(deptno)}) = 1, (dept[deptno = :deptnr] {deptno}), -1))",
-      ("tyres_usage" -> "carnr") -> ":#car")
     //create test db script
     new scala.io.BufferedSource(getClass.getResourceAsStream("/pgdb.sql")).mkString.split("//").foreach {
       sql => val st = Env.conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close

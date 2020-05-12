@@ -500,7 +500,7 @@ trait ORT extends Query {
           List(
             s":$refColName = |_lookup_edit('$refColName', ${
               if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
-            refColName -> resources.valueExpr(name, refColName))
+            refColName -> s":$refColName")
       }.orNull
     def resolver_tresql(table: metadata.Table, property: String, resolverExp: String) = {
       import QueryParser._
@@ -534,7 +534,7 @@ trait ORT extends Query {
             //resolvable field check
             case v: String if n.indexOf("->") != -1 => resolver_tresql(table, n, v)
             //ordinary field
-            case _ => List(table.colOption(n).map(_.name).orNull -> resources.valueExpr(table.name, n))
+            case _ => List(table.colOption(n).map(_.name).orNull -> s":$n")
           }
         }.groupBy { case _: String => "l" case _ => "b" } match {
           case m: Map[String @unchecked, List[_] @unchecked] =>

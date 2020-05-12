@@ -260,8 +260,6 @@ sealed trait Resources { self =>
       s"maxResultSize = $maxResultSize, params = $params)"
   }
 
-  private var _valueExprMap: Option[Map[(String, String), String]] = None
-
   def conn: java.sql.Connection
   def metadata: Metadata
   def dialect: CoreTypes.Dialect = null
@@ -270,17 +268,6 @@ sealed trait Resources { self =>
   def fetchSize = 0
   def maxResultSize = 0
   def params: Map[String, Any] = Map()
-
-  /** Column value expression in tresql statement value clause.
-   *  Default is named bind variable - {{{:columnName}}} */
-  def valueExpr(tableName: String, columnName: String) =
-    _valueExprMap.flatMap(_.get((tableName, columnName)))
-      .getOrElse(":" + columnName)
-
-  /** Set value expr map
-   * key: table name -> column name, value: expr passed to tresql
-   */
-  def updateValueExprs(map: Map[(String, String), String]) = _valueExprMap = Option(map)
 
   //resource construction convenience methods
   def withConn(conn: java.sql.Connection): Resources = Resources_(_conn = Option(conn))

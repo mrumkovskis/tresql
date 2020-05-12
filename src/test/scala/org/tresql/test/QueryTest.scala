@@ -43,9 +43,6 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     Env.macros = Macros
     Env.cache = new SimpleCache(-1)
     Env.logger = (msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg)
-    Env updateValueExprs /*value expr*/ Map(("car_usage" -> "empno") -> "(emp[empno = :empno]{empno})",
-      ("car" -> "deptnr") -> "(case((dept[deptno = :deptnr] {count(deptno)}) = 1, (dept[deptno = :deptnr] {deptno}), -1))",
-      ("tyres_usage" -> "carnr") -> ":#car")
     //create test db script
     new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
       sql => val st = conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
