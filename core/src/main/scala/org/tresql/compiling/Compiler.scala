@@ -545,10 +545,8 @@ trait Compiler extends QueryParsers { thisCompiler =>
   }
 
   def resolveColAsterisks(exp: Exp) = {
-    def createCol(col: String): Col = try {
-      intermediateResults.get.clear
-      column(new scala.util.parsing.input.CharSequenceReader(col)).get
-    } finally intermediateResults.get.clear
+    def createCol(col: String): Col =
+      phrase(column)(new scala.util.parsing.input.CharSequenceReader(col)).get
 
     lazy val resolver: TransformerWithState[List[Scope]] = transformerWithState { scopes =>
       def resolveWithQuery[T <: SQLDefBase](withQuery: WithQuery): (T, List[WithTableDef]) = {
@@ -865,13 +863,10 @@ trait Compiler extends QueryParsers { thisCompiler =>
         case x => isPrimitiveType(x)
       }
       def createPrimitiveExp = {
-        try {
-          intermediateResults.get.clear
-          PrimitiveExp(
-            query(new scala.util.parsing.input.CharSequenceReader(s"{${e.tresql}}"))
-              .get
-              .asInstanceOf[Query])
-        } finally intermediateResults.get.clear
+        PrimitiveExp(
+          phrase(query)(new scala.util.parsing.input.CharSequenceReader(s"{${e.tresql}}"))
+            .get
+            .asInstanceOf[Query])
       }
       e match {
         case Arr(exps) => Arr(exps map normalized)
