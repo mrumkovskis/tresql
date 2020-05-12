@@ -4,15 +4,9 @@ object QueryParser extends parsing.QueryParsers with parsing.ExpTransformer {
 
   override def parseExp(expr: String): parsing.Exp = {
     Env.cache.flatMap(_.get(expr)).getOrElse {
-      try {
-        intermediateResults.get.clear
-        val e = phrase(exprList)(new scala.util.parsing.input.CharSequenceReader(expr)) match {
-          case Success(r, _) => r
-          case x => sys.error(x.toString)
-        }
-        Env.cache.map(_.put(expr, e))
-        e
-      } finally intermediateResults.get.clear
+      val e = super.parseExp(expr)
+      Env.cache.map(_.put(expr, e))
+      e
     }
   }
 

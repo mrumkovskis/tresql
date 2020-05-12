@@ -10,7 +10,15 @@ trait Exp {
 
 trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer {
 
-  def parseExp(exp: String): Exp
+  def parseExp(exp: String): Exp = {
+    try {
+      intermediateResults.get.clear
+      phrase(exprList)(new scala.util.parsing.input.CharSequenceReader(exp)) match {
+        case Success(r, _) => r
+        case x => sys.error(x.toString)
+      }
+    } finally intermediateResults.get.clear
+  }
 
   val reserved = Set("in", "null", "false", "true")
 

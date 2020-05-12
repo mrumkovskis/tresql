@@ -1029,10 +1029,8 @@ trait Compiler extends QueryParsers { thisCompiler =>
   }
 
   override def parseExp(expr: String): Exp = try {
-    intermediateResults.get.clear
-    phrase(exprList)(new scala.util.parsing.input.CharSequenceReader(expr)) match {
-      case Success(r, _) => r
-      case x => throw CompilerException(x.toString, x.next.pos)
-    }
-  } finally intermediateResults.get.clear
+    super.parseExp(expr)
+  } catch {
+    case e: Exception => throw CompilerException(e.getMessage)
+  }
 }
