@@ -315,8 +315,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     //take this from childrenCount, since it RecursiveExpr is not built with new builder
     private val initChildIdx = QueryBuilder.this.childrenCount
     private val rowConverter = env.rowConverter(QueryBuilder.this.queryDepth, initChildIdx)
-    if (queryDepth >= Env.recursive_stack_dept)
-      error(s"Recursive execution stack depth $queryDepth exceeded, check for loops in data or increase Env.recursive_stack_dept setting.")
+    if (queryDepth >= Env.recursiveStackDepth)
+      error(s"Recursive execution stack depth $queryDepth exceeded, check for loops in data or increase Env.recursiveStackDepth setting.")
     val qBuilder = newInstance(new Env(QueryBuilder.this, env.reusableExpr),
       queryDepth + 1, 0, initChildIdx)
     qBuilder.recursiveQueryExp = recursiveQueryExp
@@ -1036,20 +1036,13 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         exp match {
           case fun: QueryBuilder#FunExpr =>
             if (Env isBuilderMacroDefined fun.name) {
-              val m = Env.macroMethod(fun.name)
-              val p = m.getParameterTypes
-              if (p.length > 1 && p(1).isAssignableFrom(classOf[Seq[_]]))
-                //second parameter is list of expressions
-                m.invoke(Env.macros.get, expb, fun.params).asInstanceOf[Expr]
-              else m.invoke(Env.macros.get, expb :: fun.params: _*).asInstanceOf[Expr]
+              Env.invokeMacro(fun.name, expb, fun.params)
             } else if (fun.params.contains(null)) null else fun
           case binExpr: QueryBuilder#BinExpr =>
             if (!(STANDART_BIN_OPS contains binExpr.op)) {
               val macroName = scala.reflect.NameTransformer.encode(binExpr.op)
               if (Env isBuilderMacroDefined macroName)
-                Env.macroMethod(macroName)
-                  .invoke(Env.macros.get, expb, binExpr.lop, binExpr.rop)
-                  .asInstanceOf[Expr]
+                Env.invokeMacro(macroName, expb, List(binExpr.lop, binExpr.rop))
               else binExpr
             } else binExpr
           case _ => sys.error("Unexpected exp type")

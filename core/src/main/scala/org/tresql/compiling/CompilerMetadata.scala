@@ -6,7 +6,7 @@ import org.tresql.metadata.JDBCMetadata
 
 trait CompilerMetadata {
   def metadata: Metadata
-  def macros: Option[Any]
+  def macros: Any
 }
 
 /** Implementation must have empty constructor so can be instantiated with {{{Class.newInstance}}} */
@@ -67,8 +67,8 @@ class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
           }
         }
 
-      override def macros: Option[Any] =
-        macrosClass.map(cn => Class.forName(cn).getDeclaredConstructor().newInstance())
+      override def macros: Any =
+        macrosClass.map(cn => Class.forName(cn).getDeclaredConstructor().newInstance()).orNull
     }
   }
 }

@@ -2,6 +2,7 @@ package org.tresql
 
 import sys._
 import CoreTypes.RowConverter
+import parsing.{QueryParsers, Exp}
 
 /** Environment for expression building and execution */
 class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolean)
@@ -123,13 +124,21 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
   }
 
   //resources methods
-  def conn: java.sql.Connection = provider.map(_.env.conn).getOrElse(resources.conn)
+  override def conn: java.sql.Connection = provider.map(_.env.conn).getOrElse(resources.conn)
   override def metadata = provider.map(_.env.metadata).getOrElse(resources.metadata)
   override def dialect: CoreTypes.Dialect = provider.map(_.env.dialect).getOrElse(resources.dialect)
   override def idExpr = provider.map(_.env.idExpr).getOrElse(resources.idExpr)
   override def queryTimeout: Int = provider.map(_.env.queryTimeout).getOrElse(resources.queryTimeout)
   override def fetchSize: Int = provider.map(_.env.fetchSize).getOrElse(resources.fetchSize)
   override def maxResultSize: Int = provider.map(_.env.maxResultSize).getOrElse(resources.maxResultSize)
+  override def recursiveStackDepth: Int = provider.map(_.env.recursiveStackDepth).getOrElse(resources.recursiveStackDepth)
+  override def isMacroDefined(name: String): Boolean =
+    provider.map(_.env.isMacroDefined(name)).getOrElse(resources.isMacroDefined(name))
+  override def isBuilderMacroDefined(name: String): Boolean =
+    provider.map(_.env.isBuilderMacroDefined(name)).getOrElse(resources.isBuilderMacroDefined(name))
+  override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
+    provider.map(_.env.invokeMacro(name, parser_or_builder, args))
+      .getOrElse(resources.invokeMacro(name, parser_or_builder, args))
 
   //meta data methods
   override def table(name: String) = metadata.table(name)
@@ -154,6 +163,9 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
 
 /** Static implemention of [[Resources]]. */
 object Env extends Resources {
+
+  //case class EnvResources() extends Resources
+
   private val threadConn = new ThreadLocal[java.sql.Connection]
   //query timeout
   private val query_timeout = new ThreadLocal[Int]
@@ -166,8 +178,7 @@ object Env extends Resources {
   private var _dialect: Option[CoreTypes.Dialect] = None
   private var _idExpr: Option[String => String] = None
   //macros
-  private var _macros: Option[Any] = None
-  private var _macrosMethods: Option[Map[String, java.lang.reflect.Method]] = None
+  private var _macros: MacroResources = new MacroResourcesImpl(null)
   //cache
   private var _cache: Option[Cache] = None
   //logger
@@ -186,22 +197,10 @@ object Env extends Resources {
   override def dialect = _dialect.getOrElse(super.dialect)
   override def idExpr = _idExpr.getOrElse(super.idExpr)
 
-  def macros = _macros
-  def isMacroDefined(macroName: String) = _macrosMethods
-    .exists(_.get(macroName).exists { m =>
-      val pars = m.getParameterTypes
-      pars.nonEmpty &&
-      classOf[parsing.QueryParsers].isAssignableFrom(pars(0)) &&
-      classOf[parsing.Exp].isAssignableFrom(m.getReturnType)
-    })
-  def isBuilderMacroDefined(macroName: String) = _macrosMethods
-    .exists(_.get(macroName).exists { m =>
-      val pars = m.getParameterTypes
-      pars.nonEmpty &&
-        classOf[QueryBuilder].isAssignableFrom(pars(0)) &&
-        classOf[Expr].isAssignableFrom(m.getReturnType)
-    })
-  def macroMethod(name: String) = _macrosMethods.map(_(name)).get
+  def isMacroDefined(macroName: String) = _macros.isMacroDefined(macroName)
+  def isBuilderMacroDefined(macroName: String) = _macros.isBuilderMacroDefined(macroName)
+  override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
+    _macros.invokeMacro(name, parser_or_builder, args)
 
   def cache = _cache
   override def queryTimeout = query_timeout.get
@@ -213,13 +212,11 @@ object Env extends Resources {
   def dialect_=(dialect: CoreTypes.Dialect) = this._dialect =
     Option(dialect).map(_.orElse {case e=> e.defaultSQL})
   def idExpr_=(idExpr: String => String) = this._idExpr = Option(idExpr)
-  def macros_=(macr: Any) = {
-    this._macros = macr match { case mo: Option[_] => mo case _ => Option(macr) }
-    this._macrosMethods = macros.flatMap(f => Option(f.getClass.getMethods.map(m => m.getName -> m).toMap))
-  }
+  def macros_=(macros: Any) = this._macros = new MacroResourcesImpl(macros)
+  def macros = _macros
 
-  def recursive_stack_dept = _recursive_stack_depth
-  def recursive_stack_dept_=(depth: Int) = _recursive_stack_depth = depth
+  def recursiveStackDepth: Int = _recursive_stack_depth
+  def recursiveStackDepth_=(depth: Int) = _recursive_stack_depth = depth
 
   def cache_=(cache: Cache) = this._cache = Option(cache)
   def queryTimeout_=(timeout: Int) = this.query_timeout set timeout
@@ -236,7 +233,7 @@ object Env extends Resources {
 }
 
 /** Resources and configuration for query execution like database connection, metadata, database dialect etc. */
-sealed trait Resources { self =>
+sealed trait Resources extends MacroResources { self =>
   private case class Resources_(
     _conn: Option[java.sql.Connection] = None,
     _metadata: Option[Metadata] = None,
@@ -245,7 +242,9 @@ sealed trait Resources { self =>
     _queryTimeout: Option[Int] = None,
     _fetchSize: Option[Int] = None,
     _maxResultSize: Option[Int] = None,
-    _params: Option[Map[String, Any]] = None) extends Resources {
+    _recursiveStackDepth: Option[Int] = None,
+    _params: Option[Map[String, Any]] = None,
+    _macros: Option[MacroResources] = None) extends Resources {
     override def conn: java.sql.Connection = _conn getOrElse self.conn
     override def metadata: Metadata = _metadata getOrElse self.metadata
     override def dialect: CoreTypes.Dialect = _dialect getOrElse self.dialect
@@ -253,11 +252,17 @@ sealed trait Resources { self =>
     override def queryTimeout: Int = _queryTimeout getOrElse self.queryTimeout
     override def fetchSize: Int = _fetchSize getOrElse self.fetchSize
     override def maxResultSize: Int = _maxResultSize getOrElse self.maxResultSize
+    override def recursiveStackDepth: Int = _recursiveStackDepth getOrElse self.recursiveStackDepth
     override def params: Map[String, Any] = _params getOrElse self.params
+    override def isMacroDefined(name: String) = _macros.map(_.isMacroDefined(name)).getOrElse(self.isMacroDefined(name))
+    override def isBuilderMacroDefined(name: String) =
+      _macros.map(_.isBuilderMacroDefined(name)).getOrElse(self.isBuilderMacroDefined(name))
+    override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
+      _macros.map(_.invokeMacro(name, parser_or_builder, args)).getOrElse(self.invokeMacro(name, parser_or_builder, args))
     override def toString = s"Resources_(conn = $conn, " +
       s"metadata = $metadata, dialect = $dialect, idExpr = $idExpr, " +
       s"queryTimeout = $queryTimeout, fetchSize = $fetchSize, " +
-      s"maxResultSize = $maxResultSize, params = $params)"
+      s"maxResultSize = $maxResultSize, recursiveStackDepth = $recursiveStackDepth, params = $params)"
   }
 
   def conn: java.sql.Connection
@@ -267,6 +272,7 @@ sealed trait Resources { self =>
   def queryTimeout = 0
   def fetchSize = 0
   def maxResultSize = 0
+  def recursiveStackDepth: Int
   def params: Map[String, Any] = Map()
 
   //resource construction convenience methods
@@ -277,7 +283,43 @@ sealed trait Resources { self =>
   def withQueryTimeout(queryTimeout: Int): Resources = Resources_(_queryTimeout = Option(queryTimeout))
   def withFetchSize(fetchSize: Int): Resources = Resources_(_fetchSize = Option(fetchSize))
   def withMaxResultSize(maxResultSize: Int): Resources = Resources_(_maxResultSize = Option(maxResultSize))
+  def withRecursiveStackDepth(recStackDepth: Int): Resources = Resources_(_recursiveStackDepth = Option(recStackDepth))
   def withParams(params: Map[String, Any]): Resources = Resources_(_params = Option(params))
+  def withMacros(macros: AnyRef): Resources = Resources_(_macros = Option(new MacroResourcesImpl(macros)))
+}
+
+trait MacroResources {
+  def isMacroDefined(name: String): Boolean
+  def isBuilderMacroDefined(name: String): Boolean
+  def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T
+}
+
+private class MacroResourcesImpl(val macros: Any) extends MacroResources {
+  private var methods =
+    Option(macros).map(_.getClass.getMethods.map(m => m.getName -> m).toMap).getOrElse(Map())
+
+  def isMacroDefined(name: String) = methods.get(name).exists { m =>
+    val pars = m.getParameterTypes
+    pars.nonEmpty &&
+      classOf[parsing.QueryParsers].isAssignableFrom(pars(0)) &&
+      classOf[parsing.Exp].isAssignableFrom(m.getReturnType)
+  }
+  def isBuilderMacroDefined(macroName: String) = methods.get(macroName).exists { m =>
+    val pars = m.getParameterTypes
+    pars.nonEmpty &&
+      classOf[QueryBuilder].isAssignableFrom(pars(0)) &&
+      classOf[Expr].isAssignableFrom(m.getReturnType)
+  }
+  def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T = {
+    val m = methods(name)
+    val p = m.getParameterTypes
+    if (p.length > 1 && p(1).isAssignableFrom(classOf[Seq[_]])) {
+      //parameter is list of expressions
+      m.invoke(macros, parser_or_builder, args).asInstanceOf[T]
+    } else {
+      m.invoke(macros, parser_or_builder :: args: _*).asInstanceOf[T]
+    }
+  }
 }
 
 trait EnvProvider {

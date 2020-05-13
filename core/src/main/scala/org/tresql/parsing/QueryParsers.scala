@@ -313,14 +313,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       f.map(_.elements.size).getOrElse(0)}"
   }) ^^ { case f: Fun =>
     if (f.aggregateOrder.isEmpty && f.aggregateWhere.isEmpty && Env.isMacroDefined(f.name)) {
-      val m = Env.macroMethod(f.name)
-      val p = m.getParameterTypes
-      if (p.length > 1 && p(1).isAssignableFrom(classOf[Seq[_]])) {
-        //parameter is list of expressions
-        m.invoke(Env.macros.get, QueryParsers.this, f.parameters).asInstanceOf[Exp]
-      } else {
-        m.invoke(Env.macros.get, QueryParsers.this :: f.parameters: _*).asInstanceOf[Exp]
-      }
+      Env.invokeMacro(f.name, QueryParsers.this, f.parameters)
     } else f
   } named "function"
   def array: MemParser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ Arr named "array"
