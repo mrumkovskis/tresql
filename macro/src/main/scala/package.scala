@@ -321,10 +321,10 @@ package object tresql extends CoreTypes {
            """
       c.Expr(tree)
     }
-    def settings(sett: List[String]) = sett.map { _.split("=") match {
+    def settings(sett: List[String]) = sett.map { s => s.split("=") match {
       case Array(key) => key.trim -> ""
       case Array(key, value) => key.trim -> value.trim
-      case x => sys.error(s"Setting must be in format <key>=<value> or <key>. Instead found: $x")
+      case _ => sys.error(s"Setting must be in format <key>=<value> or <key>. Instead found: $s")
     }}.toMap
     def metadata(conf: Map[String, String]) = conf.get("metadataFactoryClass").map { factory =>
       compiling.MetadataCache.create(
