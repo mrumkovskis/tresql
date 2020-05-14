@@ -164,7 +164,28 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
 /** Static implemention of [[Resources]]. */
 object Env extends Resources {
 
-  //case class EnvResources() extends Resources
+  var resourcesTemplate = new Res
+
+  private val threadRes = new ThreadLocal[Resources]
+
+  def threadResources = threadRes.get
+  def threadResources_=(res: Resources) = threadRes.set(res)
+
+  case class Res(override val conn: java.sql.Connection = null,
+                 override val metadata: Metadata = null,
+                 override val dialect: CoreTypes.Dialect = null,
+                 override val idExpr: String => String = s => "nextval('" + s + "')",
+                 override val queryTimeout: Int = 0,
+                 override val maxResultSize: Int = 0,
+                 override val recursiveStackDepth: Int = 50,
+                 override val params: Map[String, Any] = Map(),
+                 val macros: AnyRef = null) extends Resources {
+    private val macroImpl = new MacroResourcesImpl(macros)
+    def isMacroDefined(name: String) = macroImpl.isMacroDefined(name)
+    def isBuilderMacroDefined(name: String) = macroImpl.isBuilderMacroDefined(name)
+    def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
+      macroImpl.invokeMacro(name, parser_or_builder, args)
+  }
 
   private val threadConn = new ThreadLocal[java.sql.Connection]
   //query timeout
