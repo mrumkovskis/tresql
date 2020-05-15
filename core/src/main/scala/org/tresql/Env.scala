@@ -164,42 +164,36 @@ class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolea
 /** Static implemention of [[Resources]]. */
 object Env extends Resources {
 
-  var resourcesTemplate = new Res
+  var resourcesTemplate = new ResourcesImpl
 
-  private val threadRes = new ThreadLocal[Resources]
+  private val _threadResources = new ThreadLocal[ResourcesImpl] {
+    override def initialValue(): ResourcesImpl = resourcesTemplate
+  }
 
-  def threadResources = threadRes.get
-  def threadResources_=(res: Resources) = threadRes.set(res)
+  def threadResources = _threadResources.get
+  def threadResources_=(res: ResourcesImpl) = _threadResources.set(res)
 
-  case class Res(override val conn: java.sql.Connection = null,
-                 override val metadata: Metadata = null,
+  case class ResourcesImpl(override val conn: java.sql.Connection = null,
+                 override val metadata: Metadata = org.tresql.metadata.JDBCMetadata(),
                  override val dialect: CoreTypes.Dialect = null,
                  override val idExpr: String => String = s => "nextval('" + s + "')",
                  override val queryTimeout: Int = 0,
+                 override val fetchSize: Int = 0,
                  override val maxResultSize: Int = 0,
                  override val recursiveStackDepth: Int = 50,
                  override val params: Map[String, Any] = Map(),
-                 val macros: AnyRef = null) extends Resources {
+                 macros: Any = null) extends Resources {
     private val macroImpl = new MacroResourcesImpl(macros)
     def isMacroDefined(name: String) = macroImpl.isMacroDefined(name)
     def isBuilderMacroDefined(name: String) = macroImpl.isBuilderMacroDefined(name)
-    def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
+    def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T = {
       macroImpl.invokeMacro(name, parser_or_builder, args)
+    }
   }
 
-  private val threadConn = new ThreadLocal[java.sql.Connection]
-  //query timeout
-  private val query_timeout = new ThreadLocal[Int]
-  //fetch size
-  private val fetch_size = new ThreadLocal[Int]
-  //this is for single thread usage
-  var sharedConn: java.sql.Connection = _
-  //meta data object must be thread safe!
-  private var _metadata: Option[Metadata] = Some(org.tresql.metadata.JDBCMetadata())
-  private var _dialect: Option[CoreTypes.Dialect] = None
-  private var _idExpr: Option[String => String] = None
-  //macros
-  private var _macros: MacroResources = new MacroResourcesImpl(null)
+  def sharedConn: java.sql.Connection = resourcesTemplate.conn
+  def sharedConn_=(conn: java.sql.Connection) = resourcesTemplate = resourcesTemplate.copy(conn = conn)
+
   //cache
   private var _cache: Option[Cache] = None
   //logger
@@ -208,43 +202,47 @@ object Env extends Resources {
   private var _bindVarLogFilter: Option[PartialFunction[Expr, String]] = Some({
     case v: QueryBuilder#VarExpr if v.name == "password" => v.fullName + " = ***"
   })
-  //recursive execution depth
-  private var _recursive_stack_depth = 50
-  private var _maxResultSize = 0
 
   def apply(params: Map[String, Any], reusableExpr: Boolean) = new Env(params, this, reusableExpr)
-  def conn = { val c = threadConn.get; if (c == null) sharedConn else c }
-  override def metadata = _metadata.get
-  override def dialect = _dialect.getOrElse(super.dialect)
-  override def idExpr = _idExpr.getOrElse(super.idExpr)
 
-  def isMacroDefined(macroName: String) = _macros.isMacroDefined(macroName)
-  def isBuilderMacroDefined(macroName: String) = _macros.isBuilderMacroDefined(macroName)
-  override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
-    _macros.invokeMacro(name, parser_or_builder, args)
+  private def prop[T](f: ResourcesImpl => T, default: => T) =
+    Option(threadResources).map(f).getOrElse(default)
+
+  override def conn = prop(_.conn, sharedConn)
+  override def metadata = prop(_.metadata, null)
+  override def dialect = prop(_.dialect, super.dialect)
+  override def idExpr = prop(_.idExpr, super.idExpr)
+  override def queryTimeout = prop(_.queryTimeout, 0)
+  override def fetchSize = prop(_.fetchSize, 0)
+  override def maxResultSize = prop(_.maxResultSize, 0)
+  override def recursiveStackDepth: Int = prop(_.recursiveStackDepth,50)
+  def isMacroDefined(macroName: String) = prop(_.isMacroDefined(macroName), false)
+  def isBuilderMacroDefined(macroName: String) = prop(_.isBuilderMacroDefined(macroName), false)
+  override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T = {
+    prop(_.invokeMacro(name, parser_or_builder, args), sys.error(s"Macro function not found: $name"))
+  }
+  //declared so macros_= method works
+  def macros = prop(_.macros, null)
+
+  private def setProp(f: ResourcesImpl => ResourcesImpl) =
+    Option(threadResources).foreach(r => threadResources = f(r))
+
+  def conn_=(conn: java.sql.Connection) = setProp(_.copy(conn = conn))
+  def metadata_=(metadata: Metadata) = Option(threadResources)
+    .foreach(r => threadResources = r.copy(metadata = metadata))
+  def dialect_=(dialect: CoreTypes.Dialect) = {
+    val defDialect: CoreTypes.Dialect = { case e => e.defaultSQL }
+    setProp(_.copy(dialect = Option(dialect orElse defDialect).getOrElse(defDialect)))
+  }
+  def idExpr_=(idExpr: String => String) = setProp(_.copy(idExpr = Option(idExpr).orNull))
+  def macros_=(macros: Any) = setProp(_.copy(macros = macros))
+  def recursiveStackDepth_=(depth: Int) = setProp(_.copy(recursiveStackDepth = depth))
+  def queryTimeout_=(timeout: Int) =  setProp(_.copy(queryTimeout = timeout))
+  def fetchSize_=(fetchSize: Int) =  setProp(_.copy(fetchSize = fetchSize))
+  def maxResultSize_=(size: Int) = setProp(_.copy(maxResultSize = size))
 
   def cache = _cache
-  override def queryTimeout = query_timeout.get
-  override def fetchSize = fetch_size.get
-  override def maxResultSize = _maxResultSize
-
-  def conn_=(conn: java.sql.Connection) = this.threadConn set conn
-  def metadata_=(metadata: Metadata) = this._metadata = Option(metadata)
-  def dialect_=(dialect: CoreTypes.Dialect) = this._dialect =
-    Option(dialect).map(_.orElse {case e=> e.defaultSQL})
-  def idExpr_=(idExpr: String => String) = this._idExpr = Option(idExpr)
-  def macros_=(macros: Any) = this._macros = new MacroResourcesImpl(macros)
-  def macros = _macros
-
-  def recursiveStackDepth: Int = _recursive_stack_depth
-  def recursiveStackDepth_=(depth: Int) = _recursive_stack_depth = depth
-
   def cache_=(cache: Cache) = this._cache = Option(cache)
-  def queryTimeout_=(timeout: Int) = this.query_timeout set timeout
-  def fetchSize_=(fetchSize: Int) = this.fetch_size set fetchSize
-
-  def maxResultSize_=(size: Int) = this._maxResultSize = size
-
   def log(msg: => String, params: => Map[String, Any] = Map(), topic: LogTopic = LogTopic.info): Unit =
     if (_logger != null) _logger(msg, params, topic)
   def logger = _logger
@@ -322,8 +320,8 @@ private class MacroResourcesImpl(val macros: Any) extends MacroResources {
   def isMacroDefined(name: String) = methods.get(name).exists { m =>
     val pars = m.getParameterTypes
     pars.nonEmpty &&
-      classOf[parsing.QueryParsers].isAssignableFrom(pars(0)) &&
-      classOf[parsing.Exp].isAssignableFrom(m.getReturnType)
+      classOf[QueryParsers].isAssignableFrom(pars(0)) &&
+      classOf[Exp].isAssignableFrom(m.getReturnType)
   }
   def isBuilderMacroDefined(macroName: String) = methods.get(macroName).exists { m =>
     val pars = m.getParameterTypes

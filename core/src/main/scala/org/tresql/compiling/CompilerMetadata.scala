@@ -68,7 +68,7 @@ class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
         }
 
       override def macros: Any =
-        macrosClass.map(cn => Class.forName(cn).getDeclaredConstructor().newInstance()).orNull
+        macrosClass.map(cn => Class.forName(cn).getDeclaredConstructor().newInstance()).getOrElse(null)
     }
   }
 }
