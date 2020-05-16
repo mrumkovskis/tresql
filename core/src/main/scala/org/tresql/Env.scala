@@ -304,7 +304,7 @@ trait MacroResources {
     sys.error(s"Macro function not found: $name")
 }
 
-private class MacroResourcesImpl(val macros: Any) extends MacroResources {
+class MacroResourcesImpl(val macros: Any) extends MacroResources {
   private val methods =
     Option(macros).map(_.getClass.getMethods.map(m => m.getName -> m).toMap).getOrElse(Map())
 

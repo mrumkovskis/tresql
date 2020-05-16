@@ -127,7 +127,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       }
     )
     println("\n-------------- TEST compiler ----------------\n")
-    val compiler = new QueryCompiler(testRes)
+    val compiler = new QueryCompiler(testRes.metadata, testRes)
     import compiling.CompilerException
     testTresqls("/test.txt", (tresql, _, _, nr) => {
       println(s"$nr. Compiling tresql:\n$tresql")

@@ -1,6 +1,6 @@
 package org.tresql.parsing
 
-import org.tresql.Resources
+import org.tresql.MacroResources
 
 import scala.util.parsing.combinator.JavaTokenParsers
 
@@ -224,7 +224,7 @@ case class Braces(expr: Exp) extends Exp {
 
 trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer {
 
-  protected def resources: Resources
+  protected def macros: MacroResources
 
   def parseExp(exp: String): Exp = {
     phrase(exprList)(new scala.util.parsing.input.CharSequenceReader(exp)) match {
@@ -319,8 +319,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     case _ ~ _ ~ _ ~ _ ~ _ ~ f => s"Aggregate function filter must contain only one elements, instead of ${
       f.map(_.elements.size).getOrElse(0)}"
   }) ^^ { case f: Fun =>
-    if (f.aggregateOrder.isEmpty && f.aggregateWhere.isEmpty && resources.isMacroDefined(f.name)) {
-      resources.invokeMacro(f.name, QueryParsers.this, f.parameters)
+    if (f.aggregateOrder.isEmpty && f.aggregateWhere.isEmpty && macros.isMacroDefined(f.name)) {
+      macros.invokeMacro(f.name, QueryParsers.this, f.parameters)
     } else f
   } named "function"
   def array: MemParser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ Arr named "array"

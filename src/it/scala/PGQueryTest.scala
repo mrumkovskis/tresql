@@ -193,7 +193,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
         override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
       }
     )
-    val compiler = new QueryCompiler(testRes)
+    val compiler = new QueryCompiler(testRes.metadata, testRes)
     import compiling.CompilerException
     testTresqls("/pgtest.txt", (tresql, _, _, nr) => {
       println(s"$nr. Compiling tresql:\n$tresql")

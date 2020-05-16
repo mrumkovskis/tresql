@@ -12,7 +12,7 @@ case class CompilerException(message: String,
 
 trait Compiler extends QueryParsers { thisCompiler =>
 
-  lazy val metadata = resources.metadata
+  protected def metadata: Metadata
 
   trait Scope {
     def tableNames: List[String]

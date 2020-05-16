@@ -100,11 +100,9 @@ package object tresql extends CoreTypes {
         case l => l.head + l.tail.zipWithIndex.map(t => ":_" + t._2 + t._1).mkString //replace placeholders with variable defs
       }
       val compilerMetadata = metadata(macroSettings)
-      implicit val resrc = new Resources {}
-        .withMetadata(compilerMetadata.metadata)
-        .withMacros(compilerMetadata.macros)
       info(s"Compiling: $tresqlString")
-      val compiler = new QueryCompiler(resrc)
+      val compiler = new QueryCompiler(
+        compilerMetadata.metadata, new MacroResourcesImpl(compilerMetadata.macros))
       val compiledExp = try compiler.compile(tresqlString) catch {
         case ce: CompilerException => c.abort(c.enclosingPosition, ce.getMessage)
       }
