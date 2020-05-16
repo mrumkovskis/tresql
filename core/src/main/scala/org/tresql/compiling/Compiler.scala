@@ -5,14 +5,14 @@ import org.tresql.parsing._
 import org.tresql.metadata._
 import scala.reflect.ManifestFactory
 
+case class CompilerException(message: String,
+                             pos: scala.util.parsing.input.Position = scala.util.parsing.input.NoPosition)
+  extends Exception(message)
+
+
 trait Compiler extends QueryParsers { thisCompiler =>
 
-  case class CompilerException(
-    message: String,
-    pos: scala.util.parsing.input.Position = scala.util.parsing.input.NoPosition
-  ) extends Exception(message)
-
-  lazy val metadata = res.metadata
+  lazy val metadata = resources.metadata
 
   trait Scope {
     def tableNames: List[String]
@@ -55,7 +55,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
   }
   case class ColDef[T](name: String, col: Exp, typ: Manifest[T]) extends TypedExp[T] {
     def exp = this
-    override def tresql = Col(col, name).tresql
+    override def tresql = parsing.Col(col, name).tresql
   }
   case class ChildDef(exp: Exp) extends TypedExp[ChildDef] {
     val typ: Manifest[ChildDef] = ManifestFactory.classType(this.getClass)
@@ -128,7 +128,8 @@ trait Compiler extends QueryParsers { thisCompiler =>
     override def tresql = exp match {
       case q: Query =>
         /* FIXME distinct keyword is lost in Cols */
-        q.copy(tables = this.tables.map(_.exp), cols = Cols(false, this.cols.map(c => Col(c.exp, c.name)))).tresql
+        q.copy(tables = this.tables.map(_.exp),
+          cols = Cols(false, this.cols.map(c => parsing.Col(c.exp, c.name)))).tresql
       case x => x.tresql
     }
   }
@@ -229,7 +230,8 @@ trait Compiler extends QueryParsers { thisCompiler =>
     exp: Insert
   ) extends DMLDefBase {
     override def tresql = // FIXME alias lost
-      exp.copy(table = Ident(List(tables.head.name)), cols = this.cols.map(c => Col(c.exp, c.name))).tresql
+      exp.copy(table = Ident(List(tables.head.name)),
+        cols = this.cols.map(c => parsing.Col(c.exp, c.name))).tresql
   }
 
   case class UpdateDef(
@@ -238,7 +240,8 @@ trait Compiler extends QueryParsers { thisCompiler =>
     exp: Update
   ) extends DMLDefBase {
     override def tresql = // FIXME alias lost
-      exp.copy(table = Ident(List(tables.head.name)), cols = this.cols.map(c => Col(c.exp, c.name))).tresql
+      exp.copy(table = Ident(List(tables.head.name)),
+        cols = this.cols.map(c => parsing.Col(c.exp, c.name))).tresql
   }
 
   case class DeleteDef(
@@ -288,7 +291,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
   //array
   case class ArrayDef(cols: List[ColDef[_]]) extends RowDefBase {
     def exp = this
-    override def tresql = cols.map(c => any2tresql(c.col)).mkString("[", ", ", "]")
+    override def tresql = cols.map(c => QueryParsers.any2tresql(c.col)).mkString("[", ", ", "]")
   }
 
   //metadata
@@ -390,7 +393,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     def buildCols(cols: Cols): List[ColDef[_]] = {
       if (cols != null) (cols.cols map {
           //child dml statement in select
-          case c @ Col(_: DMLExp @unchecked, _) => builder(QueryCtx)(c)
+          case c @ parsing.Col(_: DMLExp @unchecked, _) => builder(QueryCtx)(c)
           case c => builder(ColsCtx)(c)
         }).asInstanceOf[List[ColDef[_]]] match {
           case l if l.exists(_.name == null) => //set names of columns
@@ -411,7 +414,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         ), retType, p)
       }.getOrElse(throw CompilerException(s"Unknown function: ${f.name}"))
       case ftd: FunAsTable => FunAsTableDef(tr(ctx, ftd.fun).asInstanceOf[FunDef[_]], ftd.cols, ftd.withOrdinality)
-      case c: Col =>
+      case c: parsing.Col =>
         val alias = if (c.alias != null) c.alias else c.col match {
           case Obj(Ident(name), _, _, _, _) => name.last //use last part of qualified ident as name
           case Cast(Obj(Ident(name), _, _, _, _), _) => name.last //use last part of qualified ident as name
@@ -493,8 +496,8 @@ trait Compiler extends QueryParsers { thisCompiler =>
           Obj(TableObj(dml.table), null, null, null))
         val cols =
           if (dml.cols != null) dml.cols.map {
-            case c @ Col(Obj(_: Ident, _, _, _, _), _) => builder(ColsCtx)(c) //insertable, updatable col
-            case c @ Col(BinOp("=", Obj(_: Ident, _, _, _, _), _), _) if dml.isInstanceOf[Update] => builder(ColsCtx)(c) //updatable col
+            case c @ parsing.Col(Obj(_: Ident, _, _, _, _), _) => builder(ColsCtx)(c) //insertable, updatable col
+            case c @ parsing.Col(BinOp("=", Obj(_: Ident, _, _, _, _), _), _) if dml.isInstanceOf[Update] => builder(ColsCtx)(c) //updatable col
             case c => builder(QueryCtx)(c) //child expression
           }.asInstanceOf[List[ColDef[_]]]
           else Nil
@@ -545,7 +548,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
   }
 
   def resolveColAsterisks(exp: Exp) = {
-    def createCol(col: String): Col =
+    def createCol(col: String): parsing.Col =
       phrase(column)(new scala.util.parsing.input.CharSequenceReader(col)).get
 
     lazy val resolver: TransformerWithState[List[Scope]] = transformerWithState { scopes =>
@@ -850,8 +853,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     type_resolver(Nil)(exp)
   }
 
-  def compile(exp: Exp)(implicit resources: Resources) = {
-    this.res = resources
+  def compile(exp: Exp) = {
     def normalized(e: Exp): Exp = {
       def isPrimitiveType(e: Exp) = e match {
         case _: Fun | _: Const | _: Variable | _: Cast | _: UnOp | _: Null | _: In => true
@@ -1024,7 +1026,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     fun_traverse
   }
 
-  override def parseExp(expr: String)(implicit resources: Resources): Exp = try {
+  override def parseExp(expr: String): Exp = try {
     super.parseExp(expr)
   } catch {
     case e: Exception => throw CompilerException(e.getMessage)

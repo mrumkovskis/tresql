@@ -295,8 +295,8 @@ trait ORT extends Query {
       val filters = Option(filter).map {
         f => Filters(Option(f), Option(f), Option(f))
       } orElse {
-        import QueryParser._
-        Option(filterStr).flatMap(parseExp(_)(resources) match {
+        import parsing._
+        Option(filterStr).flatMap(new QueryParser(resources).parseExp(_) match {
           case Arr(List(insert, delete, update)) => Some(ORT.this.Filters(
             insert = Some(insert).filter(_ != Null).map(_.tresql),
             delete = Some(delete).filter(_ != Null).map(_.tresql),
@@ -503,12 +503,13 @@ trait ORT extends Query {
             refColName -> s":$refColName")
       }.orNull
     def resolver_tresql(table: metadata.Table, property: String, resolverExp: String) = {
-      import QueryParser._
+      import parsing._
       val ResolverPropPattern(prop) = property
       val ResolverExpPattern(col, exp) = resolverExp
-      table.colOption(col).map(_.name).map { _ -> transformer {
+      val parser = new QueryParser(resources)
+      table.colOption(col).map(_.name).map { _ -> parser.transformer {
           case Ident(List("_")) => Variable(prop, Nil, opt = false)
-        } (parseExp(if (exp startsWith "(" ) exp else s"($exp)")).tresql
+        } (parser.parseExp(if (exp startsWith "(" ) exp else s"($exp)")).tresql
       }// TODO .orElse(sys.error(s"Resolver target not found for property '$prop'. Column '$col', expression '$resolverExp'"))
        .toList
     }

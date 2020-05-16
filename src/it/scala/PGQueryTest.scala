@@ -175,10 +175,11 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   test("tresql methods") {
     implicit val testRes = tresqlResources
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
+    val parser = new QueryParser(testRes)
     testTresqls("/pgtest.txt", (tresql, _, _, nr) => {
       println(s"$nr. Testing tresql method of:\n$tresql")
-      QueryParser.parseExp(tresql) match {
-        case e: parsing.Exp @unchecked => assert(e === QueryParser.parseExp(e.tresql))
+      parser.parseExp(tresql) match {
+        case e: parsing.Exp @unchecked => assert(e === parser.parseExp(e.tresql))
       }
     })
   }
@@ -192,53 +193,54 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
         override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
       }
     )
-    import QueryCompiler._
+    val compiler = new QueryCompiler(testRes)
+    import compiling.CompilerException
     testTresqls("/pgtest.txt", (tresql, _, _, nr) => {
       println(s"$nr. Compiling tresql:\n$tresql")
-      try compile(tresql)
+      try compiler.compile(tresql)
       catch {
         case e: Exception => throw new RuntimeException(s"Error compiling statement #$nr:\n$tresql", e)
       }
     })
 
     //with recursive compile with braces select def
-    compile("""t(*) {(emp[ename ~~ 'kin%']{empno}) +
+    compiler.compile("""t(*) {(emp[ename ~~ 'kin%']{empno}) +
       (t[t.empno = e.mgr]emp e{e.empno})} t#(1)""")
 
     //with recursive in column clause compile
-    compile("""dummy { (kd(nr, name) {
+    compiler.compile("""dummy { (kd(nr, name) {
       emp[ename ~~ 'kin%']{empno, ename} + emp[mgr = nr]kd{empno, ename}
     } kd {name}) val}""")
 
     //values from select compilation
-    compile("=dept_addr da [da.addr_nr = a.nr] address a {da.addr = a.addr}")
-    compile("=dept_addr da [da.addr_nr = address.nr] address {da.addr = address.addr}")
-    compile("=dept_addr da [da.addr_nr = a.nr] (address a {a.nr, a.addr}) a {da.addr = a.addr}")
-    compile("=dept_addr da [da.addr_nr = nr] (address a {a.nr, a.addr}) a {da.addr = a.addr}")
+    compiler.compile("=dept_addr da [da.addr_nr = a.nr] address a {da.addr = a.addr}")
+    compiler.compile("=dept_addr da [da.addr_nr = address.nr] address {da.addr = address.addr}")
+    compiler.compile("=dept_addr da [da.addr_nr = a.nr] (address a {a.nr, a.addr}) a {da.addr = a.addr}")
+    compiler.compile("=dept_addr da [da.addr_nr = nr] (address a {a.nr, a.addr}) a {da.addr = a.addr}")
 
     //postgresql style cast compilation
-    compile("dummy[dummy::int = 1 & dummy::'double precision' & (dummy + dummy)::long] {dummy::int}")
+    compiler.compile("dummy[dummy::int = 1 & dummy::'double precision' & (dummy + dummy)::long] {dummy::int}")
 
     //values from select compilation errors
-    intercept[CompilerException](compile("=dept_addr da [da.addr_nr = a.nr] (address a {a.addr}) a {da.addr = a.addr}"))
-    intercept[CompilerException](compile("=dept_addr da [da.addr_nr = nrz] (address a {a.nr, a.addr}) a {da.addr = a.addr}"))
+    intercept[CompilerException](compiler.compile("=dept_addr da [da.addr_nr = a.nr] (address a {a.addr}) a {da.addr = a.addr}"))
+    intercept[CompilerException](compiler.compile("=dept_addr da [da.addr_nr = nrz] (address a {a.nr, a.addr}) a {da.addr = a.addr}"))
 
-    intercept[CompilerException](compile("work/dept{*}"))
-    intercept[CompilerException](compile("works"))
-    intercept[CompilerException](compile("emp{aa}"))
-    intercept[CompilerException](compile("(dummy() ++ dummy()){dummy}"))
-    intercept[CompilerException](compile("(dummy ++ dummiz())"))
-    intercept[CompilerException](compile("(dummiz() ++ dummy){dummy}"))
-    intercept[CompilerException](compile("dept/emp[l = 'x']{loc l}(l)^(count(loc) > 1)#(l || 'x')"))
-    intercept[CompilerException](compile("dept/emp{loc l}(l)^(count(l) > 1)#(l || 'x')"))
-    intercept[CompilerException](compile("dept d{deptno dn, dname || ' ' || loc}#(~(dept[dname = dn]{deptno}))"))
-    intercept[CompilerException](compile("dept d[d.dname in (d[1]{dname})]"))
-    intercept[CompilerException](compile("(dummy{dummy} + dummy{dummy d}) d{d}"))
-    intercept[CompilerException](compile("dept{group_concat(dname)#(dnamez)}"))
-    intercept[CompilerException](compile("dept{group_concat(dname)#(dname)[dept{deptnox} < 30]}"))
-    intercept[CompilerException](compile("dept{group_concat(dname)#(dname)[deptno{deptno} < 30]}"))
-    intercept[CompilerException](compile("{dept[10]{dnamez}}"))
-    intercept[CompilerException](compile("b(# y) {a{x}}, a(# x) {dummy{dummy}} b{y}"))
+    intercept[CompilerException](compiler.compile("work/dept{*}"))
+    intercept[CompilerException](compiler.compile("works"))
+    intercept[CompilerException](compiler.compile("emp{aa}"))
+    intercept[CompilerException](compiler.compile("(dummy() ++ dummy()){dummy}"))
+    intercept[CompilerException](compiler.compile("(dummy ++ dummiz())"))
+    intercept[CompilerException](compiler.compile("(dummiz() ++ dummy){dummy}"))
+    intercept[CompilerException](compiler.compile("dept/emp[l = 'x']{loc l}(l)^(count(loc) > 1)#(l || 'x')"))
+    intercept[CompilerException](compiler.compile("dept/emp{loc l}(l)^(count(l) > 1)#(l || 'x')"))
+    intercept[CompilerException](compiler.compile("dept d{deptno dn, dname || ' ' || loc}#(~(dept[dname = dn]{deptno}))"))
+    intercept[CompilerException](compiler.compile("dept d[d.dname in (d[1]{dname})]"))
+    intercept[CompilerException](compiler.compile("(dummy{dummy} + dummy{dummy d}) d{d}"))
+    intercept[CompilerException](compiler.compile("dept{group_concat(dname)#(dnamez)}"))
+    intercept[CompilerException](compiler.compile("dept{group_concat(dname)#(dname)[dept{deptnox} < 30]}"))
+    intercept[CompilerException](compiler.compile("dept{group_concat(dname)#(dname)[deptno{deptno} < 30]}"))
+    intercept[CompilerException](compiler.compile("{dept[10]{dnamez}}"))
+    intercept[CompilerException](compiler.compile("b(# y) {a{x}}, a(# x) {dummy{dummy}} b{y}"))
   }
 
   if (executePGCompilerMacroDependantTests) test("postgres compiler macro") {

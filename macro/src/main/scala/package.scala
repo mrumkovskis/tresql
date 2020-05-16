@@ -1,5 +1,7 @@
 package org
 
+import org.tresql.compiling.CompilerException
+
 package object tresql extends CoreTypes {
 
   /**
@@ -78,22 +80,47 @@ package object tresql extends CoreTypes {
   private object Macros {
     import scala.language.reflectiveCalls //supress warnings that class Ctx is defined in function resultClassTree and later returned
     import scala.language.existentials //supress warnings that class Ctx is defined in function resultClassTree and later returned
-    import QueryCompiler._
     def impl(c: Context)(params: c.Expr[Any]*)(resources: c.Expr[Resources]): c.Expr[Result[RowLike]] = {
       import c.universe._
       import CoreTypes.RowConverter
+      val macroSettings = settings(c.settings)
+      val verbose = macroSettings.contains("verbose")
+      if (verbose) {
+        Env.logger = (msg, params, _) => {
+          println(msg)
+          if (params != null && params.nonEmpty) println(s" Params: $params")
+        }
+        Env.log("Verbose flag set")
+      }
+      def info(msg: Any) = if (verbose) c.info(c.enclosingPosition, String.valueOf(msg), false)
+      Env.log(s"Macro compiler settings:\n$macroSettings")
+      val q"org.tresql.`package`.Tresql(scala.StringContext.apply(..$parts)).tresql(..$pars)($res)" =
+        c.macroApplication
+      val tresqlString = parts.map { case Literal(Constant(x)) => x } match {
+        case l => l.head + l.tail.zipWithIndex.map(t => ":_" + t._2 + t._1).mkString //replace placeholders with variable defs
+      }
+      val compilerMetadata = metadata(macroSettings)
+      implicit val resrc = new Resources {}
+        .withMetadata(compilerMetadata.metadata)
+        .withMacros(compilerMetadata.macros)
+      info(s"Compiling: $tresqlString")
+      val compiler = new QueryCompiler(resrc)
+      val compiledExp = try compiler.compile(tresqlString) catch {
+        case ce: CompilerException => c.abort(c.enclosingPosition, ce.getMessage)
+      }
+
       case class Ctx(
-        //class name which extends RowLike
-        className: String,
-        tree: List[c.Tree], //class (field) & converter definition.
-        depth: Int, //select descendancy idx (i.e. QueryBuilder.queryDepth)
-        colIdx: Int, //column idx - used in converter
-        childIdx: Int, //child select index - used to get converter from env
-        convRegister: List[c.Tree], //Map of converters for Env in form of (Int, Int) -> RowConveter[_]
-        colNames: Set[String], //field names (stored in order to avoid duplicates)
-        colType: Tree, //filled by ColDef, may be used in result converter
-        resultConverter: Option[(String, c.Tree)] //function in form (functionName -> CompiledResult[_] -> T)
-      )
+                      //class name which extends RowLike
+                      className: String,
+                      tree: List[c.Tree], //class (field) & converter definition.
+                      depth: Int, //select descendancy idx (i.e. QueryBuilder.queryDepth)
+                      colIdx: Int, //column idx - used in converter
+                      childIdx: Int, //child select index - used to get converter from env
+                      convRegister: List[c.Tree], //Map of converters for Env in form of (Int, Int) -> RowConveter[_]
+                      colNames: Set[String], //field names (stored in order to avoid duplicates)
+                      colType: Tree, //filled by ColDef, may be used in result converter
+                      resultConverter: Option[(String, c.Tree)] //function in form (functionName -> CompiledResult[_] -> T)
+                    )
       def resultClassTree(exp: parsing.Exp): Ctx = {
         def uniqueName(prefix: String, names: Set[String]) = if (names(prefix)) {
           prefix + Stream.from(1).filterNot(i => names(prefix + i)).head
@@ -103,13 +130,13 @@ package object tresql extends CoreTypes {
           val q"typeOf[$colType]" = c.parse(s"typeOf[${m.toString}]")
           colType
         }
-        lazy val generator: QueryCompiler.Traverser[Ctx] = traverser(ctx => {
-          case f: FunDef[_] => ctx //for sql_concat function
+        lazy val generator: compiler.Traverser[Ctx] = compiler.traverser(ctx => {
+          case f: compiler.FunDef[_] => ctx //for sql_concat function
             .copy(convRegister =
               q"((${ctx.depth}, ${ctx.childIdx}), identity[RowLike] _)" :: ctx.convRegister)
           //inserts updates deletes
-          case dml: DMLDefBase => ctx.copy(className = "DMLResult")
-          case pd: PrimitiveDef[_] =>
+          case dml: compiler.DMLDefBase => ctx.copy(className = "DMLResult")
+          case pd: compiler.PrimitiveDef[_] =>
             val name = c.freshName("tresqlResultConv")
             val funName = TermName(name)
             val typeName = typeNameFromManifest(pd.typ)
@@ -123,20 +150,20 @@ package object tresql extends CoreTypes {
               q"((${ctx.depth}, ${ctx.childIdx}), identity[RowLike] _)" :: ctx.convRegister,
               resultConverter = Some(name, conv))
           //queries are compiled to CompiledResult[_ <: RowLike], arrays are compiled to tuples.
-          case sd: RowDefBase =>
+          case sd: compiler.RowDefBase =>
             val className = c.freshName("Tresql")
             val resultConv = Option(sd).collect {
-              case _: ArrayDef => (c.freshName("tresqlResultConv"), null)
+              case _: compiler.ArrayDef => (c.freshName("tresqlResultConv"), null)
             }
             case class ColsCtx(
-              colTrees: List[List[c.Tree]],
-              colIdx: Int,
-              childIdx: Int,
-              convRegister: List[c.Tree],
-              colNames: Set[String],
-              colTypes: List[c.Tree],
-              resultConvs: List[(String, c.Tree)]
-            )
+                                colTrees: List[List[c.Tree]],
+                                colIdx: Int,
+                                childIdx: Int,
+                                convRegister: List[c.Tree],
+                                colNames: Set[String],
+                                colTypes: List[c.Tree],
+                                resultConvs: List[(String, c.Tree)]
+                              )
             val colsCtx = sd.cols
               .foldLeft(ColsCtx(Nil, 0, 0, ctx.convRegister, Set(), Nil, Nil)) { case (colCt, col) =>
                 val ct = generator(Ctx(
@@ -220,7 +247,7 @@ package object tresql extends CoreTypes {
               null,
               maybeResConv(colsCtx.colTypes.reverse, colsCtx.resultConvs.reverse)
             )
-          case ColDef(colName, ChildDef(sd: RowDefBase), _) =>
+          case compiler.ColDef(colName, compiler.ChildDef(sd: compiler.RowDefBase), _) =>
             val selDefCtx = generator(Ctx(ctx.className, Nil, ctx.depth + 1,
               ctx.colIdx, ctx.childIdx, ctx.convRegister,
               Set(), null, ctx.resultConverter))(sd)
@@ -240,10 +267,10 @@ package object tresql extends CoreTypes {
               colNames = ctx.colNames + name,
               colType = tq"${TypeName(selDefCtx.className)}"
             )
-          case ColDef(_, pd: PrimitiveDef[_], _) =>
+          case compiler.ColDef(_, pd: compiler.PrimitiveDef[_], _) =>
             val nctx = generator(ctx)(pd)
             nctx.copy(tree = List(q"", q"", q"identity[RowLike] _"))
-          case ColDef(colName, _, typ) =>
+          case compiler.ColDef(colName, _, typ) =>
             val name = uniqueName(colName, ctx.colNames)
             val fieldTerm = q"${TermName(name)}"
             val colType = typeNameFromManifest(typ)
@@ -257,30 +284,7 @@ package object tresql extends CoreTypes {
         })
         generator(Ctx(null, Nil, 0, 0, 0, Nil, Set(), null, None))(exp)
       }
-      val macroSettings = settings(c.settings)
-      val verbose = macroSettings.contains("verbose")
-      if (verbose) {
-        Env.logger = (msg, params, _) => {
-          println(msg)
-          if (params != null && params.nonEmpty) println(s" Params: $params")
-        }
-        Env.log("Verbose flag set")
-      }
-      def info(msg: Any) = if (verbose) c.info(c.enclosingPosition, String.valueOf(msg), false)
-      Env.log(s"Macro compiler settings:\n$macroSettings")
-      val q"org.tresql.`package`.Tresql(scala.StringContext.apply(..$parts)).tresql(..$pars)($res)" =
-        c.macroApplication
-      val tresqlString = parts.map { case Literal(Constant(x)) => x } match {
-        case l => l.head + l.tail.zipWithIndex.map(t => ":_" + t._2 + t._1).mkString //replace placeholders with variable defs
-      }
-      val compilerMetadata = metadata(macroSettings)
-      implicit val resrc = new Resources {}
-        .withMetadata(compilerMetadata.metadata)
-        .withMacros(compilerMetadata.macros)
-      info(s"Compiling: $tresqlString")
-      val compiledExp = try compile(tresqlString) catch {
-        case ce: CompilerException => c.abort(c.enclosingPosition, ce.getMessage)
-      }
+
       val resultClassCtx = resultClassTree(compiledExp)
       val resultClassName = resultClassCtx.className match {
         case null => "org.tresql.RowLike" case n => n }

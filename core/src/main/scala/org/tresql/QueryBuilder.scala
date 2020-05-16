@@ -2,9 +2,9 @@ package org.tresql
 
 import sys._
 import scala.util.Try
-import QueryParser._
 import parsing.Exp
 import metadata.key_
+import parsing._
 
 object QueryBuildCtx {
   trait Ctx
@@ -39,7 +39,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   private[tresql] var childrenCount = 0
 
   //set by buildInternal method when building Query for potential use in RecursiveExpr
-  private[tresql] var recursiveQueryExp: QueryParser.Query = _
+  private[tresql] var recursiveQueryExp: parsing.Query = _
 
   //used for non flat updates, i.e. hierarhical object.
   private val _childUpdatesBuildTime = scala.collection.mutable.ListBuffer[(Expr, String)]()
@@ -311,7 +311,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     override def defaultSQL: String = name
   }
 
-  case class RecursiveExpr(exp: QueryParser.Query) extends BaseExpr {
+  case class RecursiveExpr(exp: parsing.Query) extends BaseExpr {
     //take this from childrenCount, since it RecursiveExpr is not built with new builder
     private val initChildIdx = QueryBuilder.this.childrenCount
     private val rowConverter = env.rowConverter(QueryBuilder.this.queryDepth, initChildIdx)
@@ -771,7 +771,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: Exp,
                           returning: Option[Cols]) = {
     lazy val insertCols = this.table(table).cols.map(c => IdentExpr(List(c.name)))
-    def resolveAsterisk(q: QueryParser.Query) =
+    def resolveAsterisk(q: parsing.Query) =
       Option(q.cols)
         .map {
           _.cols.zipWithIndex.map { case (col, idx) =>
@@ -791,11 +791,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         //get column clause from metadata
         case Nil => insertCols
         case List(Col(All, _)) => vals match {
-          case q: QueryParser.Query => resolveAsterisk(q)//adjust insertable columns to select columns
+          case q: parsing.Query => resolveAsterisk(q)//adjust insertable columns to select columns
           case e =>
             def extractQuery(e: Exp): List[IdentExpr] = e match {
               case BinOp(_, lop, _) => extractQuery(lop)
-              case q: QueryParser.Query => resolveAsterisk(q)
+              case q: parsing.Query => resolveAsterisk(q)
               case Braces(b) => extractQuery(b)
               case With(_, e) => extractQuery(e)
               case _ => insertCols
@@ -900,7 +900,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     }
 
   private[tresql] def buildInternal(parsedExpr: Exp, parseCtx: Ctx = QUERY_CTX): Expr = {
-    def buildSelect(q: QueryParser.Query) = {
+    def buildSelect(q: parsing.Query) = {
       val tablesAndAliases = buildTables(q.tables)
       if (ctxStack.head == QUERY_CTX && this.tableDefs == Nil) this.tableDefs = defs(tablesAndAliases._1)
       val filter = if (q.filter == null) null else buildFilter(tablesAndAliases._1.last, q.filter.filters)
@@ -962,7 +962,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       if (ctxStack.head == WHERE_CTX && q.filter.filters != Nil && sel.filter == null) null else sel
     }
     def buildSelectFromObj(o: Obj) =
-      buildSelect(QueryParser.Query(List(o), Filters(Nil), null, null, null, null, null))
+      buildSelect(parsing.Query(List(o), Filters(Nil), null, null, null, null, null))
     //build tables, set nullable flag for tables right to default join or foreign key shortcut join,
     //which is used for implicit left outer join, create aliases map
     def buildTables(tables: List[Obj]) = {
@@ -1107,7 +1107,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
               //copy join condition in the right place for parent child join calculation
               recursiveQueryExp.copy(
                 tables = t.head.copy(
-                  join = QueryParser.Join(default = false, join, noJoin = false)) :: t.tail,
+                  join = Join(default = false, join, noJoin = false)) :: t.tail,
                 //drop first filter for recursive query, since first filter is used to obtain initial set
                 filter = recursiveQueryExp.filter.copy(
                   filters = recursiveQueryExp.filter.filters drop 1))
@@ -1125,7 +1125,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           case QUERY_CTX | FROM_CTX | WITH_CTX | WITH_TABLE_CTX => buildSelectFromObj(t)
           case _ => buildIdentOrBracesExpr(t)
         }
-        case q: QueryParser.Query => parseCtx match {
+        case q: parsing.Query => parseCtx match {
           case ARR_CTX => buildWithNew(_.buildInternal(q, QUERY_CTX)) //may have other elements in array
           case _ =>
             if (recursiveQueryExp == null) recursiveQueryExp = q //set for potential use in RecursiveExpr
@@ -1222,7 +1222,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     } finally ctxStack = ctxStack.tail
   }
 
-  def buildExpr(ex: String): Expr = buildExpr(parseExp(ex)(env))
+  def buildExpr(ex: String): Expr = buildExpr(new QueryParser(env).parseExp(ex))
   def buildExpr(ex: Exp): Expr = buildInternal(ex, ctxStack.headOption.getOrElse(QUERY_CTX))
 
   //for debugging purposes

@@ -4,28 +4,233 @@ import org.tresql.Resources
 
 import scala.util.parsing.combinator.JavaTokenParsers
 
+private[tresql] object QueryParsers {
+  private[tresql] val simple_ident_regex = "^[_\\p{IsLatin}][_\\p{IsLatin}0-9]*$".r
+
+  def any2tresql(any: Any): String = any match {
+    case a: String => if (a.contains("'")) "\"" + a + "\"" else "'" + a + "'"
+    case e: Exp @unchecked => e.tresql
+    case null => "null"
+    case l: List[_] => l map any2tresql mkString ", "
+    case x => x.toString
+  }
+}
+
+import QueryParsers.any2tresql
+
 trait Exp {
   def tresql: String
 }
 
+trait DMLExp extends Exp {
+  def table: Ident
+  def alias: String
+  def cols: List[Col]
+  def filter: Arr
+  def vals: Exp
+  def returning: Option[Cols]
+}
+
+case class Const(value: Any) extends Exp {
+  def tresql = any2tresql(value)
+}
+case class Sql(sql: String) extends Exp {
+  def tresql = s"`$sql`"
+}
+case class Ident(ident: List[String]) extends Exp {
+  def tresql = ident.mkString(".")
+}
+case class Variable(variable: String, members: List[String], opt: Boolean) extends Exp {
+  def tresql = if (variable == "?") "?" else {
+    ":" +
+      (if (QueryParsers.simple_ident_regex.pattern.matcher(variable).matches) variable
+      else if (variable contains "'") "\"" + variable + "\""
+      else "'" + variable + "'") +
+      (if (members == null | members == Nil) "" else "." + (members map any2tresql mkString ".")) +
+      (if (opt) "?" else "")
+  }
+}
+case class Id(name: String) extends Exp {
+  def tresql = "#" + name
+}
+case class IdRef(name: String) extends Exp {
+  def tresql = ":#" + name
+}
+case class Res(rNr: Int, col: Any) extends Exp {
+  def tresql = ":" + rNr + "(" + any2tresql(col) + ")"
+}
+case class Cast(exp: Exp, typ: String) extends Exp {
+  def tresql = exp.tresql + "::" +
+    (if (QueryParsers.simple_ident_regex.pattern.matcher(typ).matches) typ else "'" + typ + "'")
+}
+case class UnOp(operation: String, operand: Exp) extends Exp {
+  def tresql = operation + operand.tresql
+}
+case class Fun(
+                name: String,
+                parameters: List[Exp],
+                distinct: Boolean,
+                aggregateOrder: Option[Ord],
+                aggregateWhere: Option[Exp]
+              ) extends Exp {
+  def tresql = name + "(" + (if (distinct) "# " else "") +
+    ((parameters map any2tresql) mkString ", ") +
+    s""")${aggregateOrder.map(o => " " + o.tresql).mkString}${
+      aggregateWhere.map(e => s"[${e.tresql}]").mkString}"""
+}
+
+case class TableColDef(name: String, typ: Option[String])
+case class FunAsTable(fun: Fun, cols: Option[List[TableColDef]], withOrdinality: Boolean) extends Exp {
+  def tresql = fun.tresql
+}
+
+case class In(lop: Exp, rop: List[Exp], not: Boolean) extends Exp {
+  def tresql = any2tresql(lop) + (if (not) " !" else " ") + rop.map(any2tresql).mkString(
+    "in(", ", ", ")")
+}
+case class BinOp(op: String, lop: Exp, rop: Exp) extends Exp {
+  def tresql = lop.tresql + " " + op + " " + rop.tresql
+}
+case class TerOp(lop: Exp, op1: String, mop: Exp, op2: String, rop: Exp) extends Exp {
+  def content = BinOp("&", BinOp(op1, lop, mop), BinOp(op2, mop, rop))
+  def tresql = s"${any2tresql(lop)} $op1 ${any2tresql(mop)} $op2 ${any2tresql(rop)}"
+}
+
+case class Join(default: Boolean, expr: Exp, noJoin: Boolean) extends Exp {
+  def tresql = this match {
+    case Join(_, _, true) => ";"
+    case Join(false, a: Arr, false) => a.tresql
+    case Join(false, e: Exp, false) => "[" + e.tresql + "]"
+    case Join(true, null, false) => "/"
+    case Join(true, e: Exp, false) => "/[" + e.tresql + "]"
+    case _ => sys.error("Unexpected Join case")
+  }
+}
+
+case class Obj(obj: Exp, alias: String, join: Join, outerJoin: String, nullable: Boolean = false)
+  extends Exp {
+  def tresql = {
+    (if (join != null) join.tresql else "") + (if (outerJoin == "r") "?" else "") +
+      obj.tresql + (if (outerJoin == "l") "?" else if (outerJoin == "i") "!" else "") +
+      (obj match {
+        case FunAsTable(_, cols, ord) =>
+          " " + alias +
+            cols
+              .map(_.map(c => c.name + c.typ.map("::" + _).getOrElse(""))
+                .mkString(if (ord) "(# " else "(", ", ", ")"))
+              .getOrElse("")
+        case _ => if (alias == null) "" else " " + alias
+      })
+  }
+}
+case class Col(col: Exp, alias: String) extends Exp {
+  def tresql = any2tresql(col) + (if (alias != null) " " + alias else "")
+}
+case class Cols(distinct: Boolean, cols: List[Col]) extends Exp {
+  def tresql = (if (distinct) "#" else "") + cols.map(_.tresql).mkString("{", ",", "}")
+}
+case class Grp(cols: List[Exp], having: Exp) extends Exp {
+  def tresql = "(" + cols.map(any2tresql).mkString(",") + ")" +
+    (if (having != null) "^(" + any2tresql(having) + ")" else "")
+}
+//cols expression is tuple in the form - ([<nulls first>], <order col list>, [<nulls last>])
+case class Ord(cols: List[(Exp, Exp, Exp)]) extends Exp {
+  def tresql = "#(" + cols.map(c => (if (c._1 == Null) "null " else "") +
+    any2tresql(c._2) + (if (c._3 == Null) " null" else "")).mkString(",") + ")"
+}
+case class Query(tables: List[Obj], filter: Filters, cols: Cols,
+                 group: Grp, order: Ord, offset: Exp, limit: Exp) extends Exp {
+  def tresql = tables.map(any2tresql).mkString +
+    filter.tresql +
+    (if (cols != null) cols.tresql else "") +
+    (if (group != null) any2tresql(group) else "") +
+    (if (order != null) order.tresql else "") +
+    (if (limit != null)
+      s"@(${if (offset != null) any2tresql(offset) + " " else ""}${any2tresql(limit)})"
+    else if (offset != null) s"@(${any2tresql(offset)}, )"
+    else "")
+}
+
+case class WithTable(name: String, cols: List[String], recursive: Boolean, table: Exp)
+  extends Exp {
+  def tresql = s"$name (${if (!recursive) "# " else ""}${cols mkString ", "}) { ${table.tresql} }"
+}
+case class With(tables: List[WithTable], query: Exp) extends Exp {
+  def tresql = tables.map(_.tresql).mkString(", ") + " " + query.tresql
+}
+case class Values(values: List[Arr]) extends Exp {
+  def tresql = values map (_.tresql) mkString ", "
+}
+case class Insert(table: Ident, alias: String, cols: List[Col], vals: Exp, returning: Option[Cols])
+  extends DMLExp {
+  override def filter = null
+  def tresql = "+" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
+    (if (cols.nonEmpty) cols.map(_.tresql).mkString("{", ",", "}") else "") +
+    (if (vals != null) any2tresql(vals) else "") +
+    returning.map(_.tresql).getOrElse("")
+}
+case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp, returning: Option[Cols])
+  extends DMLExp {
+  def tresql = {
+    val filterTresql = if (filter != null) filter.tresql else ""
+    val colsTresql = if (cols.nonEmpty) cols.map(_.tresql).mkString("{", ",", "}") else ""
+    val valsTresql = if (vals != null) any2tresql(vals) else ""
+    "=" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
+      (vals match {
+        case vfs: ValuesFromSelect => valsTresql + filterTresql + colsTresql
+        case _ => filterTresql + colsTresql + valsTresql
+      }) +
+      returning.map(_.tresql).getOrElse("")
+  }
+}
+case class ValuesFromSelect(select: Query) extends Exp {
+  def tresql =
+    if (select.tables.size > 1) select.copy(tables = select.tables.tail).tresql
+    else ""
+}
+case class Delete(table: Ident, alias: String, filter: Arr, using: Exp, returning: Option[Cols])
+  extends DMLExp {
+  override def cols = null
+  override def vals = using
+  def tresql = {
+    val tbl =
+      table.tresql + Option(alias).map(" " + _).getOrElse("") + (if (using == null) "" else using.tresql)
+
+    "-" + tbl + filter.tresql + returning.map(_.tresql).getOrElse("")
+  }
+}
+case class Arr(elements: List[Exp]) extends Exp {
+  def tresql = "[" + any2tresql(elements) + "]"
+}
+case class Filters(filters: List[Arr]) extends Exp {
+  def tresql = filters map any2tresql mkString
+}
+object All extends Exp {
+  def tresql = "*"
+}
+case class IdentAll(ident: Ident) extends Exp {
+  def tresql = ident.ident.mkString(".") + ".*"
+}
+
+trait Null extends Exp {
+  def tresql = "null"
+}
+case object Null extends Null
+case object NullUpdate extends Null
+
+case class Braces(expr: Exp) extends Exp {
+  def tresql = "(" + any2tresql(expr) + ")"
+}
+
 trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer {
 
-  protected val threadResources = new ThreadLocal[Resources]
+  protected def resources: Resources
 
-  protected def res = threadResources.get
-  protected def res_=(res: Resources) = threadResources.set(res)
-
-  def parseExp(exp: String)(implicit macros: Resources): Exp = {
-    this.threadResources.set(macros)
+  def parseExp(exp: String): Exp = {
     phrase(exprList)(new scala.util.parsing.input.CharSequenceReader(exp)) match {
       case Success(r, _) => r
       case x => sys.error(x.toString)
     }
-  }
-
-  /* This method is called from macro interpolator */
-  private [tresql] def parseExpWithThreadResources(exp: String): Exp = {
-    parseExp(exp)(res)
   }
 
   val reserved = Set("in", "null", "false", "true")
@@ -33,7 +238,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   //comparison operator regular expression
   val comp_op = """!?in\b|[<>=!~%$]+|`[^`]+`"""r
 
-  private val simple_ident_regex = "^[_\\p{IsLatin}][_\\p{IsLatin}0-9]*$".r
+  val NoJoin = Join(default = false, null, noJoin = true)
+  val DefaultJoin = Join(default = true, null, noJoin = false)
 
   //JavaTokenParsers overrides
   //besides standart whitespace symbols consider as a whitespace also comments in form /* comment */ and //comment
@@ -60,216 +266,6 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     else
       offset
   //
-
-  trait DMLExp extends Exp {
-    def table: Ident
-    def alias: String
-    def cols: List[Col]
-    def filter: Arr
-    def vals: Exp
-    def returning: Option[Cols]
-  }
-
-  case class Const(value: Any) extends Exp {
-    def tresql = any2tresql(value)
-  }
-  case class Sql(sql: String) extends Exp {
-    def tresql = s"`$sql`"
-  }
-  case class Ident(ident: List[String]) extends Exp {
-    def tresql = ident.mkString(".")
-  }
-  case class Variable(variable: String, members: List[String], opt: Boolean) extends Exp {
-    def tresql = if (variable == "?") "?" else {
-      ":" +
-        (if (simple_ident_regex.pattern.matcher(variable).matches) variable
-         else if (variable contains "'") "\"" + variable + "\""
-         else "'" + variable + "'") +
-        (if (members == null | members == Nil) "" else "." + (members map any2tresql mkString ".")) +
-        (if (opt) "?" else "")
-    }
-  }
-  case class Id(name: String) extends Exp {
-    def tresql = "#" + name
-  }
-  case class IdRef(name: String) extends Exp {
-    def tresql = ":#" + name
-  }
-  case class Res(rNr: Int, col: Any) extends Exp {
-    def tresql = ":" + rNr + "(" + any2tresql(col) + ")"
-  }
-  case class Cast(exp: Exp, typ: String) extends Exp {
-    def tresql = exp.tresql + "::" +
-      (if (simple_ident_regex.pattern.matcher(typ).matches) typ else "'" + typ + "'")
-  }
-  case class UnOp(operation: String, operand: Exp) extends Exp {
-    def tresql = operation + operand.tresql
-  }
-  case class Fun(
-    name: String,
-    parameters: List[Exp],
-    distinct: Boolean,
-    aggregateOrder: Option[Ord],
-    aggregateWhere: Option[Exp]
-  ) extends Exp {
-    def tresql = name + "(" + (if (distinct) "# " else "") +
-      ((parameters map any2tresql) mkString ", ") +
-      s""")${aggregateOrder.map(o => " " + o.tresql).mkString}${
-        aggregateWhere.map(e => s"[${e.tresql}]").mkString}"""
-  }
-
-  case class TableColDef(name: String, typ: Option[String])
-  case class FunAsTable(fun: Fun, cols: Option[List[TableColDef]], withOrdinality: Boolean) extends Exp {
-    def tresql = fun.tresql
-  }
-
-  case class In(lop: Exp, rop: List[Exp], not: Boolean) extends Exp {
-    def tresql = any2tresql(lop) + (if (not) " !" else " ") + rop.map(any2tresql).mkString(
-      "in(", ", ", ")")
-  }
-  case class BinOp(op: String, lop: Exp, rop: Exp) extends Exp {
-    def tresql = lop.tresql + " " + op + " " + rop.tresql
-  }
-  case class TerOp(lop: Exp, op1: String, mop: Exp, op2: String, rop: Exp) extends Exp {
-    def content = BinOp("&", BinOp(op1, lop, mop), BinOp(op2, mop, rop))
-    def tresql = s"${any2tresql(lop)} $op1 ${any2tresql(mop)} $op2 ${any2tresql(rop)}"
-  }
-
-  case class Join(default: Boolean, expr: Exp, noJoin: Boolean) extends Exp {
-    def tresql = this match {
-      case Join(_, _, true) => ";"
-      case Join(false, a: Arr, false) => a.tresql
-      case Join(false, e: Exp, false) => "[" + e.tresql + "]"
-      case Join(true, null, false) => "/"
-      case Join(true, e: Exp, false) => "/[" + e.tresql + "]"
-      case _ => sys.error("Unexpected Join case")
-    }
-  }
-  val NoJoin = Join(default = false, null, noJoin = true)
-  val DefaultJoin = Join(default = true, null, noJoin = false)
-
-  case class Obj(obj: Exp, alias: String, join: Join, outerJoin: String, nullable: Boolean = false)
-      extends Exp {
-    def tresql = {
-      (if (join != null) join.tresql else "") + (if (outerJoin == "r") "?" else "") +
-      obj.tresql + (if (outerJoin == "l") "?" else if (outerJoin == "i") "!" else "") +
-        (obj match {
-          case FunAsTable(_, cols, ord) =>
-            " " + alias +
-            cols
-              .map(_.map(c => c.name + c.typ.map("::" + _).getOrElse(""))
-                .mkString(if (ord) "(# " else "(", ", ", ")"))
-              .getOrElse("")
-          case _ => if (alias == null) "" else " " + alias
-        })
-    }
-  }
-  case class Col(col: Exp, alias: String) extends Exp {
-    def tresql = any2tresql(col) + (if (alias != null) " " + alias else "")
-  }
-  case class Cols(distinct: Boolean, cols: List[Col]) extends Exp {
-    def tresql = (if (distinct) "#" else "") + cols.map(_.tresql).mkString("{", ",", "}")
-  }
-  case class Grp(cols: List[Exp], having: Exp) extends Exp {
-    def tresql = "(" + cols.map(any2tresql).mkString(",") + ")" +
-      (if (having != null) "^(" + any2tresql(having) + ")" else "")
-  }
-  //cols expression is tuple in the form - ([<nulls first>], <order col list>, [<nulls last>])
-  case class Ord(cols: List[(Exp, Exp, Exp)]) extends Exp {
-    def tresql = "#(" + cols.map(c => (if (c._1 == Null) "null " else "") +
-      any2tresql(c._2) + (if (c._3 == Null) " null" else "")).mkString(",") + ")"
-  }
-  case class Query(tables: List[Obj], filter: Filters, cols: Cols,
-    group: Grp, order: Ord, offset: Exp, limit: Exp) extends Exp {
-    def tresql = tables.map(any2tresql).mkString +
-      filter.tresql +
-      (if (cols != null) cols.tresql else "") +
-      (if (group != null) any2tresql(group) else "") +
-      (if (order != null) order.tresql else "") +
-      (if (limit != null)
-        s"@(${if (offset != null) any2tresql(offset) + " " else ""}${any2tresql(limit)})"
-      else if (offset != null) s"@(${any2tresql(offset)}, )"
-      else "")
-  }
-
-  case class WithTable(name: String, cols: List[String], recursive: Boolean, table: Exp)
-    extends Exp {
-    def tresql = s"$name (${if (!recursive) "# " else ""}${cols mkString ", "}) { ${table.tresql} }"
-  }
-  case class With(tables: List[WithTable], query: Exp) extends Exp {
-    def tresql = tables.map(_.tresql).mkString(", ") + " " + query.tresql
-  }
-  case class Values(values: List[Arr]) extends Exp {
-    def tresql = values map (_.tresql) mkString ", "
-  }
-  case class Insert(table: Ident, alias: String, cols: List[Col], vals: Exp, returning: Option[Cols])
-    extends DMLExp {
-    override def filter = null
-    def tresql = "+" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
-      (if (cols.nonEmpty) cols.map(_.tresql).mkString("{", ",", "}") else "") +
-      (if (vals != null) any2tresql(vals) else "") +
-      returning.map(_.tresql).getOrElse("")
-  }
-  case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp, returning: Option[Cols])
-    extends DMLExp {
-    def tresql = {
-      val filterTresql = if (filter != null) filter.tresql else ""
-      val colsTresql = if (cols.nonEmpty) cols.map(_.tresql).mkString("{", ",", "}") else ""
-      val valsTresql = if (vals != null) any2tresql(vals) else ""
-      "=" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
-        (vals match {
-          case vfs: ValuesFromSelect => valsTresql + filterTresql + colsTresql
-          case _ => filterTresql + colsTresql + valsTresql
-        }) +
-        returning.map(_.tresql).getOrElse("")
-    }
-  }
-  case class ValuesFromSelect(select: Query) extends Exp {
-    def tresql =
-      if (select.tables.size > 1) select.copy(tables = select.tables.tail).tresql
-      else ""
-  }
-  case class Delete(table: Ident, alias: String, filter: Arr, using: Exp, returning: Option[Cols])
-    extends DMLExp {
-    override def cols = null
-    override def vals = using
-    def tresql = {
-      val tbl =
-        table.tresql + Option(alias).map(" " + _).getOrElse("") + (if (using == null) "" else using.tresql)
-
-      "-" + tbl + filter.tresql + returning.map(_.tresql).getOrElse("")
-    }
-  }
-  case class Arr(elements: List[Exp]) extends Exp {
-    def tresql = "[" + any2tresql(elements) + "]"
-  }
-  case class Filters(filters: List[Arr]) extends Exp {
-    def tresql = filters map any2tresql mkString
-  }
-  object All extends Exp {
-    def tresql = "*"
-  }
-  case class IdentAll(ident: Ident) extends Exp {
-    def tresql = ident.ident.mkString(".") + ".*"
-  }
-
-  trait Null extends Exp {
-    def tresql = "null"
-  }
-  case object Null extends Null
-  case object NullUpdate extends Null
-
-  case class Braces(expr: Exp) extends Exp {
-    def tresql = "(" + any2tresql(expr) + ")"
-  }
-
-  def any2tresql(any: Any): String = any match {
-    case a: String => if (a.contains("'")) "\"" + a + "\"" else "'" + a + "'"
-    case e: Exp @unchecked => e.tresql
-    case null => "null"
-    case l: List[_] => l map any2tresql mkString ", "
-    case x => x.toString
-  }
 
   //literals
   def TRUE: MemParser[Boolean] = ("\\btrue\\b"r) ^^^ true named "true"
@@ -323,8 +319,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     case _ ~ _ ~ _ ~ _ ~ _ ~ f => s"Aggregate function filter must contain only one elements, instead of ${
       f.map(_.elements.size).getOrElse(0)}"
   }) ^^ { case f: Fun =>
-    if (f.aggregateOrder.isEmpty && f.aggregateWhere.isEmpty && res.isMacroDefined(f.name)) {
-      res.invokeMacro(f.name, QueryParsers.this, f.parameters)
+    if (f.aggregateOrder.isEmpty && f.aggregateWhere.isEmpty && resources.isMacroDefined(f.name)) {
+      resources.invokeMacro(f.name, QueryParsers.this, f.parameters)
     } else f
   } named "function"
   def array: MemParser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ Arr named "array"

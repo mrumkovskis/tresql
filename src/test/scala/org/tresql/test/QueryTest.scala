@@ -27,7 +27,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     case e: QueryBuilder#SelectExpr =>
       val b = e.builder
       e match {
-        case s @ b.SelectExpr(List(b.Table(b.ConstExpr(QueryParser.Null), _, _, _, _)), _, _, _, _, _, _, _, _, _) =>
+        case s @ b.SelectExpr(List(b.Table(b.ConstExpr(parsing.Null), _, _, _, _)), _, _, _, _, _, _, _, _, _) =>
           s.copy(tables = List(s.tables.head.copy(table = b.IdentExpr(List("dummy"))))).sql
         case _ => e.defaultSQL
       }
@@ -110,10 +110,11 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
   test("tresql methods") {
     implicit val testRes = tresqlResources
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
+    val parser = new QueryParser(testRes)
     testTresqls("/test.txt", (tresql, _, _, nr) => {
       println(s"$nr. Testing tresql method of:\n$tresql")
-      QueryParser.parseExp(tresql) match {
-        case e: parsing.Exp @unchecked => assert(e === QueryParser.parseExp(e.tresql))
+      parser.parseExp(tresql) match {
+        case e: parsing.Exp @unchecked => assert(e === parser.parseExp(e.tresql))
       }
     })
   }
@@ -126,7 +127,8 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       }
     )
     println("\n-------------- TEST compiler ----------------\n")
-    import QueryCompiler.{compile => qcompile, CompilerException}
+    val compiler = new QueryCompiler(testRes)
+    import compiling.CompilerException
     testTresqls("/test.txt", (tresql, _, _, nr) => {
       println(s"$nr. Compiling tresql:\n$tresql")
       try compile(tresql)
@@ -136,7 +138,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     })
 
     def compile(exp: String) =
-      try qcompile(exp) catch {
+      try compiler.compile(exp) catch {
         case e: Exception => throw new RuntimeException(s"Error compiling statement $exp", e)
       }
 
@@ -181,43 +183,43 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     compile("d1(# *) { dummy a[]dummy b { b.dummy col }}, d2(# *) { d1[]dummy? {dummy.dummy d, d1.col c} }, i(# *) { +dummy {dummy} d1[col = 1]{col} {dummy} }, u(# *) { =dummy[dummy = d2.c]d2 {dummy = d2.c} {d2.c u } } u")
 
     //values from select compilation errors
-    intercept[CompilerException](qcompile("=dept_addr da [da.addr_nr = a.nr] (address a {a.addr}) a {da.addr = a.addr}"))
-    intercept[CompilerException](qcompile("=dept_addr da [da.addr_nr = nrz] (address a {a.nr, a.addr}) a {da.addr = a.addr}"))
-    intercept[CompilerException](qcompile("=dept_addr da [da.addr_nr = a.nr] address a {addr = addr}"))
-    intercept[CompilerException](qcompile("=dept_addr da [da.addr_nr = a.nr] address a {1}"))
+    intercept[CompilerException](compiler.compile("=dept_addr da [da.addr_nr = a.nr] (address a {a.addr}) a {da.addr = a.addr}"))
+    intercept[CompilerException](compiler.compile("=dept_addr da [da.addr_nr = nrz] (address a {a.nr, a.addr}) a {da.addr = a.addr}"))
+    intercept[CompilerException](compiler.compile("=dept_addr da [da.addr_nr = a.nr] address a {addr = addr}"))
+    intercept[CompilerException](compiler.compile("=dept_addr da [da.addr_nr = a.nr] address a {1}"))
 
-    intercept[CompilerException](qcompile("work/dept{*}"))
-    intercept[CompilerException](qcompile("works"))
-    intercept[CompilerException](qcompile("emp{aa}"))
-    intercept[CompilerException](qcompile("(dummy() ++ dummy()){dummy}"))
-    intercept[CompilerException](qcompile("(dummy ++ dummiz())"))
-    intercept[CompilerException](qcompile("(dummiz() ++ dummy){dummy}"))
-    intercept[CompilerException](qcompile("dept/emp[l = 'x']{loc l}(l)^(count(loc) > 1)#(l || 'x')"))
-    intercept[CompilerException](qcompile("dept/emp{loc l}(l)^(count(l) > 1)#(l || 'x')"))
-    intercept[CompilerException](qcompile("dept d{deptno dn, dname || ' ' || loc}#(~(dept[dname = dn]{deptno}))"))
-    intercept[CompilerException](qcompile("dept d[d.dname in (d[1]{dname})]"))
-    intercept[CompilerException](qcompile("(dummy{dummy} + dummy{dummy d}) d{d}"))
-    intercept[CompilerException](qcompile("dept{group_concat(dname)#(dnamez)}"))
-    intercept[CompilerException](qcompile("dept{group_concat(dname)#(dname)[dept{deptnox} < 30]}"))
-    intercept[CompilerException](qcompile("dept{group_concat(dname)#(dname)[deptno{deptno} < 30]}"))
-    intercept[CompilerException](qcompile("{dept[10]{dnamez}}"))
-    intercept[CompilerException](qcompile("b(# y) {a{x}}, a(# x) {dummy{dummy}} b{y}"))
-    intercept[CompilerException](qcompile("i(# ename){emp e[empno = '']{*}} i{*}"))
-    intercept[CompilerException](qcompile("d(# id) { dummy[dummy =0] }, u(# id) {dummy[dummy =2]}, upd(#) {dummy[dummy in (u.id)]{dummy} = [u.id + 1] }, remove_from(# ) { dummy - [ dummy in (d{id}) ] } remove_from{dummy}"))
-    intercept[CompilerException](qcompile("d(# id) { dummy[dummy =0] }, u(# id) {dummy[dummy =2]}, upd(#) {dummy[dummy in (u.id)]{dummy} = [u.id + 1] }, remove_from(# ) { dummy - [ dummy in (d{id}) ] } upd{dummy}"))
-    intercept[CompilerException](qcompile("d1(# *) { dummy a[]dummy b { b.dummy col }}, d2(# *) { d1[]dummy? {dummy.dummy d, d1.col c} }, i(# *) { +dummy {dummy} d1[col = 1]{col} {dummy} }, u(# *) { =dummy[dummy = d2.c]d2 {dummy = d2.c} {d2.c u, d1.col } } u"))
-    intercept[CompilerException](qcompile("d(# dname) {dept{dname}} =dept[d.dname = 'x']{deptno, dname} d{#dept, dname || '[reorganized]'}"))
-    intercept[CompilerException](qcompile("[]dummy_table() d(d){d.x}"))
-    intercept[CompilerException](qcompile("macro_interpolator_test4(dname, dept)"))
-    intercept[CompilerException](qcompile("macro_interpolator_test4(dept, name)"))
-    intercept[CompilerException](qcompile("dept [dname = 'RESEARCH'] {dname, if_defined(:x, macro_interpolator_test(:x, 2))}"))
-    intercept[CompilerException](qcompile("e(*){emp{ename}}, d(*) {dept{dname}}"))
+    intercept[CompilerException](compiler.compile("work/dept{*}"))
+    intercept[CompilerException](compiler.compile("works"))
+    intercept[CompilerException](compiler.compile("emp{aa}"))
+    intercept[CompilerException](compiler.compile("(dummy() ++ dummy()){dummy}"))
+    intercept[CompilerException](compiler.compile("(dummy ++ dummiz())"))
+    intercept[CompilerException](compiler.compile("(dummiz() ++ dummy){dummy}"))
+    intercept[CompilerException](compiler.compile("dept/emp[l = 'x']{loc l}(l)^(count(loc) > 1)#(l || 'x')"))
+    intercept[CompilerException](compiler.compile("dept/emp{loc l}(l)^(count(l) > 1)#(l || 'x')"))
+    intercept[CompilerException](compiler.compile("dept d{deptno dn, dname || ' ' || loc}#(~(dept[dname = dn]{deptno}))"))
+    intercept[CompilerException](compiler.compile("dept d[d.dname in (d[1]{dname})]"))
+    intercept[CompilerException](compiler.compile("(dummy{dummy} + dummy{dummy d}) d{d}"))
+    intercept[CompilerException](compiler.compile("dept{group_concat(dname)#(dnamez)}"))
+    intercept[CompilerException](compiler.compile("dept{group_concat(dname)#(dname)[dept{deptnox} < 30]}"))
+    intercept[CompilerException](compiler.compile("dept{group_concat(dname)#(dname)[deptno{deptno} < 30]}"))
+    intercept[CompilerException](compiler.compile("{dept[10]{dnamez}}"))
+    intercept[CompilerException](compiler.compile("b(# y) {a{x}}, a(# x) {dummy{dummy}} b{y}"))
+    intercept[CompilerException](compiler.compile("i(# ename){emp e[empno = '']{*}} i{*}"))
+    intercept[CompilerException](compiler.compile("d(# id) { dummy[dummy =0] }, u(# id) {dummy[dummy =2]}, upd(#) {dummy[dummy in (u.id)]{dummy} = [u.id + 1] }, remove_from(# ) { dummy - [ dummy in (d{id}) ] } remove_from{dummy}"))
+    intercept[CompilerException](compiler.compile("d(# id) { dummy[dummy =0] }, u(# id) {dummy[dummy =2]}, upd(#) {dummy[dummy in (u.id)]{dummy} = [u.id + 1] }, remove_from(# ) { dummy - [ dummy in (d{id}) ] } upd{dummy}"))
+    intercept[CompilerException](compiler.compile("d1(# *) { dummy a[]dummy b { b.dummy col }}, d2(# *) { d1[]dummy? {dummy.dummy d, d1.col c} }, i(# *) { +dummy {dummy} d1[col = 1]{col} {dummy} }, u(# *) { =dummy[dummy = d2.c]d2 {dummy = d2.c} {d2.c u, d1.col } } u"))
+    intercept[CompilerException](compiler.compile("d(# dname) {dept{dname}} =dept[d.dname = 'x']{deptno, dname} d{#dept, dname || '[reorganized]'}"))
+    intercept[CompilerException](compiler.compile("[]dummy_table() d(d){d.x}"))
+    intercept[CompilerException](compiler.compile("macro_interpolator_test4(dname, dept)"))
+    intercept[CompilerException](compiler.compile("macro_interpolator_test4(dept, name)"))
+    intercept[CompilerException](compiler.compile("dept [dname = 'RESEARCH'] {dname, if_defined(:x, macro_interpolator_test(:x, 2))}"))
+    intercept[CompilerException](compiler.compile("e(*){emp{ename}}, d(*) {dept{dname}}"))
 
     //insert with asterisk column
-    intercept[CompilerException](qcompile("+dummy{*} dummy{dummy kiza}"))
+    intercept[CompilerException](compiler.compile("+dummy{*} dummy{dummy kiza}"))
 
     //two aliases
-    intercept[Exception](qcompile("dummy {dummy a b}"))
+    intercept[Exception](compiler.compile("dummy {dummy a b}"))
   }
 
   if (executeCompilerMacroDependantTests) test("compiler macro") {
