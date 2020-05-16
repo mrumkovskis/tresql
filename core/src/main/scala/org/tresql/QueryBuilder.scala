@@ -315,8 +315,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     //take this from childrenCount, since it RecursiveExpr is not built with new builder
     private val initChildIdx = QueryBuilder.this.childrenCount
     private val rowConverter = env.rowConverter(QueryBuilder.this.queryDepth, initChildIdx)
-    if (queryDepth >= Env.recursiveStackDepth)
-      error(s"Recursive execution stack depth $queryDepth exceeded, check for loops in data or increase Env.recursiveStackDepth setting.")
+    if (queryDepth >= env.recursiveStackDepth)
+      error(s"Recursive execution stack depth $queryDepth exceeded, check for loops in data or increase {{{Resources#recursiveStackDepth}}} setting.")
     val qBuilder = newInstance(new Env(QueryBuilder.this, env.reusableExpr),
       queryDepth + 1, 0, initChildIdx)
     qBuilder.recursiveQueryExp = recursiveQueryExp
@@ -1035,14 +1035,14 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       expb.transform(
         exp match {
           case fun: QueryBuilder#FunExpr =>
-            if (Env isBuilderMacroDefined fun.name) {
-              Env.invokeMacro(fun.name, expb, fun.params)
+            if (env isBuilderMacroDefined fun.name) {
+              env.invokeMacro(fun.name, expb, fun.params)
             } else if (fun.params.contains(null)) null else fun
           case binExpr: QueryBuilder#BinExpr =>
             if (!(STANDART_BIN_OPS contains binExpr.op)) {
               val macroName = scala.reflect.NameTransformer.encode(binExpr.op)
-              if (Env isBuilderMacroDefined macroName)
-                Env.invokeMacro(macroName, expb, List(binExpr.lop, binExpr.rop))
+              if (env isBuilderMacroDefined macroName)
+                env.invokeMacro(macroName, expb, List(binExpr.lop, binExpr.rop))
               else binExpr
             } else binExpr
           case _ => sys.error("Unexpected exp type")
@@ -1222,7 +1222,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     } finally ctxStack = ctxStack.tail
   }
 
-  def buildExpr(ex: String): Expr = buildExpr(parseExp(ex))
+  def buildExpr(ex: String): Expr = buildExpr(parseExp(ex)(env))
   def buildExpr(ex: Exp): Expr = buildInternal(ex, ctxStack.headOption.getOrElse(QUERY_CTX))
 
   //for debugging purposes

@@ -1,12 +1,13 @@
 package org.tresql.test
 
-import org.scalatest.{FunSuite, BeforeAndAfterAll}
-import java.sql.DriverManager
-import org.tresql._
-import org.tresql.implicits._
-import org.tresql.result.Jsonizer._
-import scala.util.parsing.json._
+import org.scalatest.{BeforeAndAfterAll, FunSuite}
+import java.sql.{Connection, DriverManager, ResultSet}
 
+import org.tresql._
+import org.tresql.metadata.JDBCMetadata
+import org.tresql.result.Jsonizer._
+
+import scala.util.parsing.json._
 import sys._
 
 /** To run from console {{{org.scalatest.run(new test.QueryTest)}}} */
@@ -33,20 +34,26 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     case c: QueryBuilder#CastExpr => c.exp.sql
   }
 
-  override def beforeAll {
+  var tresqlResources: Resources = null
+
+  override def beforeAll = {
     //initialize environment
     Class.forName("org.hsqldb.jdbc.JDBCDriver")
     val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
-    Env.conn = conn
-    Env.dialect = hsqlDialect
-    Env.idExpr = s => "nextval('seq')"
-    Env.macros = Macros
+    tresqlResources = new Resources {}
+      .withMetadata(JDBCMetadata(conn))
+      .withConn(conn)
+      .withDialect(hsqlDialect)
+      .withIdExpr(_ => "nextval('seq')")
+      .withMacros(Macros)
     Env.cache = new SimpleCache(-1)
     Env.logger = (msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg)
     //create test db script
     new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
       sql => val st = conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
     }
+    //set resources for console
+    ConsoleResources.resources = tresqlResources
   }
 
   test("tresql statements") {
@@ -83,6 +90,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       } else pl.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
     }
     println("\n---------------- Test TreSQL statements ----------------------\n")
+    implicit val testResources = tresqlResources
     testTresqls("/test.txt", (st, params, patternRes, nr) => {
       println(s"Executing test #$nr:")
       val testRes = jsonize(if (params == null) Query(st) else Query(st, parsePars(params)), Arrays)
@@ -92,14 +100,15 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
   }
 
   if (executeCompilerMacroDependantTests) test("API") {
-    compilerMacroDependantTests.api
+    compilerMacroDependantTests.api(tresqlResources)
   }
 
   if (executeCompilerMacroDependantTests) test("ORT") {
-    compilerMacroDependantTests.ort
+    compilerMacroDependantTests.ort(tresqlResources)
   }
 
   test("tresql methods") {
+    implicit val testRes = tresqlResources
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
     testTresqls("/test.txt", (tresql, _, _, nr) => {
       println(s"$nr. Testing tresql method of:\n$tresql")
@@ -110,11 +119,13 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
   }
 
   test("compiler") {
+    implicit val testRes = tresqlResources.withMetadata(
+      new metadata.JDBCMetadata with compiling.CompilerFunctionMetadata {
+        override def conn: Connection = tresqlResources.conn
+        override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
+      }
+    )
     println("\n-------------- TEST compiler ----------------\n")
-    //set new metadata
-    Env.metadata = new metadata.JDBCMetadata with compiling.CompilerFunctionMetadata {
-      override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
-    }
     import QueryCompiler.{compile => qcompile, CompilerException}
     testTresqls("/test.txt", (tresql, _, _, nr) => {
       println(s"$nr. Compiling tresql:\n$tresql")
@@ -210,12 +221,12 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
   }
 
   if (executeCompilerMacroDependantTests) test("compiler macro") {
-    compilerMacroDependantTests.compilerMacro
+    compilerMacroDependantTests.compilerMacro(tresqlResources)
   }
 
   test("dialects") {
     println("\n------------------ Test dialects -----------------\n")
-    Env.dialect = dialects.PostgresqlDialect
+    implicit val testRes = tresqlResources.withDialect(dialects.PostgresqlDialect)
     assertResult(Query.build("a::'b'").sql)("select * from a::b")
     assertResult(Query.build("a {1::int + 2::'double precision'}").sql)("select 1::int + 2::double precision from a")
     assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] (addr a {a.addr}) a {da.addr = a.addr}").sql)(
@@ -240,9 +251,6 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     assertResult(Query.build("d(# dname) {dept[deptno = 1]{dname}} dept - [deptno in d{deptno}]").sql)(
       "with d(dname) as (select dname from dept where deptno = 1) delete from dept where deptno in (select deptno from d)"
     )
-
-    //restore hsql dialect
-    Env.dialect = hsqlDialect
   }
 
   test("cache") {
@@ -250,8 +258,16 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
   }
 
   test("Test Java API") {
+    val logger = Env.logger
+    val res = new java_api.ThreadLocalResources {}
+    res.conn = tresqlResources.conn
+    res.dialect = tresqlResources.dialect
+    res.idExpr = tresqlResources.idExpr
+    res.metadata =tresqlResources.metadata
     Class.forName("org.tresql.test.TresqlJavaApiTest").getDeclaredConstructor().newInstance()
-      .asInstanceOf[Runnable].run
+      .asInstanceOf[org.tresql.test.TresqlJavaApiTest].run(res)
+    //restore logger
+    Env.logger = logger
   }
 
   def testTresqls(resource: String, testFunction: (String, String, String, Int) => Unit) = {
@@ -269,4 +285,9 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
         case _ =>
       }
   }
+}
+
+object ConsoleResources {
+  //used in console
+  implicit var resources: Resources = _
 }

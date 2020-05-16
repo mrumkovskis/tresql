@@ -15,13 +15,12 @@ trait JDBCMetadata extends Metadata {
   private val tableCache = new ConcurrentHashMap[String, Table]
   private val procedureCache = new ConcurrentHashMap[String, Procedure[_]]
 
+  def conn: java.sql.Connection
   def defaultSchema: String = null
-  def resources: Resources = Env
 
   override def table(name: String) = tableOption(name)
     .getOrElse(sys.error(s"Table not found: $name"))
   override def tableOption(name: String) = Option(tableCache.get(name)).orElse {
-    val conn = resources.conn
     if (conn == null) throw new NullPointerException(
       """Connection not found in environment. Check if "Env.conn = conn" (in this case statement execution must be done in the same thread) or "Env.sharedConn = conn" is called.""")
     val dmd = conn.getMetaData
@@ -62,7 +61,6 @@ trait JDBCMetadata extends Metadata {
   override def procedure(name: String): Procedure[_] = procedureOption(name)
     .getOrElse(sys.error(s"Procedure not found: $name"))
   override def procedureOption(name: String) = Option(procedureCache.get(name)).orElse {
-    val conn = resources.conn
     if (conn == null) throw new NullPointerException(
       """Connection not found in environment. Check if "Env.conn = conn" (in this case statement execution must be done in the same thread) or "Env.sharedConn = conn" is called.""")
     val dmd = conn.getMetaData
@@ -183,10 +181,10 @@ trait JDBCMetadata extends Metadata {
 }
 
 object JDBCMetadata {
-  def apply(defaultSch: String = null, res: Resources = Env) = {
+  def apply(_conn: java.sql.Connection = null, defaultSch: String = null) = {
     new JDBCMetadata {
+      override def conn = _conn //USING conn HANGS UP JVM in eternal loop
       override def defaultSchema = defaultSch
-      override def resources = res
     }
   }
 }

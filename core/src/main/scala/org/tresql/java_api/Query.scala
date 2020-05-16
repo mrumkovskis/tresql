@@ -1,23 +1,24 @@
 package org.tresql.java_api
 
-import java.util.{ Map => JMap }
+import java.util.{Map => JMap}
+
 import scala.collection.JavaConverters._
-import org.tresql.RowLike
+import org.tresql.{Resources, RowLike}
 
 object Query {
   private val q = org.tresql.Query
-  def execute(expr: String, params: JMap[String, Object]): Object = {
-    q(expr, params.asScala.toMap).asInstanceOf[Object]
+  def execute(expr: String, res: Resources, params: JMap[String, Object]): Object = {
+    q(expr, params.asScala.toMap)(res).asInstanceOf[Object]
   }
   @annotation.varargs
-  def execute(expr: String, params: Object*): Object =
-    q(expr, params: _*).asInstanceOf[Object]
-  def select(expr: String, params: JMap[String, Object]): Result = {
-    new ResultWrapper(q(expr, params.asScala.toMap))
+  def execute(expr: String, res: Resources, params: Object*): Object =
+    q(expr, params: _*)(res).asInstanceOf[Object]
+  def select(expr: String, res: Resources, params: JMap[String, Object]): Result = {
+    new ResultWrapper(q(expr, params.asScala.toMap)(res))
   }
   @annotation.varargs
-  def select(expr: String, params: Object*): Result =
-    new ResultWrapper(q(expr, params: _*))
+  def select(expr: String, res: Resources, params: Object*): Result =
+    new ResultWrapper(q(expr, params: _*)(res))
 
   private class RowDelegate(delegate: RowLike) {
     def x = delegate

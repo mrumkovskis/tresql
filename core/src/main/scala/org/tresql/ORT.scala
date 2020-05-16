@@ -153,12 +153,12 @@ trait ORT extends Query {
   }
 
   def insert(name: String, obj: Map[String, Any], filter: String = null)
-    (implicit resources: Resources = Env): Any = {
+    (implicit resources: Resources): Any = {
     save(name, obj, filter, insert_tresql, "Cannot insert data. Table not found for object: " + name)
   }
 
   def update(name: String, obj: Map[String, Any], filter: String = null)
-    (implicit resources: Resources = Env): Any = {
+    (implicit resources: Resources): Any = {
     save(name, obj, filter, update_tresql,
       s"Cannot update data. Table not found or no primary key or no updateable columns found for the object: $name")
   }
@@ -178,7 +178,7 @@ trait ORT extends Query {
   }
 
   def delete(name: String, id: Any, filter: String = null, filterParams: Map[String, Any] = null)
-  (implicit resources: Resources = Env): Any = {
+  (implicit resources: Resources): Any = {
     val Array(tableName, alias) = name.split("\\s+").padTo(2, null)
     (for {
       table <- resources.metadata.tableOption(tableName)
@@ -196,14 +196,14 @@ trait ORT extends Query {
   /** insert methods to multiple tables
    *  Tables must be ordered in parent -> child direction. */
   def insertMultiple(obj: Map[String, Any], names: String*)(filter: String = null)
-    (implicit resources: Resources = Env): Any = insert(multiSaveProp(names), obj, filter)
+    (implicit resources: Resources): Any = insert(multiSaveProp(names), obj, filter)
 
   /** update to multiple tables
    *  Tables must be ordered in parent -> child direction. */
   def updateMultiple(obj: Map[String, Any], names: String*)(filter: String = null)
-    (implicit resources: Resources = Env): Any = update(multiSaveProp(names), obj, filter)
+    (implicit resources: Resources): Any = update(multiSaveProp(names), obj, filter)
 
-  private def multiSaveProp(names: Seq[String])(implicit resources: Resources = Env) = {
+  private def multiSaveProp(names: Seq[String])(implicit resources: Resources) = {
     /* Returns zero or one imported key from table for each relation. In the case of multiple
      * imported keys pointing to the same relation the one specified after : symbol is chosen
      * or exception is thrown.
@@ -228,12 +228,12 @@ trait ORT extends Query {
 
   //object methods
   def insertObj[T](obj: T, filter: String = null)(
-      implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
+      implicit resources: Resources, conv: ObjToMapConverter[T]): Any = {
     val v = conv(obj)
     insert(v._1, v._2, filter)
   }
   def updateObj[T](obj: T, filter: String = null)(
-      implicit resources: Resources = Env, conv: ObjToMapConverter[T]): Any = {
+      implicit resources: Resources, conv: ObjToMapConverter[T]): Any = {
     val v = conv(obj)
     update(v._1, v._2, filter)
   }
@@ -296,7 +296,7 @@ trait ORT extends Query {
         f => Filters(Option(f), Option(f), Option(f))
       } orElse {
         import QueryParser._
-        Option(filterStr).flatMap(parseExp(_) match {
+        Option(filterStr).flatMap(parseExp(_)(resources) match {
           case Arr(List(insert, delete, update)) => Some(ORT.this.Filters(
             insert = Some(insert).filter(_ != Null).map(_.tresql),
             delete = Some(delete).filter(_ != Null).map(_.tresql),

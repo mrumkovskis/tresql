@@ -6,7 +6,7 @@ import org.scalatest.{BeforeAndAfterAllConfigMap, ConfigMap, FunSuite}
 import java.sql.DriverManager
 
 import org.tresql._
-import org.tresql.implicits._
+import org.tresql.metadata.JDBCMetadata
 import org.tresql.result.Jsonizer._
 
 import scala.util.control.NonFatal
@@ -32,12 +32,14 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     else
       null
 
+  var tresqlResources: Resources = null
+
   override def beforeAll(configMap: ConfigMap) {
     //initialize environment
     Class.forName("org.postgresql.Driver")
     val jdbcPort = configMap.getOptional[String]("port").map(":" + _).getOrElse("")
     val (dbUri, dbUser, dbPwd) = (s"jdbc:postgresql://localhost$jdbcPort/postgres", "postgres", "")
-    Env.conn = if (configMap.get("docker").isDefined) {
+    val conn = if (configMap.get("docker").isDefined) {
       val postgresDockerImage = configMap("docker")
       val hostPort = configMap.getOrElse("port", "5432")
       val DockerCmd = s"docker run -d --rm --name tresql-it-tests -p $hostPort:5432 $postgresDockerImage"
@@ -79,14 +81,18 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
         throw sys.error(s"Unable to connect to database: ${e.toString}.\n" +
           "For postgres docker container try command: it:testOnly * -- -oD -Ddocker=postgres -Dport=<port> -Dwait_after_startup_millis=<time to wait for postgres for startup>")
     }
-    Env.dialect = dialects.PostgresqlDialect orElse dialects.VariableNameDialect
-    Env.idExpr = s => "nextval('seq')"
-    Env.macros = Macros
+    tresqlResources = new Resources {}
+      .withConn(conn)
+      .withMetadata(JDBCMetadata(conn))
+      .withDialect(dialects.PostgresqlDialect orElse dialects.VariableNameDialect)
+      .withIdExpr(_ => "nextval('seq')")
+      .withMacros(Macros)
+
     Env.cache = new SimpleCache(-1)
     Env.logger = (msg, _, _) => println(msg)
     //create test db script
     new scala.io.BufferedSource(getClass.getResourceAsStream("/pgdb.sql")).mkString.split("//").foreach {
-      sql => val st = Env.conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
+      sql => val st = conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
     }
   }
 
@@ -116,6 +122,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   }
 
   test("tresql statements") {
+    implicit val testResources = tresqlResources
     def parsePars(pars: String, sep:String = ";"): Map[String, Any] = {
       val DF = new java.text.SimpleDateFormat("yyyy-MM-dd")
       val TF = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
@@ -158,14 +165,15 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   }
 
   if (executePGCompilerMacroDependantTests) test("PG API") {
-    PGcompilerMacroDependantTests.api
+    PGcompilerMacroDependantTests.api(tresqlResources)
   }
 
   if (executePGCompilerMacroDependantTests) test("PG ORT") {
-    PGcompilerMacroDependantTests.ort
+    PGcompilerMacroDependantTests.ort(tresqlResources)
   }
 
   test("tresql methods") {
+    implicit val testRes = tresqlResources
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
     testTresqls("/pgtest.txt", (tresql, _, _, nr) => {
       println(s"$nr. Testing tresql method of:\n$tresql")
@@ -178,9 +186,12 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   test("compiler") {
     println("\n-------------- TEST compiler ----------------\n")
     //set new metadata
-    Env.metadata = new metadata.JDBCMetadata with compiling.CompilerFunctionMetadata {
-      override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
-    }
+    implicit val testRes = tresqlResources.withMetadata(
+      new metadata.JDBCMetadata with compiling.CompilerFunctionMetadata {
+        override def conn: java.sql.Connection = tresqlResources.conn
+        override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
+      }
+    )
     import QueryCompiler._
     testTresqls("/pgtest.txt", (tresql, _, _, nr) => {
       println(s"$nr. Compiling tresql:\n$tresql")
@@ -231,15 +242,11 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   }
 
   if (executePGCompilerMacroDependantTests) test("postgres compiler macro") {
-    PGcompilerMacroDependantTests.compilerMacro
+    PGcompilerMacroDependantTests.compilerMacro(tresqlResources)
   }
 
   test("cache") {
     Env.cache map(c => println(s"\nCache size: ${c.size}\n"))
-  }
-
-  test("Test Java API") {
-    Class.forName("org.tresql.test.TresqlJavaApiTest").newInstance.asInstanceOf[Runnable].run
   }
 
   def testTresqls(resource: String, testFunction: (String, String, String, Int) => Unit) = {

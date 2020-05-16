@@ -1,7 +1,9 @@
 package org.tresql.test
 
+import org.tresql.Resources
+
 trait CompilerMacroDependantTestsApi {
-  def api: Unit
-  def ort: Unit
-  def compilerMacro: Unit
+  def api(implicit resources: Resources): Unit
+  def ort(implicit resources: Resources): Unit
+  def compilerMacro(implicit resources: Resources): Unit
 }

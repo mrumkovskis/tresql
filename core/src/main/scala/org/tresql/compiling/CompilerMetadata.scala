@@ -38,11 +38,10 @@ class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
     Env.log(s"Creating database metadata from: $url")
 
     Class.forName(driverClassName)
-    val conn =
+    val connection =
       if (user == null) DriverManager.getConnection(url)
       else DriverManager.getConnection(url, user, password)
-    Env.log(s"Compiling using jdbc connection: $conn")
-    Env.sharedConn = conn
+    Env.log(s"Compiling using jdbc connection: $connection")
     if (dbCreateScript != null) {
       Env.log(s"Creating database for compiler from script $dbCreateScript...")
       new scala.io.BufferedSource(
@@ -52,7 +51,7 @@ class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
         .mkString
         .split("//")
         .foreach { sql =>
-          val st = conn.createStatement
+          val st = connection.createStatement
           st.execute(sql)
           st.close
         }
@@ -60,9 +59,10 @@ class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
     }
     new CompilerMetadata {
       override def metadata: Metadata =
-        if (functions == null) JDBCMetadata() else {
+        if (functions == null) JDBCMetadata(connection) else {
           val f = Class.forName(functions)
           new JDBCMetadata with CompilerFunctionMetadata {
+            override def conn = connection
             override def compilerFunctionSignatures = f
           }
         }

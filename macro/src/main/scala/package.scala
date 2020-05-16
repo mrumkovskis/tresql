@@ -274,8 +274,9 @@ package object tresql extends CoreTypes {
         case l => l.head + l.tail.zipWithIndex.map(t => ":_" + t._2 + t._1).mkString //replace placeholders with variable defs
       }
       val compilerMetadata = metadata(macroSettings)
-      Env.metadata = compilerMetadata.metadata
-      Env.macros = compilerMetadata.macros
+      implicit val resrc = new Resources {}
+        .withMetadata(compilerMetadata.metadata)
+        .withMacros(compilerMetadata.macros)
       info(s"Compiling: $tresqlString")
       val compiledExp = try compile(tresqlString) catch {
         case ce: CompilerException => c.abort(c.enclosingPosition, ce.getMessage)
@@ -344,6 +345,6 @@ package object tresql extends CoreTypes {
     val md = jdbcResult.getMetaData
     new DynamicSelectResult(jdbcResult, Vector((1 to md.getColumnCount map {
       i => Column(i, md.getColumnLabel(i), null)
-    }): _*), Env(Map(), false), "<not available>", Nil, Env.maxResultSize)
+    }): _*), new Env(Map[String, Any](), new Resources {}, false), "<not available>", Nil)
   }
 }

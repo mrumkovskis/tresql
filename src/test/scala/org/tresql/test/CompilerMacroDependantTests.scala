@@ -1,7 +1,6 @@
 package org.tresql.test
 
 import org.tresql._
-import org.tresql.implicits._
 import java.sql.{Date, SQLException}
 
 class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMacroDependantTestsApi  {
@@ -11,7 +10,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
   case class Car(nr: Int, brand: String) extends Poha
   case class Tyre(carNr: Int, brand: String) extends Poha
 
-  override def api {
+  override def api(implicit resources: Resources) = {
     println("\n---------------- Test API ----------------------\n")
     assertResult(10)(Query.head[Int]("dept{deptno}#(deptno)"))
     assertResult(10)(Query.unique[Int]("dept[10]{deptno}#(deptno)"))
@@ -234,17 +233,14 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       tresql"dept{deptno, dname}#(1)@(2)".list[Int, String])
 
     //Resources convenience methods test
-    val mr = Env.maxResultSize
-    val qt = Env.queryTimeout
-    val e1 = Env.withMaxResultSize(555)
-    val e2 = e1.withQueryTimeout(333)
+    val qt = resources.queryTimeout
+    val e1 = resources.withMaxResultSize(555)
+    val e2 = resources.withQueryTimeout(333)
     assertResult((555, qt)) {(e1.maxResultSize, e1.queryTimeout)}
-    assertResult((555, 333)) {(e2.maxResultSize, e2.queryTimeout)}
-    Env.queryTimeout = 222
-    assertResult((555, 222)) {(e1.maxResultSize, e1.queryTimeout)}
-    assertResult((555, 333)) {(e2.maxResultSize, e2.queryTimeout)}
-    Env.maxResultSize = mr
-    Env.queryTimeout = qt
+    assertResult((0, 333)) {(e2.maxResultSize, e2.queryTimeout)}
+    val e3 = e2.withQueryTimeout(222)
+    assertResult((555, 222)) {(e1.maxResultSize, e3.queryTimeout)}
+    assertResult((0, 333)) {(e2.maxResultSize, e2.queryTimeout)}
 
     //exists method
     assertResult(true)(tresql"exists(emp {*})")
@@ -263,7 +259,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     }
   }
 
-  override def ort {
+  override def ort(implicit resources: Resources) = {
     println("\n----------- ORT tests ------------\n")
     println("\n--- INSERT ---\n")
 
@@ -873,10 +869,10 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       ORT.updateMultiple(obj, "dept")())
 
     obj = Map("dname" -> "attorney", "dname->" -> "dname=upper(_)")
-    assertResult(new InsertResult(Some(1), Map(), Some(10080)))(ORT.insert("dept", obj)())
+    assertResult(new InsertResult(Some(1), Map(), Some(10080)))(ORT.insert("dept", obj))
 
     obj = Map("deptno" -> 10080, "dname" -> "devop", "dname->" -> "dname=upper(_)")
-    assertResult(new UpdateResult(Some(1)))(ORT.update("dept", obj)())
+    assertResult(new UpdateResult(Some(1)))(ORT.update("dept", obj))
 
     assertResult(List("DEVOP"))(tresql"dept[dname = 'DEVOP']{dname}".map(_.dname).toList)
 
@@ -998,7 +994,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     }
   }
 
-  override def compilerMacro {
+  override def compilerMacro(implicit resources: Resources) = {
       println("\n-------------- TEST compiler macro ----------------\n")
 
       assertResult(())(tresql"")
@@ -1052,7 +1048,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         val params = Map("ename" -> "cl%")
         assertResult(List(Vector("ACCOUNTING", "CLARK")))(
           tresql"emp/dept[dname ~~ $dn || '%' & ename ~~ :ename]{dname, ename}#(1, 2)"(
-            Env.withParams(params)).toListOfVectors)
+            resources.withParams(params)).toListOfVectors)
       }
 
       //column type checking

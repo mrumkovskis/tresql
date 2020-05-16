@@ -84,7 +84,7 @@ lazy val tresql = (project in file("."))
       Seq("org.scalatest" %% "scalatest" % "3.0.8" % "test,it",
         "org.hsqldb" % "hsqldb" % "2.3.1" % "test",
         "org.postgresql" % "postgresql" % "42.1.4" % "it,test"),
-    initialCommands in console := "import org.tresql._; import org.tresql.implicits._; import org.scalatest._",
+    initialCommands in console := "import org.tresql._; import org.scalatest._; import org.tresql.test.ConsoleResources._",
     publishArtifact in Test := false,
     publishArtifact in Compile := true,
     pomIncludeRepository := { x => false },

@@ -12,7 +12,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     pos: scala.util.parsing.input.Position = scala.util.parsing.input.NoPosition
   ) extends Exception(message)
 
-  val metadata = Env.metadata
+  lazy val metadata = res.metadata
 
   trait Scope {
     def tableNames: List[String]
@@ -850,7 +850,8 @@ trait Compiler extends QueryParsers { thisCompiler =>
     type_resolver(Nil)(exp)
   }
 
-  def compile(exp: Exp) = {
+  def compile(exp: Exp)(implicit resources: Resources) = {
+    this.res = resources
     def normalized(e: Exp): Exp = {
       def isPrimitiveType(e: Exp) = e match {
         case _: Fun | _: Const | _: Variable | _: Cast | _: UnOp | _: Null | _: In => true
@@ -1023,7 +1024,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     fun_traverse
   }
 
-  override def parseExp(expr: String): Exp = try {
+  override def parseExp(expr: String)(implicit resources: Resources): Exp = try {
     super.parseExp(expr)
   } catch {
     case e: Exception => throw CompilerException(e.getMessage)

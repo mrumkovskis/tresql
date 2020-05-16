@@ -7,12 +7,11 @@ import org.tresql.LogTopic;
 import org.tresql.SimpleCache;
 import org.tresql.java_api.*;
 
-public class TresqlJavaApiTest implements Runnable {
+public class TresqlJavaApiTest {
 
-    public void run() {
+    public void run(ThreadLocalResources resources) {
         println("");
         println("---- Testing Java API ----");
-        Env.State state = Env.saveState();
         Env.setLogger(new Logger() {
             // TODO test msg laziness
             @Override
@@ -21,26 +20,26 @@ public class TresqlJavaApiTest implements Runnable {
             }
         });
         Env.setCache(new SimpleCache(-1));
-        Connection c = Env.getConnection();
-        Env.setConnection(c);
-        Env.setDialect(Dialects.HSQL());
-        println("id expr: " + Env.getIdExprFunc().getIdExpr("my_table"));
-        Env.setIdExprFunc(new IdExprFunc() {
+        Connection c = resources.getConnection();
+        resources.setConnection(c);
+        resources.setDialect(Dialects.HSQL());
+        println("id expr: " + resources.getIdExprFunc().getIdExpr("my_table"));
+        resources.setIdExprFunc(new IdExprFunc() {
             @Override
             public String getIdExpr(String table) {
                 return "nextval(" + table + "_seq)";
             }
         });
-        println("id expr: " + Env.getIdExprFunc().getIdExpr("my_table[2]"));
-        Env.setMetadata(Metadata.JDBC(null));
+        println("id expr: " + resources.getIdExprFunc().getIdExpr("my_table[2]"));
+        resources.setMetadata(Metadata.JDBC(resources.getConnection(), null));
 
         println("");
-        for (Row r : Query.select("dept[deptno < 100]{deptno, dname}")) {
+        for (Row r : Query.select("dept[deptno < 100]{deptno, dname}", resources)) {
             println("" + r.i(0) + ": " + r.s(1));
         }
 
         println("");
-        for (Row r : Query.select("dept[deptno < ?]{deptno, dname}", 40)) {
+        for (Row r : Query.select("dept[deptno < ?]{deptno, dname}", resources, 40)) {
             println("" + r.int_(0) + ": " + r.string(1));
         }
 
@@ -48,7 +47,7 @@ public class TresqlJavaApiTest implements Runnable {
         java.util.Map<String, Object> pars = new java.util.HashMap<String, Object>();
         pars.put("id", 10);
         for (Row r : Query.select(
-                "dept[deptno = :id]{deptno, dname, |emp {ename} emps}", pars)) {
+                "dept[deptno = :id]{deptno, dname, |emp {ename} emps}", resources, pars)) {
             println("" + r.int_(0) + ": " + r.string(1) + ": " + "emps:");
             for (Row er : r.result("emps")) {
                 println("  " + er.s("ename"));
@@ -57,7 +56,7 @@ public class TresqlJavaApiTest implements Runnable {
 
         println("");
         for (Map<String, Object> r : Query.select(
-                "dept[deptno < 30]{deptno, dname, |emp {ename} emps}")
+                "dept[deptno < 30]{deptno, dname, |emp {ename} emps}", resources)
                 .toListOfMaps()) {
             println("toListOfMaps() - " + r.get("deptno") + ": "
                     + r.get("dname") + ", " + "emps:");
@@ -68,23 +67,23 @@ public class TresqlJavaApiTest implements Runnable {
         }
 
         println("");
-        for (Row r : Query.select("dept[60]{deptno, dname}")) {
+        for (Row r : Query.select("dept[60]{deptno, dname}", resources)) {
             println("" + r.i(0) + ": " + r.s(1));
         }
-        Query.execute("dept[60]{dname} = ['POLAR FOX']");
-        for (Row r : Query.select("dept[60]{deptno, dname}")) {
+        Query.execute("dept[60]{dname} = ['POLAR FOX']", resources);
+        for (Row r : Query.select("dept[60]{deptno, dname}", resources)) {
             println("" + r.i("deptno") + ": " + r.s("dname"));
         }
 
         println("");
-        for (Row r : Query.select("dept[60]{deptno, dname}")) {
+        for (Row r : Query.select("dept[60]{deptno, dname}", resources)) {
             java.util.Map<String, Object> map = r.toMap();
             println("toMap() - " + map.get("deptno") + ": "
                     + map.get("dname"));
         }
 
         println("");
-        Result res = Query.select("dept[60]{deptno, dname}");
+        Result res = Query.select("dept[60]{deptno, dname}", resources);
         println("columns(0).name, index: " + res.column(0).name + ", "
                 + res.column(0).index);
         println("columns(1).name, index: " + res.columns().get(1).name + ", "
@@ -96,7 +95,6 @@ public class TresqlJavaApiTest implements Runnable {
         println("");
 
         //set back previous env values
-        Env.restoreState(state);
     }
 
     private void println(String s) {

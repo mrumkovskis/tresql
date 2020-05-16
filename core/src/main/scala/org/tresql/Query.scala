@@ -6,11 +6,11 @@ import CoreTypes.RowConverter
 
 trait Query extends QueryBuilder with TypedQuery {
 
-  def apply(expr: String, params: Any*)(implicit resources: Resources = Env): DynamicResult =
+  def apply(expr: String, params: Any*)(implicit resources: Resources): DynamicResult =
     exec(expr, normalizePars(params: _*), resources).asInstanceOf[DynamicResult]
 
   def compiledResult[T <: RowLike](expr: String, params: Any*)(
-    implicit resources: Resources = Env): CompiledResult[T] =
+    implicit resources: Resources): CompiledResult[T] =
     exec(expr, normalizePars(params: _*), resources) match {
       case r: CompiledResult[T] => r
       case x => sys.error(s"Expected `org.tresql.CompiledResult[_]`, but got ${
@@ -37,7 +37,7 @@ trait Query extends QueryBuilder with TypedQuery {
     expr: String,
     params: Map[String, Any] = null,
     reusableExpr: Boolean = true
-  )(implicit resources: Resources = Env): Expr = {
+  )(implicit resources: Resources): Expr = {
     Env.log(expr, Map(), LogTopic.tresql)
     val pars =
       if (resources.params.isEmpty) params
@@ -60,8 +60,6 @@ trait Query extends QueryBuilder with TypedQuery {
       override private[tresql] def childIdx = chIdx
     }
   }
-
-  def parse(expr: String) = QueryParser.parseExp(expr)
 
   private[tresql] def normalizePars(pars: Any*): Map[String, Any] = pars match {
     case Seq(m: Map[String @unchecked, Any @unchecked]) => m
@@ -144,7 +142,7 @@ trait Query extends QueryBuilder with TypedQuery {
             env,
             sql,
             bindVariables,
-            Env.maxResultSize,
+            env.maxResultSize,
             -1,
             conv)
         }.getOrElse {
@@ -154,7 +152,7 @@ trait Query extends QueryBuilder with TypedQuery {
             env,
             sql,
             bindVariables,
-            Env.maxResultSize
+            env.maxResultSize
           )
         }
         env.result = res

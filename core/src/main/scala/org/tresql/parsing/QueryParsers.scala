@@ -1,6 +1,6 @@
 package org.tresql.parsing
 
-import org.tresql.Env
+import org.tresql.Resources
 
 import scala.util.parsing.combinator.JavaTokenParsers
 
@@ -10,11 +10,22 @@ trait Exp {
 
 trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer {
 
-  def parseExp(exp: String): Exp = {
+  protected val threadResources = new ThreadLocal[Resources]
+
+  protected def res = threadResources.get
+  protected def res_=(res: Resources) = threadResources.set(res)
+
+  def parseExp(exp: String)(implicit macros: Resources): Exp = {
+    this.threadResources.set(macros)
     phrase(exprList)(new scala.util.parsing.input.CharSequenceReader(exp)) match {
       case Success(r, _) => r
       case x => sys.error(x.toString)
     }
+  }
+
+  /* This method is called from macro interpolator */
+  private [tresql] def parseExpWithThreadResources(exp: String): Exp = {
+    parseExp(exp)(res)
   }
 
   val reserved = Set("in", "null", "false", "true")
@@ -312,8 +323,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     case _ ~ _ ~ _ ~ _ ~ _ ~ f => s"Aggregate function filter must contain only one elements, instead of ${
       f.map(_.elements.size).getOrElse(0)}"
   }) ^^ { case f: Fun =>
-    if (f.aggregateOrder.isEmpty && f.aggregateWhere.isEmpty && Env.isMacroDefined(f.name)) {
-      Env.invokeMacro(f.name, QueryParsers.this, f.parameters)
+    if (f.aggregateOrder.isEmpty && f.aggregateWhere.isEmpty && res.isMacroDefined(f.name)) {
+      res.invokeMacro(f.name, QueryParsers.this, f.parameters)
     } else f
   } named "function"
   def array: MemParser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ Arr named "array"
