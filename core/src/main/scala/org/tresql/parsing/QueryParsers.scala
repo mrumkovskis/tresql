@@ -224,7 +224,7 @@ case class Braces(expr: Exp) extends Exp {
 
 trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer {
 
-  protected def macros: MacroResources
+  protected def macros: MacroResources = null
 
   def parseExp(exp: String): Exp = {
     phrase(exprList)(new scala.util.parsing.input.CharSequenceReader(exp)) match {
@@ -319,7 +319,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     case _ ~ _ ~ _ ~ _ ~ _ ~ f => s"Aggregate function filter must contain only one elements, instead of ${
       f.map(_.elements.size).getOrElse(0)}"
   }) ^^ { case f: Fun =>
-    if (f.aggregateOrder.isEmpty && f.aggregateWhere.isEmpty && macros.isMacroDefined(f.name)) {
+    if (f.aggregateOrder.isEmpty && f.aggregateWhere.isEmpty &&
+      macros != null && macros.isMacroDefined(f.name)) {
       macros.invokeMacro(f.name, QueryParsers.this, f.parameters)
     } else f
   } named "function"

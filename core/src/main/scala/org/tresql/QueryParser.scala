@@ -1,6 +1,6 @@
 package org.tresql
 
-class QueryParser(protected val macros: MacroResources)
+class QueryParser(override protected val macros: MacroResources)
   extends parsing.QueryParsers with parsing.ExpTransformer {
 
   override def parseExp(expr: String): parsing.Exp = {
