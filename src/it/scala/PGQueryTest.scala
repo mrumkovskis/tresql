@@ -88,7 +88,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
       .withIdExpr(_ => "nextval('seq')")
       .withMacros(Macros)
       .withCache(new SimpleCache(-1))
-      .withLogger((msg, _, _) => println(msg))
+      .withLogger((msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg))
     //create test db script
     new scala.io.BufferedSource(getClass.getResourceAsStream("/pgdb.sql")).mkString.split("//").foreach {
       sql => val st = conn.createStatement; tresqlResources.log("Creating database:\n" + sql); st.execute(sql); st.close
