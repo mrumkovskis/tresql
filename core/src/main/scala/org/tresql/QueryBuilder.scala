@@ -1222,7 +1222,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     } finally ctxStack = ctxStack.tail
   }
 
-  def buildExpr(ex: String): Expr = buildExpr(new QueryParser(env).parseExp(ex))
+  def buildExpr(ex: String): Expr = buildExpr(new QueryParser(env, env.cache).parseExp(ex))
   def buildExpr(ex: Exp): Expr = buildInternal(ex, ctxStack.headOption.getOrElse(QUERY_CTX))
 
   //for debugging purposes

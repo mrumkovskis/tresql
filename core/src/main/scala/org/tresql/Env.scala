@@ -133,6 +133,9 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val reu
   override def fetchSize: Int = provider.map(_.env.fetchSize).getOrElse(resources.fetchSize)
   override def maxResultSize: Int = provider.map(_.env.maxResultSize).getOrElse(resources.maxResultSize)
   override def recursiveStackDepth: Int = provider.map(_.env.recursiveStackDepth).getOrElse(resources.recursiveStackDepth)
+  override def cache: Cache = provider.map(_.env.cache).getOrElse(resources.cache)
+  override def logger: TresqlLogger = provider.map(_.env.logger).getOrElse(resources.logger)
+  override def bindVarLogFilter: BindVarLogFilter = provider.map(_.env.bindVarLogFilter).getOrElse(resources.bindVarLogFilter)
   override def isMacroDefined(name: String): Boolean =
     provider.map(_.env.isMacroDefined(name)).getOrElse(resources.isMacroDefined(name))
   override def isBuilderMacroDefined(name: String): Boolean =
@@ -185,6 +188,9 @@ trait ThreadLocalResources extends Resources {
                  override val maxResultSize: Int,
                  override val recursiveStackDepth: Int,
                  override val params: Map[String, Any],
+                 override val cache: Cache = null, //not used
+                 override val logger: TresqlLogger = null, //not used
+                 override val bindVarLogFilter: BindVarLogFilter = null, //not used
                  macros: Any = null) extends Resources {
     private val macroImpl = new MacroResourcesImpl(macros)
     override def isMacroDefined(name: String) = macroImpl.isMacroDefined(name)
@@ -218,6 +224,13 @@ trait ThreadLocalResources extends Resources {
   }
   override protected def copyMacroResources: MacroResources = threadResources.copyMacroResources
 
+  /** Cache is global not thread local. To be overriden in subclasses. This implementation returns {{{super.cache}}} */
+  override def cache: Cache = super.cache
+  /** Logger is global not thread local. To be overriden in subclasses. This implementation returns {{{super.logger}}} */
+  override def logger: TresqlLogger = super.logger
+  /** Filter is global not thread local. To be overriden in subclasses. This implementation returns {{{super.bindVarLogFilter}}} */
+  override def bindVarLogFilter: BindVarLogFilter = super.bindVarLogFilter
+
   private def setProp(f: ResourcesImpl => ResourcesImpl) =
     Option(threadResources)
       .orElse(Option(resourcesTemplate))
@@ -239,6 +252,10 @@ trait ThreadLocalResources extends Resources {
 
 /** Resources and configuration for query execution like database connection, metadata, database dialect etc. */
 trait Resources extends MacroResources {
+
+  type TresqlLogger = (=> String, => Map[String, Any], LogTopic) => Unit
+  type BindVarLogFilter = PartialFunction[Expr, String]
+
   private case class Resources_(
     override val conn: java.sql.Connection,
     override val metadata: Metadata,
@@ -248,6 +265,9 @@ trait Resources extends MacroResources {
     override val fetchSize: Int,
     override val maxResultSize: Int,
     override val recursiveStackDepth: Int,
+    override val cache: Cache,
+    override val logger: TresqlLogger,
+    override val bindVarLogFilter: BindVarLogFilter,
     override val params: Map[String, Any],
     macros: MacroResources) extends Resources {
     override def isMacroDefined(name: String) = macros.isMacroDefined(name)
@@ -257,7 +277,9 @@ trait Resources extends MacroResources {
     override def toString = s"Resources_(conn = $conn, " +
       s"metadata = $metadata, dialect = $dialect, idExpr = $idExpr, " +
       s"queryTimeout = $queryTimeout, fetchSize = $fetchSize, " +
-      s"maxResultSize = $maxResultSize, recursiveStackDepth = $recursiveStackDepth, params = $params)"
+      s"maxResultSize = $maxResultSize, recursiveStackDepth = $recursiveStackDepth, cache = $cache" +
+      s"logger =$logger, bindVarLogFilter = $bindVarLogFilter" +
+      s" params = $params)"
 
     override protected def copyMacroResources: MacroResources = macros
   }
@@ -270,6 +292,12 @@ trait Resources extends MacroResources {
   def fetchSize = 0
   def maxResultSize = 0
   def recursiveStackDepth: Int = 50
+  /** Parsed statement {{{Cache}}} */
+  def cache: Cache = null
+  def logger: TresqlLogger = null
+  def bindVarLogFilter: BindVarLogFilter = {
+    case v: QueryBuilder#VarExpr if v.name == "password" => v.fullName + " = ***"
+  }
   def params: Map[String, Any] = Map()
 
   //resource construction convenience methods
@@ -282,6 +310,9 @@ trait Resources extends MacroResources {
   def withFetchSize(fetchSize: Int): Resources = copyResources.copy(fetchSize = fetchSize)
   def withMaxResultSize(maxResultSize: Int): Resources = copyResources.copy(maxResultSize = maxResultSize)
   def withRecursiveStackDepth(recStackDepth: Int): Resources = copyResources.copy(recursiveStackDepth = recStackDepth)
+  def withCache(cache: Cache): Resources = copyResources.copy(cache = cache)
+  def withLogger(logger: TresqlLogger): Resources = copyResources.copy(logger = logger)
+  def withBindVarLogFilter(filter: BindVarLogFilter): Resources = copyResources.copy(bindVarLogFilter = filter)
   def withParams(params: Map[String, Any]): Resources = copyResources.copy(params = params)
   def withMacros(macros: Any): Resources = copyResources.copy(macros = new MacroResourcesImpl(macros))
 
@@ -291,10 +322,14 @@ trait Resources extends MacroResources {
   private def copyResources: Resources_ = this match {
     case r: Resources_ => r
     case _ => Resources_(conn, metadata, dialect, idExpr, queryTimeout,
-      fetchSize, maxResultSize, recursiveStackDepth, params, copyMacroResources)
+      fetchSize, maxResultSize, recursiveStackDepth, cache, logger, bindVarLogFilter,
+      params, copyMacroResources)
   }
 
   protected def defaultDialect: CoreTypes.Dialect = { case e => e.defaultSQL }
+
+  def log(msg: => String, params: => Map[String, Any] = Map(), topic: LogTopic = LogTopic.info): Unit =
+    if (logger != null) logger(msg, params, topic)
 }
 
 trait MacroResources {
@@ -347,23 +382,4 @@ object LogTopic {
   case object params extends LogTopic
   case object sql_with_params extends LogTopic
   case object info extends LogTopic
-}
-
-object Env {
-  //cache
-  private var _cache: Option[Cache] = None
-  //logger
-  private var _logger: (=> String, => Map[String, Any], LogTopic) => Unit = _
-  //loggable bind variable filter
-  private var _bindVarLogFilter: Option[PartialFunction[Expr, String]] = Some({
-    case v: QueryBuilder#VarExpr if v.name == "password" => v.fullName + " = ***"
-  })
-  def cache = _cache
-  def cache_=(cache: Cache) = this._cache = Option(cache)
-  def log(msg: => String, params: => Map[String, Any] = Map(), topic: LogTopic = LogTopic.info): Unit =
-    if (_logger != null) _logger(msg, params, topic)
-  def logger = _logger
-  def logger_=(logger: (=> String, => Map[String, Any], LogTopic) => Unit) = this._logger = logger
-  def bindVarLogFilter = _bindVarLogFilter
-  def bindVarLogFilter_=(filter: PartialFunction[Expr, String]) = Option(filter)
 }

@@ -4,7 +4,6 @@ import java.sql.Connection;
 import java.util.*;
 
 import org.tresql.LogTopic;
-import org.tresql.SimpleCache;
 import org.tresql.java_api.*;
 
 public class TresqlJavaApiTest {
@@ -12,14 +11,13 @@ public class TresqlJavaApiTest {
     public void run(ThreadLocalResources resources) {
         println("");
         println("---- Testing Java API ----");
-        Env.setLogger(new Logger() {
+        resources.setLogger(new Logger() {
             // TODO test msg laziness
             @Override
             public void log(LogMessage msg, LogParams params, LogTopic topic) {
                 println("Java API logger [" + topic + "]: " + msg.get() + "; params: " + params.get());
             }
         });
-        Env.setCache(new SimpleCache(-1));
         Connection c = resources.getConnection();
         resources.setConnection(c);
         resources.setDialect(Dialects.HSQL());

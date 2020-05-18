@@ -171,7 +171,7 @@ trait ORT extends Query {
     errorMsg: String)
     (implicit resources: Resources): Any = {
     val struct = tresql_structure(obj)
-    Env log s"\nStructure: $name - $struct"
+    resources log s"\nStructure: $name - $struct"
     val tresql = save_tresql(name, struct, Nil, filter, save_tresql_fun)
     if(tresql == null) error(errorMsg)
     build(tresql, obj, reusableExpr = false)(resources)()
@@ -296,7 +296,7 @@ trait ORT extends Query {
         f => Filters(Option(f), Option(f), Option(f))
       } orElse {
         import parsing._
-        Option(filterStr).flatMap(new QueryParser(resources).parseExp(_) match {
+        Option(filterStr).flatMap(new QueryParser(resources, resources.cache).parseExp(_) match {
           case Arr(List(insert, delete, update)) => Some(ORT.this.Filters(
             insert = Some(insert).filter(_ != Null).map(_.tresql),
             delete = Some(delete).filter(_ != Null).map(_.tresql),
@@ -506,7 +506,7 @@ trait ORT extends Query {
       import parsing._
       val ResolverPropPattern(prop) = property
       val ResolverExpPattern(col, exp) = resolverExp
-      val parser = new QueryParser(resources)
+      val parser = new QueryParser(resources, resources.cache)
       table.colOption(col).map(_.name).map { _ -> parser.transformer {
           case Ident(List("_")) => Variable(prop, Nil, opt = false)
         } (parser.parseExp(if (exp startsWith "(" ) exp else s"($exp)")).tresql

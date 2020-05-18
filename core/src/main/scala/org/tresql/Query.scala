@@ -38,7 +38,7 @@ trait Query extends QueryBuilder with TypedQuery {
     params: Map[String, Any] = null,
     reusableExpr: Boolean = true
   )(implicit resources: Resources): Expr = {
-    Env.log(expr, Map(), LogTopic.tresql)
+    resources.log(expr, Map(), LogTopic.tresql)
     val pars =
       if (resources.params.isEmpty) params
       else if (params != null) resources.params ++ params else resources.params
@@ -195,10 +195,10 @@ trait Query extends QueryBuilder with TypedQuery {
   }
 
   private def statement(sql: String, env: Env, call: Boolean = false) = {
-    Env.log(sql, Map(), LogTopic.sql)
-    Env.log(sql, bindVariables.flatMap {
+    env.log(sql, Map(), LogTopic.sql)
+    env.log(sql, bindVariables.flatMap {
       case v: VarExpr => List(v.name ->
-        Env.bindVarLogFilter.filter(_.isDefinedAt(v)).map(_(v)).getOrElse(v()))
+        Option(env.bindVarLogFilter).filter(_.isDefinedAt(v)).map(_(v)).getOrElse(v()))
       case r: ResExpr => List(r.name -> r())
       case _ => Nil
     }.toMap, LogTopic.sql_with_params)
@@ -221,10 +221,8 @@ trait Query extends QueryBuilder with TypedQuery {
   }
 
   private def bindVars(st: PreparedStatement, bindVariables: List[Expr]) {
-    Env.log(bindVariables
-      .map(v =>
-        Env.bindVarLogFilter.map(_ orElse {case x => x.toString}: PartialFunction[Expr, String]/*cast needed ??*/)
-          .map(_(v)).getOrElse(v.toString))
+    env.log(bindVariables
+      .map(v => Option(env.bindVarLogFilter).filter(_.isDefinedAt(v)).map(_(v)).getOrElse(v.toString))
       .mkString("Bind vars: ", ", ", ""), Map(), LogTopic.params)
     var idx = 1
     def bindVar(p: Any) {

@@ -4,7 +4,7 @@ import java.sql.Connection
 
 import org.tresql._
 import org.tresql.metadata.JDBCMetadata
-import org.tresql.{Env => SEnv, ThreadLocalResources => TLR}
+import org.tresql.{ThreadLocalResources => TLR}
 
 trait IdExprFunc { def getIdExpr(table: String): String }
 trait LogMessage { def get: String }
@@ -22,6 +22,8 @@ object Metadata {
 trait ThreadLocalResources extends TLR {
   import CoreTypes._
 
+  var javaLogger: Logger = null
+
   def getConnection: Connection = conn
   def setConnection(c: Connection) { conn = c }
   def getDialect: Dialect = dialect
@@ -32,19 +34,13 @@ trait ThreadLocalResources extends TLR {
   def setIdExprFunc(f: IdExprFunc) { idExpr = f.getIdExpr }
   def getMetadata: Metadata = metadata
   def setMetadata(md: Metadata) { metadata = md }
-}
 
-object Env {
-  def getCache: Cache = SEnv.cache.orNull
-  def setCache(c: Cache) { SEnv.cache = c }
-  def setLogger(logger: Logger) {
-    SEnv.logger = (msg, params, topic) => logger.log(new LogMessage {
-      override def get = msg
-    }, new LogParams { override def get = params }, topic)
-  }
-  def getLogger: Logger = new Logger {
-    private[this] val logger = SEnv.logger
-    override def log(msg: LogMessage, params: LogParams, topic: LogTopic) =
-      logger(msg.get, params.get, topic)
-  }
+  def getCache = cache
+
+  override def logger = (msg, params, topic) =>
+    if (javaLogger != null) javaLogger.log(new LogMessage { override def get = msg },
+      new LogParams { override def get = params }, topic)
+
+  def setLogger(logger: Logger) = javaLogger = logger
+
 }

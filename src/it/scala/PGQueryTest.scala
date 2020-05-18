@@ -87,12 +87,11 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
       .withDialect(dialects.PostgresqlDialect orElse dialects.VariableNameDialect)
       .withIdExpr(_ => "nextval('seq')")
       .withMacros(Macros)
-
-    Env.cache = new SimpleCache(-1)
-    Env.logger = (msg, _, _) => println(msg)
+      .withCache(new SimpleCache(-1))
+      .withLogger((msg, _, _) => println(msg))
     //create test db script
     new scala.io.BufferedSource(getClass.getResourceAsStream("/pgdb.sql")).mkString.split("//").foreach {
-      sql => val st = conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
+      sql => val st = conn.createStatement; tresqlResources.log("Creating database:\n" + sql); st.execute(sql); st.close
     }
   }
 
@@ -175,7 +174,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   test("tresql methods") {
     implicit val testRes = tresqlResources
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
-    val parser = new QueryParser(testRes)
+    val parser = new QueryParser(testRes, testRes.cache)
     testTresqls("/pgtest.txt", (tresql, _, _, nr) => {
       println(s"$nr. Testing tresql method of:\n$tresql")
       parser.parseExp(tresql) match {
@@ -248,7 +247,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   }
 
   test("cache") {
-    Env.cache map(c => println(s"\nCache size: ${c.size}\n"))
+    Option(tresqlResources.cache) map(c => println(s"\nCache size: ${c.size}\n"))
   }
 
   def testTresqls(resource: String, testFunction: (String, String, String, Int) => Unit) = {

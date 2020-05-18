@@ -257,6 +257,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         Vector("WARD", "SALES"))) {
       Query("[]sql('emp')[emp.deptno = dept.deptno]sql('dept')[dname = 'SALES']{ename, dname}#(1,2)").toListOfVectors
     }
+
+    //path bind variable access (dotted syntax)
   }
 
   override def ort(implicit resources: Resources) = {

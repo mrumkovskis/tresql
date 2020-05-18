@@ -46,11 +46,11 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       .withDialect(hsqlDialect)
       .withIdExpr(_ => "nextval('seq')")
       .withMacros(Macros)
-    Env.cache = new SimpleCache(-1)
-    Env.logger = (msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg)
+      .withCache(new SimpleCache(-1))
+      .withLogger((msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg))
     //create test db script
     new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
-      sql => val st = conn.createStatement; Env.log("Creating database:\n" + sql); st.execute(sql); st.close
+      sql => val st = conn.createStatement; tresqlResources.log("Creating database:\n" + sql); st.execute(sql); st.close
     }
     //set resources for console
     ConsoleResources.resources = tresqlResources
@@ -110,7 +110,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
   test("tresql methods") {
     implicit val testRes = tresqlResources
     println("\n---- TEST tresql methods of QueryParser.Exp ------\n")
-    val parser = new QueryParser(testRes)
+    val parser = new QueryParser(testRes, testRes.cache)
     testTresqls("/test.txt", (tresql, _, _, nr) => {
       println(s"$nr. Testing tresql method of:\n$tresql")
       parser.parseExp(tresql) match {
@@ -256,20 +256,19 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
   }
 
   test("cache") {
-    Env.cache foreach(c => println(s"\nCache size: ${c.size}\n"))
+    Option(tresqlResources.cache) foreach(c => println(s"\nCache size: ${c.size}\n"))
   }
 
   test("Test Java API") {
-    val logger = Env.logger
-    val res = new java_api.ThreadLocalResources {}
+    val res = new java_api.ThreadLocalResources {
+      override def cache: Cache = tresqlResources.cache
+    }
     res.conn = tresqlResources.conn
     res.dialect = tresqlResources.dialect
     res.idExpr = tresqlResources.idExpr
-    res.metadata =tresqlResources.metadata
+    res.metadata = tresqlResources.metadata
     Class.forName("org.tresql.test.TresqlJavaApiTest").getDeclaredConstructor().newInstance()
       .asInstanceOf[org.tresql.test.TresqlJavaApiTest].run(res)
-    //restore logger
-    Env.logger = logger
   }
 
   def testTresqls(resource: String, testFunction: (String, String, String, Int) => Unit) = {

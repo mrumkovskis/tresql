@@ -1,12 +1,13 @@
 package org.tresql
 
-class QueryParser(override protected val macros: MacroResources)
+class QueryParser(override protected val macros: MacroResources, cache: Cache)
   extends parsing.QueryParsers with parsing.ExpTransformer {
 
   override def parseExp(expr: String): parsing.Exp = {
-    Env.cache.flatMap(_.get(expr)).getOrElse {
+    if (cache == null) super.parseExp(expr)
+    else cache.get(expr).getOrElse {
       val e = super.parseExp(expr)
-      Env.cache.map(_.put(expr, e))
+      cache.put(expr, e)
       e
     }
   }
