@@ -5,7 +5,7 @@ import CoreTypes.RowConverter
 import parsing.{QueryParsers, Exp}
 
 /** Environment for expression building and execution */
-class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolean)
+private [tresql] class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolean)
   extends Resources with Metadata {
 
   def this(provider: EnvProvider, reusableExpr: Boolean) = this(provider, null, reusableExpr)
@@ -333,7 +333,7 @@ class MacroResourcesImpl(val macros: Any) extends MacroResources {
   }
 }
 
-trait EnvProvider {
+private [tresql] trait EnvProvider {
   private[tresql] def env: Env
 }
 
