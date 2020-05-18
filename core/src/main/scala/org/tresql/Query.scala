@@ -81,7 +81,6 @@ trait Query extends QueryBuilder with TypedQuery {
   private[this] def sel_result(sql: String, cols: QueryBuilder#ColsExpr):
     (ResultSet, Vector[Column], Int) = { //jdbc result, columns, visible column count
     val st = statement(sql, env)
-    bindVars(st, bindVariables)
     var i = 0
     val rs = st.executeQuery
     val md = rs.getMetaData
@@ -118,7 +117,6 @@ trait Query extends QueryBuilder with TypedQuery {
   private[tresql] def update(sql: String) = {
     val st = statement(sql, env)
     try {
-      bindVars(st, bindVariables)
       st.executeUpdate
     } finally if (!env.reusableExpr) {
       st.close
@@ -131,7 +129,6 @@ trait Query extends QueryBuilder with TypedQuery {
     var result: Result[RowLike] = null
     var outs: List[Any] = null
     try {
-      bindVars(st, bindVariables)
       if (st.execute) {
         val rs = st.getResultSet
         val md = rs.getMetaData
@@ -195,13 +192,6 @@ trait Query extends QueryBuilder with TypedQuery {
   }
 
   private def statement(sql: String, env: Env, call: Boolean = false) = {
-    env.log(sql, Map(), LogTopic.sql)
-    env.log(sql, bindVariables.flatMap {
-      case v: VarExpr => List(v.name ->
-        Option(env.bindVarLogFilter).filter(_.isDefinedAt(v)).map(_(v)).getOrElse(v()))
-      case r: ResExpr => List(r.name -> r())
-      case _ => Nil
-    }.toMap, LogTopic.sql_with_params)
     val conn = env.conn
     if (conn == null) throw new NullPointerException(
       """Connection not found in environment. Check if "Env.conn = conn" (in this case statement execution must be done in the same thread) or "Env.sharedConn = conn" is called.""")
@@ -217,13 +207,12 @@ trait Query extends QueryBuilder with TypedQuery {
     else conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)
     if (env.queryTimeout > 0) st.setQueryTimeout(env.queryTimeout)
     if (env.fetchSize > 0) st.setFetchSize(env.fetchSize)
+    bindVars(st, bindVariables)
+    log(sql, bindVariables)
     st
   }
 
   private def bindVars(st: PreparedStatement, bindVariables: List[Expr]) {
-    env.log(bindVariables
-      .map(v => Option(env.bindVarLogFilter).filter(_.isDefinedAt(v)).map(_(v)).getOrElse(v.toString))
-      .mkString("Bind vars: ", ", ", ""), Map(), LogTopic.params)
     var idx = 1
     def bindVar(p: Any) {
       try p match {
@@ -281,6 +270,7 @@ trait Query extends QueryBuilder with TypedQuery {
     }
     bindVariables.map(_()).foreach { bindVar }
   }
+
   private def registerOutPar(st: CallableStatement, par: OutPar, idx: Int) {
     import java.sql.Types._
     par.idx = idx
@@ -309,6 +299,19 @@ trait Query extends QueryBuilder with TypedQuery {
       //unknown object
       case obj => st.registerOutParameter(idx, OTHER)
     }
+  }
+
+  private def log(sql: String, bindVars: List[Expr]) = {
+    env.log(sql, Map(), LogTopic.sql)
+    env.log(sql, bindVars.flatMap {
+      case v: VarExpr => List(v.name ->
+        Option(env.bindVarLogFilter).filter(_.isDefinedAt(v)).map(_(v)).getOrElse(v()))
+      case r: ResExpr => List(r.name -> r())
+      case _ => Nil
+    }.toMap, LogTopic.sql_with_params)
+    env.log(bindVars
+      .map(v => Option(env.bindVarLogFilter).filter(_.isDefinedAt(v)).map(_(v)).getOrElse(v.toString))
+      .mkString("Bind vars: ", ", ", ""), Map(), LogTopic.params)
   }
 }
 
