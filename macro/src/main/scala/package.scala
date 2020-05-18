@@ -99,7 +99,7 @@ package object tresql extends CoreTypes {
       val tresqlString = parts.map { case Literal(Constant(x)) => x } match {
         case l => l.head + l.tail.zipWithIndex.map(t => ":_" + t._2 + t._1).mkString //replace placeholders with variable defs
       }
-      val compilerMetadata = metadata(macroSettings, logger)
+      val compilerMetadata = metadata(macroSettings, verbose)
       info(s"Compiling: $tresqlString")
       val compiler = new QueryCompiler(
         compilerMetadata.metadata, new MacroResourcesImpl(compilerMetadata.macros))
@@ -329,12 +329,12 @@ package object tresql extends CoreTypes {
       case Array(key, value) => key.trim -> value.trim
       case _ => sys.error(s"Setting must be in format <key>=<value> or <key>. Instead found: $s")
     }}.toMap
-    def metadata(conf: Map[String, String], logger: Resources) = conf.get("metadataFactoryClass").map { factory =>
+    def metadata(conf: Map[String, String], verbose: Boolean) = conf.get("metadataFactoryClass").map { factory =>
       compiling.MetadataCache.create(
         conf,
         Class.forName(factory).getDeclaredConstructor().newInstance()
           .asInstanceOf[compiling.CompilerMetadataFactory],
-        logger
+        verbose
       )
     }.getOrElse(
       sys.error(s"Tresql interpolator not available. Scala macro compiler setting missing - 'metadataFactoryClass'. " +

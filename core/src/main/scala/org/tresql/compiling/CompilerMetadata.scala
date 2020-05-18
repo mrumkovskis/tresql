@@ -12,23 +12,29 @@ trait CompilerMetadata {
 
 /** Implementation must have empty constructor so can be instantiated with {{{Class.newInstance}}} */
 trait CompilerMetadataFactory {
-  def create(conf: Map[String, String], logger: Resources): CompilerMetadata
+  def create(conf: Map[String, String]): CompilerMetadata
 }
 
 private[tresql] object MetadataCache {
   def create(
     conf: Map[String, String],
     factory: CompilerMetadataFactory,
-    logger: Resources
-  ): CompilerMetadata = {
-    if (md == null) md = factory.create(conf, logger) else logger.log(s"Returning cached metadata")
+    verbose: Boolean
+): CompilerMetadata = {
+    if (md == null) md = factory match {
+      case f: CompilerJDBCMetadataFactory => f.create(conf, verbose)
+      case f => f.create(conf)
+    } else {
+      if (verbose) println(s"Returning cached metadata")
+    }
     md
   }
   private[this] var md: CompilerMetadata = null
 }
 
 class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
-  override def create(conf: Map[String, String], logger: Resources) = {
+  def create(conf: Map[String, String]): CompilerMetadata = create(conf, false)
+  def create(conf: Map[String, String], verbose: Boolean) = {
     val driverClassName = conf.getOrElse("driverClass", null)
     val url = conf.getOrElse("url", null)
     val user = conf.getOrElse("user", null)
@@ -37,15 +43,15 @@ class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
     val functions = conf.getOrElse("functionSignatures", null)
     val macrosClass = conf.get("macros")
 
-    logger.log(s"Creating database metadata from: $url")
+    if (verbose) println(s"Creating database metadata from: $url")
 
     Class.forName(driverClassName)
     val connection =
       if (user == null) DriverManager.getConnection(url)
       else DriverManager.getConnection(url, user, password)
-    logger.log(s"Compiling using jdbc connection: $connection")
+    if (verbose) println(s"Compiling using jdbc connection: $connection")
     if (dbCreateScript != null) {
-      logger.log(s"Creating database for compiler from script $dbCreateScript...")
+      if (verbose) println(s"Creating database for compiler from script $dbCreateScript...")
       new scala.io.BufferedSource(
         Option(getClass
           .getResourceAsStream(dbCreateScript))
@@ -57,7 +63,7 @@ class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
           st.execute(sql)
           st.close
         }
-      logger.log("Success")
+      if (verbose) println("Success")
     }
     new CompilerMetadata {
       override def metadata: Metadata =
