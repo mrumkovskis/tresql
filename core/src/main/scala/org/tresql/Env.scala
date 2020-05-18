@@ -251,10 +251,7 @@ trait ThreadLocalResources extends Resources {
 }
 
 /** Resources and configuration for query execution like database connection, metadata, database dialect etc. */
-trait Resources extends MacroResources {
-
-  type TresqlLogger = (=> String, => Map[String, Any], LogTopic) => Unit
-  type BindVarLogFilter = PartialFunction[Expr, String]
+trait Resources extends MacroResources with CacheResources with Logging {
 
   private case class Resources_(
     override val conn: java.sql.Connection,
@@ -292,12 +289,6 @@ trait Resources extends MacroResources {
   def fetchSize = 0
   def maxResultSize = 0
   def recursiveStackDepth: Int = 50
-  /** Parsed statement {{{Cache}}} */
-  def cache: Cache = null
-  def logger: TresqlLogger = null
-  def bindVarLogFilter: BindVarLogFilter = {
-    case v: QueryBuilder#VarExpr if v.name == "password" => v.fullName + " = ***"
-  }
   def params: Map[String, Any] = Map()
 
   //resource construction convenience methods
@@ -327,9 +318,6 @@ trait Resources extends MacroResources {
   }
 
   protected def defaultDialect: CoreTypes.Dialect = { case e => e.defaultSQL }
-
-  def log(msg: => String, params: => Map[String, Any] = Map(), topic: LogTopic = LogTopic.info): Unit =
-    if (logger != null) logger(msg, params, topic)
 }
 
 trait MacroResources {
@@ -366,6 +354,24 @@ class MacroResourcesImpl(val macros: Any) extends MacroResources {
       m.invoke(macros, _args: _*).asInstanceOf[T]
     }
   }
+}
+
+trait CacheResources {
+  /** Parsed statement {{{Cache}}} */
+  def cache: Cache = null
+}
+
+trait Logging {
+  type TresqlLogger = (=> String, => Map[String, Any], LogTopic) => Unit
+  type BindVarLogFilter = PartialFunction[Expr, String]
+
+  def logger: TresqlLogger = null
+  def bindVarLogFilter: BindVarLogFilter = {
+    case v: QueryBuilder#VarExpr if v.name == "password" => v.fullName + " = ***"
+  }
+
+  def log(msg: => String, params: => Map[String, Any] = Map(), topic: LogTopic = LogTopic.info): Unit =
+    if (logger != null) logger(msg, params, topic)
 }
 
 private [tresql] trait EnvProvider {
