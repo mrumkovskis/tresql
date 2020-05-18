@@ -259,6 +259,12 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     }
 
     //path bind variable access (dotted syntax)
+    assertResult(List(Vector("SALES")))(
+      Query("dept[dname = :dept.name] {dname}", Map("dept" -> Map("name" -> "SALES"))).toListOfVectors)
+    assertResult(Nil)(
+      Query("dept[dname = :dept.name] {dname}", Map("dept" -> Map("name" -> null))).toListOfVectors)
+    assertResult(Nil)(
+      Query("dept[dname = :dept.name] {dname}", Map("dept" -> null)).toListOfVectors)
   }
 
   override def ort(implicit resources: Resources) = {

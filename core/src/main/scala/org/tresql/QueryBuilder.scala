@@ -103,6 +103,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       members.foldLeft (env(name))((v, mem) => v match {
         case m: Map[String @unchecked, _] => m.getOrElse(mem, error(s"Variable not found: $fullName"))
         case p: Product => accessProduct(p, mem)
+        case null => null
         case x => error(s"At the moment cannot evaluate variable member '$mem' from structure $x")
       })
     }
