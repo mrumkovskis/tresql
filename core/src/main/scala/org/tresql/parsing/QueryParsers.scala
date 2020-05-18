@@ -42,11 +42,12 @@ case class Ident(ident: List[String]) extends Exp {
 }
 case class Variable(variable: String, members: List[String], opt: Boolean) extends Exp {
   def tresql = if (variable == "?") "?" else {
-    ":" +
-      (if (QueryParsers.simple_ident_regex.pattern.matcher(variable).matches) variable
-      else if (variable contains "'") "\"" + variable + "\""
-      else "'" + variable + "'") +
-      (if (members == null | members == Nil) "" else "." + (members map any2tresql mkString ".")) +
+    def var_str(v: String) =
+      (if (QueryParsers.simple_ident_regex.pattern.matcher(v).matches) v
+      else if (v contains "'") "\"" + v + "\""
+      else "'" + v + "'")
+    ":" + var_str(variable) +
+      (if (members == null | members == Nil) "" else "." + (members map var_str mkString ".")) +
       (if (opt) "?" else "")
   }
 }
