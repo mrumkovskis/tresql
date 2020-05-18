@@ -24,13 +24,6 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       null
 
   val hsqlDialect: CoreTypes.Dialect = dialects.HSQLDialect orElse dialects.VariableNameDialect orElse {
-    case e: QueryBuilder#SelectExpr =>
-      val b = e.builder
-      e match {
-        case s @ b.SelectExpr(List(b.Table(b.ConstExpr(parsing.Null), _, _, _, _)), _, _, _, _, _, _, _, _, _) =>
-          s.copy(tables = List(s.tables.head.copy(table = b.IdentExpr(List("dummy"))))).sql
-        case _ => e.defaultSQL
-      }
     case c: QueryBuilder#CastExpr => c.exp.sql
   }
 
