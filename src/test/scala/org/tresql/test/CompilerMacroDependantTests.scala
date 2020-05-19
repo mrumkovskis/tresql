@@ -232,7 +232,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(List((10, "ACCOUNTING"), (20, "RESEARCH")))(
       tresql"dept{deptno, dname}#(1)@(2)".list[Int, String])
 
-    //Resources convenience methods test
+    //Resources methods test
     val qt = resources.queryTimeout
     val e1 = resources.withMaxResultSize(555)
     val e2 = resources.withQueryTimeout(333)
@@ -265,6 +265,21 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       Query("dept[dname = :dept.name] {dname}", Map("dept" -> Map("name" -> null))).toListOfVectors)
     assertResult(Nil)(
       Query("dept[dname = :dept.name] {dname}", Map("dept" -> null)).toListOfVectors)
+
+    //macro API test
+    assertResult(List("ACCOUNTING", "LAW", "OPERATIONS", "RESEARCH", "SALES"))(
+      tresql"macro_interpolator_test4(dept, dname)"(resources
+        .withMacros(Some(Macros))).map(_.dname).toList)
+    assertResult(List(0))(tresql"dummy{dummy}@(1)"(resources
+        .withMacros(None)).map(_.dummy).toList)
+    assertResult(List(0))(tresql"dummy{dummy}@(1)"(resources
+      .withMacros(null)).map(_.dummy).toList)
+    intercept[Exception](tresql"dummy{dummy}@(1)"(resources
+      .withMacros(List(1))).map(_.dummy).toList)
+    intercept[Exception](tresql"dummy{dummy}@(1)"(resources
+      .withMacros(1)).map(_.dummy).toList)
+    intercept[Exception](tresql"macro_interpolator_test4(dept, dname)"(resources
+      .withMacros(null).withCache(null)).map(_.dname).toList)
   }
 
   override def ort(implicit resources: Resources) = {

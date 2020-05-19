@@ -327,31 +327,42 @@ trait MacroResources {
     sys.error(s"Macro function not found: $name")
 }
 
-class MacroResourcesImpl(val macros: Any) extends MacroResources {
-  private val methods =
-    Option(macros).map(_.getClass.getMethods.map(m => m.getName -> m).toMap).getOrElse(Map())
+class MacroResourcesImpl(macros: Any) extends MacroResources {
+  private val (methods, invocationTarget) = macroMethods(macros)
 
-  override def isMacroDefined(name: String) = methods.get(name).exists { m =>
-    val pars = m.getParameterTypes
-    pars.nonEmpty &&
-      classOf[QueryParsers].isAssignableFrom(pars(0)) &&
-      classOf[Exp].isAssignableFrom(m.getReturnType)
+  private def macroMethods(obj: Any): (Map[(String, Boolean), java.lang.reflect.Method], Any) = obj match {
+    case null => (Map(), null)
+    case Some(o) => macroMethods(o)
+    case None => macroMethods(null)
+    case x => {
+      def isMacro(m: java.lang.reflect.Method) =
+        m.getParameterTypes.nonEmpty && (isParserMacro(m) || isBuilderMacro(m))
+      def isParserMacro(m: java.lang.reflect.Method) =
+        classOf[QueryParsers].isAssignableFrom(m.getParameterTypes()(0)) &&
+          classOf[Exp].isAssignableFrom(m.getReturnType)
+      def isBuilderMacro(m: java.lang.reflect.Method) =
+        classOf[QueryBuilder].isAssignableFrom(m.getParameterTypes()(0)) &&
+          classOf[Expr].isAssignableFrom(m.getReturnType)
+      val mm = x.getClass.getMethods.collect {
+        case m if isMacro(m) => (m.getName -> isParserMacro(m), m)
+      }.toMap
+      if (mm.isEmpty) sys.error(s"No macro methods found in object $obj. " +
+        s"If you do not want to use macros pass null as a parameter")
+      (mm, x)
+    }
   }
-  override def isBuilderMacroDefined(macroName: String) = methods.get(macroName).exists { m =>
-    val pars = m.getParameterTypes
-    pars.nonEmpty &&
-      classOf[QueryBuilder].isAssignableFrom(pars(0)) &&
-      classOf[Expr].isAssignableFrom(m.getReturnType)
-  }
+
+  override def isMacroDefined(name: String) = methods.contains((name, true))
+  override def isBuilderMacroDefined(name: String) = methods.contains((name, false))
   override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T = {
-    val m = methods(name)
+    val m = (methods.get(name, true) orElse methods.get(name, false)).get
     val p = m.getParameterTypes
     if (p.length > 1 && p(1).isAssignableFrom(classOf[Seq[_]])) {
       //parameter is list of expressions
-      m.invoke(macros, parser_or_builder, args).asInstanceOf[T]
+      m.invoke(invocationTarget, parser_or_builder, args).asInstanceOf[T]
     } else {
       val _args = (parser_or_builder :: args).asInstanceOf[Seq[Object]] //must cast for older scala verions
-      m.invoke(macros, _args: _*).asInstanceOf[T]
+      m.invoke(invocationTarget, _args: _*).asInstanceOf[T]
     }
   }
 }
