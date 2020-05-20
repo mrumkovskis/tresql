@@ -97,16 +97,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   }
 
   case class VarExpr(name: String, members: List[String], opt: Boolean) extends BaseVarExpr {
-    override def apply() = {
-      def accessProduct(p: Product, idx: String) = Try(idx.toInt).toOption.map(i =>
-          p.productElement(i - 1)).getOrElse(error(s"Variable member '$idx' should be number to access product $p"))
-      members.foldLeft (env(name))((v, mem) => v match {
-        case m: Map[String @unchecked, _] => m.getOrElse(mem, error(s"Variable not found: $fullName"))
-        case p: Product => accessProduct(p, mem)
-        case null => null
-        case x => error(s"At the moment cannot evaluate variable member '$mem' from structure $x")
-      })
-    }
+    override def apply() = env(name, members)
     override def defaultSQL = {
       if (!binded) QueryBuilder.this._bindVariables += this
       val s = if (!env.reusableExpr && (env contains name) && (members == null | members == Nil)) {
@@ -127,8 +118,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       binded = true
       s
     }
-    def fullName = name + (members map ("." + _)).mkString
-    override def toString = if (env contains name) fullName + " = " + this() else fullName
+    def fullName = (name :: members).mkString(".")
+    override def toString = if (env.contains(name, members)) fullName + " = " + this() else fullName
   }
 
   case class IdExpr(seqName: String) extends BaseVarExpr {
@@ -1199,7 +1190,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case Variable("?", _, o) =>
           this.bindIdx += 1; VarExpr(this.bindIdx.toString, Nil, o)
         case Variable(n, m, o) =>
-          if (!env.reusableExpr && o && !(env contains n)) null else VarExpr(n, m, o)
+          if (!env.reusableExpr && o && !(env.contains(n, m))) null else VarExpr(n, m, o)
         case Id(seq) => IdExpr(seq)
         case IdRef(seq) => IdRefExpr(seq)
         case Res(r, c) => ResExpr(r, c)

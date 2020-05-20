@@ -23,8 +23,8 @@ package object dialects {
         case x => s.indexWhere (_ == '?', x + 1) match {
           case -1 => false
           case _ => true
-        }}) => s"/*${v.name}[*/$s/*]${v.name}*/"
-      case s => s + s"/*${v.name}*/"
+        }}) => s"/*${v.fullName}[*/$s/*]${v.fullName}*/"
+      case s => s + s"/*${v.fullName}*/"
     }
     case r: QueryBuilder#ResExpr => r.defaultSQL + s"/*${r.name}*/"
   }

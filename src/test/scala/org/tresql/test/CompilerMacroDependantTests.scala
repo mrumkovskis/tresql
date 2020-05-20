@@ -265,6 +265,31 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       Query("dept[dname = :dept.name] {dname}", Map("dept" -> Map("name" -> null))).toListOfVectors)
     assertResult(Nil)(
       Query("dept[dname = :dept.name] {dname}", Map("dept" -> null)).toListOfVectors)
+    intercept[MissingBindVariableException](
+      Query("dept[dname = :dept.name] {dname}", Map("dept" -> "x")).toListOfVectors)
+    assertResult(List(Vector("SALES")))(
+      Query("dept[dname = :dept.2.name] {dname}", Map("dept" -> (1 -> Map("name" -> "SALES")))).toListOfVectors)
+    assertResult(Nil)(
+      Query("dept[dname = :dept.2.name] {dname}", Map("dept" -> (1 -> null))).toListOfVectors)
+    intercept[MissingBindVariableException](
+      Query("dept[dname = :dept.2.name] {dname}", Map("dept" -> (1 -> "a"))).toListOfVectors)
+    //path bind variables optional binding
+    assertResult(List(Vector("RESEARCH"), Vector("SALES")))(
+      Query("dept[dname = 'SALES' | dname = :dept.name?] {dname}#(1)", Map("dept" -> Map("name" -> "RESEARCH"))).toListOfVectors)
+    assertResult( List(Vector(null)))(
+      Query("(dept[dname = 'SALES']{dname} + {null})[case(:dept.name? = null, dname = null, dname = :dept.name?)]{dname}#(null 1)", Map("dept" -> Map("name" -> null))).toListOfVectors)
+    assertResult( List(Vector(null)))(
+      Query("(dept[dname = 'SALES']{dname} + {null})[case(:dept.name? = null, dname = null, dname = :dept.name?)]{dname}#(null 1)", Map("dept" -> null)).toListOfVectors)
+    assertResult(List(Vector(null), Vector("SALES")))(
+      Query("(dept[dname = 'SALES']{dname} + {null})[case(:dept.name? = null, dname = null, dname = :dept.name?)]{dname}#(null 1)", Map("dept" -> "x")).toListOfVectors)
+    assertResult(List(Vector("RESEARCH")))(
+      Query("(dept{dname} + {null})[case(:dept.2.name? = null, dname = null, dname = :dept.2.name?)]{dname}#(null 1)", Map("dept" -> (1 -> Map("name" -> "RESEARCH")))).toListOfVectors)
+    assertResult(List(Vector(null), Vector("ACCOUNTING"), Vector("LAW"), Vector("OPERATIONS"), Vector("RESEARCH"), Vector("SALES")))(
+      Query("(dept{dname} + {null})[case(:dept.1.name? = null, dname = null, dname = :dept.1.name?)]{dname}#(null 1)", Map("dept" -> (1 -> Map("name" -> "RESEARCH")))).toListOfVectors)
+    assertResult(List(Vector(null)))(
+      Query("(dept{dname} + {null})[case(:dept.2.name? = null, dname = null, dname = :dept.2.name?)]{dname}#(null 1)", Map("dept" -> (1 -> null))).toListOfVectors)
+    assertResult(List(Vector(null), Vector("ACCOUNTING"), Vector("LAW"), Vector("OPERATIONS"), Vector("RESEARCH"), Vector("SALES")))(
+      Query("(dept{dname} + {null})[case(:dept.2.name? = null, dname = null, dname = :dept.2.name?)]{dname}#(null 1)", Map("dept" -> (1 -> "a"))).toListOfVectors)
 
     //macro API test
     assertResult(List("ACCOUNTING", "LAW", "OPERATIONS", "RESEARCH", "SALES"))(

@@ -93,6 +93,8 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     new scala.io.BufferedSource(getClass.getResourceAsStream("/pgdb.sql")).mkString.split("//").foreach {
       sql => val st = conn.createStatement; tresqlResources.log("Creating database:\n" + sql); st.execute(sql); st.close
     }
+    //set resources for console
+    ITConsoleResources.resources = tresqlResources
   }
 
   override def afterAll(configMap: ConfigMap) {
@@ -265,4 +267,9 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
         case _ =>
       }
   }
+}
+
+object ITConsoleResources {
+  //used in console
+  implicit var resources: Resources = _
 }

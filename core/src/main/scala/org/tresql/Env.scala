@@ -46,17 +46,19 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val reu
     case x => x
   } getOrElse (throw new MissingBindVariableException(name))
   def apply(name: String, path: List[String]) = get(name, path)
-    .getOrElse(throw new MissingBindVariableException(path.mkString(name, ".", "")))
+    .getOrElse(throw new MissingBindVariableException((name :: path).mkString(".")))
 
   def get(name: String): Option[Any] =
     vars.flatMap(_.get(name)) orElse provider.flatMap(_.env.get(name))
   def get(name: String, path: List[String]): Option[Any] = {
     def tr(p: List[String], v: Option[Any]): Option[Any] = p match {
       case Nil => v
-      case n :: rest => v collect {
+      case n :: rest => v flatMap {
         case m: Map[String, _] => tr(rest, m.get(n))
         case p: Product => tr(rest,
           Try(n.toInt).flatMap(v => Try(p.productElement(v - 1))).toOption)
+        case null => Some(null)
+        case x => None
       }
     }
     tr(path, get(name))
@@ -76,6 +78,7 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val reu
           .flatMap(v => Try(p.productElement(v - 1)))
           .map(tr(rest, _))
           .getOrElse(false)
+        case null => true
         case _ => false
       }
     }
