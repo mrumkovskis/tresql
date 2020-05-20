@@ -2,7 +2,9 @@ package org.tresql
 
 import sys._
 import CoreTypes.RowConverter
-import parsing.{QueryParsers, Exp}
+import parsing.{Exp, QueryParsers}
+
+import scala.util.Try
 
 /** Environment for expression building and execution */
 private [tresql] class Env(_provider: EnvProvider, resources: Resources, val reusableExpr: Boolean)
@@ -43,15 +45,42 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val reu
     case e: Expr => e()
     case x => x
   } getOrElse (throw new MissingBindVariableException(name))
+  def apply(name: String, path: List[String]) = get(name, path)
+    .getOrElse(throw new MissingBindVariableException(path.mkString(name, ".", "")))
 
   def get(name: String): Option[Any] =
     vars.flatMap(_.get(name)) orElse provider.flatMap(_.env.get(name))
+  def get(name: String, path: List[String]): Option[Any] = {
+    def tr(p: List[String], v: Option[Any]): Option[Any] = p match {
+      case Nil => v
+      case n :: rest => v collect {
+        case m: Map[String, _] => tr(rest, m.get(n))
+        case p: Product => tr(rest,
+          Try(n.toInt).flatMap(v => Try(p.productElement(v - 1))).toOption)
+      }
+    }
+    tr(path, get(name))
+  }
 
   /* if not found into this variable map look into provider's if such exists */
   def contains(name: String): Boolean =
     vars.map(_.contains(name))
      .filter(_ == true)
      .getOrElse(provider.exists(_.env.contains(name)))
+  def contains(name: String, path: List[String]): Boolean = {
+    def tr(p: List[String], v: Any): Boolean = p match {
+      case Nil => true
+      case n :: rest => v match {
+        case m: Map[String, _] => m.get(n).exists(tr(rest, _))
+        case p: Product => Try(n.toInt)
+          .flatMap(v => Try(p.productElement(v - 1)))
+          .map(tr(rest, _))
+          .getOrElse(false)
+        case _ => false
+      }
+    }
+    get(name).exists(tr(path, _))
+  }
 
   /* finds closest env with vars map set (Some(vars)) and looks there if variable exists */
   def containsNearest(name: String): Boolean =
