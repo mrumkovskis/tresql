@@ -194,7 +194,9 @@ trait Query extends QueryBuilder with TypedQuery {
   private def statement(sql: String, env: Env, call: Boolean = false) = {
     val conn = env.conn
     if (conn == null) throw new NullPointerException(
-      """Connection not found in environment. Check if "Env.conn = conn" (in this case statement execution must be done in the same thread) or "Env.sharedConn = conn" is called.""")
+      """Connection not found in environment.""")
+    val bindValues = bindVariables.map(_())
+    log(sql, bindVariables)
     val st = if (env.reusableExpr)
       if (env.statement == null) {
         val s = if (call) conn.prepareCall(sql) else {
@@ -207,12 +209,11 @@ trait Query extends QueryBuilder with TypedQuery {
     else conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)
     if (env.queryTimeout > 0) st.setQueryTimeout(env.queryTimeout)
     if (env.fetchSize > 0) st.setFetchSize(env.fetchSize)
-    bindVars(st, bindVariables)
-    log(sql, bindVariables)
+    bindVars(st, bindValues)
     st
   }
 
-  private def bindVars(st: PreparedStatement, bindVariables: List[Expr]) {
+  private def bindVars(st: PreparedStatement, bindVariables: List[Any]) {
     var idx = 1
     def bindVar(p: Any) {
       try p match {
@@ -268,7 +269,7 @@ trait Query extends QueryBuilder with TypedQuery {
       }
       idx += 1
     }
-    bindVariables.map(_()).foreach { bindVar }
+    bindVariables.foreach { bindVar }
   }
 
   private def registerOutPar(st: CallableStatement, par: OutPar, idx: Int) {
