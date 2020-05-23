@@ -203,13 +203,14 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val reu
 /** Implementation of [[Resources]] with thread local instance based on template */
 trait ThreadLocalResources extends Resources {
 
-  protected def resourcesTemplate: ResourcesImpl = ResourcesImpl(conn, metadata, dialect,
-    idExpr, queryTimeout, fetchSize, maxResultSize, recursiveStackDepth, params)
+  protected def resourcesTemplate: ResourcesImpl = new ResourcesImpl(new Resources {}) // empty resources
 
-  private val _threadResources = new ThreadLocal[ResourcesImpl]
+  private val _threadResources = new ThreadLocal[ResourcesImpl] {
+    override def initialValue(): ResourcesImpl = resourcesTemplate
+  }
 
   private def threadResources = _threadResources.get
-  private def threadResources_=(res: ResourcesImpl) = _threadResources.set(res)
+  private def threadResources_=(res: ResourcesImpl): Unit = _threadResources.set(res)
 
   case class ResourcesImpl(override val conn: java.sql.Connection,
                  override val metadata: Metadata,
@@ -225,6 +226,9 @@ trait ThreadLocalResources extends Resources {
                  override val bindVarLogFilter: BindVarLogFilter = null, //not used
                  macros: Any = null) extends Resources {
     private val macroImpl = new MacroResourcesImpl(macros)
+    private [ThreadLocalResources] def this(res: Resources) = this(
+      res.conn, res.metadata, res.dialect, res.idExpr, res.queryTimeout,
+      res.fetchSize, res.maxResultSize, res.recursiveStackDepth, res.params)
     override def isMacroDefined(name: String) = macroImpl.isMacroDefined(name)
     override def isBuilderMacroDefined(name: String) = macroImpl.isBuilderMacroDefined(name)
     override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T = {
@@ -236,23 +240,18 @@ trait ThreadLocalResources extends Resources {
 
   def apply(params: Map[String, Any], reusableExpr: Boolean) = new Env(params, this, reusableExpr)
 
-  private def prop[T](f: ResourcesImpl => T, default: => T) =
-    Option(threadResources).map(f).getOrElse(default)
-
-  override def conn = prop(_.conn, super.conn)
-  override def metadata = prop(_.metadata, super.metadata)
-  override def dialect = prop(_.dialect, super.dialect)
-  override def idExpr = prop(_.idExpr, super.idExpr)
-  override def queryTimeout = prop(_.queryTimeout, super.queryTimeout)
-  override def fetchSize = prop(_.fetchSize, super.fetchSize)
-  override def maxResultSize = prop(_.maxResultSize, super.maxResultSize)
-  override def recursiveStackDepth: Int = prop(_.recursiveStackDepth, super.recursiveStackDepth)
-  override def isMacroDefined(macroName: String) =
-    prop(_.isMacroDefined(macroName), super.isMacroDefined(macroName))
-  override def isBuilderMacroDefined(macroName: String) =
-    prop(_.isBuilderMacroDefined(macroName), super.isMacroDefined(macroName))
+  override def conn = threadResources.conn
+  override def metadata = threadResources.metadata
+  override def dialect = threadResources.dialect
+  override def idExpr = threadResources.idExpr
+  override def queryTimeout = threadResources.queryTimeout
+  override def fetchSize = threadResources.fetchSize
+  override def maxResultSize = threadResources.maxResultSize
+  override def recursiveStackDepth: Int = threadResources.recursiveStackDepth
+  override def isMacroDefined(macroName: String) = threadResources.isMacroDefined(macroName)
+  override def isBuilderMacroDefined(macroName: String) = threadResources.isBuilderMacroDefined(macroName)
   override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T = {
-    prop(_.invokeMacro(name, parser_or_builder, args), super.invokeMacro(name, parser_or_builder, args))
+    threadResources.invokeMacro(name, parser_or_builder, args)
   }
   override protected def copyMacroResources: MacroResources = threadResources.copyMacroResources
 
@@ -263,18 +262,13 @@ trait ThreadLocalResources extends Resources {
   /** Filter is global not thread local. To be overriden in subclasses. This implementation returns {{{super.bindVarLogFilter}}} */
   override def bindVarLogFilter: BindVarLogFilter = super.bindVarLogFilter
 
-  private def setProp(f: ResourcesImpl => ResourcesImpl) =
-    Option(threadResources)
-      .orElse(Option(resourcesTemplate))
-      .foreach(r => threadResources = f(r))
+  private def setProp(f: ResourcesImpl => ResourcesImpl) = threadResources = f(threadResources)
 
   def conn_=(conn: java.sql.Connection) = setProp(_.copy(conn = conn))
-  def metadata_=(metadata: Metadata) = Option(threadResources)
-    .foreach(r => threadResources = r.copy(metadata = metadata))
-  def dialect_=(dialect: CoreTypes.Dialect) = {
+  def metadata_=(metadata: Metadata) = setProp(_.copy(metadata = metadata))
+  def dialect_=(dialect: CoreTypes.Dialect) =
     setProp(_.copy(dialect = Option(dialect orElse defaultDialect).orNull))
-  }
-  def idExpr_=(idExpr: String => String) = setProp(_.copy(idExpr = Option(idExpr).orNull))
+  def idExpr_=(idExpr: String => String) = setProp(_.copy(idExpr = idExpr))
   def recursiveStackDepth_=(depth: Int) = setProp(_.copy(recursiveStackDepth = depth))
   def queryTimeout_=(timeout: Int) =  setProp(_.copy(queryTimeout = timeout))
   def fetchSize_=(fetchSize: Int) =  setProp(_.copy(fetchSize = fetchSize))

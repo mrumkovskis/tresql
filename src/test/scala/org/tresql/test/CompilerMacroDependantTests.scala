@@ -241,6 +241,13 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     val e3 = e2.withQueryTimeout(222)
     assertResult((555, 222)) {(e1.maxResultSize, e3.queryTimeout)}
     assertResult((0, 333)) {(e2.maxResultSize, e2.queryTimeout)}
+    assertResult((110, 111)) {
+      //thread local resources test
+      val res = new ThreadLocalResources {
+        override val resourcesTemplate = super.resourcesTemplate.copy(queryTimeout = 110)
+      }.withFetchSize(111)
+      res.queryTimeout -> res.fetchSize
+    }
 
     //exists method
     assertResult(true)(tresql"exists(emp {*})")
