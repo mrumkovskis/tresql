@@ -211,7 +211,7 @@ trait ThreadLocalResources extends Resources {
 
   private def threadResources = _threadResources.get
   private def threadResources_=(res: ResourcesImpl): Unit =
-    _threadResources.set(res.copy(dialect = liftDialect(dialect)))
+    _threadResources.set(res.copy(dialect = liftDialect(res.dialect)))
 
   case class ResourcesImpl(override val conn: java.sql.Connection,
                  override val metadata: Metadata,
