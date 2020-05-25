@@ -210,7 +210,8 @@ trait ThreadLocalResources extends Resources {
   }
 
   private def threadResources = _threadResources.get
-  private def threadResources_=(res: ResourcesImpl): Unit = _threadResources.set(res)
+  private def threadResources_=(res: ResourcesImpl): Unit =
+    _threadResources.set(res.copy(dialect = liftDialect(dialect)))
 
   case class ResourcesImpl(override val conn: java.sql.Connection,
                  override val metadata: Metadata,
@@ -266,8 +267,7 @@ trait ThreadLocalResources extends Resources {
 
   def conn_=(conn: java.sql.Connection) = setProp(_.copy(conn = conn))
   def metadata_=(metadata: Metadata) = setProp(_.copy(metadata = metadata))
-  def dialect_=(dialect: CoreTypes.Dialect) =
-    setProp(_.copy(dialect = Option(dialect orElse defaultDialect).orNull))
+  def dialect_=(dialect: CoreTypes.Dialect) = setProp(_.copy(dialect = liftDialect(dialect)))
   def idExpr_=(idExpr: String => String) = setProp(_.copy(idExpr = idExpr))
   def recursiveStackDepth_=(depth: Int) = setProp(_.copy(recursiveStackDepth = depth))
   def queryTimeout_=(timeout: Int) =  setProp(_.copy(queryTimeout = timeout))
@@ -321,7 +321,7 @@ trait Resources extends MacroResources with CacheResources with Logging {
   def withConn(conn: java.sql.Connection): Resources = copyResources.copy(conn = conn)
   def withMetadata(metadata: Metadata): Resources = copyResources.copy(metadata = metadata)
   def withDialect(dialect: CoreTypes.Dialect): Resources =
-    copyResources.copy(dialect = if (dialect == null) null else dialect orElse defaultDialect)
+    copyResources.copy(dialect = liftDialect(dialect))
   def withIdExpr(idExpr: String => String): Resources = copyResources.copy(idExpr = idExpr)
   def withQueryTimeout(queryTimeout: Int): Resources = copyResources.copy(queryTimeout = queryTimeout)
   def withFetchSize(fetchSize: Int): Resources = copyResources.copy(fetchSize = fetchSize)
@@ -344,6 +344,9 @@ trait Resources extends MacroResources with CacheResources with Logging {
   }
 
   protected def defaultDialect: CoreTypes.Dialect = { case e => e.defaultSQL }
+
+  protected def liftDialect(dialect: CoreTypes.Dialect) =
+    if (dialect == null) null else dialect orElse defaultDialect
 }
 
 trait MacroResources {
