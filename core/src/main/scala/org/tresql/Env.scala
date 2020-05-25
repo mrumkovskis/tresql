@@ -267,7 +267,7 @@ trait ThreadLocalResources extends Resources {
 
   def conn_=(conn: java.sql.Connection) = setProp(_.copy(conn = conn))
   def metadata_=(metadata: Metadata) = setProp(_.copy(metadata = metadata))
-  def dialect_=(dialect: CoreTypes.Dialect) = setProp(_.copy(dialect = liftDialect(dialect)))
+  def dialect_=(dialect: CoreTypes.Dialect) = setProp(_.copy(dialect = dialect))
   def idExpr_=(idExpr: String => String) = setProp(_.copy(idExpr = idExpr))
   def recursiveStackDepth_=(depth: Int) = setProp(_.copy(recursiveStackDepth = depth))
   def queryTimeout_=(timeout: Int) =  setProp(_.copy(queryTimeout = timeout))
