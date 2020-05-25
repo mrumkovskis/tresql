@@ -210,7 +210,7 @@ trait ThreadLocalResources extends Resources {
       .copy(dialect = liftDialect(resourcesTemplate.dialect))
   }
 
-  private def threadResources = _threadResources.get
+  private def threadResources: ResourcesImpl = _threadResources.get
   private def threadResources_=(res: ResourcesImpl): Unit = _threadResources.set(res)
 
   case class ResourcesImpl(override val conn: java.sql.Connection,
@@ -263,7 +263,7 @@ trait ThreadLocalResources extends Resources {
   /** Filter is global not thread local. To be overriden in subclasses. This implementation returns {{{super.bindVarLogFilter}}} */
   override def bindVarLogFilter: BindVarLogFilter = super.bindVarLogFilter
 
-  private def setProp(f: ResourcesImpl => ResourcesImpl) = threadResources = f(threadResources)
+  private def setProp(f: ResourcesImpl => ResourcesImpl): Unit = threadResources = f(threadResources)
 
   def conn_=(conn: java.sql.Connection) = setProp(_.copy(conn = conn))
   def metadata_=(metadata: Metadata) = setProp(_.copy(metadata = metadata))
