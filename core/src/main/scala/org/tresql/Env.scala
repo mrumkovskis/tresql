@@ -337,7 +337,7 @@ trait MacroResources {
     sys.error(s"Macro function not found: $name")
 }
 
-private [tresql] class MacroResourcesImpl(macros: Any) extends MacroResources {
+class MacroResourcesImpl(macros: Any) extends MacroResources {
   private val (methods, invocationTarget) = macroMethods(macros)
 
   private def macroMethods(obj: Any): (Map[(String, Boolean), java.lang.reflect.Method], Any) = obj match {
