@@ -23,7 +23,7 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val reu
   //is package private since is accessed from QueryBuilder
   private[tresql] val provider: Option[EnvProvider] = Option(_provider)
 
-  private def rootEnv(e: Env): Env = e.provider.map(p=>rootEnv(p.env)).getOrElse(e)
+  private def rootEnv(e: Env): Env = e.provider.map(p => rootEnv(p.env)).getOrElse(e)
   private val root = rootEnv(this)
   root.providedEnvs = this :: root.providedEnvs
 

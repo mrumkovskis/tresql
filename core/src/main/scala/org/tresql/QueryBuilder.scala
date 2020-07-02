@@ -761,7 +761,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
 
   //DML statements are defined outside of buildInternal method since they are called from other QueryBuilder
   private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: Exp,
-                          returning: Option[Cols]) = {
+                          returning: Option[Cols], ctx: Ctx) = {
     lazy val insertCols = this.table(table).cols.map(c => IdentExpr(List(c.name)))
     def resolveAsterisk(q: parsing.Query) =
       Option(q.cols)
@@ -812,11 +812,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         })
         case q => buildInternal(q, VALUES_CTX)
       },
-      returning map buildCols
+      returning.map(buildCols(_, ctx))
     )
   }
   private def buildUpdate(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp,
-                          returning: Option[Cols]) = {
+                          returning: Option[Cols], ctx: Ctx) = {
     new UpdateExpr(IdentExpr(table.ident), alias, if (filter != null)
       filter.elements map { buildInternal(_, WHERE_CTX) } else null, cols match {
         //get column clause from metadata
@@ -834,15 +834,16 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case null => ValuesExpr(patchVals(table, cols, Nil))
         case x => error("Knipis: " + x)
       },
-      returning map buildCols
+      returning.map(buildCols(_, ctx))
     )
   }
 
-  private def buildDelete(table: Ident, alias: String, filter: Arr, using: Exp, returning: Option[Cols]) = {
+  private def buildDelete(table: Ident, alias: String, filter: Arr, using: Exp, returning: Option[Cols],
+                          ctx: Ctx) = {
     new DeleteExpr(IdentExpr(table.ident), alias,
       if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null,
       buildInternal(using, VALUES_CTX),
-      returning map buildCols
+      returning.map(buildCols(_, ctx))
     )
   }
 
@@ -866,7 +867,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     }
 
   /* method is used for both select expression and dml returning column build */
-  private def buildCols(cols: Cols): ColsExpr =
+  private def buildCols(cols: Cols, ctx: Ctx): ColsExpr =
     if (cols == null)
       ColsExpr(List(ColExpr(AllExpr(), null, Some(false))), hasAll = true, hasIdentAll = false, hasHidden = false)
     else {
@@ -884,7 +885,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       val colsWithLinksToChildren =
         colExprs ++
         //for top level queries add hidden columns used in filters of descendant queries
-        (if (ctxStack.headOption.orNull == QUERY_CTX) {
+        (if (ctx == QUERY_CTX) {
           hasHidden |= joinsWithChildrenColExprs.nonEmpty
           joinsWithChildrenColExprs
         } else Nil)
@@ -892,11 +893,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     }
 
   private[tresql] def buildInternal(parsedExpr: Exp, parseCtx: Ctx = QUERY_CTX): Expr = {
-    def buildSelect(q: parsing.Query) = {
+    def buildSelect(q: parsing.Query, ctx: Ctx) = {
       val tablesAndAliases = buildTables(q.tables)
-      if (ctxStack.head == QUERY_CTX && this.tableDefs == Nil) this.tableDefs = defs(tablesAndAliases._1)
+      if (ctx == QUERY_CTX && this.tableDefs == Nil) this.tableDefs = defs(tablesAndAliases._1)
       val filter = if (q.filter == null) null else buildFilter(tablesAndAliases._1.last, q.filter.filters)
-      val cols = buildCols(q.cols)
+      val cols = buildCols(q.cols, ctx)
       val distinct = q.cols != null && q.cols.distinct
       val group = buildInternal(q.group, GROUP_CTX)
       val order = buildInternal(q.order, ORD_CTX)
@@ -910,7 +911,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       }
       //establish link with ancestors
       val parentJoin =
-        if (QueryBuilder.this.ctxStack.headOption.orNull != QUERY_CTX || !hasParentQuery) None else {
+        if (ctx != QUERY_CTX || !hasParentQuery) None else {
           def parentChildJoinExpr(table: Table, qname: List[String], refCol: Option[String] = None) = {
             def exp(childCol: String, parentCol: String) = BinExpr("=",
               IdentExpr(List(table.aliasOrName, childCol)), ResExpr(1, parentCol))
@@ -951,10 +952,10 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         tablesAndAliases._2, parentJoin)
       //if select expression is subquery in other's expression where clause, has where clause itself
       //but where clause was removed due to unbound optional variables remove subquery itself
-      if (ctxStack.head == WHERE_CTX && q.filter.filters != Nil && sel.filter == null) null else sel
+      if (ctx == WHERE_CTX && q.filter.filters != Nil && sel.filter == null) null else sel
     }
-    def buildSelectFromObj(o: Obj) =
-      buildSelect(parsing.Query(List(o), Filters(Nil), null, null, null, null, null))
+    def buildSelectFromObj(o: Obj, ctx: Ctx) =
+      buildSelect(parsing.Query(List(o), Filters(Nil), null, null, null, null, null), ctx)
     //build tables, set nullable flag for tables right to default join or foreign key shortcut join,
     //which is used for implicit left outer join, create aliases map
     def buildTables(tables: List[Obj]) = {
@@ -1077,19 +1078,19 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case Null => ConstExpr(Null)
         case NullUpdate => ConstExpr(NullUpdate)
         //insert
-        case Insert(t, a, c, v, r) => parseCtx match {
-          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(_.buildInsert(t, a, c, v, r))
-          case _ => buildInsert(t, a, c, v, r)
+        case i @ Insert(t, a, c, v, r) => parseCtx match {
+          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(_.buildInternal(i, QUERY_CTX))
+          case _ => buildInsert(t, a, c, v, r, parseCtx)
         }
         //update
-        case Update(t, a, f, c, v, r) => parseCtx match {
-          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(_.buildUpdate(t, a, f, c, v, r))
-          case _ => buildUpdate(t, a, f, c, v, r)
+        case u @ Update(t, a, f, c, v, r) => parseCtx match {
+          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(_.buildInternal(u, QUERY_CTX))
+          case _ => buildUpdate(t, a, f, c, v, r, parseCtx)
         }
         //delete
-        case Delete(t, a, f, u, r) => parseCtx match {
-          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(_.buildDelete(t, a, f, u, r))
-          case _ => buildDelete(t, a, f, u, r)
+        case d @ Delete(t, a, f, u, r) => parseCtx match {
+          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(_.buildInternal(d, QUERY_CTX))
+          case _ => buildDelete(t, a, f, u, r, parseCtx)
         }
         //recursive child query
         case UnOp("|", join: Arr) =>
@@ -1114,14 +1115,14 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           case ARR_CTX =>
             buildWithNew(_.buildInternal(t, QUERY_CTX)) //may have other elements in array
           //table in from clause of top level query or in any other subquery
-          case QUERY_CTX | FROM_CTX | WITH_CTX | WITH_TABLE_CTX => buildSelectFromObj(t)
+          case QUERY_CTX | FROM_CTX | WITH_CTX | WITH_TABLE_CTX => buildSelectFromObj(t, parseCtx)
           case _ => buildIdentOrBracesExpr(t)
         }
         case q: parsing.Query => parseCtx match {
           case ARR_CTX => buildWithNew(_.buildInternal(q, QUERY_CTX)) //may have other elements in array
           case _ =>
             if (recursiveQueryExp == null) recursiveQueryExp = q //set for potential use in RecursiveExpr
-            buildSelect(q)
+            buildSelect(q, parseCtx)
         }
         case wq @ With(tables, query) => parseCtx match {
           case ARR_CTX => buildWithNew(_.buildInternal(wq, QUERY_CTX)) //may have other elements in array
