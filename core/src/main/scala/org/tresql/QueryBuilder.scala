@@ -6,6 +6,8 @@ import parsing.Exp
 import metadata.key_
 import parsing._
 
+import scala.annotation.tailrec
+
 object QueryBuildCtx {
   trait Ctx
   object ARR_CTX extends Ctx
@@ -952,7 +954,13 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         tablesAndAliases._2, parentJoin)
       //if select expression is subquery in other's expression where clause, has where clause itself
       //but where clause was removed due to unbound optional variables remove subquery itself
-      if (ctx == WHERE_CTX && q.filter.filters != Nil && sel.filter == null) null else sel
+      @tailrec
+      def isWhere(cstack: List[Ctx]): Boolean = cstack.head match {
+        case WHERE_CTX => true
+        case x if x != FUN_CTX => false
+        case _ => isWhere(cstack.tail)
+      }
+      if ((ctx == WHERE_CTX || isWhere(ctxStack)) && q.filter.filters != Nil && sel.filter == null) null else sel
     }
     def buildSelectFromObj(o: Obj, ctx: Ctx) =
       buildSelect(parsing.Query(List(o), Filters(Nil), null, null, null, null, null), ctx)
