@@ -955,10 +955,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       //if select expression is subquery in other's expression where clause, has where clause itself
       //but where clause was removed due to unbound optional variables remove subquery itself
       @tailrec
-      def isWhere(cstack: List[Ctx]): Boolean = cstack.head match {
-        case WHERE_CTX => true
-        case x if x != FUN_CTX => false
-        case _ => isWhere(cstack.tail)
+      def isWhere(cstack: List[Ctx]): Boolean = cstack match {
+        case WHERE_CTX :: _ => true
+        case x :: _ if x != FUN_CTX => false
+        case Nil => false
+        case FUN_CTX :: tail => isWhere(tail)
       }
       if ((ctx == WHERE_CTX || isWhere(ctxStack)) && q.filter.filters != Nil && sel.filter == null) null else sel
     }
