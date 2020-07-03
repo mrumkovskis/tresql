@@ -371,6 +371,8 @@ if_defined(:x, if_defined(:x, emp[ename ~~ :n?]{deptno})) --> x = 1; n = 'sco% -
 if_defined(:x, if_defined(:x, dept[deptno = :n?]{deptno}#(1))) --> x = 1 --> [[10], [20], [30], [40]]
 dept d[d.deptno in (if_defined(:x, emp[ename ~~ :n?]{deptno})) | deptno = 10]{deptno}#(1) --> x = 1; n = 'sco% --> [[10], [20]]
 dept[deptno in (/(dept[:id?]{deptno}){deptno})]{deptno}#(1) --> [[10], [20], [30], [40]]
+dept[deptno in (dept[:id?]{deptno}) | deptno = 10]{deptno}#(1) --> [[10]]
+dept[deptno in ((dept[:id?]{deptno}){deptno}) | deptno = 10]{deptno}#(1) --> [[10], [20], [30], [40]]
 dept[deptno in (/(salgrade[:id?]{grade} + dept[:id?]{deptno}){*})]{deptno}#(1) --> [[10], [20], [30], [40]]
 dept[deptno in (/(salgrade[:id?]{grade} + dept[10]{deptno}){*})]{deptno}#(1) --> [[10]]
 dept[deptno in ((dept[:id?]{deptno}){deptno})]{deptno}#(1) --> [[10], [20], [30], [40]]
