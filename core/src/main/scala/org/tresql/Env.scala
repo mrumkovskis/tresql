@@ -289,6 +289,8 @@ trait Resources extends MacroResources with CacheResources with Logging {
       s"maxResultSize = $maxResultSize, recursiveStackDepth = $recursiveStackDepth, cache = $cache" +
       s"logger =$logger, bindVarLogFilter = $bindVarLogFilter" +
       s" params = $params)"
+
+    override protected def copyResources: Resources#Resources_ = this
   }
 
   def conn: java.sql.Connection = null
@@ -317,12 +319,10 @@ trait Resources extends MacroResources with CacheResources with Logging {
   def withParams(params: Map[String, Any]): Resources = copyResources.copy(params = params)
   def withMacros(macros: Any): Resources = copyResources.copy(macros = new MacroResourcesImpl(macros))
 
-  protected def copyResources: Resources_ = this match {
-    case r: Resources_ => r
-    case _ => Resources_(conn, metadata, liftDialect(dialect), idExpr, queryTimeout,
+  protected def copyResources: Resources#Resources_ =
+    Resources_(conn, metadata, liftDialect(dialect), idExpr, queryTimeout,
       fetchSize, maxResultSize, recursiveStackDepth, cache, logger, bindVarLogFilter,
       params, this)
-  }
 
   protected def defaultDialect: CoreTypes.Dialect = { case e => e.defaultSQL }
 
