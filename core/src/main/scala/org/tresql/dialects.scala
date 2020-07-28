@@ -125,6 +125,19 @@ package object dialects {
       case "long" => "bigint"
       case x => x
     })
+    case u: QueryBuilder#UpdateExpr
+      if !u.isInstanceOf[QueryBuilder#WithUpdateExpr] && u.vals.isInstanceOf[QueryBuilder#SelectExpr] =>
+      val b = u.builder
+
+      def applyAliases(q: b.SelectExpr, aliases: List[String]) = {
+        val cols = q.cols.copy(cols = (q.cols.cols zip aliases).map(ca => ca._1.copy(alias = ca._2)))
+        q.copy(cols = cols)
+      }
+
+      "update " + u.table.sql + (if (u.alias == null) "" else " " + u.alias) +
+        " set " + u.cols.map(c => c.sql + " = t_." + c.sql).mkString(", ") + " from " + "(" +
+        applyAliases(u.vals.asInstanceOf[b.SelectExpr], u.cols.map(_.sql)).sql + ") t_" +
+        (if (u.filter == null) "" else " where " + u.where)
   }
 
   def HSQLDialect = HSQLRawDialect orElse CommonDialect orElse ANSISQLDialect
