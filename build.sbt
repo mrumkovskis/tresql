@@ -88,7 +88,7 @@ lazy val tresql = (project in file("."))
     initialCommands in (IntegrationTest, console) := "import org.tresql._; import org.scalatest._; import org.tresql.test.ITConsoleResources._",
     publishArtifact in Test := false,
     publishArtifact in Compile := true,
-    pomIncludeRepository := { x => false },
+    pomIncludeRepository := { _ => false },
     pomPostProcess := { (node: XmlNode) =>
       new RuleTransformer(new RewriteRule {
         override def transform(node: XmlNode): XmlNodeSeq = node match {
