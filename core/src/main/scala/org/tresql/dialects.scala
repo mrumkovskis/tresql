@@ -126,7 +126,8 @@ package object dialects {
       case x => x
     })
     case u: QueryBuilder#UpdateExpr
-      if !u.isInstanceOf[QueryBuilder#WithUpdateExpr] && u.vals.isInstanceOf[QueryBuilder#SelectExpr] =>
+      if !u.isInstanceOf[QueryBuilder#WithUpdateExpr] &&
+        u.vals.isInstanceOf[QueryBuilder#SelectExpr] =>
       val b = u.builder
 
       def applyAliases(q: b.SelectExpr, aliases: List[String]) = {
