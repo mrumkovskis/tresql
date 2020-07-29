@@ -237,9 +237,6 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     )
     assertResult(Query.build("d(# dname) {dept{dname}} +dept{deptno, dname} d{#dept, dname || '[reorganized]'}").sql)(
       "with d(dname) as (select dname from dept) insert into dept (deptno, dname) select ?, dname || '[reorganized]' from d")
-    assertResult(Query.build("d(# dname) {dept{dname}} =dept[d.dname = 'x']{deptno, dname} d{#dept, dname || '[reorganized]'}").sql)(
-      "with d(dname) as (select dname from dept) update dept set deptno = t_.deptno, dname = t_.dname from (select ? as deptno, dname || '[reorganized]' as dname from d) t_ where d.dname = 'x'"
-    )
     assertResult(Query.build("d(# dname) {dept{dname}} =dept[dept.dname = d.dname]d[d.dname = 'x'] {deptno = #dept, dname = d.dname}").sql)(
       "with d(dname) as (select dname from dept) update dept set deptno = ?, dname = d.dname from d where (dept.dname = d.dname) and (d.dname = 'x')"
     )

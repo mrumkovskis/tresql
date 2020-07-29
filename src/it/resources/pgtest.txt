@@ -522,6 +522,9 @@ EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [9999, "MĀRTIŅŠ �
 +dummy{dummy} dummy[dummy = ?]{dummy + 1} --> 1 --> [[1]]
 //update with select instead of values
 =dummy[dummy.dummy = 1]{dummy} dummy[dummy = 2] {dummy} --> [[1]]
+=emp [empno = 9999]{sal, comm} emp[empno = 9999] {sal + 10, 12} --> [[1]]
+e(#) { emp[empno = 9999] {empno, sal, comm} } =emp [empno = 9999]{sal, comm} e {sal - 10, comm + 1} {emp.sal, emp.comm} --> [[1100.00, 13.00]]
+=emp e[empno = 9999]{sal, comm} emp[empno = 9999] {sal, null::decimal} {e.sal, e.comm} --> [[1100.00, null]]
 //cleanup
 -dummy[dummy != 0] --> [[2]]
 

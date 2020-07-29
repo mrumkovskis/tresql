@@ -640,7 +640,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       case l => Option(alias).getOrElse(table.sql) + "." + env.table(table.sql).key.cols(0) + " in(" +
         (l map { _.sql }).mkString(",") + ")"
     }
-    protected def returningSql =
+    def returningSql =
       returning.map(rc => s" returning ${rc.sql}").getOrElse("")
   }
 

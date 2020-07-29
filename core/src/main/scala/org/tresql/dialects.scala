@@ -134,11 +134,12 @@ package object dialects {
         val cols = q.cols.copy(cols = (q.cols.cols zip aliases).map(ca => ca._1.copy(alias = ca._2)))
         q.copy(cols = cols)
       }
-
+      val vals = u.vals.asInstanceOf[b.SelectExpr]
+      val alias = Option(u.alias).map(_ + "_q").getOrElse(u.table.name.last + "_q")
       "update " + u.table.sql + (if (u.alias == null) "" else " " + u.alias) +
-        " set " + u.cols.map(c => c.sql + " = t_." + c.sql).mkString(", ") + " from " + "(" +
-        applyAliases(u.vals.asInstanceOf[b.SelectExpr], u.cols.map(_.sql)).sql + ") t_" +
-        (if (u.filter == null) "" else " where " + u.where)
+        " set " + u.cols.map(c => c.sql + s" = $alias." + c.sql).mkString(", ") + " from " + "(" +
+        applyAliases(vals, u.cols.map(_.sql)).sql + s") $alias" +
+        (if (u.filter == null) "" else " where " + u.where) + u.returningSql
   }
 
   def HSQLDialect = HSQLRawDialect orElse CommonDialect orElse ANSISQLDialect
