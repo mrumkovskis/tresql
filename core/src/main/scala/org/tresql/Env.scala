@@ -367,12 +367,16 @@ class MacroResourcesImpl(macros: Any) extends MacroResources {
   override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T = {
     val m = (methods.get(name, true) orElse methods.get(name, false)).get
     val p = m.getParameterTypes
-    if (p.length > 1 && p(1).isAssignableFrom(classOf[Seq[_]])) {
-      //parameter is list of expressions
-      m.invoke(invocationTarget, parser_or_builder, args).asInstanceOf[T]
-    } else {
-      val _args = (parser_or_builder :: args).asInstanceOf[Seq[Object]] //must cast for older scala verions
-      m.invoke(invocationTarget, _args: _*).asInstanceOf[T]
+    try {
+      if (p.length > 1 && p(1).isAssignableFrom(classOf[Seq[_]])) {
+        //parameter is list of expressions
+        m.invoke(invocationTarget, parser_or_builder, args).asInstanceOf[T]
+      } else {
+        val _args = (parser_or_builder :: args).asInstanceOf[Seq[Object]] //must cast for older scala verions
+        m.invoke(invocationTarget, _args: _*).asInstanceOf[T]
+      }
+    } catch {
+      case e: Exception => throw new RuntimeException(s"Error invoking macro function - $name", e)
     }
   }
 }
