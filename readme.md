@@ -1,4 +1,4 @@
-tresql [![Latest version](https://index.scala-lang.org/mrumkovskis/tresql/tresql/latest.svg)](https://index.scala-lang.org/mrumkovskis/tresql/tresql)
+tresql [![Latest version](https://index.scala-lang.org/mrumkovskis/tresql/tresql/latest.svg)](https://index.scala-lang.org/mrumkovskis/tresql/tresql)[![Build Status](https://travis-ci.org/mrumkovskis/tresql.svg?branch=master)](https://travis-ci.org/mrumkovskis/tresql)
 ====
 
 [TreSQL (Tree SQL)](Query/wiki/language-guide) is a query language built on top of SQL that can select data into hierarchical [JSON](http://en.wikipedia.org/wiki/JSON) objects. This allows to select data for complex input form using one simple query, without any additional server-side programming. TreSQL has very compact notation and provides many powerful shortcuts. It aims to provide complete functionality of SQL for query and data manipulation purposes. In a web application or a client-server application, it can fullfill all the database querying needs for the client. It's Scala API is much more concise than JDBC and can be used for all database requests.
