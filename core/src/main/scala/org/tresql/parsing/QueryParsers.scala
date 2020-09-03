@@ -279,10 +279,11 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   def sql: MemParser[Sql] = "`" ~> ("[^`]+"r) <~ "`" ^^ Sql named "sql"
   def qualifiedIdent: MemParser[Ident] = rep1sep(ident, ".") ^^ Ident named "qualified-ident"
   def qualifiedIdentAll: MemParser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
-  def variable: MemParser[Variable] = ((":" ~> ((ident | stringLiteral) ~
-      rep("." ~> (ident | stringLiteral | wholeNumber)) ~ opt(":" ~> ident) ~ opt("?"))) | "?") ^^ {
+  def variable: MemParser[Variable] = ((":" ~> (
+      rep1sep(ident | stringLiteral | wholeNumber, ".") ~ opt("?"))) | "?") ^^ {
     case "?" => Variable("?", null, opt = false)
-    case (i: String) ~ (m: List[String @unchecked]) ~ (t: Option[String @unchecked]) ~ o => Variable(i, m, o != None)
+    case ((i: String) :: (m: List[String @unchecked])) ~ o =>
+      Variable(i, m, o != None)
   } named "variable"
   def id: MemParser[Id] = "#" ~> ident ^^ Id named "id"
   def idref: MemParser[IdRef] = ":#" ~> ident ^^ IdRef named "id-ref"
@@ -300,9 +301,10 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
      * withQuery parser must be applied before function parser
      * array parser must be applied after query parser because it matches join parser
      * of the query.
-     * insert, delete, update parsers must be applied before query parser */
-  def operand: MemParser[Exp] = (const | ALL | withQuery | function | insert | update | variable |
-    query | id | idref | result | array | sql) named "operand"
+     * insert, delete, update parsers must be applied before query parser
+     * result parser must be applied before variable parser */
+  def operand: MemParser[Exp] = (const | ALL | withQuery | function | insert | update | result |
+    variable | query | id | idref  | array | sql) named "operand"
   /* function(<#> <arglist> <order by>). Maybe used in from clause so filter is not confused with join syntax.  */
   def functionWithoutFilter: MemParser[Fun] = (qualifiedIdent /* name */ <~ "(") ~
     opt("#") /* distinct */ ~ repsep(expr, ",") /* arglist */ ~

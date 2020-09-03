@@ -138,6 +138,10 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       ex.close
       res
     }
+    assertResult(List(Vector("ACCOUNTING"), Vector("RESEARCH"))) {
+      Query("(dept[deptno = :1.deptno]{dname} + dept[deptno = :2.deptno]{dname})#(1)",
+        List(Map("deptno" -> 10), Map("deptno" -> 20)): _*).toListOfVectors
+    }
     //array, stream, reader, blob, clob test
     assertResult(List(Vector(2)))(Query("car_image{carnr, image} + [?, ?], [?, ?]", 1111,
         new java.io.ByteArrayInputStream(scala.Array[Byte](1, 4, 127, -128, 57)), 2222,
