@@ -1043,16 +1043,14 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult("Betty")(tresql"emp[ename = 'Betty']{ename}".unique[String])
 
     println("----- Exception handling test -----")
-    assertResult("property emp[+-=], property work:empno") {
+    assertResult("emp[+-=]") {
       try {
         obj = Map("deptno" -> tresql"dept[dname = 'Temp']{deptno}".unique[Int],
           "emp[+-=]" -> List(Map("empno" -> 987654, "ename" -> "Betty",
             "work:empno" -> List(Map("hours" -> 4)))))
         ORT.update("dept", obj)
       } catch {
-        case e: Exception =>
-          val m = e.getMessage
-          m.take(m.indexWhere(_ == ',', m.indexWhere(_ == ',') + 1))
+        case e: ChildSaveException => e.tableName
       }
     }
   }

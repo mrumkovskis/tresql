@@ -26,6 +26,8 @@ object QueryBuildCtx {
   object WITH_TABLE_CTX extends Ctx
 }
 
+class ChildSaveException(val tableName: String, cause: Throwable) extends RuntimeException(cause)
+
 trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { this: org.tresql.Query =>
 
   import QueryBuildCtx._
@@ -707,7 +709,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   private def executeChildren: Map[String, Any] = {
     def exec(name: String, e: Expr, pars: Option[Map[String, Any]]) =
       try pars.map(e(_)).getOrElse(e()) catch { case e: Exception =>
-        throw new RuntimeException(s"property $name, ${e.getMessage}", e)
+        throw new ChildSaveException(name, e)
       }
     childUpdates.map {
       case (ex, n) if !env.contains(n) => (n, exec(n, ex, None))
