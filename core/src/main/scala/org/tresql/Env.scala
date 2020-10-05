@@ -376,7 +376,7 @@ class MacroResourcesImpl(macros: Any) extends MacroResources {
         m.invoke(invocationTarget, _args: _*).asInstanceOf[T]
       }
     } catch {
-      case e: Exception => throw new RuntimeException(s"Error invoking macro function - $name", e)
+      case e: Exception => throw new RuntimeException(s"Error invoking macro function - $name (${e.getMessage})", e)
     }
   }
 }

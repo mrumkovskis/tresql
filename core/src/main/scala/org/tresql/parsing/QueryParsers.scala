@@ -322,9 +322,13 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     case _ ~ _ ~ _ ~ _ ~ _ ~ f => s"Aggregate function filter must contain only one elements, instead of ${
       f.map(_.elements.size).getOrElse(0)}"
   }) ^^ { case f: Fun =>
-    if (f.aggregateOrder.isEmpty && f.aggregateWhere.isEmpty &&
-      macros != null && macros.isMacroDefined(f.name)) {
-      macros.invokeMacro(f.name, QueryParsers.this, f.parameters)
+    if (macros != null && macros.isMacroDefined(f.name)) {
+      if (f.distinct || f.aggregateOrder.nonEmpty || f.aggregateWhere.nonEmpty) {
+        sys.error(s"Macro '${f.name}' invocation error. " +
+          s"Neither distinct nor order by nor filter clause can be used in macro invocation.")
+      } else {
+        macros.invokeMacro(f.name, QueryParsers.this, f.parameters)
+      }
     } else f
   } named "function"
   def array: MemParser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ Arr named "array"

@@ -210,6 +210,12 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     intercept[CompilerException](compiler.compile("dept [dname = 'RESEARCH'] {dname, if_defined(:x, macro_interpolator_test(:x, 2))}"))
     intercept[CompilerException](compiler.compile("e(*){emp{ename}}, d(*) {dept{dname}}"))
 
+    //parser errors on macro functions with distinct or agreggate capabilities
+    intercept[CompilerException](compiler.compile("macro_interpolator_test1(# 1, 2)"))
+    intercept[CompilerException](compiler.compile("macro_interpolator_test1(1, 2)#(1)"))
+    intercept[CompilerException](compiler.compile("macro_interpolator_test1(1, 2)[true]"))
+    intercept[CompilerException](compiler.compile("macro_interpolator_test1(# 1, 2)#(1)[true]"))
+
     //insert with asterisk column
     intercept[CompilerException](compiler.compile("+dummy{*} dummy{dummy kiza}"))
 
