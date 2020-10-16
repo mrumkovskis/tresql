@@ -745,23 +745,26 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   }
   //join with ancestor query
   private def joinWithAncestor(ancestorTableAlias: String,
-    ancestorTableCol: String): Option[ResExpr] =
+    ancestorTableCol: String): Option[ResExpr] = {
     if (!this.tableDefs.exists(_.alias == ancestorTableAlias))
       joinWithAncestor(ancestorTableAlias, ancestorTableCol, 1)
         .map(ResExpr(_, ancestorTableAlias + "_" + ancestorTableCol + "_"))
     else None
+  }
+
   private def joinWithAncestor(ancestorTableAlias: String, ancestorTableCol: String,
       resIdx: Int): Option[Int] = env.provider.flatMap {
     case b: QueryBuilder =>
-      b.joinWithDescendant(ancestorTableAlias, ancestorTableCol).map(x=> resIdx).orElse(
+      b.joinWithDescendant(ancestorTableAlias, ancestorTableCol).map(_ => resIdx).orElse(
           b.joinWithAncestor(ancestorTableAlias, ancestorTableCol, resIdx + 1))
     case _ => None
   }
-  private def joinWithDescendant(tableAlias: String, tableCol: String) =
-    this.tableDefs.find(tableAlias == _.alias).map(x=> {
+  private def joinWithDescendant(tableAlias: String, tableCol: String) = {
+    this.tableDefs.find(tableAlias == _.alias).map { x =>
       this.joinsWithChildren += (tableAlias -> List(tableCol))
       x
-    })
+    }
+  }
 
   //DML statements are defined outside of buildInternal method since they are called from other QueryBuilder
   private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: Exp,
