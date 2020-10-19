@@ -238,6 +238,7 @@ dept[10, 20]{dname, |[dept.deptno = e.deptno](emp) e {ename}#(1) }#(1) --> [["AC
 (dept[10]) d {dname, |[d.deptno = c.deptnr]car c #(nr)} --> [["ACCOUNTING", [["1111", "PORCHE", false, 10, null]]]]
 d(# *) {dept[10]} d {dname, |[d.deptno = c.deptnr]car c #(nr)} --> [["ACCOUNTING", [["1111", "PORCHE", false, 10, null]]]]
 (d(# *) {dept[10]} d) d {dname, |[d.deptno = c.deptnr]car c #(nr)} --> [["ACCOUNTING", [["1111", "PORCHE", false, 10, null]]]]
+dept_addr[deptnr = deptno]?(d(# *) {dept[10]} d) d {dname, addr, |[d.deptno = c.deptnr]car c #(nr)} --> [["ACCOUNTING", null, [["1111", "PORCHE", false, 10, null]]]]
 
 //two level hierarchical query, child query in the midst of parent query columns
 dept[?]{loc, deptno, |emp[deptno = :1(2)] {job}, dname} --> 10 --> [["NEW YORK", 10, [["PRESIDENT"], ["MANAGER"], ["CLERK"]], "ACCOUNTING"]]
