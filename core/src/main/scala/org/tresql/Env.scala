@@ -159,7 +159,8 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val reu
   //resources methods
   override def conn: java.sql.Connection = provider.map(_.env.conn).getOrElse(resources.conn)
   override def metadata = provider.map(_.env.metadata).getOrElse(resources.metadata)
-  override def dialect: CoreTypes.Dialect = provider.map(_.env.dialect).getOrElse(resources.dialect)
+  /** for performance reasons dialect is val, so it does not need to be lifted on every call */
+  override val dialect: CoreTypes.Dialect = liftDialect(provider.map(_.env.dialect).getOrElse(resources.dialect))
   override def idExpr = provider.map(_.env.idExpr).getOrElse(resources.idExpr)
   override def queryTimeout: Int = provider.map(_.env.queryTimeout).getOrElse(resources.queryTimeout)
   override def fetchSize: Int = provider.map(_.env.fetchSize).getOrElse(resources.fetchSize)
@@ -175,6 +176,9 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val reu
   override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
     provider.map(_.env.invokeMacro(name, parser_or_builder, args))
       .getOrElse(resources.invokeMacro(name, parser_or_builder, args))
+
+  protected def liftDialect(dialect: CoreTypes.Dialect) =
+    if (dialect == null) null else dialect orElse defaultDialect
 
   //meta data methods
   override def table(name: String) = metadata.table(name)
@@ -219,15 +223,18 @@ trait ThreadLocalResources extends Resources {
                                override val recursiveStackDepth: Int,
                                override val params: Map[String, Any],
                                macros: Any = null) extends Resources {
+
     private [ThreadLocalResources] def this(res: Resources) = this(
       res.conn, res.metadata, res.dialect, res.idExpr, res.queryTimeout,
       res.fetchSize, res.maxResultSize, res.recursiveStackDepth, res.params)
-    private val macroResources = new MacroResourcesImpl(macros)
-    override protected[tresql] def copyResources: Resources_ =
-      super.copyResources.withMacros(macros).asInstanceOf[Resources_]
 
-    override def isMacroDefined(name: String): Boolean = isMacroDefined(name)
-    override def isBuilderMacroDefined(name: String): Boolean = isBuilderMacroDefined(name)
+    private val macroResources = new MacroResourcesImpl(macros)
+
+    override protected[tresql] def copyResources: Resources#Resources_ =
+      super.copyResources.copy(macros = macroResources)
+
+    override def isMacroDefined(name: String): Boolean = macroResources.isMacroDefined(name)
+    override def isBuilderMacroDefined(name: String): Boolean = macroResources.isBuilderMacroDefined(name)
     override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
       macroResources.invokeMacro(name, parser_or_builder, args)
   }
@@ -316,8 +323,7 @@ trait Resources extends MacroResources with CacheResources with Logging {
   //resource construction convenience methods
   def withConn(conn: java.sql.Connection): Resources = copyResources.copy(conn = conn)
   def withMetadata(metadata: Metadata): Resources = copyResources.copy(metadata = metadata)
-  def withDialect(dialect: CoreTypes.Dialect): Resources =
-    copyResources.copy(dialect = liftDialect(dialect))
+  def withDialect(dialect: CoreTypes.Dialect): Resources = copyResources.copy(dialect = dialect)
   def withIdExpr(idExpr: String => String): Resources = copyResources.copy(idExpr = idExpr)
   def withQueryTimeout(queryTimeout: Int): Resources = copyResources.copy(queryTimeout = queryTimeout)
   def withFetchSize(fetchSize: Int): Resources = copyResources.copy(fetchSize = fetchSize)
@@ -330,14 +336,11 @@ trait Resources extends MacroResources with CacheResources with Logging {
   def withMacros(macros: Any): Resources = copyResources.copy(macros = new MacroResourcesImpl(macros))
 
   protected def copyResources: Resources#Resources_ =
-    Resources_(conn, metadata, liftDialect(dialect), idExpr, queryTimeout,
+    Resources_(conn, metadata, dialect, idExpr, queryTimeout,
       fetchSize, maxResultSize, recursiveStackDepth, cache, logger, bindVarLogFilter,
       params, this)
 
   protected def defaultDialect: CoreTypes.Dialect = { case e => e.defaultSQL }
-
-  protected def liftDialect(dialect: CoreTypes.Dialect) =
-    if (dialect == null) null else dialect orElse defaultDialect
 }
 
 trait MacroResources {
