@@ -203,7 +203,7 @@ trait ThreadLocalResources extends Resources {
   protected def resourcesTemplate: ResourcesTemplate = new ResourcesTemplate(new Resources {}) // empty resources
 
   private val _threadResources = new ThreadLocal[Resources] {
-    override def initialValue(): Resources = resourcesTemplate.copyResources
+    override def initialValue(): Resources = resourcesTemplate
   }
 
   private def threadResources: Resources = _threadResources.get
@@ -222,8 +222,14 @@ trait ThreadLocalResources extends Resources {
     private [ThreadLocalResources] def this(res: Resources) = this(
       res.conn, res.metadata, res.dialect, res.idExpr, res.queryTimeout,
       res.fetchSize, res.maxResultSize, res.recursiveStackDepth, res.params)
+    private val macroResources = new MacroResourcesImpl(macros)
     override protected[tresql] def copyResources: Resources_ =
       super.copyResources.withMacros(macros).asInstanceOf[Resources_]
+
+    override def isMacroDefined(name: String): Boolean = isMacroDefined(name)
+    override def isBuilderMacroDefined(name: String): Boolean = isBuilderMacroDefined(name)
+    override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
+      macroResources.invokeMacro(name, parser_or_builder, args)
   }
 
   def apply(params: Map[String, Any], reusableExpr: Boolean) = new Env(params, this, reusableExpr)
@@ -260,6 +266,10 @@ trait ThreadLocalResources extends Resources {
   def fetchSize_=(fetchSize: Int) =  setProp(_.withFetchSize(fetchSize))
   def maxResultSize_=(size: Int) = setProp(_.withMaxResultSize(size))
   def setMacros(macros: Any) = setProp(_.withMacros(macros))
+
+  def initFromTemplate: Unit = {
+    threadResources = resourcesTemplate
+  }
 }
 
 /** Resources and configuration for query execution like database connection, metadata, database dialect etc. */
