@@ -160,7 +160,7 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val reu
   override def conn: java.sql.Connection = provider.map(_.env.conn).getOrElse(resources.conn)
   override def metadata = provider.map(_.env.metadata).getOrElse(resources.metadata)
   /** for performance reasons dialect is val, so it does not need to be lifted on every call */
-  override val dialect: CoreTypes.Dialect = liftDialect(provider.map(_.env.dialect).getOrElse(resources.dialect))
+  override val dialect: CoreTypes.Dialect = provider.map(_.env.dialect).getOrElse(liftDialect(resources.dialect))
   override def idExpr = provider.map(_.env.idExpr).getOrElse(resources.idExpr)
   override def queryTimeout: Int = provider.map(_.env.queryTimeout).getOrElse(resources.queryTimeout)
   override def fetchSize: Int = provider.map(_.env.fetchSize).getOrElse(resources.fetchSize)
