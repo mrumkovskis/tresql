@@ -231,7 +231,8 @@ final case class ResourcesTemplate(override val conn: java.sql.Connection,
 /** Implementation of [[Resources]] with thread local instance based on template */
 trait ThreadLocalResources extends Resources {
 
-  protected def resourcesTemplate: ResourcesTemplate = new ResourcesTemplate(new Resources {}) // empty resources
+  /** Creates resources template with default values from {{{Resources}}}. Subclasses can override this method. */
+  def resourcesTemplate: ResourcesTemplate = new ResourcesTemplate(new Resources {}) // empty resources
 
   private val _threadResources = new ThreadLocal[Resources] {
     override def initialValue(): Resources = resourcesTemplate
