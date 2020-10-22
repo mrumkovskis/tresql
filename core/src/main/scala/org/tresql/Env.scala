@@ -201,6 +201,33 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val reu
 
 }
 
+final case class ResourcesTemplate(override val conn: java.sql.Connection,
+                             override val metadata: Metadata,
+                             override val dialect: CoreTypes.Dialect,
+                             override val idExpr: String => String,
+                             override val queryTimeout: Int,
+                             override val fetchSize: Int,
+                             override val maxResultSize: Int,
+                             override val recursiveStackDepth: Int,
+                             override val params: Map[String, Any],
+                             macros: Any = null) extends Resources {
+
+  private [tresql] def this(res: Resources) = this(
+    res.conn, res.metadata, res.dialect, res.idExpr, res.queryTimeout,
+    res.fetchSize, res.maxResultSize, res.recursiveStackDepth, res.params)
+
+  private val macroResources = new MacroResourcesImpl(macros)
+
+  override protected[tresql] def copyResources: Resources#Resources_ =
+    super.copyResources.copy(macros = macroResources)
+
+  override def isMacroDefined(name: String): Boolean = macroResources.isMacroDefined(name)
+  override def isBuilderMacroDefined(name: String): Boolean = macroResources.isBuilderMacroDefined(name)
+  override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
+    macroResources.invokeMacro(name, parser_or_builder, args)
+}
+
+
 /** Implementation of [[Resources]] with thread local instance based on template */
 trait ThreadLocalResources extends Resources {
 
@@ -212,32 +239,6 @@ trait ThreadLocalResources extends Resources {
 
   private def threadResources: Resources = _threadResources.get
   private def threadResources_=(res: Resources): Unit = _threadResources.set(res)
-
-  case class ResourcesTemplate(override val conn: java.sql.Connection,
-                               override val metadata: Metadata,
-                               override val dialect: CoreTypes.Dialect,
-                               override val idExpr: String => String,
-                               override val queryTimeout: Int,
-                               override val fetchSize: Int,
-                               override val maxResultSize: Int,
-                               override val recursiveStackDepth: Int,
-                               override val params: Map[String, Any],
-                               macros: Any = null) extends Resources {
-
-    private [ThreadLocalResources] def this(res: Resources) = this(
-      res.conn, res.metadata, res.dialect, res.idExpr, res.queryTimeout,
-      res.fetchSize, res.maxResultSize, res.recursiveStackDepth, res.params)
-
-    private val macroResources = new MacroResourcesImpl(macros)
-
-    override protected[tresql] def copyResources: Resources#Resources_ =
-      super.copyResources.copy(macros = macroResources)
-
-    override def isMacroDefined(name: String): Boolean = macroResources.isMacroDefined(name)
-    override def isBuilderMacroDefined(name: String): Boolean = macroResources.isBuilderMacroDefined(name)
-    override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
-      macroResources.invokeMacro(name, parser_or_builder, args)
-  }
 
   def apply(params: Map[String, Any], reusableExpr: Boolean) = new Env(params, this, reusableExpr)
 
