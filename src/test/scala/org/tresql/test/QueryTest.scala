@@ -113,7 +113,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
   }
 
   test("compiler") {
-    implicit val testRes = tresqlResources.withMetadata(
+    val testRes = tresqlResources.withMetadata(
       new metadata.JDBCMetadata with compiling.CompilerFunctionMetadata {
         override def conn: Connection = tresqlResources.conn
         override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
@@ -121,6 +121,8 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     )
     println("\n-------------- TEST compiler ----------------\n")
     val compiler = new QueryCompiler(testRes.metadata, testRes)
+    //set console compiler so it can be used from scala console
+    ConsoleResources.compiler = compiler
     import compiling.CompilerException
     testTresqls("/test.txt", (tresql, _, _, nr) => {
       println(s"$nr. Compiling tresql:\n$tresql")
@@ -208,6 +210,12 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     intercept[CompilerException](compiler.compile("dept [dname = 'RESEARCH'] {dname, if_defined(:x, macro_interpolator_test(:x, 2))}"))
     intercept[CompilerException](compiler.compile("e(*){emp{ename}}, d(*) {dept{dname}}"))
 
+    //parser errors on macro functions with distinct or agreggate capabilities
+    intercept[CompilerException](compiler.compile("macro_interpolator_test1(# 1, 2)"))
+    intercept[CompilerException](compiler.compile("macro_interpolator_test1(1, 2)#(1)"))
+    intercept[CompilerException](compiler.compile("macro_interpolator_test1(1, 2)[true]"))
+    intercept[CompilerException](compiler.compile("macro_interpolator_test1(# 1, 2)#(1)[true]"))
+
     //insert with asterisk column
     intercept[CompilerException](compiler.compile("+dummy{*} dummy{dummy kiza}"))
 
@@ -281,4 +289,5 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
 object ConsoleResources {
   //used in console
   implicit var resources: Resources = _
+  var compiler: QueryCompiler = _
 }

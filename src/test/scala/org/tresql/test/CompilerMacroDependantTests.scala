@@ -138,6 +138,14 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       ex.close
       res
     }
+    assertResult(List(Vector("ACCOUNTING"), Vector("RESEARCH"))) {
+      Query("(dept[deptno = :1.deptno]{dname} + dept[deptno = :2.deptno]{dname})#(1)",
+        List(Map("deptno" -> 10), Map("deptno" -> 20)): _*).toListOfVectors
+    }
+    assertResult(List(Vector("Kiki"), Vector("Mimi"))) {
+      Query("names(# name) {{:1.name name} + {:2.name}} names{name}#(1)",
+        List(Map("name" -> "Mimi"), Map("name" -> "Kiki")): _*).toListOfVectors
+    }
     //array, stream, reader, blob, clob test
     assertResult(List(Vector(2)))(Query("car_image{carnr, image} + [?, ?], [?, ?]", 1111,
         new java.io.ByteArrayInputStream(scala.Array[Byte](1, 4, 127, -128, 57)), 2222,
@@ -1035,16 +1043,14 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult("Betty")(tresql"emp[ename = 'Betty']{ename}".unique[String])
 
     println("----- Exception handling test -----")
-    assertResult("property emp[+-=], property work:empno") {
+    assertResult("emp[+-=]") {
       try {
         obj = Map("deptno" -> tresql"dept[dname = 'Temp']{deptno}".unique[Int],
           "emp[+-=]" -> List(Map("empno" -> 987654, "ename" -> "Betty",
             "work:empno" -> List(Map("hours" -> 4)))))
         ORT.update("dept", obj)
       } catch {
-        case e: Exception =>
-          val m = e.getMessage
-          m.take(m.indexWhere(_ == ',', m.indexWhere(_ == ',') + 1))
+        case e: ChildSaveException => e.tableName
       }
     }
   }

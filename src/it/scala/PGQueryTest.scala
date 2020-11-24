@@ -188,13 +188,15 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   test("compiler") {
     println("\n-------------- TEST compiler ----------------\n")
     //set new metadata
-    implicit val testRes = tresqlResources.withMetadata(
+    val testRes = tresqlResources.withMetadata(
       new metadata.JDBCMetadata with compiling.CompilerFunctionMetadata {
         override def conn: java.sql.Connection = tresqlResources.conn
         override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
       }
     )
     val compiler = new QueryCompiler(testRes.metadata, testRes)
+    //set console compiler so it can be used from scala console
+    ITConsoleResources.compiler = compiler
     import compiling.CompilerException
     testTresqls("/pgtest.txt", (tresql, _, _, nr) => {
       println(s"$nr. Compiling tresql:\n$tresql")
@@ -272,4 +274,5 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
 object ITConsoleResources {
   //used in console
   implicit var resources: Resources = _
+  var compiler: QueryCompiler = _
 }

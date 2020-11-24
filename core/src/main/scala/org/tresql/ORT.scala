@@ -178,19 +178,10 @@ trait ORT extends Query {
   }
 
   def delete(name: String, id: Any, filter: String = null, filterParams: Map[String, Any] = null)
-  (implicit resources: Resources): Any = {
-    val Array(tableName, alias) = name.split("\\s+").padTo(2, null)
-    (for {
-      table <- resources.metadata.tableOption(tableName)
-      pk <- table.key.cols.headOption
-      if table.key.cols.size == 1
-    } yield {
-      val delete = s"-${table.name}${Option(alias).map(" " + _).getOrElse("")}[$pk = ?${Option(filter)
-        .map(f => s" & ($f)").getOrElse("")}]"
-      build(delete, Map("1" -> id) ++ Option(filterParams).getOrElse(Map()), reusableExpr = false)(resources)()
-    }) getOrElse {
-      error(s"Table $name not found or table primary key not found or table primary key consists of more than one column")
-    }
+            (implicit resources: Resources): Any = {
+    val delete = deleteTresql(name, filter)
+    build(delete, Map("1" -> id) ++ Option(filterParams).getOrElse(Map()),
+      reusableExpr = false)(resources)()
   }
 
   /** insert methods to multiple tables
@@ -273,7 +264,31 @@ trait ORT extends Query {
     else struct.flatMap { case (k, _) if resolvableProps(k) => Nil case x => List(x) }
   }
 
-  def save_tresql(
+  def insertTresql(obj: Map[String, Any], names: String*)(filter: String = null)
+                  (implicit resources: Resources): String = {
+    save_tresql(multiSaveProp(names), tresql_structure(obj), Nil, filter, insert_tresql)
+  }
+
+  def updateTresql(obj: Map[String, Any], names: String*)(filter: String = null)
+                  (implicit resources: Resources): String = {
+    save_tresql(multiSaveProp(names), tresql_structure(obj), Nil, filter, update_tresql)
+  }
+
+  def deleteTresql(name: String, filter: String = null)(implicit resources: Resources): String = {
+    val Array(tableName, alias) = name.split("\\s+").padTo(2, null)
+    (for {
+      table <- resources.metadata.tableOption(tableName)
+      pk <- table.key.cols.headOption
+      if table.key.cols.size == 1
+    } yield {
+      s"-${table.name}${Option(alias).map(" " + _).getOrElse("")}[$pk = ?${Option(filter)
+        .map(f => s" & ($f)").getOrElse("")}]"
+    }) getOrElse {
+      error(s"Table $name not found or table primary key not found or table primary key consists of more than one column")
+    }
+  }
+
+  private def save_tresql(
     name: String,
     struct: Map[String, Any],
     parents: List[ParentRef],

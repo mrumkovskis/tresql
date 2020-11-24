@@ -63,7 +63,7 @@ trait Query extends QueryBuilder with TypedQuery {
 
   private[tresql] def normalizePars(pars: Any*): Map[String, Any] = pars match {
     case Seq(m: Map[String @unchecked, Any @unchecked]) => m
-    case l => l.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
+    case l => l.zipWithIndex.map { case (v, k) => (k + 1).toString -> v }.toMap
   }
 
   private[tresql] def sel(sql: String, cols: QueryBuilder#ColsExpr): Result[_ <: RowLike] = {

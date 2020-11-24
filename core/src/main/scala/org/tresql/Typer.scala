@@ -53,6 +53,8 @@ trait Typer { this: QueryBuilder =>
         TableDef(name, if (a == null) name else a)
       case Table(sel: SelectExpr, a, null | TableJoin(_, _, false, _), _, _) if a != null =>
         SelectDef(sel.tables map extractDef filter (_ != null), a)
+      case Table(_: WithExpr, a, null | TableJoin(_, _, false, _), _, _) if a != null =>
+        TableDef(a, a)
       case Table(BracesExpr(sel: SelectExpr), a, null | TableJoin(_, _, false, _), _, _) if a != null =>
         SelectDef(sel.tables map extractDef filter (_ != null), a)
       //extract def from deep braces
@@ -61,5 +63,4 @@ trait Typer { this: QueryBuilder =>
     }
     tables map extractDef filter (_ != null)
   }
-
 }

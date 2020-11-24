@@ -26,6 +26,8 @@ object QueryBuildCtx {
   object WITH_TABLE_CTX extends Ctx
 }
 
+class ChildSaveException(val tableName: String, cause: Throwable) extends RuntimeException(cause)
+
 trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { this: org.tresql.Query =>
 
   import QueryBuildCtx._
@@ -707,7 +709,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   private def executeChildren: Map[String, Any] = {
     def exec(name: String, e: Expr, pars: Option[Map[String, Any]]) =
       try pars.map(e(_)).getOrElse(e()) catch { case e: Exception =>
-        throw new RuntimeException(s"property $name, ${e.getMessage}", e)
+        throw new ChildSaveException(name, e)
       }
     childUpdates.map {
       case (ex, n) if !env.contains(n) => (n, exec(n, ex, None))
@@ -743,23 +745,26 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   }
   //join with ancestor query
   private def joinWithAncestor(ancestorTableAlias: String,
-    ancestorTableCol: String): Option[ResExpr] =
+    ancestorTableCol: String): Option[ResExpr] = {
     if (!this.tableDefs.exists(_.alias == ancestorTableAlias))
       joinWithAncestor(ancestorTableAlias, ancestorTableCol, 1)
         .map(ResExpr(_, ancestorTableAlias + "_" + ancestorTableCol + "_"))
     else None
+  }
+
   private def joinWithAncestor(ancestorTableAlias: String, ancestorTableCol: String,
       resIdx: Int): Option[Int] = env.provider.flatMap {
     case b: QueryBuilder =>
-      b.joinWithDescendant(ancestorTableAlias, ancestorTableCol).map(x=> resIdx).orElse(
+      b.joinWithDescendant(ancestorTableAlias, ancestorTableCol).map(_ => resIdx).orElse(
           b.joinWithAncestor(ancestorTableAlias, ancestorTableCol, resIdx + 1))
     case _ => None
   }
-  private def joinWithDescendant(tableAlias: String, tableCol: String) =
-    this.tableDefs.find(tableAlias == _.alias).map(x=> {
+  private def joinWithDescendant(tableAlias: String, tableCol: String) = {
+    this.tableDefs.find(tableAlias == _.alias).map { x =>
       this.joinsWithChildren += (tableAlias -> List(tableCol))
       x
-    })
+    }
+  }
 
   //DML statements are defined outside of buildInternal method since they are called from other QueryBuilder
   private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: Exp,
