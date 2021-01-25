@@ -1,6 +1,7 @@
 package org.tresql.test
 
 import org.tresql._
+
 import java.sql.{Date, SQLException}
 
 class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompilerMacroDependantTestsApi  {
@@ -37,7 +38,7 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
       res(0)
     }
     //expression closing
-    intercept[SQLException] {
+    intercept[TresqlException] {
       val ex = Query.build("emp")
       ex().asInstanceOf[Result[_]].toList
       ex.close
@@ -282,11 +283,11 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
     assertResult(1)(ORT.insert("car_usage", obj))
     //primary key component not specified error must be thrown
     obj = Map("car_nr" -> "1111")
-    intercept[SQLException](ORT.insert("car_usage", obj))
+    intercept[TresqlException](ORT.insert("car_usage", obj))
     obj = Map("date_from" -> "2013-10-24")
-    intercept[SQLException](ORT.insert("car_usage", obj))
+    intercept[TresqlException](ORT.insert("car_usage", obj))
     obj = Map("empno" -> 7839)
-    intercept[SQLException](ORT.insert("car_usage", obj))
+    intercept[TresqlException](ORT.insert("car_usage", obj))
 
     //value clause test
     obj = Map("car_nr" -> 2222, "empno" -> 7788, "date_from" -> java.sql.Date.valueOf("2013-11-06"))
@@ -347,7 +348,7 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
     assertResult(1)(ORT.update("car", obj))
     obj = Map("nr" -> "4444", "deptnr" -> -1)
     //intercept[java.sql.SQLIntegrityConstraintViolationException](ORT.update("car", obj))
-    intercept[org.postgresql.util.PSQLException](ORT.update("car", obj))
+    intercept[TresqlException](ORT.update("car", obj))
 
     //update only children (no first level table column updates)
     obj = Map("nr" -> "4444", "tyres" -> List(Map("brand" -> "GOOD YEAR", "season" -> "S"),

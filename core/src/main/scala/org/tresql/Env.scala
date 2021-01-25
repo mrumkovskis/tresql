@@ -4,6 +4,7 @@ import sys._
 import CoreTypes.RowConverter
 import parsing.{Exp, QueryParsers}
 
+import java.sql.SQLException
 import scala.util.Try
 
 /** Environment for expression building and execution */
@@ -420,6 +421,9 @@ private [tresql] trait EnvProvider {
 
 class MissingBindVariableException(val name: String)
   extends RuntimeException(s"Missing bind variable: $name")
+
+class TresqlException(val sql: String, val bindVars: Map[String, Any], sqlExc: SQLException)
+  extends RuntimeException(sqlExc)
 
 trait LogTopic
 object LogTopic {

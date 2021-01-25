@@ -1,6 +1,6 @@
 package org.tresql
 
-import java.sql.{ PreparedStatement, CallableStatement, ResultSet }
+import java.sql.{CallableStatement, PreparedStatement, ResultSet, SQLException}
 import sys._
 import CoreTypes.RowConverter
 
@@ -66,7 +66,7 @@ trait Query extends QueryBuilder with TypedQuery {
     case l => l.zipWithIndex.map { case (v, k) => (k + 1).toString -> v }.toMap
   }
 
-  private[tresql] def sel(sql: String, cols: QueryBuilder#ColsExpr): Result[_ <: RowLike] = {
+  private[tresql] def sel(sql: String, cols: QueryBuilder#ColsExpr): Result[_ <: RowLike] = try {
     val (rs, columns, visibleColCount) = sel_result(sql, cols)
     val result = env.rowConverter(queryDepth, childIdx).map { conv =>
       new CompiledSelectResult(rs, columns, env, sql,bindVariables,
@@ -76,6 +76,9 @@ trait Query extends QueryBuilder with TypedQuery {
     }
     env.result = result
     result
+  } catch {
+    case ex: SQLException =>
+      throw new TresqlException(sql, bindVarsToMap(bindVariables), ex)
   }
 
   private[this] def sel_result(sql: String, cols: QueryBuilder#ColsExpr):
@@ -114,7 +117,7 @@ trait Query extends QueryBuilder with TypedQuery {
       (rs, columns, visibleColCount)
   }
 
-  private[tresql] def update(sql: String) = {
+  private[tresql] def update(sql: String) = try {
     val st = statement(sql, env)
     try {
       st.executeUpdate
@@ -122,9 +125,12 @@ trait Query extends QueryBuilder with TypedQuery {
       st.close
       env.statement = null
     }
+  } catch {
+    case ex: SQLException =>
+      throw new TresqlException(sql, bindVarsToMap(bindVariables), ex)
   }
 
-  private[tresql] def call(sql: String): Result[RowLike] = {
+  private[tresql] def call(sql: String): Result[RowLike] = try {
     val st = statement(sql, env, true).asInstanceOf[CallableStatement]
     var result: Result[RowLike] = null
     var outs: List[Any] = null
@@ -189,6 +195,9 @@ trait Query extends QueryBuilder with TypedQuery {
     else env.rowConverter(queryDepth, childIdx).map { conv =>
       new CompiledArrayResult(if (result== null) outs else result :: outs, conv)
     }.getOrElse(new DynamicArrayResult(if (result== null) outs else result :: outs))
+  } catch {
+    case ex: SQLException =>
+      throw new TresqlException(sql, bindVarsToMap(bindVariables), ex)
   }
 
   private def statement(sql: String, env: Env, call: Boolean = false) = {
@@ -302,17 +311,19 @@ trait Query extends QueryBuilder with TypedQuery {
     }
   }
 
-  private def log(sql: String, bindVars: List[Expr]) = {
-    env.log(sql, Map(), LogTopic.sql)
-    env.log(sql, bindVars.flatMap {
+  private def bindVarsToMap(bindVars: List[Expr]): Map[String, Any] = {
+    bindVars.flatMap {
       case v: VarExpr => List(v.name ->
         Option(env.bindVarLogFilter).filter(_.isDefinedAt(v)).map(_(v)).getOrElse(v()))
       case r: ResExpr => List(r.name -> r())
       case _ => Nil
-    }.toMap, LogTopic.sql_with_params)
-    env.log(bindVars
-      .map(v => Option(env.bindVarLogFilter).filter(_.isDefinedAt(v)).map(_(v)).getOrElse(v.toString))
-      .mkString("Bind vars: ", ", ", ""), Map(), LogTopic.params)
+    }.toMap
+  }
+
+  private def log(sql: String, bindVars: List[Expr]) = {
+    env.log(sql, Map(), LogTopic.sql)
+    env.log(sql, bindVarsToMap(bindVars), LogTopic.sql_with_params)
+    env.log(bindVarsToMap(bindVars).mkString("[", ", ", "]"), Map(), LogTopic.params)
   }
 }
 
