@@ -306,6 +306,10 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(List(Vector(null), Vector("ACCOUNTING"), Vector("LAW"), Vector("OPERATIONS"), Vector("RESEARCH"), Vector("SALES")))(
       Query("(dept{dname} + {null})[case(:dept.2.name? = null, dname = null, dname = :dept.2.name?)]{dname}#(null 1)", Map("dept" -> (1 -> "a"))).toListOfVectors)
 
+    //test string escape syntax
+    assertResult("x\u202Fy")(Query("{'x' || '\u202F' || 'y'}").head[String])
+    assertResult("x\u202Fy")(tresql"{'x' || '\u202F' || 'y'}".head[String])
+
     //macro API test
     assertResult(List("ACCOUNTING", "LAW", "OPERATIONS", "RESEARCH", "SALES"))(
       tresql"macro_interpolator_test4(dept, dname)"(resources
@@ -320,6 +324,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       .withMacros(1)).map(_.dummy).toList)
     intercept[Exception](tresql"macro_interpolator_test4(dept, dname)"(resources
       .withMacros(null).withCache(null)).map(_.dname).toList)
+    //macro string escape syntax
+    assertResult("\u202F\u202F")(tresql"macro_interpolator_str_test('\u202F', '\u202F')")
 
     //tresql exception test
     try {

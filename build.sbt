@@ -1,13 +1,12 @@
-val scalaV = "2.13.2"
+val scalaV = "2.13.4"
 
 lazy val commonSettings = Seq(
   organization := "org.tresql",
   scalaVersion := scalaV,
   crossScalaVersions := Seq(
       scalaV,
-      "2.12.8",
-      "2.11.8",
-      "2.10.6"
+      "2.12.13",
+      "2.11.12",
     ),
   //coverageEnabled := true,
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",

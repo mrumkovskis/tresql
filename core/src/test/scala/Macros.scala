@@ -49,6 +49,9 @@ class Macros extends org.tresql.Macros {
                                    rightOp: Exp,
                                    col: Exp) =
     macro_"$from[$leftOp = $rightOp]{$col}#(1)"
+  def macro_interpolator_str_test(implicit p: parsing.QueryParsers,
+                               e1: Exp,
+                               e2: Exp) = macro_"($e1 || $e2)"
 }
 
 object Macros extends Macros

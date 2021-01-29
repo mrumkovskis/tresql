@@ -96,7 +96,9 @@ package object tresql extends CoreTypes {
       logger.log(s"Macro compiler settings:\n$macroSettings")
       val q"org.tresql.`package`.Tresql(scala.StringContext.apply(..$parts)).tresql(..$pars)($res)" =
         c.macroApplication
-      val tresqlString = parts.map { case Literal(Constant(x)) => x } match {
+      val tresqlString = parts.map {
+        case Literal(Constant(x)) => StringContext.processEscapes(String.valueOf(x))
+      } match {
         case l => l.head + l.tail.zipWithIndex.map(t => ":_" + t._2 + t._1).mkString //replace placeholders with variable defs
       }
       val compilerMetadata = metadata(macroSettings, verbose)
@@ -303,7 +305,9 @@ package object tresql extends CoreTypes {
             Map[(Int, Int), RowConverter[_ <: RowLike]](..$convRegister)
         }
         def result = query.compiledResult[$classType](
-          ${parts.head} + List[String](..${parts.tail})
+          StringContext.processEscapes(${parts.head}) +
+          List[String](..${parts.tail})
+            .map(StringContext.processEscapes)
             .zipWithIndex.map { case (part, idx) =>
               if (part.trim.startsWith("?")) optionalVars += idx
               ":_" + idx + part

@@ -7,7 +7,7 @@ import parsing.{QueryParsers, Exp}
 package object macro_ {
   implicit class TresqlMacroInterpolator(val sc: StringContext) extends AnyVal {
     def macro_(args: Exp*)(implicit p: QueryParsers): Exp = {
-      p.parseExp(sc.standardInterpolator(identity, args.map(_.tresql)))
+      p.parseExp(sc.standardInterpolator(StringContext.processEscapes, args.map(_.tresql)))
     }
   }
 }
