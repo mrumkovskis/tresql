@@ -3,10 +3,9 @@ dist: xenial
 script:
   - sbt ++$TRAVIS_SCALA_VERSION clean update compile test it:test
 scala:
-  - 2.13.1
+  - 2.13.4
   - 2.12.11
   - 2.11.12
-  - 2.10.7
 jdk:
   - oraclejdk11
   - openjdk11
