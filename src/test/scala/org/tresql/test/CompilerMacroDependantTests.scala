@@ -305,6 +305,12 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       Query("(dept{dname} + {null})[case(:dept.2.name? = null, dname = null, dname = :dept.2.name?)]{dname}#(null 1)", Map("dept" -> (1 -> null))).toListOfVectors)
     assertResult(List(Vector(null), Vector("ACCOUNTING"), Vector("LAW"), Vector("OPERATIONS"), Vector("RESEARCH"), Vector("SALES")))(
       Query("(dept{dname} + {null})[case(:dept.2.name? = null, dname = null, dname = :dept.2.name?)]{dname}#(null 1)", Map("dept" -> (1 -> "a"))).toListOfVectors)
+    assertResult(List(Map("name" -> "Sales Riga")))(
+      Query("{:dept.0.name || ' ' || :dept.0.loc name}",
+        Map("dept" -> Vector(Map("name" -> "Sales", "loc" -> "Riga")))).toListOfMaps)
+    assertResult(List(Map("name" -> "Sales, Riga")))(
+      Query("dept(# name, loc) { {:dept.0.name, :dept.0.loc} } dept { name || ', ' || loc name}#(1)",
+        Map("dept" -> Vector(Map("name" -> "Sales", "loc" -> "Riga")))).toListOfMaps)
 
     //test string escape syntax
     assertResult("x\u202Fy")(Query("{'x' || '\u202F' || 'y'}").head[String])

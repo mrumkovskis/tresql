@@ -56,6 +56,7 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val reu
       case Nil => v
       case n :: rest => v flatMap {
         case m: Map[String, _] => tr(rest, m.get(n))
+        case s: Seq[_] => tr(rest, Try(n.toInt).flatMap(i => Try(s(i))).toOption)
         case p: Product => tr(rest,
           Try(n.toInt).flatMap(v => Try(p.productElement(v - 1))).toOption)
         case null => Some(null)
@@ -75,6 +76,9 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val reu
       case Nil => true
       case n :: rest => v match {
         case m: Map[String, _] => m.get(n).exists(tr(rest, _))
+        case s: Seq[_] => Try(n.toInt)
+          .flatMap(i => Try(tr(rest, s(i))))
+          .getOrElse(false)
         case p: Product => Try(n.toInt)
           .flatMap(v => Try(p.productElement(v - 1)))
           .map(tr(rest, _))
