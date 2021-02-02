@@ -715,7 +715,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       case (ex, n) if !env.contains(n) => (n, exec(n, ex, None))
       case (ex, n) => (n, env(n) match {
         case m: Map[String @unchecked, Any] => exec(n, ex, Some(m))
-        case t: scala.collection.Traversable[Map[String, _] @unchecked] => t.map(m => exec(n, ex, Some(m)))
+        case t: Iterable[Map[String, _] @unchecked] => t.map(m => exec(n, ex, Some(m)))
         case a: Array[Map[String, _] @unchecked] => (a map {m => exec(n, ex, Some(m)) }).toList
         case _ => exec(n, ex, None)
       })
