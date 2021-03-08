@@ -13,6 +13,9 @@ trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T]
   def toListOfVectors: List[Vector[Any]] = this.map(_.rowToVector).toList
   def toListOfMaps: List[Map[String, Any]] = this.map(_.toMap).toList
 
+  /** Is implemented in {{{DMLResult}}} */
+  def affectedRowCount: Int = ???
+
   /**
    * iterates through this result rows as well as these of descendant result
    * ensures execution of dml (update, insert, delete) expressions in colums otherwise
@@ -407,6 +410,9 @@ trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
     //ATTENTION! if all three items to be added are put non separate lines expression gives wrong result
     count.map(_ => 1).getOrElse(0) + id.map(_ => 1).getOrElse(0) + (if (children.isEmpty) 0 else 1)
   }
+
+  override def affectedRowCount: Int = count.getOrElse(0)
+
   // Members declared in org.tresql.Typed
   override def typed[T: Manifest](name: String): T = ???
 
