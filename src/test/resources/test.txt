@@ -272,6 +272,8 @@ d(#) {dept[10]} d{deptno, dname, |[d.deptno = e.deptno] (e(#) {emp} e {ename}#(e
 
 //hierarchical query parent value in division operation as second operand
 work[empno]emp{emp.empno, ename, sal, |[empno]work{hours, hours/:1(sal)}#(1,2)}#(1) --> [[7788, "SCOTT", 3000.00, [[5, 0], [8, 0]]], [7788, "SCOTT", 3000.00, [[5, 0], [8, 0]]], [7839, "KING", 5000.00, [[3, 0], [4, 0]]], [7839, "KING", 5000.00, [[3, 0], [4, 0]]]]
+work[empno]emp{emp.empno, ename, sal, |[empno]work{hours, work.hours/(:1(sal)/1000)}#(1,2)}#(1) --> [[7788, "SCOTT", 3000.00, [[5, 1], [8, 2]]], [7788, "SCOTT", 3000.00, [[5, 1], [8, 2]]], [7839, "KING", 5000.00, [[3, 0], [4, 0]]], [7839, "KING", 5000.00, [[3, 0], [4, 0]]]]
+work[empno]emp{emp.empno, ename, sal, |[empno]work{hours, work.hours/(:1(sal) * 1)}#(1,2)}#(1) --> [[7788, "SCOTT", 3000.00, [[5, 0], [8, 0]]], [7788, "SCOTT", 3000.00, [[5, 0], [8, 0]]], [7839, "KING", 5000.00, [[3, 0], [4, 0]]], [7839, "KING", 5000.00, [[3, 0], [4, 0]]]]
 
 //union
 dept[?]{deptno} ++ emp[?]{empno} ++ salgrade[?]{grade} --> 10;7839;1 --> [[10], [7839], [1]]
