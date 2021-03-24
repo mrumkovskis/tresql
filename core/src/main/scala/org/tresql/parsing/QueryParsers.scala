@@ -345,7 +345,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     } named "join"
   def filter: MemParser[Arr] = array named "filter"
   def filters: MemParser[Filters] = rep(filter) ^^ Filters named "filters"
-  private def objContent = const | functionWithoutFilter | variable | qualifiedIdent | braces
+  /** objContent is meant to be table, column or division operation operand */
+  private def objContent = const | functionWithoutFilter | result | variable | qualifiedIdent | braces
   private def alias =
     ident ~ opt("(" ~> opt("#") ~ rep1sep(ident ~ opt(cast), ",") <~ ")") ^^ {
       case id ~ Some(mbOrd ~ colDefs) =>

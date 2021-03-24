@@ -270,6 +270,9 @@ d(#) {dept[10]} d{deptno, dname, |[](e(#) {emp [deptno = :1(deptno)]} e {ename}#
 d(#) {dept[10]} d{deptno, dname, |[d.deptno = e.deptno] e(#) {emp} e {ename}#(ename)} --> [[10, "ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
 d(#) {dept[10]} d{deptno, dname, |[d.deptno = e.deptno] (e(#) {emp} e {ename}#(ename))} --> [[10, "ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
 
+//hierarchical query parent value in division operation as second operand
+work[empno]emp{emp.empno, ename, sal, |[empno]work{hours, hours/:1(sal)}#(1,2)}#(1) --> [[7788, "SCOTT", 3000.00, [[5, 0], [8, 0]]], [7788, "SCOTT", 3000.00, [[5, 0], [8, 0]]], [7839, "KING", 5000.00, [[3, 0], [4, 0]]], [7839, "KING", 5000.00, [[3, 0], [4, 0]]]]
+
 //union
 dept[?]{deptno} ++ emp[?]{empno} ++ salgrade[?]{grade} --> 10;7839;1 --> [[10], [7839], [1]]
 (dept{deptno} + salgrade{grade})#(~1 null) --> [[40], [30], [20], [10], [5], [4], [3], [2], [1]]
