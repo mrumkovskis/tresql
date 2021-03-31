@@ -333,6 +333,9 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     //macro string escape syntax
     assertResult("\u202F\u202F")(tresql"macro_interpolator_str_test('\u202F', '\u202F')")
 
+    //alias test
+    assertResult(List(1))(tresql"{(pi()) / pi() pi}".map(_.pi).toList)
+
     //tresql exception test
     try {
       val n = "SCOTT"

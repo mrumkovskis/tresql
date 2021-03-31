@@ -411,37 +411,43 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
         case x => res.zipWithIndex.map(t => if (t._2 < x && !t._1.nullable) t._1.copy(nullable = true) else t._1)
       }
   } named "objs"
-  def column: MemParser[Col] = (qualifiedIdentAll | (expr ~ opt(stringLiteral | qualifiedIdent))) ^^ {
-    case i: IdentAll => Col(i, null)
-    //move object alias to column alias
-    case (o @ Obj(_, a, _, _, _)) ~ (Some(ca)) if a != null =>
-      sys.error(s"Column cannot have two aliases: `$a`, `$ca`")
-    case (o @ Obj(_, a, _, _, _))  ~ None => Col(o.copy(alias = null), a)
-    case (e: Exp @unchecked) ~ (a: Option[_]) => Col(e, a map {
+  private def aliasToStr(maybeAlias: Option[_]): String =
+    maybeAlias map {
       case Ident(i) => i.mkString; case s => "\"" + s + "\""
-    } orNull)
-  } ^^ { pr =>
-    def extractAlias(expr: Exp): (String, Exp) = expr match {
-      case t: TerOp => extractAlias(t.content)
-      case o@BinOp(_, lop, rop) =>
-        val x = extractAlias(rop)
-        (x._1, o.copy(rop = x._2))
-      case o@UnOp(_, op) =>
-        val x = extractAlias(op)
-        (x._1, o.copy(operand = x._2))
-      case o@Obj(_, alias, _, null, _) if alias != null => (alias, o.copy(alias = null))
-      case o => (null, o)
-    }
-    pr match {
-      case c @ Col(_: IdentAll | _: Obj, _) => c
-      case c @ Col(e, null) => extractAlias(e) match {
-        case (null, _) => c
-        case (a, e) =>
-          c.copy(col = e, alias = a)
+    } orNull
+  def column: MemParser[Col] =
+    (qualifiedIdentAll | (expr ~ opt(stringLiteral | qualifiedIdent))) ^^ {
+      case (c: Col) ~ (a: Option[_]) =>
+        val al = aliasToStr(a)
+        if (al == null) c else c.copy(alias = al)
+      case i: IdentAll => Col(i, null)
+      //move object alias to column alias
+      case (o @ Obj(_, a, _, _, _)) ~ Some(ca) if a != null =>
+        sys.error(s"Column cannot have two aliases: `$a`, `$ca`")
+      case (o @ Obj(_, a, _, _, _))  ~ None => Col(o.copy(alias = null), a)
+      case (e: Exp @unchecked) ~ (a: Option[_]) => Col(e, aliasToStr(a))
+    } ^^ { pr =>
+      def extractAlias(expr: Exp): (String, Exp) = expr match {
+        case t: TerOp => extractAlias(t.content)
+        case o@BinOp(_, _, rop) =>
+          val x = extractAlias(rop)
+          (x._1, o.copy(rop = x._2))
+        case o@UnOp(_, op) =>
+          val x = extractAlias(op)
+          (x._1, o.copy(operand = x._2))
+        case o@Obj(_, alias, _, null, _) if alias != null => (alias, o.copy(alias = null))
+        case o => (null, o)
       }
-      case r => r
-    }
-  } named "column"
+      pr match {
+        case c @ Col(_: IdentAll | _: Obj, _) => c
+        case c @ Col(e, null) => extractAlias(e) match {
+          case (null, _) => c
+          case (a, e) =>
+            c.copy(col = e, alias = a)
+        }
+        case r => r
+      }
+    } named "column"
   def columns: MemParser[Cols] = (opt("#") <~ "{") ~ rep1sep(column, ",") <~ "}" ^^ {
     case d ~ c => Cols(d.isDefined, c)
   } named "columns"
@@ -485,13 +491,22 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       case (c: Cols) ~ (f: Filters) => Query(List(Obj(Null, null, null, null)), f, c,
         null, null, null, null)
     } ^^ { pr =>
-      def toDivChain(objs: List[Obj]): Exp = objs match {
-        case o :: Nil => o.obj
-        case l => BinOp("/", l.head.obj, toDivChain(l.tail))
+      def toDivChain(objs: List[Obj]): Exp = {
+        def parseChain(os: List[Obj]): (Exp, String) =
+          os match {
+            case o :: Nil => (o.obj, o.alias)
+            case l =>
+              val tailRes = parseChain(l.tail)
+              (BinOp("/", l.head.obj, tailRes._1), tailRes._2)
+          }
+        parseChain(objs) match {
+          case (e, null) => e
+          case (e, a) => Col(e, a)
+        }
       }
       pr match {
         case Query(objs, Filters(Nil), null, null, null, null, null) if objs forall {
-          case Obj(_, null, DefaultJoin, null, _) | Obj(_, null, null, null, _) => true
+          case Obj(_, _, DefaultJoin, null, _) | Obj(_, _, null, null, _) => true
           case _ => false
         } => toDivChain(objs)
         case q: Exp => q
