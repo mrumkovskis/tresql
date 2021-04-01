@@ -411,22 +411,25 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
         case x => res.zipWithIndex.map(t => if (t._2 < x && !t._1.nullable) t._1.copy(nullable = true) else t._1)
       }
   } named "objs"
-  private def aliasToStr(maybeAlias: Option[_]): String =
-    maybeAlias map {
-      case Ident(i) => i.mkString; case s => "\"" + s + "\""
-    } orNull
   def column: MemParser[Col] =
     (qualifiedIdentAll | (expr ~ opt(stringLiteral | qualifiedIdent))) ^^ {
-      case (c: Col) ~ (a: Option[_]) =>
-        val al = aliasToStr(a)
-        if (al == null) c else c.copy(alias = al)
-      case i: IdentAll => Col(i, null)
-      //move object alias to column alias
-      case (o @ Obj(_, a, _, _, _)) ~ Some(ca) if a != null =>
-        sys.error(s"Column cannot have two aliases: `$a`, `$ca`")
-      case (o @ Obj(_, a, _, _, _))  ~ None => Col(o.copy(alias = null), a)
-      case (e: Exp @unchecked) ~ (a: Option[_]) => Col(e, aliasToStr(a))
-    } ^^ { pr =>
+      def aliasToStr(maybeAlias: Option[_]): String = {
+        maybeAlias map {
+          case Ident(i) => i.mkString; case s => "\"" + s + "\""
+        } orNull
+      }
+      {
+        case (c: Col) ~ (a: Option[_]) =>
+          val al = aliasToStr(a)
+          if (al == null) c else c.copy(alias = al)
+        case i: IdentAll => Col(i, null)
+        //move object alias to column alias
+        case (o @ Obj(_, a, _, _, _)) ~ Some(ca) if a != null =>
+          sys.error(s"Column cannot have two aliases: `$a`, `$ca`")
+        case (o @ Obj(_, a, _, _, _))  ~ None => Col(o.copy(alias = null), a)
+        case (e: Exp @unchecked) ~ (a: Option[_]) => Col(e, aliasToStr(a))
+      }
+    } ^^ {
       def extractAlias(expr: Exp): (String, Exp) = expr match {
         case t: TerOp => extractAlias(t.content)
         case o@BinOp(_, _, rop) =>
@@ -438,7 +441,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
         case o@Obj(_, alias, _, null, _) if alias != null => (alias, o.copy(alias = null))
         case o => (null, o)
       }
-      pr match {
+      {
         case c @ Col(_: IdentAll | _: Obj, _) => c
         case c @ Col(e, null) => extractAlias(e) match {
           case (null, _) => c
