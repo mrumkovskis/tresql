@@ -26,8 +26,6 @@ object QueryBuildCtx {
   object WITH_TABLE_CTX extends Ctx
 }
 
-class ChildSaveException(val tableName: String, cause: Throwable) extends RuntimeException(cause)
-
 trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { this: org.tresql.Query =>
 
   import QueryBuildCtx._
