@@ -20,9 +20,9 @@ lazy val commonSettings = Seq(
     else
       Some("releases" at nexus + "service/local/staging/deploy/maven2")
     },
-  publishArtifact in Compile := false,
+  Compile / publishArtifact := false,
   publishMavenStyle := true,
-  sources in (Compile, doc) := Seq.empty
+  Compile / doc / sources := Seq.empty
 )
 
 def coreDependencies(scalaVer: String) =
@@ -34,7 +34,7 @@ lazy val core = (project in file("core"))
   .settings(
     name := "tresql-core",
     libraryDependencies ++= coreDependencies(scalaVersion.value),
-    skip in publish := true,
+    publish / skip := true,
   ).settings(commonSettings: _*)
 
 lazy val macros = (project in file("macro"))
@@ -42,8 +42,8 @@ lazy val macros = (project in file("macro"))
   .dependsOn(core)
   .settings(
     name := "macro",
-    excludeFilter in unmanagedSources := (if (scalaVersion.value.startsWith("2.10.")) "*.*" else ""),
-    skip in publish := true,
+    unmanagedSources / excludeFilter := (if (scalaVersion.value.startsWith("2.10.")) "*.*" else ""),
+    publish / skip := true,
 )
   .settings(commonSettings: _*)
 
@@ -54,7 +54,7 @@ val packageProjects = Seq(core, macros)
 val packageMerges = for {
   project <- packageProjects
   scope <- packageScopes
-} yield mappings in(Compile, scope) := (mappings in (Compile, scope)).value ++ (mappings in (project, Compile, scope)).value
+} yield Compile / scope / mappings := (Compile / scope / mappings).value ++ (project / Compile / scope / mappings).value
 
 
 import scala.xml.{Node => XmlNode, NodeSeq => XmlNodeSeq, _}
@@ -66,7 +66,7 @@ lazy val tresql = (project in file("."))
   .aggregate(core, macros)
   .settings(
     //compiler macro works only on scala 2.12.x and greater
-    excludeFilter in (Test, unmanagedSources) :=
+    Test / unmanagedSources / excludeFilter :=
       (if (scalaVersion.value.startsWith("2.10") || scalaVersion.value.startsWith("2.11"))
         "*CompilerMacroDependantTests.scala" else "")
   )
@@ -76,17 +76,17 @@ lazy val tresql = (project in file("."))
   .settings(commonSettings: _*)
   .settings(packageMerges: _*)
   .settings(
-    sources in (Compile, doc) := (sources in (core, Compile)).value ++ (sources in (macros, Compile)).value,
+    Compile / doc / sources := (core / Compile / sources).value ++ (macros / Compile / sources).value,
 
     name := "tresql",
     libraryDependencies ++= coreDependencies(scalaVersion.value) ++
       Seq("org.scalatest" %% "scalatest" % "3.0.8" % "test,it",
         "org.hsqldb" % "hsqldb" % "2.3.1" % "test",
         "org.postgresql" % "postgresql" % "42.1.4" % "it,test"),
-    initialCommands in (Test, console) := "import org.tresql._; import org.scalatest._; import org.tresql.test.ConsoleResources._",
-    initialCommands in (IntegrationTest, console) := "import org.tresql._; import org.scalatest._; import org.tresql.test.ITConsoleResources._",
-    publishArtifact in Test := false,
-    publishArtifact in Compile := true,
+    Test / console / initialCommands := "import org.tresql._; import org.scalatest._; import org.tresql.test.ConsoleResources._",
+    IntegrationTest / console / initialCommands := "import org.tresql._; import org.scalatest._; import org.tresql.test.ITConsoleResources._",
+    Test / publishArtifact := false,
+    Compile / publishArtifact := true,
     pomIncludeRepository := { _ => false },
     pomPostProcess := { (node: XmlNode) =>
       new RuleTransformer(new RewriteRule {
@@ -126,4 +126,4 @@ lazy val tresql = (project in file("."))
       </developers>
   )
   .configs(IntegrationTest extend(Test))
-  .settings(Defaults.itSettings) 
+  .settings(Defaults.itSettings)
