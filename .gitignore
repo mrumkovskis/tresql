@@ -22,6 +22,7 @@ project/boot/
 setenv*
 .history
 bin/*.jar
+.bsp/
 
 # db
 lift_proto*
