@@ -861,7 +861,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         case _ => false
       }
       def isPrimitive(e: Exp): Boolean = e match {
-        case BinOp(_, l, r) => isPrimitive(l) && isPrimitive(r)
+        case BinOp(_, l, r) => isPrimitive(l) || isPrimitive(r)
         case Braces(b) => isPrimitive(b)
         case f: Fun => f.name != "sql_concat" //TODO may be make configurable?
         case x => isPrimitiveType(x)
