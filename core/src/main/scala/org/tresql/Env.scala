@@ -83,7 +83,6 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val reu
           .flatMap(v => Try(p.productElement(v - 1)))
           .map(tr(rest, _))
           .getOrElse(false)
-        case null => true
         case _ => false
       }
     }

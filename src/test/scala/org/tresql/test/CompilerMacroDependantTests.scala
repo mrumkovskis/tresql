@@ -293,7 +293,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       Query("dept[dname = 'SALES' | dname = :dept.name?] {dname}#(1)", Map("dept" -> Map("name" -> "RESEARCH"))).toListOfVectors)
     assertResult( List(Vector(null)))(
       Query("(dept[dname = 'SALES']{dname} + {null})[case(:dept.name? = null, dname = null, dname = :dept.name?)]{dname}#(null 1)", Map("dept" -> Map("name" -> null))).toListOfVectors)
-    assertResult( List(Vector(null)))(
+    assertResult(List(Vector(null), Vector("SALES")) )(
       Query("(dept[dname = 'SALES']{dname} + {null})[case(:dept.name? = null, dname = null, dname = :dept.name?)]{dname}#(null 1)", Map("dept" -> null)).toListOfVectors)
     assertResult(List(Vector(null), Vector("SALES")))(
       Query("(dept[dname = 'SALES']{dname} + {null})[case(:dept.name? = null, dname = null, dname = :dept.name?)]{dname}#(null 1)", Map("dept" -> "x")).toListOfVectors)
@@ -301,7 +301,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       Query("(dept{dname} + {null})[case(:dept.2.name? = null, dname = null, dname = :dept.2.name?)]{dname}#(null 1)", Map("dept" -> (1 -> Map("name" -> "RESEARCH")))).toListOfVectors)
     assertResult(List(Vector(null), Vector("ACCOUNTING"), Vector("LAW"), Vector("OPERATIONS"), Vector("RESEARCH"), Vector("SALES")))(
       Query("(dept{dname} + {null})[case(:dept.1.name? = null, dname = null, dname = :dept.1.name?)]{dname}#(null 1)", Map("dept" -> (1 -> Map("name" -> "RESEARCH")))).toListOfVectors)
-    assertResult(List(Vector(null)))(
+    assertResult(List(Vector(null), Vector("ACCOUNTING"), Vector("LAW"), Vector("OPERATIONS"), Vector("RESEARCH"), Vector("SALES")))(
       Query("(dept{dname} + {null})[case(:dept.2.name? = null, dname = null, dname = :dept.2.name?)]{dname}#(null 1)", Map("dept" -> (1 -> null))).toListOfVectors)
     assertResult(List(Vector(null), Vector("ACCOUNTING"), Vector("LAW"), Vector("OPERATIONS"), Vector("RESEARCH"), Vector("SALES")))(
       Query("(dept{dname} + {null})[case(:dept.2.name? = null, dname = null, dname = :dept.2.name?)]{dname}#(null 1)", Map("dept" -> (1 -> "a"))).toListOfVectors)
@@ -349,6 +349,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     }
 
     //if_defined macro test for nested bind vars structure
+    assertResult("n")(Query("if_defined_or_else(:a.x, 'y', 'n')", Map("a" -> null)).head(0))
     assertResult("n")(Query("if_defined_or_else(:a.x, 'y', 'n')", Map("a" -> 1)).head(0))
     assertResult("y")(Query("if_defined_or_else(:a.x, 'y', 'n')", Map("a" -> Map("x" -> 2))).head(0))
   }
