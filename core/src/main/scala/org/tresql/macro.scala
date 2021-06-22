@@ -15,8 +15,12 @@ package object macro_ {
 class Macros {
   def sql(b: QueryBuilder, const: QueryBuilder#ConstExpr) = b.SQLExpr(String valueOf const.value, Nil)
 
+  private def containsVar(b: QueryBuilder, v: QueryBuilder#VarExpr) =
+    if (v.members != null && v.members.nonEmpty) b.env.contains(v.name, v.members)
+    else b.env contains v.name
+
   def if_defined(b: QueryBuilder, v: Expr, e: Expr) = v match {
-    case ve: QueryBuilder#VarExpr => if (b.env contains ve.name) e else null
+    case ve: QueryBuilder#VarExpr => if (containsVar(b, ve)) e else null
     case null => null
     case _ => e
   }
@@ -25,7 +29,7 @@ class Macros {
     Option(if_defined(b, v, e1)).getOrElse(e2)
 
   def if_missing(b: QueryBuilder, v: Expr, e: Expr) = v match {
-    case ve: QueryBuilder#VarExpr => if (b.env contains ve.name) null else e
+    case ve: QueryBuilder#VarExpr => if (containsVar(b, ve)) null else e
     case null => e
     case _ => null
   }
@@ -35,7 +39,7 @@ class Macros {
     val vars = e dropRight 1
     val expr = e.last
     if (vars forall {
-      case v: QueryBuilder#VarExpr => b.env contains v.name
+      case v: QueryBuilder#VarExpr => containsVar(b, v)
       case null => false
       case _ => true
     }) expr
@@ -47,7 +51,7 @@ class Macros {
     val vars = e dropRight 1
     val expr = e.last
     if (vars exists {
-      case v: QueryBuilder#VarExpr => b.env contains v.name
+      case v: QueryBuilder#VarExpr => containsVar(b, v)
       case null => false
       case _ => true
     }) expr
@@ -59,7 +63,7 @@ class Macros {
     val vars = e dropRight 1
     val expr = e.last
     if (vars forall {
-      case v: QueryBuilder#VarExpr => !(b.env contains v.name)
+      case v: QueryBuilder#VarExpr => !containsVar(b, v)
       case null => true
       case _ => false
     }) expr
@@ -71,7 +75,7 @@ class Macros {
     val vars = e dropRight 1
     val expr = e.last
     if (vars exists {
-      case v: QueryBuilder#VarExpr => !(b.env contains v.name)
+      case v: QueryBuilder#VarExpr => !containsVar(b, v)
       case null => true
       case _ => false
     }) expr

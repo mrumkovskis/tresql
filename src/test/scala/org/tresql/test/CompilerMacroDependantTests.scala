@@ -347,6 +347,10 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         }
       case x => throw x
     }
+
+    //if_defined macro test for nested bind vars structure
+    assertResult("n")(Query("if_defined_or_else(:a.x, 'y', 'n')", Map("a" -> 1)).head(0))
+    assertResult("y")(Query("if_defined_or_else(:a.x, 'y', 'n')", Map("a" -> Map("x" -> 2))).head(0))
   }
 
   override def ort(implicit resources: Resources) = {
