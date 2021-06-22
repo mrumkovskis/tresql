@@ -845,7 +845,6 @@ trait Compiler extends QueryParsers { thisCompiler =>
           }
           fd.copy(typ = t)
         case PrimitiveDef(exp, _) =>
-          //println(s"\n\n---------------\n$pd\n${typer(Ctx(ctx, Manifest.Any))(exp).mf}\n------------\n\n")
           val res_exp = type_resolver(ctx)(exp)
           PrimitiveDef(res_exp, typer(Ctx(ctx, Manifest.Any))(res_exp).mf)
       }
