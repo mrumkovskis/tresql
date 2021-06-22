@@ -292,6 +292,16 @@ class DynamicSelectResult private[tresql] (
     case r: DynamicSelectResult => r.toList
     case x => x
   })).toList
+
+  override def headOption: Option[DynamicRow] = try {
+    if (hasNext) {
+      next
+      Some(DynamicRowImpl(values))
+    } else None
+  } finally close
+
+  override def head: DynamicRow =
+    headOption.getOrElse(throw new NoSuchElementException("No rows in result"))
 }
 
 object ArrayResult {

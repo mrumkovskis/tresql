@@ -78,15 +78,12 @@ trait Compiler extends QueryParsers { thisCompiler =>
     override def table(table: String) = scope.table(table)
   }
 
-  /** Marker for compiler macro, to create {{{PrimitiveDef}}} */
-  case class PrimitiveExp(exp: Query) extends Exp {
+  /** Marker for primitive expression (non query) */
+  case class PrimitiveExp(exp: Exp) extends Exp {
     def tresql = exp.tresql
   }
-
   /** Marker for compiler macro, to unwrap compiled result */
-  case class PrimitiveDef[T](exp: RowDefBase) extends TypedExp[T] {
-    override def typ = exp.cols.head.typ.asInstanceOf[Manifest[T]]
-  }
+  case class PrimitiveDef[T](exp: Exp, typ: Manifest[T]) extends TypedExp[T]
 
   //is superclass of sql query and array
   trait RowDefBase extends TypedExp[RowDefBase] {
@@ -435,7 +432,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         builder(ctx)(Query(List(o), Filters(Nil), null, null, null, null, null))
       case o: Obj if ctx == BodyCtx =>
         o.copy(obj = builder(ctx)(o.obj), join = builder(ctx)(o.join).asInstanceOf[Join])
-      case PrimitiveExp(q) => PrimitiveDef(builder(ctx)(q).asInstanceOf[RowDefBase])
+      case PrimitiveExp(q) => PrimitiveDef[Nothing](builder(ctx)(q), Manifest.Nothing)
       case q: Query =>
         val tables = buildTables(q.tables)
         val cols = buildCols(q.cols)
@@ -805,7 +802,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         else if (f.procedure.returnTypeParIndex == -1) type_from_const(Manifest.Any)
         else typer(ctx)(f.exp.parameters(f.procedure.returnTypeParIndex))
       case Cast(_, typ) => type_from_const(metadata.xsd_scala_type_map(typ))
-      case pd: PrimitiveDef[_] => type_from_const(pd.typ)
+      case PrimitiveDef(e, _) => typer(ctx)(e)
     })
     lazy val type_resolver: TransformerWithState[List[Scope]] = transformerWithState { ctx =>
       def resolveWithQuery[T <: SQLDefBase](withQuery: WithQuery): (T, List[WithTableDef]) = {
@@ -847,8 +844,10 @@ trait Compiler extends QueryParsers { thisCompiler =>
             typer(Ctx(ctx, Manifest.Any))(f.parameters(p.returnTypeParIndex)).mf
           }
           fd.copy(typ = t)
-        case PrimitiveDef(exp) =>
-          PrimitiveDef(type_resolver(ctx)(exp).asInstanceOf[RowDefBase])
+        case PrimitiveDef(exp, _) =>
+          //println(s"\n\n---------------\n$pd\n${typer(Ctx(ctx, Manifest.Any))(exp).mf}\n------------\n\n")
+          val res_exp = type_resolver(ctx)(exp)
+          PrimitiveDef(res_exp, typer(Ctx(ctx, Manifest.Any))(res_exp).mf)
       }
     }
     type_resolver(Nil)(exp)
@@ -861,28 +860,27 @@ trait Compiler extends QueryParsers { thisCompiler =>
         case _ => false
       }
       def isPrimitive(e: Exp): Boolean = e match {
+        case BinOp("++", _, _) => false // union all
+        case BinOp("&&", _, _) => false // intersect
+        case BinOp("=", _: Variable, _) => false // assign expression
         case BinOp(_, l, r) => isPrimitive(l) || isPrimitive(r)
         case Braces(b) => isPrimitive(b)
-        case f: Fun => f.name != "sql_concat" //TODO may be make configurable?
+        case f: Fun =>
+          f.name != "sql_concat" && macros != null && !macros.isBuilderMacroDefined(f.name)
         case x => isPrimitiveType(x)
-      }
-      def createPrimitiveExp = {
-        PrimitiveExp(
-          phrase(query)(new scala.util.parsing.input.CharSequenceReader(s"{${e.tresql}}"))
-            .get
-            .asInstanceOf[Query])
       }
       e match {
         case Arr(exps) => Arr(exps map normalized)
-        case _ if isPrimitive(e) => createPrimitiveExp
+        case _ if isPrimitive(e) =>
+          PrimitiveExp(phrase(query)(
+            new scala.util.parsing.input.CharSequenceReader(s"{${e.tresql}}")).get)
         case _ => e
       }
     }
     resolveColTypes(
       resolveNamesAndJoins(
         resolveColAsterisks(
-          buildTypedDef(
-            normalized(exp)))))
+          buildTypedDef(normalized(exp)))))
   }
 
   override def transformer(fun: Transformer): Transformer = {
@@ -898,7 +896,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
       case to: TableObj => to.copy(obj = tt(to.obj))
       case ta: TableAlias => ta.copy(obj = tt(ta.obj))
       case PrimitiveExp(q) => PrimitiveExp(tt(q))
-      case PrimitiveDef(exp) => PrimitiveDef(tt(exp))
+      case PrimitiveDef(exp, typ) => PrimitiveDef(tt(exp), typ)
       case sd: SelectDef =>
         val t = sd.tables map tt
         val c = sd.cols map tt
@@ -955,7 +953,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
       case to: TableObj => to.copy(obj = tt(state)(to.obj))
       case ta: TableAlias => ta.copy(obj = tt(state)(ta.obj))
       case PrimitiveExp(q) => PrimitiveExp(tt(state)(q))
-      case PrimitiveDef(exp) => PrimitiveDef(tt(state)(exp))
+      case PrimitiveDef(exp, typ) => PrimitiveDef(tt(state)(exp), typ)
       case sd: SelectDef =>
         val t = sd.tables map tt(state)
         val c = sd.cols map tt(state)
@@ -1022,7 +1020,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
       case vfsd: ValuesFromSelectDef => tr(state, vfsd.exp)
       case sql: SQLDefBase => tr(trl(trl(state, sql.tables), sql.cols), sql.exp)
       case PrimitiveExp(q) => tr(state, q)
-      case PrimitiveDef(exp) => tr(state, exp)
+      case PrimitiveDef(exp, _) => tr(state, exp)
     }
     fun_traverse
   }

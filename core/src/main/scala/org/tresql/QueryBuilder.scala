@@ -103,7 +103,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     override def defaultSQL = {
       if (!binded) QueryBuilder.this._bindVariables += this
       val s = if (!env.reusableExpr && (env contains name) && (members == null | members == Nil)) {
-        apply() match {
+        this() match {
           case l: scala.collection.Iterable[_] =>
             if (l.nonEmpty) "?," * (l size) dropRight 1 else {
               //return null for empty collection (not to fail in 'in' operator)
@@ -323,8 +323,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   case class ArrExpr(elements: List[Expr]) extends BaseExpr {
     override def apply() = {
       val result = elements map {
-        case e: ConstExpr => executeAsSelect(e)
-        case e: VarExpr => executeAsSelect(e)
+        case e: ConstExpr => wrapExprInSelect(e)()
+        case e: VarExpr => wrapExprInSelect(e)()
         case e => e()
       }
       env.rowConverter(queryDepth, childIdx).map { conv =>
@@ -681,7 +681,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       env update params
       apply()
     }
-    override def apply(): Any = executeAsSelect(this)
+    override def apply(): Any = wrapExprInSelect(this)()
     override def close = {
       env.closeStatement
       childUpdates foreach { t => t._1.close }
@@ -698,10 +698,12 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     }
   }
 
-  private def executeAsSelect(expr: Expr) = {
-    SelectExpr(List(Table(ConstExpr(Null), null, null, null, true)),
+  private def wrapExprInSelect(expr: Expr) = {
+    SelectExpr(
+      List(Table(ConstExpr(Null), null, null, null, true)),
       null, ColsExpr(List(ColExpr(expr, null, Some(false))), false, false, false),
-      false, null, null, null, null, Map(), None)()
+      false, null, null, null, null, Map(), None
+    )
   }
 
   private def executeChildren: Map[String, Any] = {

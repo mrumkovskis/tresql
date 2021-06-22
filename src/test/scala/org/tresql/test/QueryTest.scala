@@ -1,7 +1,7 @@
 package org.tresql.test
 
 import org.scalatest.{BeforeAndAfterAll, FunSuite}
-import java.sql.{Connection, DriverManager, ResultSet}
+import java.sql.{Connection, DriverManager}
 
 import org.tresql._
 import org.tresql.metadata.JDBCMetadata
