@@ -272,6 +272,12 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         Vector("WARD", "SALES"))) {
       Query("[]sql('emp')[emp.deptno = dept.deptno]sql('dept')[dname = 'SALES']{ename, dname}#(1,2)").toListOfVectors
     }
+    assertResult(List(Vector("ACCOUNTING"))) {
+      Query("[]dynamic_table(:table)[deptno = 10]{dname}", Map("table" -> "dept")).toListOfVectors
+    }
+    assertResult(List(Vector("ACCOUNTING"))) {
+      Query("c(#) { []dynamic_table(:table)[deptno = 10]{dname} } c", Map("table" -> "dept")).toListOfVectors
+    }
 
     //path bind variable access (dotted syntax)
     assertResult(List(Vector("SALES")))(

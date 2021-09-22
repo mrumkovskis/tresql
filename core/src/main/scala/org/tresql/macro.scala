@@ -91,6 +91,13 @@ class Macros {
   def !~~ (b: QueryBuilder, lop: Expr, rop: Expr) =
     b.BinExpr("!~", b.FunExpr("lower", List(lop)), b.FunExpr("lower", List(rop)))
 
+  /** Allows to specify table name as bind variable value.
+   * Like {{{ []dynamic_table(:table)[deptno = 10]{dname} }}}
+   * */
+  def dynamic_table(b: QueryBuilder, table_name: QueryBuilder#VarExpr): b.Table = {
+    b.Table(b.IdentExpr(List(String.valueOf(table_name()))), null, null, null, false)
+  }
+
   def _lookup_edit(b: ORT,
     objName: QueryBuilder#ConstExpr,
     idName: QueryBuilder#ConstExpr,
