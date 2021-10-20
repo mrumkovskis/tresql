@@ -276,6 +276,10 @@ work[empno]emp{emp.empno, ename, sal, |[empno]work{hours, work.hours/(:1(sal)/10
 work[empno]emp{emp.empno, ename, sal, |[empno]work{hours, work.hours/(:1(sal) * 1)}#(1,2)}#(1) --> [[7788, "SCOTT", 3000.00, [[5, 0], [8, 0]]], [7788, "SCOTT", 3000.00, [[5, 0], [8, 0]]], [7839, "KING", 5000.00, [[3, 0], [4, 0]]], [7839, "KING", 5000.00, [[3, 0], [4, 0]]]]
 work[empno]emp{emp.empno, ename, sal, |[empno]work{hours, work.hours/:1(sal) * 1}#(1,2)}#(1) --> [[7788, "SCOTT", 3000.00, [[5, 0], [8, 0]]], [7788, "SCOTT", 3000.00, [[5, 0], [8, 0]]], [7839, "KING", 5000.00, [[3, 0], [4, 0]]], [7839, "KING", 5000.00, [[3, 0], [4, 0]]]]
 
+//hierarchical query with child from another database
+dept[dname ~~ 'acc%']{dname, |emp_db:emp {ename}#(1)} --> [["ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
+dept[dname ~~ 'acc%']{dname, |emp_db:[dept.deptno = emp.deptno]emp {ename}#(1)} --> [["ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
+
 //union
 dept[?]{deptno} ++ emp[?]{empno} ++ salgrade[?]{grade} --> 10;7839;1 --> [[10], [7839], [1]]
 (dept{deptno} + salgrade{grade})#(~1 null) --> [[40], [30], [20], [10], [5], [4], [3], [2], [1]]
@@ -437,6 +441,8 @@ emp[7876] {ename, sal} --> [["kukuzis", 1000.00]]
 
 //child update
 emp{empno, job, emp[empno = :1(1)]{job} = [:1(2)]}#(1) --> [[7369, "CLERK", [[1]]], [7499, "SALESMAN", [[1]]], [7521, "SALESMAN", [[1]]], [7566, "MANAGER", [[1]]], [7654, "SALESMAN", [[1]]], [7698, "MANAGER", [[1]]], [7782, "MANAGER", [[1]]], [7788, "ANALYST", [[1]]], [7839, "PRESIDENT", [[1]]], [7844, "SALESMAN", [[1]]], [7876, null, [[1]]], [7900, "CLERK", [[1]]], [7902, "ANALYST", [[1]]], [7934, "CLERK", [[1]]]]
+//child update in another database
+emp{empno, job, =emp_db: emp[empno = :1(1)]{job} [:1(2)]}#(1) --> [[7369, "CLERK", [[1]]], [7499, "SALESMAN", [[1]]], [7521, "SALESMAN", [[1]]], [7566, "MANAGER", [[1]]], [7654, "SALESMAN", [[1]]], [7698, "MANAGER", [[1]]], [7782, "MANAGER", [[1]]], [7788, "ANALYST", [[1]]], [7839, "PRESIDENT", [[1]]], [7844, "SALESMAN", [[1]]], [7876, null, [[1]]], [7900, "CLERK", [[1]]], [7902, "ANALYST", [[1]]], [7934, "CLERK", [[1]]]]
 
 //----DELETE----
 salgrade - [?] --> 5 --> [[1]]

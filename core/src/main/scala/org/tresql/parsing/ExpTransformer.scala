@@ -26,6 +26,7 @@ trait ExpTransformer { this: QueryParsers =>
       case FunAsTable(f, cds, ord) => FunAsTable(tt(f), cds, ord)
       case Cast(e, t) => Cast(tt(e), t)
       case UnOp(o, op) => UnOp(o, tt(op))
+      case ChildQuery(q, db) => ChildQuery(tt(q), db)
       case BinOp(o, lop, rop) => BinOp(o, tt(lop), tt(rop))
       case TerOp(lop, op1, mop, op2, rop) => TerOp(tt(lop), op1, tt(mop), op2, tt(rop))
       case In(lop, rop, not) => In(tt(lop), rop map tt, not)
@@ -39,9 +40,9 @@ trait ExpTransformer { this: QueryParsers =>
         Query(objs map tt, tt(filters), tt(cols), tt(gr), tt(ord), tt(off), tt(lim))
       case WithTable(n, c, r, q) => WithTable(n, c, r, tt(q))
       case With(ts, q) => With(ts map tt, tt(q))
-      case Insert(t, a, cols, vals, r) => Insert(tt(t), a, cols map tt, tt(vals), r map tt)
-      case Update(t, a, filter, cols, vals, r) => Update(tt(t), a, tt(filter), cols map tt, tt(vals), r map tt)
-      case Delete(t, a, filter, u, r) => Delete(tt(t), a, tt(filter), tt(u), r map tt)
+      case Insert(t, a, cols, vals, r, db) => Insert(tt(t), a, cols map tt, tt(vals), r map tt, db)
+      case Update(t, a, filter, cols, vals, r, db) => Update(tt(t), a, tt(filter), cols map tt, tt(vals), r map tt, db)
+      case Delete(t, a, filter, u, r, db) => Delete(tt(t), a, tt(filter), tt(u), r map tt, db)
       case Arr(els) => Arr(els map tt)
       case Filters(f) => Filters(f map tt)
       case Values(v) => Values(v map tt)
@@ -75,6 +76,7 @@ trait ExpTransformer { this: QueryParsers =>
       case FunAsTable(f, cds, ord) => FunAsTable(tt(state)(f), cds, ord)
       case Cast(e, t) => Cast(tt(state)(e), t)
       case UnOp(o, op) => UnOp(o, tt(state)(op))
+      case ChildQuery(q, db) => ChildQuery(tt(state)(q), db)
       case BinOp(o, lop, rop) => BinOp(o, tt(state)(lop), tt(state)(rop))
       case TerOp(lop, op1, mop, op2, rop) => TerOp(tt(state)(lop), op1, tt(state)(mop), op2, tt(state)(rop))
       case In(lop, rop, not) => In(tt(state)(lop), rop map tt(state), not)
@@ -96,19 +98,20 @@ trait ExpTransformer { this: QueryParsers =>
         )
       case WithTable(n, c, r, q) => WithTable(n, c, r, tt(state)(q))
       case With(ts, q) => With(ts map { wt => tt(state)(wt) }, tt(state)(q))
-      case Insert(t, a, cols, vals, r) => Insert(tt(state)(t), a,
-          cols map { c => tt(state)(c) }, tt(state)(vals), r map tt(state))
-      case Update(table, alias, filter, cols, vals, r) =>
+      case Insert(t, a, cols, vals, r, db) => Insert(tt(state)(t), a,
+          cols map { c => tt(state)(c) }, tt(state)(vals), r map tt(state), db)
+      case Update(table, alias, filter, cols, vals, r, db) =>
         Update(
           tt(state)(table),
           alias,
           tt(state)(filter),
           cols map { c => tt(state)(c) },
           tt(state)(vals),
-          r map tt(state)
+          r map tt(state),
+          db
         )
-      case Delete(table, alias, filter, using, returning) =>
-        Delete(tt(state)(table), alias, tt(state)(filter), tt(state)(using), returning map tt(state))
+      case Delete(table, alias, filter, using, returning, db) =>
+        Delete(tt(state)(table), alias, tt(state)(filter), tt(state)(using), returning map tt(state), db)
       case Arr(els) => Arr(els map tt(state))
       case Filters(f) => Filters(f map tt(state))
       case Values(v) => Values(v map tt(state))
@@ -136,6 +139,7 @@ trait ExpTransformer { this: QueryParsers =>
       case FunAsTable(f, _, _) => tr(state, f)
       case Cast(e, _) => tr(state, e)
       case UnOp(_, operand) => tr(state, operand)
+      case ChildQuery(query, _) => tr(state, query)
       case BinOp(_, lop, rop) => tr(tr(state, lop), rop)
       case In(lop, rop, _) => trl(tr(state, lop), rop)
       case TerOp(lop, op1, mop, op2, rop) => tr(tr(tr(state, lop), mop), rop)
@@ -149,9 +153,9 @@ trait ExpTransformer { this: QueryParsers =>
         tr(tr(tr(tr(tr(tr(trl(state, objs), filters), cols), gr), ord), off), lim)
       case WithTable(_, _, _, q) => tr(state, q)
       case With(ts, q) => tr(trl(state, ts), q)
-      case Insert(t, _, cols, vals, r) => tro(tr(trl(tr(state, t), cols), vals), r)
-      case Update(t, _, filter, cols, vals, r) => tro(tr(trl(tr(tr(state, t), filter), cols), vals), r)
-      case Delete(t, _, filter, u, r) => tro(tr(tr(tr(state, t), u), filter), r)
+      case Insert(t, _, cols, vals, r, _) => tro(tr(trl(tr(state, t), cols), vals), r)
+      case Update(t, _, filter, cols, vals, r, _) => tro(tr(trl(tr(tr(state, t), filter), cols), vals), r)
+      case Delete(t, _, filter, u, r, _) => tro(tr(tr(tr(state, t), u), filter), r)
       case Arr(els) => trl(state, els)
       case Filters(f) => trl(state, f)
       case Values(v) => trl(state, v)

@@ -33,7 +33,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     //initialize environment
     Class.forName("org.hsqldb.jdbc.JDBCDriver")
     val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
-    tresqlResources = new Resources {}
+    val res = new Resources {}
       .withMetadata(JDBCMetadata(conn))
       .withConn(conn)
       .withDialect(hsqlDialect)
@@ -41,6 +41,8 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       .withMacros(Macros)
       .withCache(new SimpleCache(-1))
       .withLogger((msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg))
+
+    tresqlResources = res.withChildren(Map("emp_db" -> res))
     //create test db script
     new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
       sql => val st = conn.createStatement; tresqlResources.log("Creating database:\n" + sql); st.execute(sql); st.close

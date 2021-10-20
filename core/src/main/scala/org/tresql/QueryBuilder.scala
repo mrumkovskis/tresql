@@ -311,7 +311,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     private val rowConverter = env.rowConverter(QueryBuilder.this.queryDepth, initChildIdx)
     if (queryDepth >= env.recursiveStackDepth)
       error(s"Recursive execution stack depth $queryDepth exceeded, check for loops in data or increase {{{Resources#recursiveStackDepth}}} setting.")
-    val qBuilder = newInstance(new Env(QueryBuilder.this, env.reusableExpr),
+    val qBuilder = newInstance(new Env(QueryBuilder.this, env.db, env.reusableExpr),
       queryDepth + 1, 0, initChildIdx)
     qBuilder.recursiveQueryExp = recursiveQueryExp
     //TODO pass rowConverter to built SelectExpr!
@@ -1071,9 +1071,9 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       )
     }
 
-    def buildWithNew(buildFunc: QueryBuilder => Expr) = {
+    def buildWithNew(db: Option[String], buildFunc: QueryBuilder => Expr) = {
       val b = newInstance(
-        new Env(QueryBuilder.this, QueryBuilder.this.env.reusableExpr),
+        new Env(QueryBuilder.this, db, QueryBuilder.this.env.reusableExpr),
         queryDepth + 1, bindIdx, this.childrenCount)
       val ex = buildFunc(b)
       this.separateQueryFlag = true
@@ -1092,22 +1092,22 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case Null => ConstExpr(Null)
         case NullUpdate => ConstExpr(NullUpdate)
         //insert
-        case i @ Insert(t, a, c, v, r) => parseCtx match {
-          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(_.buildInternal(i, QUERY_CTX))
+        case i @ Insert(t, a, c, v, r, db) => parseCtx match {
+          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(db, _.buildInternal(i, QUERY_CTX))
           case _ => buildInsert(t, a, c, v, r, parseCtx)
         }
         //update
-        case u @ Update(t, a, f, c, v, r) => parseCtx match {
-          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(_.buildInternal(u, QUERY_CTX))
+        case u @ Update(t, a, f, c, v, r, db) => parseCtx match {
+          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(db, _.buildInternal(u, QUERY_CTX))
           case _ => buildUpdate(t, a, f, c, v, r, parseCtx)
         }
         //delete
-        case d @ Delete(t, a, f, u, r) => parseCtx match {
-          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(_.buildInternal(d, QUERY_CTX))
+        case d @ Delete(t, a, f, u, r, db) => parseCtx match {
+          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(db, _.buildInternal(d, QUERY_CTX))
           case _ => buildDelete(t, a, f, u, r, parseCtx)
         }
         //recursive child query
-        case UnOp("|", join: Arr) =>
+        case ChildQuery(join: Arr, db) =>
           if (recursiveQueryExp != null) {
             val e = RecursiveExpr({
               val t = recursiveQueryExp.tables
@@ -1124,22 +1124,22 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
             e
         } else null
         //child query
-        case UnOp("|", oper) => buildWithNew(_.buildInternal(oper, QUERY_CTX))
+        case ChildQuery(q, db) => buildWithNew(db, _.buildInternal(q, QUERY_CTX))
         case t: Obj => parseCtx match {
           case ARR_CTX =>
-            buildWithNew(_.buildInternal(t, QUERY_CTX)) //may have other elements in array
+            buildWithNew(None, _.buildInternal(t, QUERY_CTX)) //may have other elements in array
           //table in from clause of top level query or in any other subquery
           case QUERY_CTX | FROM_CTX | WITH_CTX | WITH_TABLE_CTX => buildSelectFromObj(t, parseCtx)
           case _ => buildIdentOrBracesExpr(t)
         }
         case q: parsing.Query => parseCtx match {
-          case ARR_CTX => buildWithNew(_.buildInternal(q, QUERY_CTX)) //may have other elements in array
+          case ARR_CTX => buildWithNew(None, _.buildInternal(q, QUERY_CTX)) //may have other elements in array
           case _ =>
             if (recursiveQueryExp == null) recursiveQueryExp = q //set for potential use in RecursiveExpr
             buildSelect(q, parseCtx)
         }
         case wq @ With(tables, query) => parseCtx match {
-          case ARR_CTX => buildWithNew(_.buildInternal(wq, QUERY_CTX)) //may have other elements in array
+          case ARR_CTX => buildWithNew(None, _.buildInternal(wq, QUERY_CTX)) //may have other elements in array
           case _ =>
             val withTables = tables.map(buildInternal(_, parseCtx).asInstanceOf[WithTableExpr])
             buildInternal(query, if (parseCtx == QUERY_CTX) QUERY_CTX else WITH_CTX) match {
@@ -1157,7 +1157,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           val o = buildInternal(oper, parseCtx)
           if (o == null) null else UnExpr(op, o)
         case c @ Cast(exp, typ) => parseCtx match {
-          case ARR_CTX => buildWithNew(_.buildInternal(c, QUERY_CTX))
+          case ARR_CTX => buildWithNew(None, _.buildInternal(c, QUERY_CTX))
           case ctx => buildInternal(exp, ctx) match {
             case null => null
             case e => CastExpr(e, typ)
@@ -1165,7 +1165,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         }
         case e @ BinOp(op, lop, rop) => parseCtx match {
           case ARR_CTX if op != "=" /*do not create new query builder for assignment or equals operation*/=>
-            buildWithNew(_.buildInternal(e, QUERY_CTX))
+            buildWithNew(None, _.buildInternal(e, QUERY_CTX))
           case ctx =>
             val l = buildInternal(lop, ctx)
             val r = buildInternal(rop, ctx)
@@ -1176,7 +1176,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         }
         case t: TerOp => buildInternal(t.content, parseCtx)
         case in @ In(lop, rop, not) => parseCtx match {
-          case ARR_CTX => buildWithNew(_.buildInternal(in, QUERY_CTX))
+          case ARR_CTX => buildWithNew(None, _.buildInternal(in, QUERY_CTX))
           case _ =>
             val l = buildInternal(lop, parseCtx)
             if (l == null) null else {
@@ -1185,7 +1185,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
             }
         }
         case fun @ Fun(n, pl: List[_], d, o, f) => parseCtx match  {
-          case ARR_CTX => buildWithNew(_.buildInternal(fun, FUN_CTX))
+          case ARR_CTX => buildWithNew(None, _.buildInternal(fun, FUN_CTX))
           case _ =>
             val pars = pl map { buildInternal(_, FUN_CTX) }
             val order = o.map(buildInternal(_, FUN_CTX))
@@ -1198,7 +1198,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => IdentAllExpr(i.ident)
         case a: Arr => parseCtx match {
-          case ARR_CTX => buildWithNew(_.buildArray(a))
+          case ARR_CTX => buildWithNew(None, _.buildArray(a))
           case QUERY_CTX => buildArray(a)
           case ctx => buildArray(a, ctx)
         }

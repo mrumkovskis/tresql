@@ -465,12 +465,12 @@ trait Compiler extends QueryParsers { thisCompiler =>
             BinSelectDef(lop, FunSelectDef(Nil, Nil, rop), b)
           case (lop, rop) => b.copy(lop = lop, rop = rop)
         }
-      case UnOp("|", o: Exp @unchecked) if ctx == ColsCtx =>
-        val exp = o match {
+      case ChildQuery(q: Exp @unchecked, _) if ctx == ColsCtx =>
+        val exp = q match {
           //recursive expression
           case a: Arr => RecursiveDef(builder(BodyCtx)(a))
           //ordinary child
-          case e => builder(QueryCtx)(o)
+          case e => builder(QueryCtx)(q)
         }
         ChildDef(exp)
       case Braces(exp: Exp @unchecked) if ctx == TablesCtx => builder(ctx)(exp) //remove braces around table expression, so it can be accessed directly
@@ -502,14 +502,15 @@ trait Compiler extends QueryParsers { thisCompiler =>
         val filter = if (dml.filter != null) tr(BodyCtx, dml.filter).asInstanceOf[Arr] else null
         val vals = if (dml.vals != null) tr(BodyCtx, dml.vals) else null
         val retCols = dml.returning map buildCols
+        val db = dml.db
         val dmlDef = dml match {
           case _: Insert =>
-            InsertDef(cols, List(table), Insert(table = null, alias = null, cols = Nil, vals = vals, None))
+            InsertDef(cols, List(table), Insert(table = null, alias = null, cols = Nil, vals = vals, None, db))
           case _: Update =>
             UpdateDef(cols, List(table), Update(
-              table = null, alias = null, cols = Nil, filter = filter, vals = vals, returning = None))
+              table = null, alias = null, cols = Nil, filter = filter, vals = vals, returning = None, db = db))
           case _: Delete =>
-            DeleteDef(List(table), Delete(table = null, alias = null, filter = filter, using = vals, None))
+            DeleteDef(List(table), Delete(table = null, alias = null, filter = filter, using = vals, None, db))
         }
         retCols
           .map(rc =>
