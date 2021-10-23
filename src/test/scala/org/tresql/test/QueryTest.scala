@@ -32,7 +32,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
   override def beforeAll = {
     //initialize environment
     Class.forName("org.hsqldb.jdbc.JDBCDriver")
-    val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
+    val conn = DriverManager.getConnection("jdbc:hsqldb:mem:db")
     val res = new Resources {}
       .withMetadata(JDBCMetadata(conn))
       .withConn(conn)
@@ -42,10 +42,24 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       .withCache(new SimpleCache(-1))
       .withLogger((msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg))
 
-    tresqlResources = res.withChildren(Map("emp_db" -> res))
-    //create test db script
-    new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
-      sql => val st = conn.createStatement; tresqlResources.log("Creating database:\n" + sql); st.execute(sql); st.close
+    val conn1 = DriverManager.getConnection("jdbc:hsqldb:mem:db1")
+    val res1 = new Resources {}
+      .withMetadata(JDBCMetadata(conn1))
+      .withConn(conn1)
+      .withDialect(hsqlDialect orElse {
+        case f: QueryBuilder#FunExpr if f.name == "current_time" && f.params.isEmpty => "current_time"
+      })
+      .withIdExpr(_ => "nextval('seq1')")
+      .withLogger((msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg))
+
+    tresqlResources = res.withChildren(Map("emp_db" -> res, "contact_db" -> res1))
+
+    List(("/db.sql", conn), ("/db1.sql", conn1)) foreach { case (db, c) =>
+      //create test db script
+      tresqlResources.log(s"Creating database from file ($db)")
+      new scala.io.BufferedSource(getClass.getResourceAsStream(db)).mkString.split("//").foreach {
+        sql => val st = c.createStatement; tresqlResources.log(sql); st.execute(sql); st.close
+      }
     }
     //set resources for console
     ConsoleResources.resources = tresqlResources
@@ -121,8 +135,13 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
         override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
       }
     )
+    val child_metadata = new JDBCMetadata with compiling.CompilerFunctionMetadata {
+      override def conn: Connection = testRes.children("contact_db").conn
+      override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
+    }
     println("\n-------------- TEST compiler ----------------\n")
-    val compiler = new QueryCompiler(testRes.metadata, testRes)
+    val compiler = new QueryCompiler(testRes.metadata,
+      Map("contact_db" -> child_metadata, "emp_db" -> testRes.metadata), testRes)
     //set console compiler so it can be used from scala console
     ConsoleResources.compiler = compiler
     import compiling.CompilerException
@@ -221,8 +240,11 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     //insert with asterisk column
     intercept[CompilerException](compiler.compile("+dummy{*} dummy{dummy kiza}"))
 
+    //hierarchical recursive query
+    intercept[CompilerException](compiler.compile("emp[mgr = null]{empno, ename, |[:1(empno) = kiza]}"))
+
     //two aliases
-    intercept[Exception](compiler.compile("dummy {dummy a b}"))
+    intercept[CompilerException](compiler.compile("dummy {dummy a b}"))
   }
 
   if (executeCompilerMacroDependantTests) test("compiler macro") {

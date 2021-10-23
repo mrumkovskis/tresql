@@ -14,6 +14,9 @@ class CompilerException(message: String,
 trait Compiler extends QueryParsers { thisCompiler =>
 
   protected def metadata: Metadata
+  protected def childrenMetadata: Map[String, Metadata] = Map()
+
+  protected def error(msg: String) = throw new CompilerException(msg)
 
   trait Scope {
     def tableNames: List[String]
@@ -22,17 +25,20 @@ trait Compiler extends QueryParsers { thisCompiler =>
   }
 
   trait TableMetadata {
-    def tableOption(name: String): Option[Table]
+    def tableOption(name: String)(db: Option[String]): Option[Table]
   }
 
   object EnvMetadata extends TableMetadata {
-    override def tableOption(name: String): Option[Table] = metadata.tableOption(name)
+    override def tableOption(name: String)(database: Option[String]): Option[Table] =
+      database
+        .flatMap(db => childrenMetadata.getOrElse(db, error(s"Unknown database: $db")).tableOption(name))
+        .orElse(metadata.tableOption(name))
   }
 
   case class WithTableMetadata(scopes: List[Scope]) extends TableMetadata {
-    override def tableOption(name: String): Option[Table] = {
+    override def tableOption(name: String)(database: Option[String]): Option[Table] = {
       def to(lScopes: List[Scope]): Option[Table] = lScopes match {
-        case Nil => EnvMetadata.tableOption(name)
+        case Nil => EnvMetadata.tableOption(name)(database)
         case scope :: tail => scope.table(name).orElse(to(tail))
       }
       to(scopes)
@@ -42,23 +48,23 @@ trait Compiler extends QueryParsers { thisCompiler =>
   trait TypedExp[T] extends Exp {
     def exp: Exp
     def typ: Manifest[T]
-    def tresql = exp.tresql
+    def tresql: String = exp.tresql
   }
 
-  case class TableDef(name: String, exp: Obj) extends Exp { def tresql = exp.tresql }
+  case class TableDef(name: String, exp: Obj) extends Exp { def tresql: String = exp.tresql }
   /** helper class for namer to distinguish table references from column references */
   case class TableObj(obj: Exp) extends Exp {
-    def tresql = obj.tresql
+    def tresql: String = obj.tresql
   }
   /** helper class for namer to distinguish table with NoJoin, i.e. must be defined in tables clause earlier */
   case class TableAlias(obj: Exp) extends Exp {
-    def tresql = obj.tresql
+    def tresql: String = obj.tresql
   }
   case class ColDef[T](name: String, col: Exp, typ: Manifest[T]) extends TypedExp[T] {
-    def exp = this
-    override def tresql = parsing.Col(col, name).tresql
+    def exp: ColDef[T] = this
+    override def tresql: String = parsing.Col(col, name).tresql
   }
-  case class ChildDef(exp: Exp) extends TypedExp[ChildDef] {
+  case class ChildDef(exp: Exp, db: Option[String]) extends TypedExp[ChildDef] {
     val typ: Manifest[ChildDef] = ManifestFactory.classType(this.getClass)
   }
   case class FunDef[T](name: String, exp: Fun, typ: Manifest[T], procedure: Procedure[_])
@@ -69,18 +75,15 @@ trait Compiler extends QueryParsers { thisCompiler =>
         s"Function '$name' has wrong number of parameters: ${exp.parameters.size} instead of ${procedure.pars.size}")
   }
   case class FunAsTableDef[T](exp: FunDef[T], cols: Option[List[TableColDef]], withOrdinality: Boolean) extends Exp {
-    def tresql = FunAsTable(exp.exp, cols, withOrdinality).tresql
+    def tresql: String = FunAsTable(exp.exp, cols, withOrdinality).tresql
   }
-  case class RecursiveDef(exp: Exp, scope: Scope = null) extends TypedExp[RecursiveDef]
-  with Scope {
+  case class RecursiveDef(exp: Exp) extends TypedExp[RecursiveDef] {
     val typ: Manifest[RecursiveDef] = ManifestFactory.classType(this.getClass)
-    override def tableNames = scope.tableNames
-    override def table(table: String) = scope.table(table)
   }
 
   /** Marker for primitive expression (non query) */
   case class PrimitiveExp(exp: Exp) extends Exp {
-    def tresql = exp.tresql
+    def tresql: String = exp.tresql
   }
   /** Marker for compiler macro, to unwrap compiled result */
   case class PrimitiveDef[T](exp: Exp, typ: Manifest[T]) extends TypedExp[T]
@@ -95,11 +98,11 @@ trait Compiler extends QueryParsers { thisCompiler =>
   trait SQLDefBase extends RowDefBase with Scope {
     def tables: List[TableDef]
 
-    def tableNames = tables.collect {
+    def tableNames: List[String] = tables.collect {
       //collect table names in this sql (i.e. exclude tresql no join aliases)
       case TableDef(t, Obj(_: TableObj, _, _, _, _)) => t.toLowerCase
     }
-    def table(table: String) = tables.find(_.name.toLowerCase == table).flatMap {
+    def table(table: String): Option[Table] = tables.find(_.name.toLowerCase == table).flatMap {
       case TableDef(_, Obj(TableObj(Ident(name)), _, _, _, _)) =>
         Option(table_alias(name mkString "."))
       case TableDef(n, Obj(TableObj(s: SelectDefBase), _, _, _, _)) =>
@@ -109,7 +112,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         Option(Table(alias,
           cols.map(c =>
             org.tresql.metadata.Col(name = c.name,
-              true, -1,
+              nullable = true, -1,
               scalaType =
                 c.typ
                   .map(metadata.xsd_scala_type_map)
@@ -121,19 +124,21 @@ trait Compiler extends QueryParsers { thisCompiler =>
       Table(name, sd.cols map col_from_coldef, null, Map())
     protected def table_alias(name: String) = Table(name, Nil, null, Map())
     protected def col_from_coldef(cd: ColDef[_]) =
-      org.tresql.metadata.Col(name = cd.name, true, -1, scalaType = cd.typ)
+      org.tresql.metadata.Col(name = cd.name, nullable = true, -1, scalaType = cd.typ)
 
     override def tresql = exp match {
       case q: Query =>
         /* FIXME distinct keyword is lost in Cols */
         q.copy(tables = this.tables.map(_.exp),
-          cols = Cols(false, this.cols.map(c => parsing.Col(c.exp, c.name)))).tresql
+          cols = Cols(distinct = false, this.cols.map(c => parsing.Col(c.exp, c.name)))).tresql
       case x => x.tresql
     }
   }
 
   //is superclass of insert, update, delete
-  trait DMLDefBase extends SQLDefBase
+  trait DMLDefBase extends SQLDefBase {
+    def db: Option[String]
+  }
 
   //is superclass of select, union, intersect etc.
   trait SelectDefBase extends SQLDefBase {
@@ -202,7 +207,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
       }
     }
     override def table(table: String) = tables.find(_.name == table).map {
-      case _ => table_from_selectdef(table, this)
+      _ => table_from_selectdef(table, this)
     }
   }
 
@@ -227,6 +232,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     tables: List[TableDef],
     exp: Insert
   ) extends DMLDefBase {
+    override def db: Option[String] = exp.db
     override def tresql = // FIXME alias lost
       exp.copy(table = Ident(List(tables.head.name)),
         cols = this.cols.map(c => parsing.Col(c.exp, c.name))).tresql
@@ -237,6 +243,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     tables: List[TableDef],
     exp: Update
   ) extends DMLDefBase {
+    override def db: Option[String] = exp.db
     override def tresql = // FIXME alias lost
       exp.copy(table = Ident(List(tables.head.name)),
         cols = this.cols.map(c => parsing.Col(c.exp, c.name))).tresql
@@ -247,6 +254,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     exp: Delete
   ) extends DMLDefBase {
     def cols = Nil
+    override def db: Option[String] = exp.db
     override def tresql = // FIXME alias lost
       exp.copy(table = Ident(List(tables.head.name))).tresql
   }
@@ -267,6 +275,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
   }
   trait WithDMLQuery extends DMLDefBase with WithQuery {
     def exp: DMLDefBase
+    override def db: Option[String] = None
   }
 
   case class WithSelectDef(
@@ -294,51 +303,60 @@ trait Compiler extends QueryParsers { thisCompiler =>
 
   //metadata
   /** Table of dml statement or table in from clause of any scope in the {{{scopes}}} list */
-  def declaredTable(scopes: List[Scope])(tableName: String)(md: TableMetadata = EnvMetadata): Option[Table] = {
+  def declaredTable(scopes: List[Scope])(tableName: String)(md: TableMetadata,
+                                                            db: Option[String]): Option[Table] = {
     val tn = tableName.toLowerCase
     scopes match {
       case Nil => None
       case scope :: tail => scope.table(tn).flatMap {
-        case Table(n, c, _, _) if c.isEmpty => table(tail)(n)(md) //alias is decoded ask parent scope
+        case Table(n, Nil, _, _) => table(tail)(n)(md, db) //alias is decoded ask parent scope
         case t => Some(t)
-      } orElse declaredTable(tail)(tn)(md)
+      } orElse declaredTable(tail)(tn)(md, db)
     }
   }
   /** Table from metadata or defined in from clause or dml table of any scope in {{{scopes}}} list */
-  def table(scopes: List[Scope])(tableName: String)(md: TableMetadata = EnvMetadata): Option[Table] =
+  def table(scopes: List[Scope])(tableName: String)(md: TableMetadata,
+                                                    db: Option[String]): Option[Table] =
     Option(tableName).flatMap { tn =>
       val table = tn.toLowerCase
-      declaredTable(scopes)(table)(md) orElse md.tableOption(table)
+      declaredTable(scopes)(table)(md, db) orElse md.tableOption(table)(db)
     }
   /** Column declared in any scope in {{{scopes}}} list */
-  def column(scopes: List[Scope])(colName: String)(md: TableMetadata = EnvMetadata): Option[org.tresql.metadata.Col[_]] = {
+  def column(scopes: List[Scope])(colName: String)(md: TableMetadata,
+                                                   db: Option[String]): Option[org.tresql.metadata.Col[_]] = {
     val col = colName.toLowerCase
     (scopes match {
       case Nil => None
       case scope :: tail => col.lastIndexOf('.') match {
         case -1 =>
           scope.tableNames
-            .map(tn => tn -> declaredTable(scopes)(tn)(md).flatMap(_.colOption(col)))
+            .map(tn => tn -> declaredTable(scopes)(tn)(md, db).flatMap(_.colOption(col)))
             .collect { case (tn, col @ Some(_)) => (tn, col) } match {
               case List((_, c)) => c
-              case Nil => column(tail)(col)(md)
+              case Nil => column(tail)(col)(md, db)
               case x => throw new CompilerException(
                 s"Ambiguous columns: ${x.map { case (t, c) =>
                   s"$t.${c.map(_.name).iterator.mkString}"
                 }.mkString(", ")}"
               )
             }
-        case x => declaredTable(scopes)(col.substring(0, x))(md).flatMap(_.colOption(col.substring(x + 1)))
+        case x => declaredTable(scopes)(col.substring(0, x))(md, db).flatMap(_.colOption(col.substring(x + 1)))
       }
-    }).orElse(procedure(s"$col#0").map(p => //check for empty pars function declaration
-      org.tresql.metadata.Col(name = col, true, -1, scalaType = p.scalaReturnType)))
+    }).orElse(procedure(s"$col#0")(db).map(p => //check for empty pars function declaration
+      org.tresql.metadata.Col(name = col, nullable = true, -1, scalaType = p.scalaReturnType)))
   }
   /** Method is used to resolve column names in group by or order by clause, since they can reference columns by name from column clause. */
-  def declaredColumn(scopes: List[Scope])(colName: String)(md: TableMetadata = EnvMetadata): Option[org.tresql.metadata.Col[_]] = {
+  def declaredColumn(scopes: List[Scope])(colName: String)(md: TableMetadata,
+                                                           db: Option[String]): Option[org.tresql.metadata.Col[_]] = {
     val col = colName.toLowerCase
-    scopes.head.column(col) orElse column(scopes)(col)(md)
+    scopes.head.column(col) orElse column(scopes)(col)(md, db)
   }
-  def procedure(procedure: String) = metadata.procedureOption(procedure)
+  def procedure(procedure: String)(database: Option[String]) =
+    database
+      .flatMap(db => childrenMetadata
+        .getOrElse(db, error(s"Unknown database: $db"))
+        .procedureOption(procedure))
+      .orElse(metadata.procedureOption(procedure))
 
   def buildTypedDef(exp: Exp) = {
     trait Ctx
@@ -385,7 +403,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
                   join.copy(expr =
                     expr.copy(obj =
                       Ident(List(left.name, fkAlias))))))
-        case (left, right) => right
+        case (_, right) => right
       }
     }
     def buildCols(cols: Cols): List[ColDef[_]] = {
@@ -403,7 +421,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
       else List[ColDef[_]](ColDef[Nothing](null, All, ManifestFactory.Nothing))
     }
     lazy val builder: TransformerWithState[Ctx] = transformerWithState(ctx => {
-      case f: Fun => procedure(s"${f.name}#${f.parameters.size}").map { p =>
+      case f: Fun => procedure(s"${f.name}#${f.parameters.size}")(None).map { p => // FIXME db is not allways 'None'
         val retType = if (p.returnTypeParIndex == -1) p.scalaReturnType else ManifestFactory.Nothing
         FunDef(p.name, f.copy(
           parameters = f.parameters map(tr(ctx, _)),
@@ -421,7 +439,8 @@ trait Compiler extends QueryParsers { thisCompiler =>
         ColDef[Nothing](
           alias,
           tr(ctx, c.col) match {
-            case x: DMLDefBase @unchecked => ChildDef(x)
+            case x: DMLDefBase @unchecked => ChildDef(x, x.db)
+            case x: ReturningDMLDef => ChildDef(x, x.exp.db)
             case x => x
           },
           ManifestFactory.Nothing
@@ -465,14 +484,14 @@ trait Compiler extends QueryParsers { thisCompiler =>
             BinSelectDef(lop, FunSelectDef(Nil, Nil, rop), b)
           case (lop, rop) => b.copy(lop = lop, rop = rop)
         }
-      case ChildQuery(q: Exp @unchecked, _) if ctx == ColsCtx =>
+      case ChildQuery(q: Exp @unchecked, db) if ctx == ColsCtx =>
         val exp = q match {
           //recursive expression
           case a: Arr => RecursiveDef(builder(BodyCtx)(a))
           //ordinary child
-          case e => builder(QueryCtx)(q)
+          case _ => builder(QueryCtx)(q)
         }
-        ChildDef(exp)
+        ChildDef(exp, db)
       case Braces(exp: Exp @unchecked) if ctx == TablesCtx => builder(ctx)(exp) //remove braces around table expression, so it can be accessed directly
       case Braces(exp: Exp @unchecked) => builder(ctx)(exp) match {
         case sdb: SelectDefBase => BracesSelectDef(sdb)
@@ -483,7 +502,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
           ColDef[Nothing](
             s"_${idx + 1}",
             tr(ctx, el) match {
-              case r: RowDefBase => ChildDef(r)
+              case r: RowDefBase => ChildDef(r, None)
               case e => e
             },
             ManifestFactory.Nothing)
@@ -528,7 +547,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
           case s: SQLDefBase => s
           case x => throw new CompilerException(s"Table in with clause must be query. Instead found: ${x.getClass.getName}(${x.tresql})")
         }
-        val tables: List[TableDef] = List(TableDef(name, Obj(TableObj(Ident(List(name))), null, null, null, false)))
+        val tables: List[TableDef] = List(TableDef(name, Obj(TableObj(Ident(List(name))), null, null, null)))
         val cols =
           wtCols.map { c =>
             ColDef[Nothing](c, Ident(List(c)), Manifest.Nothing)
@@ -550,16 +569,18 @@ trait Compiler extends QueryParsers { thisCompiler =>
     def createCol(col: String): parsing.Col =
       phrase(column)(new scala.util.parsing.input.CharSequenceReader(col)).get
 
-    lazy val resolver: TransformerWithState[List[Scope]] = transformerWithState { scopes =>
+    case class Ctx(scopes: List[Scope], db: Option[String])
+
+    lazy val resolver: TransformerWithState[Ctx] = transformerWithState { ctx =>
       def resolveWithQuery[T <: SQLDefBase](withQuery: WithQuery): (T, List[WithTableDef]) = {
         val wtables: List[WithTableDef] = withQuery.withTables.foldLeft(List[WithTableDef]()) { (tables, table) =>
-          val withScopes = tables ++ scopes
-          (resolver(if (table.recursive) table :: withScopes else withScopes)(table) match {
+          val nctx = ctx.copy(scopes = tables ++ ctx.scopes)
+          (resolver(if (table.recursive) ctx.copy(scopes = table :: ctx.scopes) else nctx)(table) match {
             case wtd @ WithTableDef(Nil, _, _, _) =>
               wtd.copy(cols = wtd.exp.cols.map(col =>
                 ColDef(
                   col.name,
-                  Obj(Ident(List(wtd.tables.head.name, col.name)), null, null, null, false),
+                  Obj(Ident(List(wtd.tables.head.name, col.name)), null, null, null),
                   col.typ
                 )))
             case x: WithTableDef =>
@@ -571,22 +592,22 @@ trait Compiler extends QueryParsers { thisCompiler =>
             case x => sys.error(s"Compiler error, expected WithTableDef, encountered: $x")
           }) :: tables
         }
-        val exp = resolver(wtables ++ scopes)(withQuery.exp).asInstanceOf[T]
+        val exp = resolver(ctx.copy(scopes = wtables ++ ctx.scopes))(withQuery.exp).asInstanceOf[T]
         (exp, wtables.reverse)
       }
-      def resolveCols(scopes: List[Scope], sql: SQLDefBase) = {
+      def resolveCols(ctx: Ctx, sql: SQLDefBase) = {
         sql.cols.flatMap {
           case ColDef(_, All, _) => sql.tables.flatMap { td =>
-            table(scopes)(td.name)().map(_.cols.map { c =>
+            table(ctx.scopes)(td.name)(EnvMetadata, ctx.db).map(_.cols.map { c =>
               ColDef(c.name, createCol(s"${td.name}.${c.name}").col, c.scalaType)
-            }).getOrElse(throw new CompilerException(s"Cannot find table: ${td.tresql}\nScopes:\n$scopes"))
+            }).getOrElse(throw new CompilerException(s"Cannot find table: ${td.tresql}\nScopes:\n${ctx.scopes}"))
           }
           case ColDef(_, IdentAll(Ident(ident)), _) =>
             val alias = ident mkString "."
-            table(scopes)(alias)()
+            table(ctx.scopes)(alias)(EnvMetadata, ctx.db)
               .map(_.cols.map { c => ColDef(c.name, createCol(s"$alias.${c.name}").col, c.scalaType) })
               .getOrElse(throw new CompilerException(s"Cannot find table: $alias"))
-          case ColDef(n, e, t) => List(ColDef(n, resolver(scopes)(e), t))
+          case ColDef(n, e, t) => List(ColDef(n, resolver(ctx)(e), t))
         }
       }
 
@@ -595,19 +616,19 @@ trait Compiler extends QueryParsers { thisCompiler =>
           val nsd = sd.copy(tables = {
             sd.tables.map {
               case td @ TableDef(_, Obj(TableObj(_: SelectDefBase), _, _, _, _)) =>
-                resolver(scopes)(td).asInstanceOf[TableDef]
+                resolver(ctx)(td).asInstanceOf[TableDef]
               case td => td
             }
           })
-          val nscopes = nsd :: scopes
+          val nctx = ctx.copy(nsd :: ctx.scopes)
           nsd.copy (
-            cols = resolveCols(nscopes, nsd),
-            exp = resolver(nscopes)(nsd.exp).asInstanceOf[Query]
+            cols = resolveCols(nctx, nsd),
+            exp = resolver(nctx)(nsd.exp).asInstanceOf[Query]
           )
         case rd: ReturningDMLDef =>
           rd.copy(
-            cols = resolveCols(rd :: scopes, rd),
-            exp = resolver(scopes)(rd.exp).asInstanceOf[DMLDefBase]
+            cols = resolveCols(ctx.copy(scopes = rd :: ctx.scopes), rd),
+            exp = resolver(ctx)(rd.exp).asInstanceOf[DMLDefBase]
           )
         case wsd: WithSelectDef =>
           val (exp, wtables) = resolveWithQuery[SelectDefBase](wsd)
@@ -616,7 +637,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
           val (exp, wtables) = resolveWithQuery[DMLDefBase](wdmld)
           wdmld.copy(exp, wtables)
         case ins @ InsertDef(List(ColDef(_, All, _)), _, exp) =>
-          val nexp = resolver(scopes)(exp).asInstanceOf[Insert]
+          val nexp = resolver(ctx)(exp).asInstanceOf[Insert]
           nexp.vals match {
             case s: SQLDefBase =>
               val cols = s.cols map { c =>
@@ -627,9 +648,10 @@ trait Compiler extends QueryParsers { thisCompiler =>
               ins.copy(cols = cols, exp = nexp)
             case _ => ins.copy(exp = nexp)
           }
+        case ChildDef(exp, db) => ChildDef(resolver(ctx.copy(db = db))(exp), db)
       }
     }
-    resolver(Nil)(exp)
+    resolver(Ctx(Nil, None))(exp)
   }
 
   def resolveNamesAndJoins(exp: Exp) = {
@@ -640,7 +662,8 @@ trait Compiler extends QueryParsers { thisCompiler =>
     case class Context(colScopes: List[Scope],
                        tblScopes: List[Scope],
                        ctx: Ctx, isGrpOrd: Boolean,
-                       withTableMetadata: Option[WithTableMetadata]) {
+                       withTableMetadata: Option[WithTableMetadata],
+                       db: Option[String]) {
       def tableMetadata: TableMetadata = withTableMetadata.getOrElse(EnvMetadata)
       def addTable(scope: Scope) = withTableMetadata
         .map { case WithTableMetadata(scopes) => WithTableMetadata(scope :: scopes)}
@@ -649,12 +672,14 @@ trait Compiler extends QueryParsers { thisCompiler =>
       def withMetadata = withTableMetadata.map(_ => this)
         .getOrElse(this.copy(withTableMetadata = Some(WithTableMetadata(Nil))))
     }
-    def checkDefaultJoin(scopes: List[Scope], table1: TableDef, table2: TableDef) = if (table1 != null) {
-      for {
-        t1 <- table(scopes)(table1.name)()
-        t2 <- table(scopes)(table2.name)()
-      } yield try metadata.join(t1.name, t2.name) catch {
-        case e: Exception => throw new CompilerException(e.getMessage, cause = e)
+    def checkDefaultJoin(scopes: List[Scope], table1: TableDef, table2: TableDef, db: Option[String]) = {
+      if (table1 != null) {
+        for {
+          t1 <- table(scopes)(table1.name)(EnvMetadata, db)
+          t2 <- table(scopes)(table2.name)(EnvMetadata, db)
+        } yield try metadata.join(t1.name, t2.name) catch {
+          case e: Exception => throw new CompilerException(e.getMessage, cause = e)
+        }
       }
     }
     lazy val namer: Traverser[Context] = traverser(ctx => {
@@ -667,7 +692,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
             //join definition check goes within this select scope
             namer(nctx)(j)
             j match {
-              case Join(true, _, _) => checkDefaultJoin(nctx.tblScopes, prevTable, t)
+              case Join(true, _, _) => checkDefaultJoin(nctx.tblScopes, prevTable, t, ctx.db)
               case _ =>
             }
           }
@@ -698,8 +723,8 @@ trait Compiler extends QueryParsers { thisCompiler =>
         namer(wtCtx)(wsd.exp)
         ctx
       case dml: DMLDefBase =>
-        val dmlTableCtx = Context(Nil, Nil, TableCtx, isGrpOrd = false, None) // root scope
-        val dmlColCtx = Context(colScopes = List(dml), tblScopes = Nil, ColumnCtx, isGrpOrd = false, None) // dml table scope
+        val dmlTableCtx = Context(Nil, Nil, TableCtx, isGrpOrd = false, None, ctx.db) // root scope
+        val dmlColCtx = Context(colScopes = List(dml), tblScopes = Nil, ColumnCtx, isGrpOrd = false, None, ctx.db) // dml table scope
         val thisCtx = ctx.copy(colScopes = dml :: ctx.colScopes)
         dml.tables foreach (t => namer(dmlTableCtx)(t.exp.obj)) // dml table must come from root scope
         dml match {
@@ -734,7 +759,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         //return old scope
         ctx
       case rdml: ReturningDMLDef =>
-        val tableCtx = Context(Nil, Nil, TableCtx, isGrpOrd = false, None) // root scope
+        val tableCtx = Context(Nil, Nil, TableCtx, isGrpOrd = false, None, ctx.db) // root scope
         namer(tableCtx)(rdml.tables.head.exp.obj) //first table must come from root scope since it is modified
         rdml.tables.tail foreach (t => namer(ctx)(t.exp.obj))
         val colCtx = ctx.copy(colScopes = List(rdml))
@@ -746,23 +771,25 @@ trait Compiler extends QueryParsers { thisCompiler =>
       case o: Obj => namer(namer(ctx.copy(ctx = ColumnCtx))(o.join))(o.obj) //set column context
       case Ident(ident) if ctx.ctx == TableCtx => //check table
         val tn = ident mkString "."
-        table(ctx.tblScopes)(tn)(ctx.tableMetadata).orElse(throw new CompilerException(s"Unknown table: $tn"))
+        table(ctx.tblScopes)(tn)(ctx.tableMetadata, ctx.db).orElse(throw new CompilerException(s"Unknown table: $tn"))
         ctx
       case Ident(ident) if ctx.ctx == ColumnCtx => //check column
         val cn = ident mkString "."
-        (if (ctx.isGrpOrd) declaredColumn(ctx.colScopes)(cn)(ctx.tableMetadata) else column(ctx.colScopes)(cn)(ctx.tableMetadata))
+        (if (ctx.isGrpOrd) declaredColumn(ctx.colScopes)(cn)(ctx.tableMetadata, ctx.db) else
+          column(ctx.colScopes)(cn)(ctx.tableMetadata, ctx.db))
           .orElse(throw new CompilerException(s"Unknown column: $cn"))
         ctx
+      case ChildDef(exp, db) => namer(ctx.copy(db = db))(exp)
     })
-    namer(Context(Nil, Nil, ColumnCtx, isGrpOrd = false, None))(exp)
+    namer(Context(Nil, Nil, ColumnCtx, isGrpOrd = false, None, None))(exp)
     exp
   }
 
   def resolveColTypes(exp: Exp) = {
-    case class Ctx(scopes: List[Scope], mf: Manifest[_])
-    def type_from_const(const: Any): Ctx = Ctx(Nil, const match {
+    case class Ctx(scopes: List[Scope], db: Option[String], mf: Manifest[_])
+    def type_from_const(const: Any): Ctx = Ctx(Nil, None, const match {
       case n: java.lang.Number => ManifestFactory.classType(n.getClass)
-      case b: Boolean => ManifestFactory.Boolean
+      case _: Boolean => ManifestFactory.Boolean
       case s: String => ManifestFactory.classType(s.getClass)
       case m: Manifest[_] => m
       case null => Manifest.Any
@@ -772,7 +799,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
       case Const(const) => type_from_const(const)
       case _: Null => type_from_const(null)
       case Ident(ident) =>
-        Ctx(ctx.scopes, column(ctx.scopes)(ident mkString ".")().map(_.scalaType).get)
+        Ctx(ctx.scopes, ctx.db, column(ctx.scopes)(ident mkString ".")(EnvMetadata, ctx.db).map(_.scalaType).get)
       case UnOp(_, operand) => typer(ctx)(operand)
       case BinOp(op, lop, rop) =>
         comp_op.findAllIn(op).toList match {
@@ -786,7 +813,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
                   if (lt.toString == "java.lang.String") lt else if (rt.toString == "java.lang.String") rt
                   else if (lt.toString == "java.lang.Boolean") lt else if (rt.toString == "java.lang.Boolean") rt
                   else if (lt <:< rt) rt else if (rt <:< lt) lt else lt
-                Ctx(ctx.scopes, mf)
+                Ctx(ctx.scopes, ctx.db, mf)
             }
           }
           case _ => type_from_const(true)
@@ -805,21 +832,24 @@ trait Compiler extends QueryParsers { thisCompiler =>
       case Cast(_, typ) => type_from_const(metadata.xsd_scala_type_map(typ))
       case PrimitiveDef(e, _) => typer(ctx)(e)
     })
-    lazy val type_resolver: TransformerWithState[List[Scope]] = transformerWithState { ctx =>
+    case class ResolverCtx(scopes: List[Scope], db: Option[String])
+    lazy val type_resolver: TransformerWithState[ResolverCtx] = transformerWithState { ctx =>
       def resolveWithQuery[T <: SQLDefBase](withQuery: WithQuery): (T, List[WithTableDef]) = {
         val wtables = withQuery.withTables.foldLeft(List[WithTableDef]()) { (tables, table) =>
-          type_resolver(tables ++ ctx)(table).asInstanceOf[WithTableDef] :: tables
+          type_resolver(ctx.copy(scopes = tables ++ ctx.scopes))(table).asInstanceOf[WithTableDef] :: tables
         }
-        (type_resolver(wtables ++ ctx)(withQuery.exp).asInstanceOf[T], wtables.reverse)
+        (type_resolver(ctx.copy(scopes = wtables ++ ctx.scopes))(withQuery.exp).asInstanceOf[T], wtables.reverse)
       }
       {
         case s: SelectDef =>
           //resolve column types for potential from clause select definitions
-          val nsd = s.copy(tables = (s.tables map type_resolver(s :: ctx)).asInstanceOf[List[TableDef]])
+          val nsd = s.copy(tables =
+            (s.tables map type_resolver(ctx.copy(scopes = s :: ctx.scopes))).asInstanceOf[List[TableDef]])
           //resolve types for column defs
-          nsd.copy(cols = (nsd.cols map type_resolver(nsd :: ctx)).asInstanceOf[List[ColDef[_]]])
+          nsd.copy(cols =
+            (nsd.cols map type_resolver(ctx.copy(scopes = nsd :: ctx.scopes))).asInstanceOf[List[ColDef[_]]])
         case wtd: WithTableDef =>
-          val nctx = if (wtd.recursive) wtd :: ctx else ctx
+          val nctx = if (wtd.recursive) ctx.copy(scopes = wtd :: ctx.scopes) else ctx
           val exp = type_resolver(nctx)(wtd.exp).asInstanceOf[SQLDefBase]
           val cols = wtd.cols zip exp.cols map { case (col, ecol) => col.copy(typ = ecol.typ) }
           wtd.copy(cols = cols, exp = exp)
@@ -829,28 +859,32 @@ trait Compiler extends QueryParsers { thisCompiler =>
         case wdmld: WithDMLDef =>
           val (exp, wtables) = resolveWithQuery[DMLDefBase](wdmld)
           wdmld.copy(exp = exp, withTables = wtables)
-        case dml: DMLDefBase if ctx.isEmpty || ctx.head != dml => type_resolver(dml :: ctx)(dml)
+        case dml: DMLDefBase if ctx.scopes.isEmpty || ctx.scopes.head != dml =>
+          type_resolver(ctx.copy(scopes = dml :: ctx.scopes))(dml)
         case rdml: ReturningDMLDef =>
           //resolve column types for potential from clause select definitions
-          val nrdml = rdml.copy(tables = (rdml.tables map type_resolver(rdml :: ctx)).asInstanceOf[List[TableDef]])
+          val nrdml = rdml.copy(tables =
+            (rdml.tables map type_resolver(ctx.copy(scopes = rdml :: ctx.scopes))).asInstanceOf[List[TableDef]])
           //resolve types for column defs
-          nrdml.copy(cols = (nrdml.cols map type_resolver(nrdml :: ctx)).asInstanceOf[List[ColDef[_]]])
-        case ColDef(n, ChildDef(ch), t) => ColDef(n, ChildDef(type_resolver(ctx)(ch)), t)
+          nrdml.copy(cols =
+            (nrdml.cols map type_resolver(ctx.copy(scopes = nrdml :: ctx.scopes))).asInstanceOf[List[ColDef[_]]])
+        case ColDef(n, ChildDef(ch, db), t) =>
+          ColDef(n, ChildDef(type_resolver(ctx.copy(db = db))(ch), db), t)
         case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
           val nexp = type_resolver(ctx)(exp) //resolve expression in the case it contains select
-          ColDef(n, nexp, typer(Ctx(ctx, Manifest.Any))(nexp).mf)
+          ColDef(n, nexp, typer(Ctx(ctx.scopes, ctx.db, Manifest.Any))(nexp).mf)
         //resolve return type only for root level function
-        case fd @ FunDef(n, f, typ, p) if ctx.isEmpty && (typ == null || typ == Manifest.Nothing) =>
+        case fd @ FunDef(_, f, typ, p) if ctx.scopes.isEmpty && (typ == null || typ == Manifest.Nothing) =>
           val t = if (p.returnTypeParIndex == -1) Manifest.Any else {
-            typer(Ctx(ctx, Manifest.Any))(f.parameters(p.returnTypeParIndex)).mf
+            typer(Ctx(ctx.scopes, ctx.db, Manifest.Any))(f.parameters(p.returnTypeParIndex)).mf
           }
           fd.copy(typ = t)
         case PrimitiveDef(exp, _) =>
           val res_exp = type_resolver(ctx)(exp)
-          PrimitiveDef(res_exp, typer(Ctx(ctx, Manifest.Any))(res_exp).mf)
+          PrimitiveDef(res_exp, typer(Ctx(ctx.scopes, ctx.db, Manifest.Any))(res_exp).mf)
       }
     }
-    type_resolver(Nil)(exp)
+    type_resolver(ResolverCtx(Nil, None))(exp)
   }
 
   def compile(exp: Exp) = {

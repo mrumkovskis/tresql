@@ -9,8 +9,8 @@ DUMMY {DUMMY} + [0] --> [[1]]
 DEPT {DEPTNO, DNAME, LOC} + [10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"] --> [[2]]
 DEPT {DEPTNO, DNAME, LOC} + [], [*] --> 30; 'SALES; 'CHICAGO; 40; 'OPERATIONS; 'BOSTON --> [[2]]
 //EMPS
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7839, "KING",   "PRESIDENT", null, "1981-11-17", 5000, null, 10] --> [[1]]
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7698, "BLAKE",  "MANAGER",   7839, "1981-05-01",  2850, null, *] --> 30 --> [[1]]
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO, +contact_db:contact{id, name, sex, birth_date, email}[7839, "Peter", "M", "1980-03-10", "peter@tresql.org"]} + [7839, "KING",   "PRESIDENT", null, "1981-11-17", 5000, null, 10] --> [[1, [[[1]]]]]
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO, +contact_db:contact{id, name, sex, birth_date, email}[7698, "John", "M", "1982-02-05", "john@tresql.org"]} + [7698, "BLAKE",  "MANAGER",   7839, "1981-05-01",  2850, null, 30] --> [[1, [[[1]]]]]
 EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7782, "CLARK",  *,   7839, "1981-06-9", 2450, null, 10] --> 'MANAGER --> [[1]]
 EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [*, "JONES",  "MANAGER",   7839, "1981-04-02",  2975, null, 20] --> 7566 --> [[1]]
 EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7499, "ALLEN",  "SALESMAN",  7698, "1981-02-20", *] --> 1600; 300; 30 --> [[1]]
@@ -279,6 +279,7 @@ work[empno]emp{emp.empno, ename, sal, |[empno]work{hours, work.hours/:1(sal) * 1
 //hierarchical query with child from another database
 dept[dname ~~ 'acc%']{dname, |emp_db:emp {ename}#(1)} --> [["ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
 dept[dname ~~ 'acc%']{dname, |emp_db:[dept.deptno = emp.deptno]emp {ename}#(1)} --> [["ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
+emp[ename = 'BLAKE']{ ename, |contact_db:[id = emp.empno]contact{email} email} --> [["BLAKE", [["john@tresql.org"]]]]
 
 //union
 dept[?]{deptno} ++ emp[?]{empno} ++ salgrade[?]{grade} --> 10;7839;1 --> [[10], [7839], [1]]

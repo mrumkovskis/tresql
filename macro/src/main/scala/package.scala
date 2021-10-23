@@ -104,7 +104,7 @@ package object tresql extends CoreTypes {
       val compilerMetadata = metadata(macroSettings, verbose)
       info(s"Compiling: $tresqlString")
       val compiler = new QueryCompiler(
-        compilerMetadata.metadata, new MacroResourcesImpl(compilerMetadata.macros))
+        compilerMetadata.metadata, Map(), new MacroResourcesImpl(compilerMetadata.macros))
       val compiledExp = try compiler.compile(tresqlString) catch {
         case ce: CompilerException => c.abort(c.enclosingPosition, ce.getMessage)
       }
@@ -247,7 +247,7 @@ package object tresql extends CoreTypes {
               null,
               maybeResConv(colsCtx.colTypes.reverse, colsCtx.resultConvs.reverse)
             )
-          case compiler.ColDef(colName, compiler.ChildDef(sd: compiler.RowDefBase), _) =>
+          case compiler.ColDef(colName, compiler.ChildDef(sd: compiler.RowDefBase, _), _) =>
             val selDefCtx = generator(Ctx(ctx.className, Nil, ctx.depth + 1,
               ctx.colIdx, ctx.childIdx, ctx.convRegister,
               Set(), null, ctx.resultConverter))(sd)
