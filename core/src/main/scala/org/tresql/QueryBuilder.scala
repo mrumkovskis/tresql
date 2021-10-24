@@ -12,6 +12,7 @@ object QueryBuildCtx {
   trait Ctx
   object ARR_CTX extends Ctx
   object QUERY_CTX extends Ctx
+  object DML_CTX extends Ctx
   object FROM_CTX extends Ctx
   object JOIN_CTX extends Ctx
   object WHERE_CTX extends Ctx
@@ -1093,17 +1094,20 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case NullUpdate => ConstExpr(NullUpdate)
         //insert
         case i @ Insert(t, a, c, v, r, db) => parseCtx match {
-          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(db, _.buildInternal(i, QUERY_CTX))
+          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(db, _.buildInternal(i, DML_CTX))
+          case QUERY_CTX if db.nonEmpty => buildWithNew(db, _.buildInternal(i, DML_CTX))
           case _ => buildInsert(t, a, c, v, r, parseCtx)
         }
         //update
         case u @ Update(t, a, f, c, v, r, db) => parseCtx match {
-          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(db, _.buildInternal(u, QUERY_CTX))
+          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(db, _.buildInternal(u, DML_CTX))
+          case QUERY_CTX if db.nonEmpty => buildWithNew(db, _.buildInternal(u, DML_CTX))
           case _ => buildUpdate(t, a, f, c, v, r, parseCtx)
         }
         //delete
         case d @ Delete(t, a, f, u, r, db) => parseCtx match {
-          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(db, _.buildInternal(d, QUERY_CTX))
+          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(db, _.buildInternal(d, DML_CTX))
+          case QUERY_CTX if db.nonEmpty => buildWithNew(db, _.buildInternal(d, DML_CTX))
           case _ => buildDelete(t, a, f, u, r, parseCtx)
         }
         //recursive child query

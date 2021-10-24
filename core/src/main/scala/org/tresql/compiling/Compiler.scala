@@ -484,7 +484,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
             BinSelectDef(lop, FunSelectDef(Nil, Nil, rop), b)
           case (lop, rop) => b.copy(lop = lop, rop = rop)
         }
-      case ChildQuery(q: Exp @unchecked, db) if ctx == ColsCtx =>
+      case ChildQuery(q: Exp @unchecked, db) =>
         val exp = q match {
           //recursive expression
           case a: Arr => RecursiveDef(builder(BodyCtx)(a))
@@ -723,9 +723,9 @@ trait Compiler extends QueryParsers { thisCompiler =>
         namer(wtCtx)(wsd.exp)
         ctx
       case dml: DMLDefBase =>
-        val dmlTableCtx = Context(Nil, Nil, TableCtx, isGrpOrd = false, None, ctx.db) // root scope
-        val dmlColCtx = Context(colScopes = List(dml), tblScopes = Nil, ColumnCtx, isGrpOrd = false, None, ctx.db) // dml table scope
-        val thisCtx = ctx.copy(colScopes = dml :: ctx.colScopes)
+        val dmlTableCtx = Context(Nil, Nil, TableCtx, isGrpOrd = false, None, dml.db) // root scope
+        val dmlColCtx = Context(colScopes = List(dml), tblScopes = Nil, ColumnCtx, isGrpOrd = false, None, dml.db) // dml table scope
+        val thisCtx = ctx.copy(colScopes = dml :: ctx.colScopes, db = dml.db)
         dml.tables foreach (t => namer(dmlTableCtx)(t.exp.obj)) // dml table must come from root scope
         dml match {
           case ins: InsertDef =>
@@ -759,10 +759,10 @@ trait Compiler extends QueryParsers { thisCompiler =>
         //return old scope
         ctx
       case rdml: ReturningDMLDef =>
-        val tableCtx = Context(Nil, Nil, TableCtx, isGrpOrd = false, None, ctx.db) // root scope
+        val tableCtx = Context(Nil, Nil, TableCtx, isGrpOrd = false, None, rdml.exp.db) // root scope
         namer(tableCtx)(rdml.tables.head.exp.obj) //first table must come from root scope since it is modified
         rdml.tables.tail foreach (t => namer(ctx)(t.exp.obj))
-        val colCtx = ctx.copy(colScopes = List(rdml))
+        val colCtx = ctx.copy(colScopes = List(rdml), db = rdml.exp.db)
         rdml.cols foreach namer(colCtx)
         namer(ctx)(rdml.exp)
         ctx
@@ -860,11 +860,11 @@ trait Compiler extends QueryParsers { thisCompiler =>
           val (exp, wtables) = resolveWithQuery[DMLDefBase](wdmld)
           wdmld.copy(exp = exp, withTables = wtables)
         case dml: DMLDefBase if ctx.scopes.isEmpty || ctx.scopes.head != dml =>
-          type_resolver(ctx.copy(scopes = dml :: ctx.scopes))(dml)
+          type_resolver(ctx.copy(scopes = dml :: ctx.scopes, db = dml.db))(dml)
         case rdml: ReturningDMLDef =>
           //resolve column types for potential from clause select definitions
           val nrdml = rdml.copy(tables =
-            (rdml.tables map type_resolver(ctx.copy(scopes = rdml :: ctx.scopes))).asInstanceOf[List[TableDef]])
+            (rdml.tables map type_resolver(ctx.copy(scopes = rdml :: ctx.scopes, db = rdml.exp.db))).asInstanceOf[List[TableDef]])
           //resolve types for column defs
           nrdml.copy(cols =
             (nrdml.cols map type_resolver(ctx.copy(scopes = nrdml :: ctx.scopes))).asInstanceOf[List[ColDef[_]]])
@@ -882,6 +882,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         case PrimitiveDef(exp, _) =>
           val res_exp = type_resolver(ctx)(exp)
           PrimitiveDef(res_exp, typer(Ctx(ctx.scopes, ctx.db, Manifest.Any))(res_exp).mf)
+        case ChildDef(ch, db) => ChildDef(type_resolver(ctx.copy(db = db))(ch), db)
       }
     }
     type_resolver(ResolverCtx(Nil, None))(exp)

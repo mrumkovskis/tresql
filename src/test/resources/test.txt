@@ -280,6 +280,21 @@ work[empno]emp{emp.empno, ename, sal, |[empno]work{hours, work.hours/:1(sal) * 1
 dept[dname ~~ 'acc%']{dname, |emp_db:emp {ename}#(1)} --> [["ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
 dept[dname ~~ 'acc%']{dname, |emp_db:[dept.deptno = emp.deptno]emp {ename}#(1)} --> [["ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
 emp[ename = 'BLAKE']{ ename, |contact_db:[id = emp.empno]contact{email} email} --> [["BLAKE", [["john@tresql.org"]]]]
+emp[ename = 'BLAKE']{ ename, |contact_db:[id = emp.empno]contact{*} email} --> [["BLAKE", [[7698, "John", "M", "1982-02-05", "john@tresql.org"]]]]
+
+//query from another database
+emp[ename = 'BLAKE'], |contact_db:contact[name = 'John'] --> [[[[7698, "BLAKE", "MANAGER", 7839, "1981-05-01", 2850.00, null, 30]], [[7698, "John", "M", "1982-02-05", "john@tresql.org"]]]]
+|contact_db:contact[name = 'John']{*} --> [[7698, "John", "M", "1982-02-05", "john@tresql.org"]]
+|contact_db:contact[name = 'John']{email} --> [["john@tresql.org"]]
+
+//insert, update, delete into another database
++contact_db:contact{id, name, sex, birth_date, email, +contact_db:notes{id, contact_id, note_date, note}[#notes, :#contact, current_time, 'Pick up the phone']}[#contact, 'Zia', 'F', '1988-07-31', 'zia@tresql.org'] --> [[1, [[[1, 100001]]], 100000]]
+|contact_db:contact[name = 'Zia'] {email, |contact_db:[notes.contact_id = contact.id]notes{note} notes} --> [["zia@tresql.org", [["Pick up the phone"]]]]
+=contact_db:contact[name = 'Zia'] { birth_date, =contact_db:notes[contact_id = (contact[name = 'Zia']{id})]{note}['All good'] } ['1988-10-01'] --> [[1, [[[1]]]]]
+|contact_db:contact[name = 'Zia'] {birth_date, |contact_db:[notes.contact_id = contact.id]notes{note} notes} --> [["1988-10-01", [["All good"]]]]
+=contact_db:contact[name = 'Zia'] { -contact_db:notes[contact_id = (contact[name = 'Zia']{id})] } [] --> [[[[[1]]]]]
+|contact_db:contact[name = 'Zia'] {|contact_db:[notes.contact_id = contact.id]notes{note} notes} --> [[[]]]
+
 
 //union
 dept[?]{deptno} ++ emp[?]{empno} ++ salgrade[?]{grade} --> 10;7839;1 --> [[10], [7839], [1]]

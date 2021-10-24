@@ -245,6 +245,12 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
 
     //two aliases
     intercept[CompilerException](compiler.compile("dummy {dummy a b}"))
+
+    //child database error
+    intercept[CompilerException](compiler.compile("emp[ename = 'BLAKE']{ ename, |contact_db:[ids = emp.empno]contact{email} email}"))
+    intercept[CompilerException](compiler.compile("emp[ename = 'BLAKE']{ ename, |contact_db:[id = emp.empno]contacts{email} email}"))
+    intercept[CompilerException](compiler.compile("emp[ename = 'BLAKE']{ ename, |contact_db:[id = emp.empno]contact{eml} email}"))
+    intercept[CompilerException](compiler.compile("emp[ename = 'BLAKE']{ ename, |contact:[id = emp.empno]contact{eml} email}"))
   }
 
   if (executeCompilerMacroDependantTests) test("compiler macro") {
