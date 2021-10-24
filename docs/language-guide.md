@@ -26,7 +26,10 @@ Data selection
   * [Escape to sql](#escape-to-sql) 
   * [Table less query](#table-less-query)
 
-[Binding variables](#binding-variables)  
+[Binding variables](#binding-variables)
+
+[FROM clause](#from-clause)
+
 [Table joins](#table-joins)  
   * [Inner join](#inner-join)
   * [Outer join](#outer-join)
@@ -48,10 +51,6 @@ Data selection
 SELECT statement has following structure
 
 `<from>[<where>][<columns>][<group by> [<having>]][<order>][<offset> [<limit>]`
-
-FROM
-
-`<table expr>[<join><table expr> ...]`
 
 ### Simple SELECTs 
 
@@ -208,6 +207,20 @@ select dname from dept limit ?/*limit*/
 
 select dname from dept
 /* No bind variable */
+```
+
+### FROM clause
+
+`<table expr>[<join><table expr> ...]`
+
+Table expression can be table identifier or select expresion itself. In this case it must be placed in braces - `()`:
+
+`(dept[deptno = 10]{deptno, dname}) d[d.deptno = e.deptno](emp{*}) e{e.ename, d.dname}`
+```sql
+select e.ename, d.dname from
+  (select deptno, dname from dept where deptno = 10) d join
+  (select * from emp) e
+  on d.deptno = e.deptno
 ```
 
 ### Table joins 
