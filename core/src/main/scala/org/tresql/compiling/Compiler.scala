@@ -864,10 +864,12 @@ trait Compiler extends QueryParsers { thisCompiler =>
         case rdml: ReturningDMLDef =>
           //resolve column types for potential from clause select definitions
           val nrdml = rdml.copy(tables =
-            (rdml.tables map type_resolver(ctx.copy(scopes = rdml :: ctx.scopes, db = rdml.exp.db))).asInstanceOf[List[TableDef]])
+            (rdml.tables map type_resolver(ctx.copy(scopes = rdml :: ctx.scopes, db = rdml.exp.db)))
+              .asInstanceOf[List[TableDef]])
           //resolve types for column defs
           nrdml.copy(cols =
-            (nrdml.cols map type_resolver(ctx.copy(scopes = nrdml :: ctx.scopes))).asInstanceOf[List[ColDef[_]]])
+            (nrdml.cols map type_resolver(ctx.copy(scopes = nrdml :: ctx.scopes, db = rdml.exp.db)))
+              .asInstanceOf[List[ColDef[_]]])
         case ColDef(n, ChildDef(ch, db), t) =>
           ColDef(n, ChildDef(type_resolver(ctx.copy(db = db))(ch), db), t)
         case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>

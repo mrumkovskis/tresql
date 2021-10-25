@@ -197,6 +197,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     //returing compilation
     compile("i(#) { +dummy{dummy} [:v] {*} }, u(#) {=dummy [dummy = :v] {dummy = :v + 1} {*}}, d (#) {dummy - [dummy = :v] {*}} i ++ u ++ d")
     compile("d1(# *) { dummy a[]dummy b { b.dummy col }}, d2(# *) { d1[]dummy? {dummy.dummy d, d1.col c} }, i(# *) { +dummy {dummy} d1[col = 1]{col} {dummy} }, u(# *) { =dummy[dummy = d2.c]d2 {dummy = d2.c} {d2.c u } } u")
+    compile("+contact_db:contact{name}[:n] {name}")
 
     //values from select compilation errors
     intercept[CompilerException](compiler.compile("=dept_addr da [da.addr_nr = a.nr] (address a {a.addr}) a {da.addr = a.addr}"))
@@ -251,6 +252,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     intercept[CompilerException](compiler.compile("emp[ename = 'BLAKE']{ ename, |contact_db:[id = emp.empno]contacts{email} email}"))
     intercept[CompilerException](compiler.compile("emp[ename = 'BLAKE']{ ename, |contact_db:[id = emp.empno]contact{eml} email}"))
     intercept[CompilerException](compiler.compile("emp[ename = 'BLAKE']{ ename, |contact:[id = emp.empno]contact{eml} email}"))
+    intercept[CompilerException](compiler.compile("+contact_db:contact{name}[:n] {namez}"))
   }
 
   if (executeCompilerMacroDependantTests) test("compiler macro") {

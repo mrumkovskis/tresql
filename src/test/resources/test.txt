@@ -292,6 +292,7 @@ emp[ename = 'BLAKE'], |contact_db:contact[name = 'John'] --> [[[[7698, "BLAKE", 
 |contact_db:contact[name = 'Zia'] {email, |contact_db:[notes.contact_id = contact.id]notes{note} notes} --> [["zia@tresql.org", [["Pick up the phone"]]]]
 =contact_db:contact[name = 'Zia'] { birth_date, =contact_db:notes[contact_id = (contact[name = 'Zia']{id})]{note}['All good'] } ['1988-10-01'] --> [[1, [[[1]]]]]
 |contact_db:contact[name = 'Zia'] {birth_date, |contact_db:[notes.contact_id = contact.id]notes{note} notes} --> [["1988-10-01", [["All good"]]]]
+|contact_db:c(#) {contact} c{name, |contact_db:[n.contact_id = c.id]n(#){notes} n{note}#(id)}#(id) --> [["John", []], ["Peter", []], ["Zia", [["All good"]]]]
 =contact_db:contact[name = 'Zia'] { -contact_db:notes[contact_id = (contact[name = 'Zia']{id})] } [] --> [[[[[1]]]]]
 |contact_db:contact[name = 'Zia'] {|contact_db:[notes.contact_id = contact.id]notes{note} notes} --> [[[]]]
 
