@@ -634,8 +634,11 @@ object OrtMetadata {
   /** Table to save data to.
    * @param table         table name
    * @param refs          imported keys of table from parent or linked tables to be set
+   * @param uk            unique keys constraint of table within parent table record,
+   *                      i.e. reference field to parent table is added to get table level unique constraint.
+   *                      If table is top level {{{uk}}} is table level unique constraint.
    * */
-  case class SaveTo(table: String, refs: Set[String])
+  case class SaveTo(table: String, refs: Set[String], uk: Set[String])
   /** Save options
    *  @param doInsert     insert new children data
    *  @param doUpdate     update existing children data
