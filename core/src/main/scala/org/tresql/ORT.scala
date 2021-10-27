@@ -613,10 +613,11 @@ trait ORT extends Query {
 object OrtMetadata {
   sealed trait OrtValue
   /** Saveable column.
+   * @param name      saveable property name
    * @param col       Goes to column clause, parameter {{{tresql}}} goes to values clause.
-   * @param tresql    If {{{tresql.isEmpty}}} default value is bind variable {{{:col}}}
+   * @param tresql    If {{{tresql.isEmpty}}} default value is bind variable {{{:name}}}
    * */
-  sealed case class Property(col: String, tresql: Option[String]) extends OrtValue
+  sealed case class Property(name: String, col: String, tresql: Option[String]) extends OrtValue
   /** Saveable view.
    * @param saveTo        destination tables. If first table has {{{refs}}} parameter
    *                      it indicates reference field to parent.
@@ -634,11 +635,9 @@ object OrtMetadata {
   /** Table to save data to.
    * @param table         table name
    * @param refs          imported keys of table from parent or linked tables to be set
-   * @param uk            unique keys constraint of table within parent table record,
-   *                      i.e. reference field to parent table is added to get table level unique constraint.
-   *                      If table is top level {{{uk}}} is table level unique constraint.
+   * @param key           column names uniquely identifying table record
    * */
-  case class SaveTo(table: String, refs: Set[String], uk: Set[String])
+  case class SaveTo(table: String, refs: Set[String], key: Seq[String])
   /** Save options
    *  @param doInsert     insert new children data
    *  @param doUpdate     update existing children data
