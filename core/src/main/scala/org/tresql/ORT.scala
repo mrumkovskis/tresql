@@ -1,5 +1,7 @@
 package org.tresql
 
+import org.tresql.OrtMetadata.Filters
+
 import sys._
 
 /** Object Relational Transformations - ORT */
@@ -48,7 +50,6 @@ trait ORT extends Query {
 
   case class TableLink(table: String, refs: Set[String])
   case class ParentRef(table: String, ref: String)
-  case class Filters(insert: Option[String], delete: Option[String], update: Option[String])
   case class Property(
     tables: List[TableLink],
     insert: Boolean,
@@ -312,7 +313,7 @@ trait ORT extends Query {
       } orElse {
         import parsing._
         Option(filterStr).flatMap(new QueryParser(resources, resources.cache).parseExp(_) match {
-          case Arr(List(insert, delete, update)) => Some(ORT.this.Filters(
+          case Arr(List(insert, delete, update)) => Some(OrtMetadata.Filters(
             insert = Some(insert).filter(_ != Null).map(_.tresql),
             delete = Some(delete).filter(_ != Null).map(_.tresql),
             update = Some(update).filter(_ != Null).map(_.tresql)
@@ -607,6 +608,19 @@ trait ORT extends Query {
           .map(_ => s" '$name'").getOrElse(""), false)
     }.orNull
   }
+}
+
+object OrtMetadata {
+  trait OrtValue
+  case class Property(col: String, tresql: Option[String]) extends OrtValue
+  case class View(saveTo: List[SaveTo],
+                  options: SaveOptions,
+                  filters: Option[Filters],
+                  alias: String,
+                  properties: List[OrtValue]) extends OrtValue
+  case class SaveTo(table: String, refs: Set[String])
+  case class SaveOptions(doInsert: Boolean, doUpdate: Boolean, doDelete: Boolean)
+  case class Filters(insert: Option[String], delete: Option[String], update: Option[String])
 }
 
 object ORT extends ORT
