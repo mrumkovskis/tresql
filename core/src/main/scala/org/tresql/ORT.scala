@@ -627,10 +627,10 @@ object OrtMetadata {
    *
    * */
   sealed case class View(saveTo: List[SaveTo],
-                  options: SaveOptions,
-                  filters: Option[Filters],
-                  alias: String,
-                  properties: List[OrtValue]) extends OrtValue
+                         options: SaveOptions,
+                         filters: Option[Filters],
+                         alias: String,
+                         properties: List[OrtValue]) extends OrtValue
   /** Table to save data to.
    * @param table         table name
    * @param refs          imported keys of table from parent or linked tables to be set
