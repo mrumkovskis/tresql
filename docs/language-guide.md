@@ -12,7 +12,7 @@ Contents
 tresql provides syntax for both querying (SELECT) and data manipulation (INSERT, UPDATE)
 as well as more complicated SQL constructs like Common Table Expressions (CTE aka WITH queries).
 
-For other many other examples see also hsqldb [test satements](/src/test/resources/test.txt) and
+For many other examples see also hsqldb [test satements](/src/test/resources/test.txt) and
 postgresql [test statements](/src/it/resources/pgtest.txt)
 
 Data selection 
