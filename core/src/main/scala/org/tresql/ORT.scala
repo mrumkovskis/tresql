@@ -611,15 +611,42 @@ trait ORT extends Query {
 }
 
 object OrtMetadata {
-  trait OrtValue
-  case class Property(col: String, tresql: Option[String]) extends OrtValue
-  case class View(saveTo: List[SaveTo],
+  sealed trait OrtValue
+  /** Saveable column.
+   * @param col       Goes to column clause, parameter {{{tresql}}} goes to values clause.
+   * @param tresql    If {{{tresql.isEmpty}}} default value is bind variable {{{:col}}}
+   * */
+  sealed case class Property(col: String, tresql: Option[String]) extends OrtValue
+  /** Saveable view.
+   * @param saveTo        destination tables. If first table has {{{refs}}} parameter
+   *                      it indicates reference field to parent.
+   * @param options       saveable options [+-=]. Relevant for child views
+   * @param filters       horizontal authentication filters
+   * @param alias         table alias in DML statement
+   * @param properties    saveable fields
+   *
+   * */
+  sealed case class View(saveTo: List[SaveTo],
                   options: SaveOptions,
                   filters: Option[Filters],
                   alias: String,
                   properties: List[OrtValue]) extends OrtValue
+  /** Table to save data to.
+   * @param table         table name
+   * @param refs          imported keys of table from parent or linked tables to be set
+   * */
   case class SaveTo(table: String, refs: Set[String])
+  /** Save options
+   *  @param doInsert     insert new children data
+   *  @param doUpdate     update existing children data
+   *  @param doDelete     delete absent children data
+   * */
   case class SaveOptions(doInsert: Boolean, doUpdate: Boolean, doDelete: Boolean)
+  /** Horizontal authentication filters
+   *  @param insert   insert statement where clause
+   *  @param delete   delete statement where clause
+   *  @param update   update statement where clause
+   * */
   case class Filters(insert: Option[String], delete: Option[String], update: Option[String])
 }
 
