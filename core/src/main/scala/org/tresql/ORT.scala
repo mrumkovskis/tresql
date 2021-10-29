@@ -159,6 +159,67 @@ trait ORT extends Query {
       s"Cannot update data. Table not found or no primary key or no updateable columns found for the object: $name")
   }
 
+  def delete(name: String, id: Any, filter: String = null, filterParams: Map[String, Any] = null)
+            (implicit resources: Resources): Any = {
+    val delete = deleteTresql(name, filter)
+    build(delete, Map("1" -> id) ++ Option(filterParams).getOrElse(Map()),
+      reusableExpr = false)(resources)()
+  }
+
+  /** insert methods to multiple tables
+   *  Tables must be ordered in parent -> child direction. */
+  def insertMultiple(obj: Map[String, Any], names: String*)(filter: String = null)
+                    (implicit resources: Resources): Any = insert(names.mkString("#"), obj, filter)
+
+  /** update to multiple tables
+   *  Tables must be ordered in parent -> child direction. */
+  def updateMultiple(obj: Map[String, Any], names: String*)(filter: String = null)
+                    (implicit resources: Resources): Any = update(names.mkString("#"), obj, filter)
+
+  //object methods
+  def insertObj[T](obj: T, filter: String = null)(
+    implicit resources: Resources, conv: ObjToMapConverter[T]): Any = {
+    val v = conv(obj)
+    insert(v._1, v._2, filter)
+  }
+  def updateObj[T](obj: T, filter: String = null)(
+    implicit resources: Resources, conv: ObjToMapConverter[T]): Any = {
+    val v = conv(obj)
+    update(v._1, v._2, filter)
+  }
+
+  def insertTresql(obj: Map[String, Any], names: String*)(filter: String = null)
+                  (implicit resources: Resources): String = {
+    val ns = names.mkString("#")
+    val names_with_filter = if (filter == null) ns else s"$ns|$filter, null, null"
+    val struct = tresql_structure(obj)
+    val view = ort_metadata(names_with_filter, struct)
+    save_tresql(view, names_with_filter, Nil, insert_tresql)
+  }
+
+  def updateTresql(obj: Map[String, Any], names: String*)(filter: String = null)
+                  (implicit resources: Resources): String = {
+    val ns = names.mkString("#")
+    val names_with_filter = if (filter == null) ns else s"$ns|null, null, $filter"
+    val struct = tresql_structure(obj)
+    val view = ort_metadata(names_with_filter, struct)
+    save_tresql(view, names_with_filter, Nil, update_tresql)
+  }
+
+  def deleteTresql(name: String, filter: String = null)(implicit resources: Resources): String = {
+    val Array(tableName, alias) = name.split("\\s+").padTo(2, null)
+    (for {
+      table <- resources.metadata.tableOption(tableName)
+      pk <- table.key.cols.headOption
+      if table.key.cols.size == 1
+    } yield {
+      s"-${table.name}${Option(alias).map(" " + _).getOrElse("")}[$pk = ?${Option(filter)
+        .map(f => s" & ($f)").getOrElse("")}]"
+    }) getOrElse {
+      error(s"Table $name not found or table primary key not found or table primary key consists of more than one column")
+    }
+  }
+
   def insert(metadata: View, obj: Map[String, Any]): Any = {
 
   }
@@ -175,70 +236,16 @@ trait ORT extends Query {
 
   }
 
-  private def save(
-    name: String,
-    obj: Map[String, Any],
-    save_tresql_fun: SaveContext => String,
-    errorMsg: String)
-    (implicit resources: Resources): Any = {
+  private def save(name: String,
+                   obj: Map[String, Any],
+                   save_tresql_fun: SaveContext => String,
+                   errorMsg: String)(implicit resources: Resources): Any = {
     val struct = tresql_structure(obj)
     resources log s"\nStructure: $name - $struct"
     val view = ort_metadata(name, struct)
     val tresql = save_tresql(view, name, Nil, save_tresql_fun)
     if(tresql == null) error(errorMsg)
     build(tresql, obj, reusableExpr = false)(resources)()
-  }
-
-  def delete(name: String, id: Any, filter: String = null, filterParams: Map[String, Any] = null)
-            (implicit resources: Resources): Any = {
-    val delete = deleteTresql(name, filter)
-    build(delete, Map("1" -> id) ++ Option(filterParams).getOrElse(Map()),
-      reusableExpr = false)(resources)()
-  }
-
-  /** insert methods to multiple tables
-   *  Tables must be ordered in parent -> child direction. */
-  def insertMultiple(obj: Map[String, Any], names: String*)(filter: String = null)
-    (implicit resources: Resources): Any = insert(names.mkString("#"), obj, filter)
-
-  /** update to multiple tables
-   *  Tables must be ordered in parent -> child direction. */
-  def updateMultiple(obj: Map[String, Any], names: String*)(filter: String = null)
-    (implicit resources: Resources): Any = update(names.mkString("#"), obj, filter)
-
-  private def multiSaveProp(names: Seq[String])(implicit resources: Resources) = {
-    /* Returns zero or one imported key from table for each relation. In the case of multiple
-     * imported keys pointing to the same relation the one specified after : symbol is chosen
-     * or exception is thrown.
-     * This is used to find relation columns for insert/update multiple methods.
-     * Additionaly primary key of table is returned if it consist only of one column */
-    def importedKeysAndPks(tableName: String, relations: List[String]) = {
-      val x = tableName split ":"
-      val table = resources.metadata.table(x.head)
-      relations.foldLeft(x.tail.toSet) { (keys, rel) =>
-        val relation = rel.split(":").head
-        val refs = table.refs(relation).filter(_.cols.size == 1)
-        (if (refs.size == 1) keys + refs.head.cols.head
-        else if (refs.isEmpty || refs.exists(r => keys.contains(r.cols.head))) keys
-        else error(s"Ambiguous refs: $refs from table ${table.name} to table $relation")) ++
-        (table.key.cols match {case List(k) => Set(k) case _ => Set()})
-      }
-    }
-    names.tail.foldLeft(List(names.head)) { (ts, t) => (t.split(":")
-      .head + importedKeysAndPks(t, ts).mkString(":", ":", "")) :: ts
-    }.reverse.mkString("#")
-  }
-
-  //object methods
-  def insertObj[T](obj: T, filter: String = null)(
-      implicit resources: Resources, conv: ObjToMapConverter[T]): Any = {
-    val v = conv(obj)
-    insert(v._1, v._2, filter)
-  }
-  def updateObj[T](obj: T, filter: String = null)(
-      implicit resources: Resources, conv: ObjToMapConverter[T]): Any = {
-    val v = conv(obj)
-    update(v._1, v._2, filter)
   }
 
   private def tresql_structure(obj: Map[String, Any]): Map[String, Any] = {
@@ -278,6 +285,28 @@ trait ORT extends Query {
 
   private def ort_metadata(tables: String, struct: Map[String, Any])(implicit resources: Resources): View = {
     def parseTables(name: String) = {
+      def multiSaveProp(names: Seq[String])(implicit resources: Resources) = {
+        /* Returns zero or one imported key from table for each relation. In the case of multiple
+         * imported keys pointing to the same relation the one specified after : symbol is chosen
+         * or exception is thrown.
+         * This is used to find relation columns for insert/update multiple methods.
+         * Additionaly primary key of table is returned if it consist only of one column */
+        def importedKeysAndPks(tableName: String, relations: List[String]) = {
+          val x = tableName split ":"
+          val table = resources.metadata.table(x.head)
+          relations.foldLeft(x.tail.toSet) { (keys, rel) =>
+            val relation = rel.split(":").head
+            val refs = table.refs(relation).filter(_.cols.size == 1)
+            (if (refs.size == 1) keys + refs.head.cols.head
+            else if (refs.isEmpty || refs.exists(r => keys.contains(r.cols.head))) keys
+            else error(s"Ambiguous refs: $refs from table ${table.name} to table $relation")) ++
+              (table.key.cols match {case List(k) => Set(k) case _ => Set()})
+          }
+        }
+        names.tail.foldLeft(List(names.head)) { (ts, t) => (t.split(":")
+          .head + importedKeysAndPks(t, ts).mkString(":", ":", "")) :: ts
+        }.reverse.mkString("#")
+      }
       def setLinks(name: String) =
         if (name.indexOf("#") == -1) name else {
           val tablesEndIdx = {
@@ -331,38 +360,6 @@ trait ORT extends Query {
     val vp = parseTables(tables)
     import vp._
     View(vp.tables, SaveOptions(vp.insert, vp.update, vp.delete), filters, alias, props)
-  }
-
-  def insertTresql(obj: Map[String, Any], names: String*)(filter: String = null)
-                  (implicit resources: Resources): String = {
-    val ns = names.mkString("#")
-    val names_with_filter = if (filter == null) ns else s"$ns|$filter, null, null"
-    val struct = tresql_structure(obj)
-    val view = ort_metadata(names_with_filter, struct)
-    save_tresql(view, names_with_filter, Nil, insert_tresql)
-  }
-
-  def updateTresql(obj: Map[String, Any], names: String*)(filter: String = null)
-                  (implicit resources: Resources): String = {
-    val ns = names.mkString("#")
-    val names_with_filter = if (filter == null) ns else s"$ns|null, null, $filter"
-    val struct = tresql_structure(obj)
-    val view = ort_metadata(names_with_filter, struct)
-    save_tresql(view, names_with_filter, Nil, update_tresql)
-  }
-
-  def deleteTresql(name: String, filter: String = null)(implicit resources: Resources): String = {
-    val Array(tableName, alias) = name.split("\\s+").padTo(2, null)
-    (for {
-      table <- resources.metadata.tableOption(tableName)
-      pk <- table.key.cols.headOption
-      if table.key.cols.size == 1
-    } yield {
-      s"-${table.name}${Option(alias).map(" " + _).getOrElse("")}[$pk = ?${Option(filter)
-        .map(f => s" & ($f)").getOrElse("")}]"
-    }) getOrElse {
-      error(s"Table $name not found or table primary key not found or table primary key consists of more than one column")
-    }
   }
 
   private def save_tresql(
