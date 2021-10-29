@@ -1,6 +1,6 @@
 package org.tresql
 
-import org.tresql.OrtMetadata.Filters
+import org.tresql.OrtMetadata.{Filters, SaveOptions, SaveTo, TresqlValue, View, ViewValue}
 
 import sys._
 
@@ -48,10 +48,9 @@ trait ORT extends Query {
       override private[tresql] def childIdx = chIdx
     }
 
-  case class TableLink(table: String, refs: Set[String])
   case class ParentRef(table: String, ref: String)
   case class Property(
-    tables: List[TableLink],
+    tables: List[SaveTo],
     insert: Boolean,
     update: Boolean,
     delete: Boolean,
@@ -59,15 +58,9 @@ trait ORT extends Query {
     filters: Option[Filters]
   )
   case class SaveContext(
+    view: View,
     name: String,
-    struct: Map[String, Any],
     parents: List[ParentRef],
-    filters: Option[Filters],
-    tables: List[TableLink],
-    insertOption: Boolean,
-    updateOption: Boolean,
-    deleteOption: Boolean,
-    alias: String,
     parent: String,
     table: metadata.Table,
     refToParent: String,
@@ -155,25 +148,43 @@ trait ORT extends Query {
 
   def insert(name: String, obj: Map[String, Any], filter: String = null)
     (implicit resources: Resources): Any = {
-    save(name, obj, filter, insert_tresql, "Cannot insert data. Table not found for object: " + name)
+    val name_with_filter = if (filter == null) name else s"$name|$filter, null, null"
+    save(name_with_filter, obj, insert_tresql, "Cannot insert data. Table not found for object: " + name)
   }
 
   def update(name: String, obj: Map[String, Any], filter: String = null)
     (implicit resources: Resources): Any = {
-    save(name, obj, filter, update_tresql,
+    val name_with_filter = if (filter == null) name else s"$name|null, null, $filter"
+    save(name_with_filter, obj, update_tresql,
       s"Cannot update data. Table not found or no primary key or no updateable columns found for the object: $name")
+  }
+
+  def insert(metadata: View, obj: Map[String, Any]): Any = {
+
+  }
+
+  def update(metadata: View, obj: Map[String, Any]): Any = {
+
+  }
+
+  def save(metadata: View, obj: Map[String, Any]): Any = {
+
+  }
+
+  def delete(name: String, key: List[String], params: Map[String, Any], filter: String): Any = {
+
   }
 
   private def save(
     name: String,
     obj: Map[String, Any],
-    filter: String,
     save_tresql_fun: SaveContext => String,
     errorMsg: String)
     (implicit resources: Resources): Any = {
     val struct = tresql_structure(obj)
     resources log s"\nStructure: $name - $struct"
-    val tresql = save_tresql(name, struct, Nil, filter, save_tresql_fun)
+    val view = ort_metadata(name, struct)
+    val tresql = save_tresql(view, name, Nil, save_tresql_fun)
     if(tresql == null) error(errorMsg)
     build(tresql, obj, reusableExpr = false)(resources)()
   }
@@ -188,12 +199,12 @@ trait ORT extends Query {
   /** insert methods to multiple tables
    *  Tables must be ordered in parent -> child direction. */
   def insertMultiple(obj: Map[String, Any], names: String*)(filter: String = null)
-    (implicit resources: Resources): Any = insert(multiSaveProp(names), obj, filter)
+    (implicit resources: Resources): Any = insert(names.mkString("#"), obj, filter)
 
   /** update to multiple tables
    *  Tables must be ordered in parent -> child direction. */
   def updateMultiple(obj: Map[String, Any], names: String*)(filter: String = null)
-    (implicit resources: Resources): Any = update(multiSaveProp(names), obj, filter)
+    (implicit resources: Resources): Any = update(names.mkString("#"), obj, filter)
 
   private def multiSaveProp(names: Seq[String])(implicit resources: Resources) = {
     /* Returns zero or one imported key from table for each relation. In the case of multiple
@@ -265,14 +276,79 @@ trait ORT extends Query {
     else struct.flatMap { case (k, _) if resolvableProps(k) => Nil case x => List(x) }
   }
 
+  private def ort_metadata(tables: String, struct: Map[String, Any])(implicit resources: Resources): View = {
+    def parseTables(name: String) = {
+      def setLinks(name: String) =
+        if (name.indexOf("#") == -1) name else {
+          val tablesEndIdx = {
+            val oi = name.indexOf("[")
+            if (oi != -1) oi else name.indexOf("|")
+          }
+          if (tablesEndIdx != -1) multiSaveProp(name.substring(0, tablesEndIdx)
+            .split("#")) + name.substring(tablesEndIdx) else multiSaveProp(name.split("#"))
+        }
+      val PropPattern(tables, options, alias, filterStr) = setLinks(name)
+      //insert update delete option
+      val (i, u, d) = Option(options).map (_ =>
+        (options contains "+", options contains "=", options contains "-")
+      ).getOrElse {(true, false, true)}
+      import parsing.{Arr, Null}
+      val filters =
+        Option(filterStr).flatMap(new QueryParser(resources, resources.cache).parseExp(_) match {
+          case Arr(List(insert, delete, update)) => Some(Filters(
+            insert = Some(insert).filter(_ != Null).map(_.tresql),
+            delete = Some(delete).filter(_ != Null).map(_.tresql),
+            update = Some(update).filter(_ != Null).map(_.tresql)
+          ))
+          case _ => error(s"""Unrecognized filter declaration '$filterStr'.
+                             |Must consist of 3 comma separated tresql expressions: insertFilter, deleteFilter, updateFilter.
+                             |In the case expression is not needed it must be set to 'null'.""".stripMargin)
+        })
+      Property((tables split "#").map{ t =>
+        val x = t split ":"
+        SaveTo(x.head, x.tail.toSet, Nil)
+      }.toList, i, u, d, alias, filters)
+    }
+    def resolver_tresql(property: String, resolverExp: String) = {
+      import parsing._
+      val ResolverPropPattern(prop) = property
+      val ResolverExpPattern(col, exp) = resolverExp
+      val parser = new QueryParser(resources, resources.cache)
+      OrtMetadata.Property(col, TresqlValue(
+        parser.transformer {
+          case Ident(List("_")) => Variable(prop, Nil, opt = false)
+        } (parser.parseExp(if (exp startsWith "(" ) exp else s"($exp)")).tresql
+      ))
+    }
+    val props =
+      struct.map {
+        case (prop, value) => value match {
+          case m: Map[String, Any] => OrtMetadata.Property(prop, ViewValue(ort_metadata(prop, m)))
+          case v: String if prop.indexOf("->") != -1 => resolver_tresql(prop, v)
+          case _ => OrtMetadata.Property(prop, TresqlValue(s":$prop"))
+        }
+      }.toList
+    val vp = parseTables(tables)
+    import vp._
+    View(vp.tables, SaveOptions(vp.insert, vp.update, vp.delete), filters, alias, props)
+  }
+
   def insertTresql(obj: Map[String, Any], names: String*)(filter: String = null)
                   (implicit resources: Resources): String = {
-    save_tresql(multiSaveProp(names), tresql_structure(obj), Nil, filter, insert_tresql)
+    val ns = names.mkString("#")
+    val names_with_filter = if (filter == null) ns else s"$ns|$filter, null, null"
+    val struct = tresql_structure(obj)
+    val view = ort_metadata(names_with_filter, struct)
+    save_tresql(view, names_with_filter, Nil, insert_tresql)
   }
 
   def updateTresql(obj: Map[String, Any], names: String*)(filter: String = null)
                   (implicit resources: Resources): String = {
-    save_tresql(multiSaveProp(names), tresql_structure(obj), Nil, filter, update_tresql)
+    val ns = names.mkString("#")
+    val names_with_filter = if (filter == null) ns else s"$ns|null, null, $filter"
+    val struct = tresql_structure(obj)
+    val view = ort_metadata(names_with_filter, struct)
+    save_tresql(view, names_with_filter, Nil, update_tresql)
   }
 
   def deleteTresql(name: String, filter: String = null)(implicit resources: Resources): String = {
@@ -290,50 +366,15 @@ trait ORT extends Query {
   }
 
   private def save_tresql(
+    view: View,
     name: String,
-    struct: Map[String, Any],
     parents: List[ParentRef],
-    filter: String,
     save_tresql_func: SaveContext => String)
     (implicit resources: Resources): String = {
-    def parseProperty(name: String) = {
-      def setLinks(name: String) =
-        if (parents.isEmpty || name.indexOf("#") == -1) name else {
-          val optionIdx = name.indexOf("[")
-          if (optionIdx != -1) multiSaveProp(name.substring(0, optionIdx)
-            .split("#")) + name.substring(optionIdx) else multiSaveProp(name.split("#"))
-        }
-      val PropPattern(tables, options, alias, filterStr) = setLinks(name)
-      //insert update delete option
-      val (i, u, d) = Option(options).map (_ =>
-        (options contains "+", options contains "=", options contains "-")
-      ).getOrElse {(true, false, true)}
-      val filters = Option(filter).map {
-        f => Filters(Option(f), Option(f), Option(f))
-      } orElse {
-        import parsing._
-        Option(filterStr).flatMap(new QueryParser(resources, resources.cache).parseExp(_) match {
-          case Arr(List(insert, delete, update)) => Some(OrtMetadata.Filters(
-            insert = Some(insert).filter(_ != Null).map(_.tresql),
-            delete = Some(delete).filter(_ != Null).map(_.tresql),
-            update = Some(update).filter(_ != Null).map(_.tresql)
-          ))
-          case x => error(s"""Unrecognized filter declaration '$filterStr'.
-            |Must consist of 3 comma separated tresql expressions: insertFilter, deleteFilter, updateFilter.
-            |In the case expression is not needed it must be set to 'null'.""".stripMargin)
-        })
-      }
-      Property((tables split "#").map{ t =>
-        val x = t split ":"
-        TableLink(x.head, x.tail.toSet)
-      }.toList, i, u, d, alias, filters)
-    }
-    val Property(tables, insertOption, updateOption, deleteOption, alias, filters) =
-      parseProperty(name)
     val parent = parents.headOption.map(_.table).orNull
     val md = resources.metadata
     //find first imported key to parent in list of table links passed as a param.
-    def importedKeyOption(tables: List[TableLink]): Option[(metadata.Table, String)] = {
+    def importedKeyOption(tables: List[SaveTo]): Option[(metadata.Table, String)] = {
       def refInSet(refs: Set[String], child: metadata.Table) = refs.find(r =>
         child.refs(parent).filter(_.cols.size == 1).exists(_.cols.head == r))
       def imported_key_option(childTable: metadata.Table) =
@@ -345,7 +386,7 @@ trait ORT extends Query {
              |Reference must be one and must consist of one column. Found: $x"""
               .stripMargin)
         }
-      def processLinkedTables(linkedTables: List[TableLink]): Option[(metadata.Table, String)] =
+      def processLinkedTables(linkedTables: List[SaveTo]): Option[(metadata.Table, String)] =
         linkedTables match {
           case table :: tail => md.tableOption(table.table)
             .flatMap(t =>
@@ -365,13 +406,10 @@ trait ORT extends Query {
         }
     }
     (for {
-      (table, ref) <- importedKeyOption(tables)
+      (table, ref) <- importedKeyOption(view.saveTo)
       pk <- Some(table.key.cols).filter(_.size == 1).map(_.head) orElse Some(null)
     } yield
-        save_tresql_func(
-          SaveContext(name, struct, parents, filters, tables,
-            insertOption, updateOption, deleteOption, alias, parent, table, ref, pk)
-        )
+        save_tresql_func(SaveContext(view, name, parents, parent, table, ref, pk))
     ).orNull
   }
 
@@ -401,8 +439,8 @@ trait ORT extends Query {
 
   private def insert_tresql(ctx: SaveContext)
     (implicit resources: Resources): String = {
-    save_tresql_internal(ctx, table_insert_tresql(_, _, _, _, _, ctx.filters),
-      save_tresql(_, _, _,null, insert_tresql)) //do not pass filter since it may come from child property
+    save_tresql_internal(ctx, table_insert_tresql(_, _, _, _, _, ctx.view.filters),
+      save_tresql(_, _, _, insert_tresql))
   }
 
   private def update_tresql(ctx: SaveContext)
@@ -419,7 +457,7 @@ trait ORT extends Query {
       upsert: Boolean) = {
       val upd_tresql = cols_vals.unzip match {
         case (cols: List[String], vals: List[String]) if cols.nonEmpty =>
-          val filter = ctx.filters.flatMap(_.update).map(f => s" & ($f)").getOrElse("")
+          val filter = ctx.view.filters.flatMap(_.update).map(f => s" & ($f)").getOrElse("")
           val tn = tableName + (if (alias == null) "" else " " + alias)
           val updateFilter = refsAndPk.map(t=> s"${t._1} = ${t._2}").mkString("[", " & ", s"$filter]")
           cols.mkString(s"=$tn $updateFilter {", ", ", "}") +
@@ -433,7 +471,7 @@ trait ORT extends Query {
             val stripped_ut = stripTrailingAlias(ut, alias)
             val ins_tresql =
               stripTrailingAlias(
-                table_insert_tresql(tableName, alias, cols_vals, refsAndPk, false, ctx.filters),
+                table_insert_tresql(tableName, alias, cols_vals, refsAndPk, false, ctx.view.filters),
                 alias)
             s"""|_upsert($stripped_ut, $ins_tresql)"""
           } else ut
@@ -443,19 +481,18 @@ trait ORT extends Query {
 
     import ctx._
     val tableName = table.name
-    def upd: String = save_tresql_internal(ctx, table_save_tresql, save_tresql(
-      _, _, _,null /* do not pass filter since it may come from child property */, update_tresql))
-    val delFilter = ctx.filters.flatMap(_.delete).map(f => s" & ($f)").getOrElse("")
+    def upd: String = save_tresql_internal(ctx, table_save_tresql, save_tresql(_, _, _, update_tresql))
+    val delFilter = ctx.view.filters.flatMap(_.delete).map(f => s" & ($f)").getOrElse("")
     def delAllChildren = s"-$tableName[$refToParent = :#$parent$delFilter]"
     def delMissingChildren =
       s"""_delete_children('$name', '$tableName', -${table
         .name}[$refToParent = :#$parent & _not_delete_ids($pk !in :ids)$delFilter])"""
 
     val insFilter = {
-      val insf = ctx.filters.flatMap(_.insert)
+      val insf = ctx.view.filters.flatMap(_.insert)
       (for {
         pkstr <- Option(pk)
-        uf <- ctx.filters.flatMap(_.update)
+        _ <- ctx.view.filters.flatMap(_.update)
       } yield {
         //if update filter is present set additional insert filter which checks if row with current sequence id does not exist
         val pkcheck = s"!exists($tableName[$pkstr = #$tableName]{1})"
@@ -463,23 +500,25 @@ trait ORT extends Query {
       })
       .getOrElse(insf orNull)
     }
-    def ins = save_tresql(name, struct, parents, insFilter, insert_tresql)
+    def ins = save_tresql(
+      ctx.view.copy(filters = Option(insFilter).map(f => Filters(insert = Some(f)))), name, parents, insert_tresql)
     def insOrUpd = {
       val strippedIns = stripTrailingAlias(ins, s" '$name'")
       val strippedUpd = stripTrailingAlias(upd, s" '$name'")
       s"""|_insert_or_update('$tableName', $strippedIns, $strippedUpd) '$name'"""
     }
 
+    import view.options._
     if (parent == null) if (pk == null) null else upd
     else if (refToParent == pk) upd else
       if (pk == null) {
-        (Option(deleteOption).filter(_ == true).map(_ => delAllChildren) ++
-        Option(insertOption).filter(_ == true)
+        (Option(doDelete).filter(_ == true).map(_ => delAllChildren) ++
+        Option(doInsert).filter(_ == true)
           .flatMap(_ => Option(ins))).mkString(", ")
       } else {
-        (Option(deleteOption).filter(_ == true).map(_ =>
-          if(!updateOption) delAllChildren else delMissingChildren) ++
-        ((insertOption, updateOption) match {
+        (Option(doDelete).filter(_ == true).map(_ =>
+          if(!doUpdate) delAllChildren else delMissingChildren) ++
+        ((doInsert, doUpdate) match {
           case (true, true) => Option(insOrUpd)
           case (true, false) => Option(ins)
           case (false, true) => Option(upd)
@@ -498,37 +537,27 @@ trait ORT extends Query {
       Boolean //upsert flag
     ) => String,
     children_save_tresql: (
+      View,
       String, //table property
-      Map[String, Any], //saveable structure
       List[ParentRef] //parent chain
     ) => String)
     (implicit resources: Resources) = {
 
     def lookup_tresql(
+      view: View,
       refColName: String,
-      name: String,
-      struct: Map[String, _])(implicit resources: Resources) =
+      name: String)(implicit resources: Resources) =
       resources.metadata.tableOption(name).filter(_.key.cols.size == 1).map {
         table =>
-          val pk = table.key.cols.headOption.filter(struct contains).orNull
-          val insert = save_tresql(name, struct, Nil, null, insert_tresql)
-          val update = save_tresql(name, struct, Nil, null, update_tresql)
+          val pk = table.key.cols.headOption.filter(pk => view.properties
+            .exists { case OrtMetadata.Property(col, _) => pk == col case _ => false }).orNull
+          val insert = save_tresql(view, name, Nil, insert_tresql)
+          val update = save_tresql(view, name, Nil, update_tresql)
           List(
             s":$refColName = |_lookup_edit('$refColName', ${
               if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
             refColName -> s":$refColName")
       }.orNull
-    def resolver_tresql(table: metadata.Table, property: String, resolverExp: String) = {
-      import parsing._
-      val ResolverPropPattern(prop) = property
-      val ResolverExpPattern(col, exp) = resolverExp
-      val parser = new QueryParser(resources, resources.cache)
-      table.colOption(col).map(_.name).map { _ -> parser.transformer {
-          case Ident(List("_")) => Variable(prop, Nil, opt = false)
-        } (parser.parseExp(if (exp startsWith "(" ) exp else s"($exp)")).tresql
-      }// TODO .orElse(sys.error(s"Resolver target not found for property '$prop'. Column '$col', expression '$resolverExp'"))
-       .toList
-    }
 
     import ctx._
     def tresql_string(
@@ -538,47 +567,41 @@ trait ORT extends Query {
       children: List[String],
       tresqlColAlias: String,
       upsert: Boolean
-    ) = struct.flatMap {
-          case (n, v) => v match {
-            //children
-            case o: Map[String @unchecked, Any @unchecked] => table.refTable.get(List(n)).map(lookupTable =>
-              lookup_tresql(n, lookupTable, o)).getOrElse {
-              List(children_save_tresql(n, o,
-                ParentRef(table.name, refToParent) :: parents) -> null)
-            }
-            //pk or ref to parent
-            case _ if refsAndPk.exists(_._1 == n) => Nil
-            //resolvable field check
-            case v: String if n.indexOf("->") != -1 => resolver_tresql(table, n, v)
-            //ordinary field
-            case _ => List(table.colOption(n).map(_.name).orNull -> s":$n")
-          }
-        }.groupBy { case _: String => "l" case _ => "b" } match {
-          case m: Map[String @unchecked, List[_] @unchecked] =>
-            val tableName = table.name
-            //lookup edit tresql
-            val lookupTresql = m.get("l").map(_.asInstanceOf[List[String]].map(_ + ", ").mkString).orNull
-            //base table tresql
-            val tresql =
-              m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]]
-                .filter(_._1 != null /*check if prop->col mapping found*/) ++
-                children.map(_ -> null) /*add same level one to one children*/
-              match {
-                case x if x.isEmpty && refsAndPk.isEmpty => null //no columns & refs found
-                case cols_vals => table_save_tresql(tableName, alias, cols_vals, refsAndPk, upsert)
-              }
-
-            (for {
-              base <- Option(tresql)
-              tresql <- Option(lookupTresql).map(lookup =>
-                  s"([$lookup$base])") //put lookup in braces and array,
-                  //so potentially not to conflict with insert expr with multiple values arrays
-                .orElse(Some(base))
-            } yield tresql + tresqlColAlias).orNull
+    ) = view.properties.flatMap {
+      case OrtMetadata.Property(col, _) if refsAndPk.exists(_._1 == col) => Nil
+      case OrtMetadata.Property(col, TresqlValue(tresql)) =>
+        List(table.colOption(col).map(_.name).orNull -> tresql)
+      case OrtMetadata.Property(col, ViewValue(v)) =>
+        table.refTable.get(List(col)).map(lookupTable =>
+          lookup_tresql(v.copy(saveTo = List(SaveTo(lookupTable, Set(), Nil))), col, lookupTable)).getOrElse {
+          List(children_save_tresql(v, col, ParentRef(table.name, refToParent) :: parents) -> null)
         }
+      }.groupBy { case _: String => "l" case _ => "b" } match {
+        case m: Map[String @unchecked, List[_] @unchecked] =>
+          val tableName = table.name
+          //lookup edit tresql
+          val lookupTresql = m.get("l").map(_.asInstanceOf[List[String]].map(_ + ", ").mkString).orNull
+          //base table tresql
+          val tresql =
+            m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]]
+              .filter(_._1 != null /*check if prop->col mapping found*/) ++
+              children.map(_ -> null) /*add same level one to one children*/
+            match {
+              case x if x.isEmpty && refsAndPk.isEmpty => null //no columns & refs found
+              case cols_vals => table_save_tresql(tableName, alias, cols_vals, refsAndPk, upsert)
+            }
+
+          (for {
+            base <- Option(tresql)
+            tresql <- Option(lookupTresql).map(lookup =>
+                s"([$lookup$base])") //put lookup in braces and array,
+                //so potentially not to conflict with insert expr with multiple values arrays
+              .orElse(Some(base))
+          } yield tresql + tresqlColAlias).orNull
+      }
 
     val md = resources.metadata
-    val headTable = tables.head
+    val headTable = view.saveTo.head
     def idRefId(idRef: String, id: String) = s"_id_ref_id($idRef, $id)"
     def refsAndPk(tbl: metadata.Table, refs: Set[String]): Set[(String, String)] =
       //ref table (set fk and pk)
@@ -597,13 +620,13 @@ trait ORT extends Query {
     md.tableOption(headTable.table).map { tableDef =>
       val linkedTresqls =
         for {
-          linkedTable <- tables.tail
+          linkedTable <- view.saveTo.tail
           tableDef <- md.tableOption(linkedTable.table)
         } yield
-          tresql_string(tableDef, alias,
+          tresql_string(tableDef, view.alias,
             refsAndPk(tableDef, linkedTable.refs), Nil, "", true) //no children, set upsert flag for linked table
 
-      tresql_string(tableDef, alias, refsAndPk(tableDef, Set()),
+      tresql_string(tableDef, view.alias, refsAndPk(tableDef, Set()),
         linkedTresqls.filter(_ != null), Option(parent)
           .map(_ => s" '$name'").getOrElse(""), false)
     }.orNull
@@ -612,12 +635,23 @@ trait ORT extends Query {
 
 object OrtMetadata {
   sealed trait OrtValue
-  /** Saveable column.
-   * @param name      saveable property name
-   * @param col       Goes to column clause, parameter {{{tresql}}} goes to values clause.
-   * @param tresql    If {{{tresql.isEmpty}}} default value is bind variable {{{:name}}}
+
+  /** Column value
+   * @param tresql    tresql statement
    * */
-  sealed case class Property(name: String, col: String, tresql: Option[String]) extends OrtValue
+  case class TresqlValue(tresql: String) extends OrtValue
+
+  /** Column value
+   * @param view      child view
+   * */
+  case class ViewValue(view: View) extends OrtValue
+
+  /** Saveable column.
+   * @param col       Goes to dml column clause or child tresql alias
+   * @param value     Goes to dml values clause or column clause as child tresql
+   * */
+  case class Property(col: String, value: OrtValue)
+
   /** Saveable view.
    * @param saveTo        destination tables. If first table has {{{refs}}} parameter
    *                      it indicates reference field to parent.
@@ -627,29 +661,32 @@ object OrtMetadata {
    * @param properties    saveable fields
    *
    * */
-  sealed case class View(saveTo: List[SaveTo],
-                         options: SaveOptions,
-                         filters: Option[Filters],
-                         alias: String,
-                         properties: List[OrtValue]) extends OrtValue
+  case class View(saveTo: List[SaveTo],
+                  options: SaveOptions,
+                  filters: Option[Filters],
+                  alias: String,
+                  properties: List[Property])
+
   /** Table to save data to.
    * @param table         table name
    * @param refs          imported keys of table from parent or linked tables to be set
    * @param key           column names uniquely identifying table record
    * */
   case class SaveTo(table: String, refs: Set[String], key: Seq[String])
+
   /** Save options
    *  @param doInsert     insert new children data
    *  @param doUpdate     update existing children data
    *  @param doDelete     delete absent children data
    * */
   case class SaveOptions(doInsert: Boolean, doUpdate: Boolean, doDelete: Boolean)
+
   /** Horizontal authentication filters
    *  @param insert   insert statement where clause
    *  @param delete   delete statement where clause
    *  @param update   update statement where clause
    * */
-  case class Filters(insert: Option[String], delete: Option[String], update: Option[String])
+  case class Filters(insert: Option[String] = None, delete: Option[String] = None, update: Option[String] = None)
 }
 
 object ORT extends ORT
