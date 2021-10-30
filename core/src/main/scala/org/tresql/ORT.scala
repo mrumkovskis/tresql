@@ -53,7 +53,6 @@ trait ORT extends Query {
     view: View,
     name: String,
     parents: List[ParentRef],
-    parent: String,
     table: metadata.Table,
     refToParent: String,
     pk: String)
@@ -393,7 +392,7 @@ trait ORT extends Query {
       (table, ref) <- importedKeyOption(view.saveTo)
       pk <- Some(table.key.cols).filter(_.size == 1).map(_.head) orElse Some(null)
     } yield
-        save_tresql_func(SaveContext(view, name, parents, parent, table, ref, pk))
+        save_tresql_func(SaveContext(view, name, parents, table, ref, pk))
     ).orNull
   }
 
@@ -464,6 +463,7 @@ trait ORT extends Query {
     }
 
     import ctx._
+    val parent = parents.headOption.map(_.table).orNull
     val tableName = table.name
     def upd: String = save_tresql_internal(ctx, table_save_tresql, save_tresql(_, _, _, update_tresql))
     val delFilter = ctx.view.filters.flatMap(_.delete).map(f => s" & ($f)").getOrElse("")
@@ -586,6 +586,7 @@ trait ORT extends Query {
 
     val md = resources.metadata
     val headTable = view.saveTo.head
+    val parent = parents.headOption.map(_.table).orNull
     def idRefId(idRef: String, id: String) = s"_id_ref_id($idRef, $id)"
     def refsAndPk(tbl: metadata.Table, refs: Set[String]): Set[(String, String)] =
       //ref table (set fk and pk)
