@@ -152,7 +152,18 @@ trait ORT extends Query {
 
   def delete(name: String, id: Any, filter: String = null, filterParams: Map[String, Any] = null)
             (implicit resources: Resources): Any = {
-    val delete = deleteTresql(name, filter)
+    val Array(tableName, alias) = name.split("\\s+").padTo(2, null)
+    val delete =
+      (for {
+        table <- resources.metadata.tableOption(tableName)
+        pk <- table.key.cols.headOption
+        if table.key.cols.size == 1
+      } yield {
+        s"-${table.name}${Option(alias).map(" " + _).getOrElse("")}[$pk = ?${Option(filter)
+          .map(f => s" & ($f)").getOrElse("")}]"
+      }) getOrElse {
+        error(s"Table $name not found or table primary key not found or table primary key consists of more than one column")
+      }
     build(delete, Map("1" -> id) ++ Option(filterParams).getOrElse(Map()),
       reusableExpr = false)(resources)()
   }
@@ -179,50 +190,41 @@ trait ORT extends Query {
     update(v._1, v._2, filter)
   }
 
-  def insertTresql(obj: Map[String, Any], names: String*)(filter: String = null)
-                  (implicit resources: Resources): String = {
-    val ns = names.mkString("#")
-    val names_with_filter = if (filter == null) ns else s"$ns|$filter, null, null"
-    val view = ort_metadata(names_with_filter, obj)
-    save_tresql(null, view, Nil, insert_tresql)
+  def insert(metadata: View, obj: Map[String, Any])(implicit resources: Resources): Any = {
+    val tresql = insertTresql(metadata)
+    build(tresql, obj, reusableExpr = false)(resources)()
   }
 
-  def updateTresql(obj: Map[String, Any], names: String*)(filter: String = null)
-                  (implicit resources: Resources): String = {
-    val ns = names.mkString("#")
-    val names_with_filter = if (filter == null) ns else s"$ns|null, null, $filter"
-    val view = ort_metadata(names_with_filter, obj)
-    save_tresql(null, view, Nil, update_tresql)
+  def update(metadata: View, obj: Map[String, Any])(implicit resources: Resources): Any = {
+    val tresql = updateTresql(metadata)
+    build(tresql, obj, reusableExpr = false)(resources)()
   }
 
-  def deleteTresql(name: String, filter: String = null)(implicit resources: Resources): String = {
+  def save(metadata: View, obj: Map[String, Any])(implicit resources: Resources): Any = {
+    val tresql = s"_upsert(${updateTresql(metadata)}, ${insertTresql(metadata)})"
+    build(tresql, obj, reusableExpr = false)(resources)()
+  }
+
+  def delete(name: String, key: List[String], params: Map[String, Any], filter: String)(implicit
+                                                                                        resources: Resources): Any = {
+    val tresql = deleteTresql(name, key, filter)
+    build(tresql, params, reusableExpr = false)(resources)()
+  }
+
+  def insertTresql(metadata: View)(implicit resources: Resources): String = {
+    save_tresql(null, metadata, Nil, insert_tresql)
+  }
+
+  def updateTresql(metadata: View)(implicit resources: Resources): String = {
+    save_tresql(null, metadata, Nil, update_tresql)
+  }
+
+  def deleteTresql(name: String, key: List[String], filter: String)(implicit resources: Resources): String = {
     val Array(tableName, alias) = name.split("\\s+").padTo(2, null)
-    (for {
-      table <- resources.metadata.tableOption(tableName)
-      pk <- table.key.cols.headOption
-      if table.key.cols.size == 1
-    } yield {
-      s"-${table.name}${Option(alias).map(" " + _).getOrElse("")}[$pk = ?${Option(filter)
-        .map(f => s" & ($f)").getOrElse("")}]"
-    }) getOrElse {
-      error(s"Table $name not found or table primary key not found or table primary key consists of more than one column")
-    }
-  }
-
-  def insert(metadata: View, obj: Map[String, Any]): Any = {
-
-  }
-
-  def update(metadata: View, obj: Map[String, Any]): Any = {
-
-  }
-
-  def save(metadata: View, obj: Map[String, Any]): Any = {
-
-  }
-
-  def delete(name: String, key: List[String], params: Map[String, Any], filter: String): Any = {
-
+    resources.metadata.tableOption(tableName).map { table =>
+      s"-${table.name}${if (alias == null) "" else " " + alias}[${
+        key.map(c => c + " = :" + c).mkString(" & ")}${if (filter == null) "" else s" & ($filter)"}]"
+    }.getOrElse(s"Table $name not found")
   }
 
   private def save(name: String,
