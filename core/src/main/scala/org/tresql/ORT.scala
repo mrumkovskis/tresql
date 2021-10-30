@@ -49,14 +49,6 @@ trait ORT extends Query {
     }
 
   case class ParentRef(table: String, ref: String)
-  case class Property(
-    tables: List[SaveTo],
-    insert: Boolean,
-    update: Boolean,
-    delete: Boolean,
-    alias: String,
-    filters: Option[Filters]
-  )
   case class SaveContext(
     view: View,
     name: String,
@@ -192,18 +184,16 @@ trait ORT extends Query {
                   (implicit resources: Resources): String = {
     val ns = names.mkString("#")
     val names_with_filter = if (filter == null) ns else s"$ns|$filter, null, null"
-    val struct = tresql_structure(obj)
-    val view = ort_metadata(names_with_filter, struct)
-    save_tresql(view, names_with_filter, Nil, insert_tresql)
+    val view = ort_metadata(names_with_filter, obj)
+    save_tresql(view, null, Nil, insert_tresql)
   }
 
   def updateTresql(obj: Map[String, Any], names: String*)(filter: String = null)
                   (implicit resources: Resources): String = {
     val ns = names.mkString("#")
     val names_with_filter = if (filter == null) ns else s"$ns|null, null, $filter"
-    val struct = tresql_structure(obj)
-    val view = ort_metadata(names_with_filter, struct)
-    save_tresql(view, names_with_filter, Nil, update_tresql)
+    val view = ort_metadata(names_with_filter, obj)
+    save_tresql(view, null, Nil, update_tresql)
   }
 
   def deleteTresql(name: String, filter: String = null)(implicit resources: Resources): String = {
@@ -240,50 +230,48 @@ trait ORT extends Query {
                    obj: Map[String, Any],
                    save_tresql_fun: SaveContext => String,
                    errorMsg: String)(implicit resources: Resources): Any = {
-    val struct = tresql_structure(obj)
-    resources log s"\nStructure: $name - $struct"
-    val view = ort_metadata(name, struct)
-    val tresql = save_tresql(view, name, Nil, save_tresql_fun)
+    val view = ort_metadata(name, obj)
+    resources log s"\nMetadata:\n$view"
+    val tresql = save_tresql(view, null, Nil, save_tresql_fun)
     if(tresql == null) error(errorMsg)
     build(tresql, obj, reusableExpr = false)(resources)()
   }
 
-  private def tresql_structure(obj: Map[String, Any]): Map[String, Any] = {
-    def merge(lm: Seq[Map[String, Any]]): Map[String, Any] =
-      lm.tail.foldLeft(tresql_structure(lm.head)) {(l, m) =>
-        val x = tresql_structure(m)
-        l map (t => (t._1, (t._2, x.getOrElse(t._1, null)))) map {
-          case (k, (v1: Map[String @unchecked, _], v2: Map[String @unchecked, _])) if v1.nonEmpty && v2.nonEmpty =>
-            (k, merge(List(v1, v2)))
-          case (k, (v1: Map[String @unchecked, _], _)) if v1.nonEmpty => (k, v1)
-          case (k, (_, v2: Map[String @unchecked, _])) if v2.nonEmpty => (k, v2)
-          case (k, (v1, _)) => (k, v1 match {
-            case _: Map[_, _] | _: Seq[_] => v1
-            case _ if k endsWith "->" => v1
-            case _ => "***"
-          })
+  private def ort_metadata(tables: String, saveableMap: Map[String, Any])(implicit resources: Resources): View = {
+    def tresql_structure(obj: Map[String, Any]): Map[String, Any] = {
+      def merge(lm: Seq[Map[String, Any]]): Map[String, Any] =
+        lm.tail.foldLeft(tresql_structure(lm.head)) {(l, m) =>
+          val x = tresql_structure(m)
+          l map (t => (t._1, (t._2, x.getOrElse(t._1, null)))) map {
+            case (k, (v1: Map[String @unchecked, _], v2: Map[String @unchecked, _])) if v1.nonEmpty && v2.nonEmpty =>
+              (k, merge(List(v1, v2)))
+            case (k, (v1: Map[String @unchecked, _], _)) if v1.nonEmpty => (k, v1)
+            case (k, (_, v2: Map[String @unchecked, _])) if v2.nonEmpty => (k, v2)
+            case (k, (v1, _)) => (k, v1 match {
+              case _: Map[_, _] | _: Seq[_] => v1
+              case _ if k endsWith "->" => v1
+              case _ => "***"
+            })
+          }
         }
+      var resolvableProps = Set[String]()
+      val struct: Map[String, Any] = obj.map { case (key, value) =>
+        (key, value match {
+          case Seq() | Array() => Map()
+          case l: Seq[Map[String, _] @unchecked] => merge(l)
+          case l: Array[Map[String, _] @unchecked] => merge(l)
+          case m: Map[String @unchecked, Any @unchecked] => tresql_structure(m)
+          case x =>
+            //filter out properties which are duplicated because of resolver
+            if (key endsWith "->") {
+              resolvableProps += key.substring(0, key.length - "->".length)
+              value
+            } else "***"
+        })
       }
-    var resolvableProps = Set[String]()
-    val struct: Map[String, Any] = obj.map { case (key, value) =>
-      (key, value match {
-        case Seq() | Array() => Map()
-        case l: Seq[Map[String, _] @unchecked] => merge(l)
-        case l: Array[Map[String, _] @unchecked] => merge(l)
-        case m: Map[String @unchecked, Any @unchecked] => tresql_structure(m)
-        case x =>
-          //filter out properties which are duplicated because of resolver
-          if (key endsWith "->") {
-            resolvableProps += key.substring(0, key.length - "->".length)
-            value
-          } else "***"
-      })
+      if (resolvableProps.isEmpty) struct
+      else struct.flatMap { case (k, _) if resolvableProps(k) => Nil case x => List(x) }
     }
-    if (resolvableProps.isEmpty) struct
-    else struct.flatMap { case (k, _) if resolvableProps(k) => Nil case x => List(x) }
-  }
-
-  private def ort_metadata(tables: String, struct: Map[String, Any])(implicit resources: Resources): View = {
     def parseTables(name: String) = {
       def multiSaveProp(names: Seq[String])(implicit resources: Resources) = {
         /* Returns zero or one imported key from table for each relation. In the case of multiple
@@ -333,10 +321,10 @@ trait ORT extends Query {
                              |Must consist of 3 comma separated tresql expressions: insertFilter, deleteFilter, updateFilter.
                              |In the case expression is not needed it must be set to 'null'.""".stripMargin)
         })
-      Property((tables split "#").map{ t =>
+      View((tables split "#").map{ t =>
         val x = t split ":"
         SaveTo(x.head, x.tail.toSet, Nil)
-      }.toList, i, u, d, alias, filters)
+      }.toList, SaveOptions(i, u, d), filters, alias, Nil)
     }
     def resolver_tresql(property: String, resolverExp: String) = {
       import parsing._
@@ -349,6 +337,7 @@ trait ORT extends Query {
         } (parser.parseExp(if (exp startsWith "(" ) exp else s"($exp)")).tresql
       ))
     }
+    val struct = tresql_structure(saveableMap)
     val props =
       struct.map {
         case (prop, value) => value match {
@@ -357,9 +346,7 @@ trait ORT extends Query {
           case _ => OrtMetadata.Property(prop, TresqlValue(s":$prop"))
         }
       }.toList
-    val vp = parseTables(tables)
-    import vp._
-    View(vp.tables, SaveOptions(vp.insert, vp.update, vp.delete), filters, alias, props)
+    parseTables(tables).copy(properties = props)
   }
 
   private def save_tresql(
@@ -568,10 +555,10 @@ trait ORT extends Query {
       case OrtMetadata.Property(col, _) if refsAndPk.exists(_._1 == col) => Nil
       case OrtMetadata.Property(col, TresqlValue(tresql)) =>
         List(table.colOption(col).map(_.name).orNull -> tresql)
-      case OrtMetadata.Property(col, ViewValue(v)) =>
-        table.refTable.get(List(col)).map(lookupTable =>
-          lookup_tresql(v.copy(saveTo = List(SaveTo(lookupTable, Set(), Nil))), col, lookupTable)).getOrElse {
-          List(children_save_tresql(v, col, ParentRef(table.name, refToParent) :: parents) -> null)
+      case OrtMetadata.Property(prop, ViewValue(v)) =>
+        table.refTable.get(List(prop)).map(lookupTable =>
+          lookup_tresql(v.copy(saveTo = List(SaveTo(lookupTable, Set(), Nil))), prop, lookupTable)).getOrElse {
+          List(children_save_tresql(v, prop, ParentRef(table.name, refToParent) :: parents) -> null)
         }
       }.groupBy { case _: String => "l" case _ => "b" } match {
         case m: Map[String @unchecked, List[_] @unchecked] =>
