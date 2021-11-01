@@ -232,7 +232,7 @@ trait ORT extends Query {
                    save_tresql_fun: SaveContext => String,
                    errorMsg: String)(implicit resources: Resources): Any = {
     val view = ort_metadata(name, obj)
-    resources log s"\nMetadata:\n$view"
+    resources log s"$view"
     val tresql = save_tresql(null, view, Nil, save_tresql_fun)
     if(tresql == null) error(errorMsg)
     build(tresql, obj, reusableExpr = false)(resources)()
@@ -544,7 +544,6 @@ trait ORT extends Query {
             refColName -> s":$refColName")
       }.orNull
 
-    import ctx._
     def tresql_string(
       table: metadata.Table,
       alias: String,
@@ -552,14 +551,14 @@ trait ORT extends Query {
       children: List[String],
       tresqlColAlias: String,
       upsert: Boolean
-    ) = view.properties.flatMap {
+    ) = ctx.view.properties.flatMap {
       case OrtMetadata.Property(col, _) if refsAndPk.exists(_._1 == col) => Nil
       case OrtMetadata.Property(col, TresqlValue(tresql)) =>
         List(table.colOption(col).map(_.name).orNull -> tresql)
       case OrtMetadata.Property(prop, ViewValue(v)) =>
         table.refTable.get(List(prop)).map(lookupTable =>
           lookup_tresql(v.copy(saveTo = List(SaveTo(lookupTable, Set(), Nil))), prop, lookupTable)).getOrElse {
-          List(children_save_tresql(prop, v, ParentRef(table.name, refToParent) :: parents) -> null)
+          List(children_save_tresql(prop, v, ParentRef(table.name, ctx.refToParent) :: ctx.parents) -> null)
         }
       }.groupBy { case _: String => "l" case _ => "b" } match {
         case m: Map[String @unchecked, List[_] @unchecked] =>
@@ -586,35 +585,35 @@ trait ORT extends Query {
       }
 
     val md = resources.metadata
-    val headTable = view.saveTo.head
-    val parent = parents.headOption.map(_.table).orNull
+    val headTable = ctx.view.saveTo.head
+    val parent = ctx.parents.headOption.map(_.table).orNull
     def idRefId(idRef: String, id: String) = s"_id_ref_id($idRef, $id)"
     def refsAndPk(tbl: metadata.Table, refs: Set[String]): Set[(String, String)] =
       //ref table (set fk and pk)
-      (if (tbl.name == table.name && refToParent != null) if (refToParent == pk)
-        Set(pk -> idRefId(parent, tbl.name)) else Set(refToParent -> s":#$parent") ++
-          (if (pk == null || refs.contains(pk)) Set() else Set(pk -> s"#${tbl.name}"))
+      (if (tbl.name == ctx.table.name && ctx.refToParent != null) if (ctx.refToParent == ctx.pk)
+        Set(ctx.pk -> idRefId(parent, tbl.name)) else Set(ctx.refToParent -> s":#$parent") ++
+          (if (ctx.pk == null || refs.contains(ctx.pk)) Set() else Set(ctx.pk -> s"#${tbl.name}"))
       //not ref table (set pk)
       else Option(tbl.key.cols)
         .filter(k=> k.size == 1 && !refs.contains(k.head)).map(_.head -> s"#${tbl.name}").toSet) ++
       //set refs
       (if(tbl.name == headTable.table) Set() else refs
-          //filter pk of the linked table in case it matches refToParent
-          .filterNot(tbl.name == table.name && _ == refToParent)
+          //filter out pk of the linked table in case it matches refToParent
+          .filterNot(tbl.name == ctx.table.name && _ == ctx.refToParent)
           .map(_ -> idRefId(headTable.table, tbl.name)))
 
     md.tableOption(headTable.table).map { tableDef =>
       val linkedTresqls =
         for {
-          linkedTable <- view.saveTo.tail
+          linkedTable <- ctx.view.saveTo.tail
           tableDef <- md.tableOption(linkedTable.table)
         } yield
-          tresql_string(tableDef, view.alias,
+          tresql_string(tableDef, ctx.view.alias,
             refsAndPk(tableDef, linkedTable.refs), Nil, "", true) //no children, set upsert flag for linked table
 
-      tresql_string(tableDef, view.alias, refsAndPk(tableDef, Set()),
+      tresql_string(tableDef, ctx.view.alias, refsAndPk(tableDef, Set()),
         linkedTresqls.filter(_ != null), Option(parent)
-          .map(_ => s" '$name'").getOrElse(""), false)
+          .map(_ => s" '${ctx.name}'").getOrElse(""), false)
     }.orNull
   }
 }
