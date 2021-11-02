@@ -528,22 +528,6 @@ trait ORT extends Query {
     ) => String)
     (implicit resources: Resources) = {
 
-    def lookup_tresql(
-      view: View,
-      refColName: String,
-      name: String)(implicit resources: Resources) =
-      resources.metadata.tableOption(name).filter(_.key.cols.size == 1).map {
-        table =>
-          val pk = table.key.cols.headOption.filter(pk => view.properties
-            .exists { case OrtMetadata.Property(col, _) => pk == col case _ => false }).orNull
-          val insert = save_tresql(name, view, Nil, insert_tresql)
-          val update = save_tresql(name, view, Nil, update_tresql)
-          List(
-            s":$refColName = |_lookup_edit('$refColName', ${
-              if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
-            refColName -> s":$refColName")
-      }.orNull
-
     def tresql_string(
       table: metadata.Table,
       alias: String,
@@ -551,15 +535,32 @@ trait ORT extends Query {
       children: List[String],
       tresqlColAlias: String,
       upsert: Boolean
-    ) = ctx.view.properties.flatMap {
-      case OrtMetadata.Property(col, _) if refsAndPk.exists(_._1 == col) => Nil
-      case OrtMetadata.Property(col, TresqlValue(tresql)) =>
-        List(table.colOption(col).map(_.name).orNull -> tresql)
-      case OrtMetadata.Property(prop, ViewValue(v)) =>
-        table.refTable.get(List(prop)).map(lookupTable =>
-          lookup_tresql(v.copy(saveTo = List(SaveTo(lookupTable, Set(), Nil))), prop, lookupTable)).getOrElse {
-          List(children_save_tresql(prop, v, ParentRef(table.name, ctx.refToParent) :: ctx.parents) -> null)
-        }
+    ) = {
+      def lookup_tresql(
+                         view: View,
+                         refColName: String,
+                         name: String)(implicit resources: Resources) =
+        resources.metadata.tableOption(name).filter(_.key.cols.size == 1).map {
+          table =>
+            val pk = table.key.cols.headOption.filter(pk => view.properties
+              .exists { case OrtMetadata.Property(col, _) => pk == col case _ => false }).orNull
+            val insert = save_tresql(name, view, Nil, insert_tresql)
+            val update = save_tresql(name, view, Nil, update_tresql)
+            List(
+              s":$refColName = |_lookup_edit('$refColName', ${
+                if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
+              refColName -> s":$refColName")
+        }.orNull
+
+      ctx.view.properties.flatMap {
+        case OrtMetadata.Property(col, _) if refsAndPk.exists(_._1 == col) => Nil
+        case OrtMetadata.Property(col, TresqlValue(tresql)) =>
+          List(table.colOption(col).map(_.name).orNull -> tresql)
+        case OrtMetadata.Property(prop, ViewValue(v)) =>
+          table.refTable.get(List(prop)).map(lookupTable => // FIXME perhaps take lookup table from metadata since 'prop' may not match fk name
+            lookup_tresql(v.copy(saveTo = List(SaveTo(lookupTable, Set(), Nil))), prop, lookupTable)).getOrElse {
+            List(children_save_tresql(prop, v, ParentRef(table.name, ctx.refToParent) :: ctx.parents) -> null)
+          }
       }.groupBy { case _: String => "l" case _ => "b" } match {
         case m: Map[String @unchecked, List[_] @unchecked] =>
           val tableName = table.name
@@ -578,11 +579,12 @@ trait ORT extends Query {
           (for {
             base <- Option(tresql)
             tresql <- Option(lookupTresql).map(lookup =>
-                s"([$lookup$base])") //put lookup in braces and array,
-                //so potentially not to conflict with insert expr with multiple values arrays
+              s"([$lookup$base])") //put lookup in braces and array,
+              //so potentially not to conflict with insert expr with multiple values arrays
               .orElse(Some(base))
           } yield tresql + tresqlColAlias).orNull
       }
+    }
 
     val md = resources.metadata
     val headTable = ctx.view.saveTo.head
