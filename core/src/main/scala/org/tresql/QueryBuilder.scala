@@ -143,7 +143,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   case class IdRefExpr(seqName: String) extends BaseVarExpr {
     override def apply() = getId(seqName).getOrElse(
         error(s"Current id not found for sequence $seqName in environment:\n$env"))
-    private def getId(name: String): Option[Any] = env.refOption(name).orElse {
+    private def getId(name: String): Option[Any] = env.idRefOption(name).orElse {
       env.tableOption(name).flatMap(t=> t.refTable.get(t.key.cols).map(getId))
     }
     override def toString = s":#$seqName = ${getId(seqName).getOrElse("?")}"

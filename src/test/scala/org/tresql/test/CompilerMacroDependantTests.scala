@@ -1091,6 +1091,13 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         case e: ChildSaveException => e.tableName
       }
     }
+
+    println("------ UPDATE by key test ------")
+    obj = Map("dname" -> "METEO", "loc" -> "Florida", "emp[ename, deptno][+-=]" -> List(
+      Map("ename" -> "Selina", "job" -> "Observer" , "mgr->" -> "mgr = emp[ename = 'KING']{empno}"),
+      Map("ename" -> "Paul", "job" -> "Observer" , "mgr->" -> "mgr = emp[ename = 'Selina']{empno}"),
+    ))
+    println(ORT.updateTresql(ORT.ortMetadata("dept[dname]", obj)))
   }
 
   override def compilerMacro(implicit resources: Resources) = {

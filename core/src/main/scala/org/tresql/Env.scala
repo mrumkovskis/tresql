@@ -145,8 +145,8 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
   private[tresql] def currId(seqName: String, id: Any): Unit = ids(seqName) = id
 
   /* like currId, with the difference that this.ids is not searched */
-  private[tresql] def ref(seqName: String) = provider.map(_.env.currId(seqName))
-  private[tresql] def refOption(seqName: String) = provider.flatMap(_.env.currIdOption(seqName))
+  private[tresql] def idRef(seqName: String) = provider.map(_.env.currId(seqName))
+  private[tresql] def idRefOption(seqName: String) = provider.flatMap(_.env.currIdOption(seqName))
 
   private[tresql] def rowCount: Int = provider.map(_.env.rowCount).getOrElse(_rowCount)
   private[tresql] def rowCount_=(rc: Int) {

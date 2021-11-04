@@ -108,24 +108,34 @@ class Macros {
         if (idName.value == null) null else String valueOf idName.value,
         insertExpr, updateExpr)
 
-  def _insert_or_update(b: ORT,
-    table: QueryBuilder#ConstExpr, insertExpr: Expr, updateExpr: Expr) =
-    b.InsertOrUpdateExpr(String valueOf table.value, insertExpr, updateExpr)
+  def _update_or_insert(b: ORT,
+                        table: QueryBuilder#ConstExpr, updateExpr: Expr, insertExpr: Expr) =
+    b.UpdateOrInsertExpr(String valueOf table.value, updateExpr, insertExpr)
 
   def _upsert(b: ORT, updateExpr: Expr, insertExpr: Expr) = b.UpsertExpr(updateExpr, insertExpr)
 
-  def _delete_children(b: ORT,
-    objName: QueryBuilder#ConstExpr,
-    tableName: QueryBuilder#ConstExpr,
-    deleteExpr: Expr) = b.DeleteChildrenExpr(
+  def _delete_missing_children(b: ORT,
+                               objName: QueryBuilder#ConstExpr,
+                               key: QueryBuilder#ArrExpr,
+                               deleteExpr: Expr) =
+    b.DeleteChildrenExpr(
       String valueOf objName.value,
-      String valueOf tableName.value,
+      key.elements.collect {
+        case b.IdentExpr(n) => n.mkString(".")
+        case x => sys.error(s"Unrecognized key type - $x")
+      },
       deleteExpr)
 
-  def _not_delete_ids(b: ORT, idsExpr: Expr) = b.NotDeleteIdsExpr(idsExpr)
+  def _not_delete_keys(b: ORT, key: QueryBuilder#ArrExpr) = b.NotDeleteKeysExpr(key)
 
   def _id_ref_id(b: ORT,
     idRef: QueryBuilder#IdentExpr,
     id: QueryBuilder#IdentExpr) =
     b.IdRefIdExpr(idRef.name.mkString("."), id.name.mkString("."))
+
+  def _id_by_key(b: ORT, idExpr: Expr) = b.IdByKeyExpr(idExpr)
+
+  def _update_by_key(b: ORT, table: QueryBuilder#IdentExpr, setIdExpr: Expr, updateExpr: Expr) = {
+    b.UpdateByKeyExpr(table.name.mkString("."), setIdExpr, updateExpr)
+  }
 }
