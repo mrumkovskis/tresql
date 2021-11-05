@@ -505,7 +505,7 @@ trait ORT extends Query {
     }
     def upd = save_tresql_internal(ctx, table_save_tresql, save_tresql(_, _, _, update_tresql))
     def ins = {
-      val insFilter = {
+      val nctx = {
         (for {
           pkstr <- Option(pk)
           _ <- ctx.view.filters.flatMap(_.update)
@@ -513,10 +513,10 @@ trait ORT extends Query {
           //if update filter is present set additional insert filter which checks if row with current sequence id does not exist
           val pkcheck = s"!exists($tableName[$pkstr = #$tableName]{1})"
           s"$pkcheck${filterString(ctx.view.filters, _.insert)}"
-        }).map(f => Filters(insert = Some(f))).orElse(ctx.view.filters)
+        }).map(f => ctx.copy(view = view.copy(filters = Some(Filters(insert = Some(f))))))
+          .getOrElse(ctx)
       }
-      save_tresql_internal(ctx.copy(view = view.copy(filters = insFilter)),
-        table_insert_tresql, save_tresql(_, _, _, insert_tresql))
+      save_tresql_internal(nctx, table_insert_tresql, save_tresql(_, _, _, insert_tresql))
     }
     def updOrIns = s"""|_update_or_insert('$tableName', $upd, $ins)"""
 
