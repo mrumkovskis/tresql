@@ -450,32 +450,6 @@ trait ORT extends Query {
     def filterString(filters: Option[Filters], extraction: Filters => Option[String]): String =
       filters.flatMap(extraction).map(f => s" & ($f)").getOrElse("")
 
-    def table_save_tresql(data: SaveData) = {
-      def upd = {
-        import data._
-        val upd_tresql = Option(colsVals.unzip match {
-          case (cols: List[String], vals: List[String]) if cols.nonEmpty =>
-            val tn = table + (if (alias == null) "" else " " + alias)
-            val filter = filterString(data.filters, _.update)
-            val updateFilter = refsPkVals.map(t=> s"${t._1} = ${t._2}").mkString("[", " & ", s"$filter]")
-            cols.mkString(s"=$tn $updateFilter {", ", ", "}") +
-              vals.filter(_ != null).mkString("[", ", ", "]")
-          case _ => null
-        })
-          .map { ut =>
-            if (upsert) {
-              s"""|_upsert($ut, ${table_insert_tresql(data)})"""
-            } else ut
-          }
-          .orNull
-
-        Option(pk).filter(_ => keyVals.nonEmpty).map { pk =>
-          s"|_update_by_key($table, :$pk = |_id_by_key($table[${
-            keyVals.map(kv => s"${kv._1.name} = ${kv._2}").mkString(" & ")}]{$pk}), $upd_tresql)"
-        }.getOrElse(upd_tresql)
-      }
-      upd
-    }
     import ctx._
     val parent = parents.headOption.map(_.table).orNull
     val tableName = table.name
@@ -483,27 +457,54 @@ trait ORT extends Query {
     def delAllChildren = s"-$tableName[$refToParent = :#$parent${filterString(ctx.view.filters, _.delete)}]"
     def delMissingChildren = {
       def del_children_tresql(data: SaveData) = {
-        data.keyVals.partition(_._1.isInstanceOf[RefKeyCol]) match {
-          case (refCols: List[(RefKeyCol, String)@unchecked], keyCols: List[(KeyCol, String)@unchecked]) =>
-            val refColsFilter = refCols.map { case (n, v) => s"$n = $v"}.mkString("&")
-            val key_arr = s"[${if (keyCols.isEmpty) data.pk else keyCols.map(_._1.name).mkString(", ")}]"
-            val filter = filterString(ctx.view.filters, _.delete)
-        }
+        val (refCols, keyCols) =
+          if (data.keyVals.nonEmpty) data.keyVals.partition(_._1.isInstanceOf[RefKeyCol]) match {
+            case (refCols: List[(RefKeyCol, String)@unchecked], keyCols: List[(KeyCol, String)@unchecked]) =>
+              (refCols.map { case (k, v) => (k.name, v) }, keyCols.map { case (k, v) => (k.name, v) })
+          } else data.refsPkVals.partition(_._1 != data.pk) match {
+            case (refs: Set[(String, String)@unchecked], pk: Set[(String, String)@unchecked]) =>
+              (refs.toList, pk.toList)
+          }
+          val refColsFilter = refCols.map { case (n, v) => s"$n = $v"}.mkString("&")
+          val key_arr = s"[${if (keyCols.isEmpty) data.pk else keyCols.map(_._1).mkString(", ")}]"
+          val filter = filterString(data.filters, _.delete)
+          s"""_delete_missing_children('$name', $key_arr, -${data
+            .table}[$refColsFilter & _not_delete_keys($key_arr)$filter])"""
       }
-
-      ctx.view.saveTo.collectFirst { case SaveTo(table, _, key) if table == tableName && key.nonEmpty =>
-        key.filterNot(_ == refToParent)
-      }
-        .filter(_.nonEmpty)
-        .orElse(Option(table.key.cols).filter(_.nonEmpty))
-        .map { key =>
-          val key_arr = s"[${key.mkString(", ")}]"
-          s"""_delete_missing_children('$name', $key_arr, -${table
-            .name}[$refToParent = :#$parent & _not_delete_keys($key_arr)${filterString(ctx.view.filters, _.delete)}])"""
-        }
-        .getOrElse("")
+      ctx.view.saveTo.collectFirst { case st: SaveTo if st.table == tableName =>
+        save_tresql_internal(ctx.copy(view = ctx.view.copy(saveTo = List(st), properties = Nil)),
+          del_children_tresql, null)
+      }.getOrElse("")
     }
-    def upd = save_tresql_internal(ctx, table_save_tresql, save_tresql(_, _, _, update_tresql))
+    def upd = {
+      def table_save_tresql(data: SaveData) = {
+        def upd = {
+          import data._
+          val upd_tresql = Option(colsVals.unzip match {
+            case (cols: List[String], vals: List[String]) if cols.nonEmpty =>
+              val tn = table + (if (alias == null) "" else " " + alias)
+              val filter = filterString(data.filters, _.update)
+              val updateFilter = refsPkVals.map(t=> s"${t._1} = ${t._2}").mkString("[", " & ", s"$filter]")
+              cols.mkString(s"=$tn $updateFilter {", ", ", "}") +
+                vals.filter(_ != null).mkString("[", ", ", "]")
+            case _ => null
+          })
+            .map { ut =>
+              if (upsert) {
+                s"""|_upsert($ut, ${table_insert_tresql(data)})"""
+              } else ut
+            }
+            .orNull
+
+          Option(pk).filter(_ => keyVals.nonEmpty).map { pk =>
+            s"|_update_by_key($table, :$pk = |_id_by_key($table[${
+              keyVals.map(kv => s"${kv._1.name} = ${kv._2}").mkString(" & ")}]{$pk}), $upd_tresql)"
+          }.getOrElse(upd_tresql)
+        }
+        upd
+      }
+      save_tresql_internal(ctx, table_save_tresql, save_tresql(_, _, _, update_tresql))
+    }
     def ins = {
       val nctx = {
         (for {
@@ -627,7 +628,7 @@ trait ORT extends Query {
             //filter out pk of the linked table in case it matches refToParent
             .filterNot(tbl.name == ctx.table.name && _ == ctx.refToParent)
             .map(_ -> idRefId(headTable.table, tbl.name)))
-      (refsPk, key.map(k => refsPk.collectFirst { case (n, v) if n == k => RefKeyCol(n) -> v }
+      (refsPk, key.map(k => refsPk.collectFirst { case (n, v) if n == k && n != ctx.pk => RefKeyCol(n) -> v }
         .getOrElse(KeyCol(k) -> s":$k")))
     }
 
