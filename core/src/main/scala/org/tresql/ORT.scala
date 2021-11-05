@@ -574,14 +574,14 @@ trait ORT extends Query {
             val chtresql = children_save_tresql(prop, v, ParentRef(table.name, ctx.refToParent) :: ctx.parents)
             List(Option(chtresql).map(_ + s" '$prop'").orNull -> null)
           }
-      }.groupBy { case _: String => "l" case _ => "b" } match {
-        case m: Map[String @unchecked, List[_] @unchecked] =>
+      }.partition(_.isInstanceOf[String]) match {
+        case (lookups: List[String@unchecked], props: List[(String, String)@unchecked]) =>
           val tableName = table.name
           //lookup edit tresql
-          val lookupTresql = m.get("l").map(_.asInstanceOf[List[String]].map(_ + ", ").mkString).orNull
+          val lookupTresql = Option(lookups).filter(_.nonEmpty).map(_.map(_ + ", ").mkString)
           //base table tresql
           val tresql =
-            m.getOrElse("b", Nil).asInstanceOf[List[(String, String)]]
+            props
               .filter(_._1 != null /*check if prop->col mapping found*/) ++
               children.map(_ -> null) /*add same level one to one children*/
             match {
@@ -593,7 +593,7 @@ trait ORT extends Query {
 
           (for {
             base <- Option(tresql)
-            tresql <- Option(lookupTresql).map(lookup =>
+            tresql <- lookupTresql.map(lookup =>
               s"([$lookup$base])") //put lookup in braces and array,
               //so potentially not to conflict with insert expr with multiple values arrays
               .orElse(Some(base))
