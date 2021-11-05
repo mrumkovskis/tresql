@@ -447,13 +447,16 @@ trait ORT extends Query {
 
   private def update_tresql(ctx: SaveContext)(implicit resources: Resources): String = {
 
+    def filterString(filters: Option[Filters], extraction: Filters => Option[String]): String =
+      filters.flatMap(extraction).map(f => s" & ($f)").getOrElse("")
+
     def table_save_tresql(data: SaveData) = {
       def upd = {
         import data._
         val upd_tresql = Option(colsVals.unzip match {
           case (cols: List[String], vals: List[String]) if cols.nonEmpty =>
-            val filter = data.filters.flatMap(_.update).map(f => s" & ($f)").getOrElse("")
             val tn = table + (if (alias == null) "" else " " + alias)
+            val filter = filterString(data.filters, _.update)
             val updateFilter = refsPkVals.map(t=> s"${t._1} = ${t._2}").mkString("[", " & ", s"$filter]")
             cols.mkString(s"=$tn $updateFilter {", ", ", "}") +
               vals.filter(_ != null).mkString("[", ", ", "]")
@@ -477,9 +480,17 @@ trait ORT extends Query {
     val parent = parents.headOption.map(_.table).orNull
     val tableName = table.name
 
-    val delFilter = ctx.view.filters.flatMap(_.delete).map(f => s" & ($f)").getOrElse("")
-    def delAllChildren = s"-$tableName[$refToParent = :#$parent$delFilter]"
+    def delAllChildren = s"-$tableName[$refToParent = :#$parent${filterString(ctx.view.filters, _.delete)}]"
     def delMissingChildren = {
+      def del_children_tresql(data: SaveData) = {
+        data.keyVals.partition(_._1.isInstanceOf[RefKeyCol]) match {
+          case (refCols: List[(RefKeyCol, String)@unchecked], keyCols: List[(KeyCol, String)@unchecked]) =>
+            val refColsFilter = refCols.map { case (n, v) => s"$n = $v"}.mkString("&")
+            val key_arr = s"[${if (keyCols.isEmpty) data.pk else keyCols.map(_._1.name).mkString(", ")}]"
+            val filter = filterString(ctx.view.filters, _.delete)
+        }
+      }
+
       ctx.view.saveTo.collectFirst { case SaveTo(table, _, key) if table == tableName && key.nonEmpty =>
         key.filterNot(_ == refToParent)
       }
@@ -488,26 +499,23 @@ trait ORT extends Query {
         .map { key =>
           val key_arr = s"[${key.mkString(", ")}]"
           s"""_delete_missing_children('$name', $key_arr, -${table
-            .name}[$refToParent = :#$parent & _not_delete_keys($key_arr)$delFilter])"""
+            .name}[$refToParent = :#$parent & _not_delete_keys($key_arr)${filterString(ctx.view.filters, _.delete)}])"""
         }
         .getOrElse("")
     }
     def upd = save_tresql_internal(ctx, table_save_tresql, save_tresql(_, _, _, update_tresql))
     def ins = {
       val insFilter = {
-        val insf = ctx.view.filters.flatMap(_.insert)
         (for {
           pkstr <- Option(pk)
           _ <- ctx.view.filters.flatMap(_.update)
         } yield {
           //if update filter is present set additional insert filter which checks if row with current sequence id does not exist
           val pkcheck = s"!exists($tableName[$pkstr = #$tableName]{1})"
-          insf.map (f => s"($f) & $pkcheck").getOrElse(pkcheck)
-        })
-          .getOrElse(insf orNull)
+          s"$pkcheck${filterString(ctx.view.filters, _.insert)}"
+        }).map(f => Filters(insert = Some(f))).orElse(ctx.view.filters)
       }
-      val filters = Option(insFilter).map(f => Filters(insert = Some(f)))
-      save_tresql_internal(ctx.copy(view = view.copy(filters = filters)),
+      save_tresql_internal(ctx.copy(view = view.copy(filters = insFilter)),
         table_insert_tresql, save_tresql(_, _, _, insert_tresql))
     }
     def updOrIns = s"""|_update_or_insert('$tableName', $upd, $ins)"""
