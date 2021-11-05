@@ -126,7 +126,11 @@ class Macros {
       },
       deleteExpr)
 
-  def _not_delete_keys(b: ORT, key: QueryBuilder#ArrExpr) = b.NotDeleteKeysExpr(key)
+  def _not_delete_keys(b: ORT, key: QueryBuilder#ArrExpr) =
+    b.NotDeleteKeysExpr(key.elements.collect {
+      case b.IdentExpr(n) => n.mkString(".")
+      case x => sys.error(s"Unrecognized key type - $x")
+    })
 
   def _id_ref_id(b: ORT,
     idRef: QueryBuilder#IdentExpr,

@@ -107,21 +107,28 @@ trait ORT extends Query {
     }
     override def defaultSQL = s"DeleteChildrenExpr($obj, $key, $expr)"
   }
-  case class NotDeleteKeysExpr(keyExpr: Expr) extends BaseExpr {
+  case class NotDeleteKeysExpr(key: List[String]) extends BaseExpr {
     override def defaultSQL = env.get("keys").map {
       case keyVals: Seq[_] if keyVals.isEmpty =>
         //add 'keys' bind variable to query builder binded variables so it can be bound for later child records
         VarExpr("keys", Nil, false).sql
         "true"
       case keyVals: Seq[_] =>
-        keyExpr match {
-          case ArrExpr(key: List[IdentExpr@unchecked]) =>
-            if (key.size == 1) {
-              InExpr(key.head, List(VarExpr("keys", Nil, false)), true).sql
-            } else {
-              sys.error(s"Key size greater than 1 currently not supported: $key")
-            }
-          case x => sys.error(s"Expected array expression insted got: $x")
+        if (key.size == 1) {
+          InExpr(IdentExpr(key), List(VarExpr("keys", Nil, false)), true).sql
+        } else {
+          def comp(n: String, i: Int) =
+            BinExpr("=", IdentExpr(List(n)), VarExpr(s":$i.$n", Nil, false))
+          def and(l: List[String], i: Int): Expr = l match {
+            case Nil  => null
+            case k :: Nil => comp(k, i)
+            case k :: tail => BinExpr("&", comp(k, i), and(tail, i))
+          }
+          def or(k: List[String], i: Int): Expr =
+            if (i < 0) null
+            else if (i == 0) BracesExpr(and(k, i))
+            else BinExpr("|", BracesExpr(and(k, i)), or(k, i - 1))
+          BracesExpr(or(key, keyVals.size - 1)).sql
         }
     }.getOrElse("true")
   }
@@ -145,7 +152,7 @@ trait ORT extends Query {
         case _ => null
       }
     }
-    override def defaultSQL: String = toString
+    override def defaultSQL: String = s"IdByKeyExpr($idExpr)"
   }
 
   case class UpdateByKeyExpr(table: String, setIdExpr: Expr, updateExpr: Expr) extends BaseExpr {
@@ -156,7 +163,7 @@ trait ORT extends Query {
         .collect { case id if id != null => updateExpr() }
         .getOrElse(new UpdateResult()) // empty update result
     }
-    override def defaultSQL: String = toString
+    override def defaultSQL: String = s"UpdateByKeyExpr($table, $setIdExpr, $updateExpr)"
   }
 
   def insert(name: String, obj: Map[String, Any], filter: String = null)
@@ -480,7 +487,10 @@ trait ORT extends Query {
       def table_save_tresql(data: SaveData) = {
         def upd = {
           import data._
-          val upd_tresql = Option(colsVals.unzip match {
+          val filteredColsVals =
+            if (keyVals.nonEmpty) colsVals.filter(cv => !keyVals.exists(_._1.name == cv._1))
+            else colsVals
+          val upd_tresql = Option(filteredColsVals.unzip match {
             case (cols: List[String], vals: List[String]) if cols.nonEmpty =>
               val tn = table + (if (alias == null) "" else " " + alias)
               val filter = filterString(data.filters, _.update)
@@ -519,7 +529,12 @@ trait ORT extends Query {
       }
       save_tresql_internal(nctx, table_insert_tresql, save_tresql(_, _, _, insert_tresql))
     }
-    def updOrIns = s"""|_update_or_insert('$tableName', $upd, $ins)"""
+    def updOrIns = {
+      ctx.view.saveTo.collectFirst {
+        case SaveTo(table, _, key) if table == tableName && key.nonEmpty =>
+          s"|_upsert($upd, $ins)" //upsert for save by key since primary key is set only in update statement
+      }.getOrElse(s"""|_update_or_insert('$tableName', $upd, $ins)""")
+    }
 
     import view.options._
     if (parent == null) if (pk == null) null else upd
