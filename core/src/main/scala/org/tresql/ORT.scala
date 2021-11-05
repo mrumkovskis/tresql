@@ -466,7 +466,7 @@ trait ORT extends Query {
               (refs.toList, pk.toList)
           }
           val refColsFilter = refCols.map { case (n, v) => s"$n = $v"}.mkString("&")
-          val key_arr = s"[${if (keyCols.isEmpty) data.pk else keyCols.map(_._1).mkString(", ")}]"
+          val key_arr = s"[${keyCols.map(_._1).mkString(", ")}]"
           val filter = filterString(data.filters, _.delete)
           s"""_delete_missing_children('$name', $key_arr, -${data
             .table}[$refColsFilter & _not_delete_keys($key_arr)$filter])"""
