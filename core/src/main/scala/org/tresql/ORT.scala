@@ -580,9 +580,7 @@ trait ORT extends Query {
           //lookup edit tresql
           val lookupTresql = Option(lookups).filter(_.nonEmpty).map(_.map(_ + ", ").mkString)
           //base table tresql
-          val tresql =
-            props
-              .filter(_._1 != null /*check if prop->col mapping found*/) ++
+          val tresql = props.filter(_._1 != null /*check if prop->col mapping found*/) ++
               children.map(_ -> null) /*add same level one to one children*/
             match {
               case x if x.isEmpty && refsAndPk.isEmpty => null //no columns & refs found
