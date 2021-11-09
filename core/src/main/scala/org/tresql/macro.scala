@@ -117,20 +117,19 @@ class Macros {
   def _delete_missing_children(b: ORT,
                                objName: QueryBuilder#ConstExpr,
                                key: QueryBuilder#ArrExpr,
+                               keyValExprs: QueryBuilder#ArrExpr,
                                deleteExpr: Expr) =
-    b.DeleteChildrenExpr(
+    b.DeleteMissingChildrenExpr(
       String valueOf objName.value,
       key.elements.collect {
         case b.IdentExpr(n) => n.mkString(".")
         case x => sys.error(s"Unrecognized key type - $x")
       },
+      keyValExprs.elements,
       deleteExpr)
 
-  def _not_delete_keys(b: ORT, key: QueryBuilder#ArrExpr) =
-    b.NotDeleteKeysExpr(key.elements.collect {
-      case b.IdentExpr(n) => n.mkString(".")
-      case x => sys.error(s"Unrecognized key type - $x")
-    })
+  def _not_delete_keys(b: ORT, key: QueryBuilder#ArrExpr, keyValExprs: QueryBuilder#ArrExpr) =
+    b.NotDeleteKeysExpr(key.elements, keyValExprs.elements)
 
   def _id_ref_id(b: ORT,
     idRef: QueryBuilder#IdentExpr,

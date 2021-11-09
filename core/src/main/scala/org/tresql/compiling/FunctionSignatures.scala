@@ -23,8 +23,8 @@ trait TresqlMacroFunctionSignatures {
   def _lookup_edit(objName: String, idName: String, insertExpr: Any, updateExpr: Any): Any
   def _update_or_insert(table: Any, updateExpr: Any, insertExpr: Any): Any
   def _upsert(updateExpr: Any, insertExpr: Any): Any
-  def _delete_missing_children(objName: String, key: Any, deleteExpr: Any): Any
-  def _not_delete_keys(key: Any): Any
+  def _delete_missing_children(objName: String, key: Any, keyValExprs: Any, deleteExpr: Any): Any
+  def _not_delete_keys(key: Any, keyValExprs: Any): Any
   def _id_ref_id(idRef: Any, id: Any): Any
   def _id_by_key(idExpr: Any): Any
   def _update_by_key(table: String, setIdExpr: Any, updateExpr: Any): Any

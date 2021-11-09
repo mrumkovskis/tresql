@@ -69,16 +69,16 @@ trait Query extends QueryBuilder with TypedQuery {
   private[tresql] def sel(sql: String, cols: QueryBuilder#ColsExpr): Result[_ <: RowLike] = try {
     val (rs, columns, visibleColCount) = sel_result(sql, cols)
     val result = env.rowConverter(queryDepth, childIdx).map { conv =>
-      new CompiledSelectResult(rs, columns, env, sql,bindVariables,
+      new CompiledSelectResult(rs, columns, env, sql,registeredBindVariables,
         env.maxResultSize, visibleColCount, conv)
     }.getOrElse {
-      new DynamicSelectResult(rs, columns, env, sql, bindVariables, env.maxResultSize, visibleColCount)
+      new DynamicSelectResult(rs, columns, env, sql, registeredBindVariables, env.maxResultSize, visibleColCount)
     }
     env.result = result
     result
   } catch {
     case ex: SQLException =>
-      throw new TresqlException(sql, bindVarsToMap(bindVariables), ex)
+      throw new TresqlException(sql, bindVarsToMap(registeredBindVariables), ex)
   }
 
   private[this] def sel_result(sql: String, cols: QueryBuilder#ColsExpr):
@@ -127,7 +127,7 @@ trait Query extends QueryBuilder with TypedQuery {
     }
   } catch {
     case ex: SQLException =>
-      throw new TresqlException(sql, bindVarsToMap(bindVariables), ex)
+      throw new TresqlException(sql, bindVarsToMap(registeredBindVariables), ex)
   }
 
   private[tresql] def call(sql: String): Result[RowLike] = try {
@@ -144,7 +144,7 @@ trait Query extends QueryBuilder with TypedQuery {
             Vector(1 to md.getColumnCount map { i => Column(i, md.getColumnLabel(i), null) }: _*),
             env,
             sql,
-            bindVariables,
+            registeredBindVariables,
             env.maxResultSize,
             -1,
             conv)
@@ -154,14 +154,14 @@ trait Query extends QueryBuilder with TypedQuery {
             Vector(1 to md.getColumnCount map { i => Column(i, md.getColumnLabel(i), null) }: _*),
             env,
             sql,
-            bindVariables,
+            registeredBindVariables,
             env.maxResultSize
           )
         }
         env.result = res
         result = res
       }
-      outs = bindVariables map (_()) collect { case x: OutPar =>
+      outs = registeredBindVariables map (_()) collect { case x: OutPar =>
         val p = x.asInstanceOf[OutPar]
         p.value = p.value match {
           case null => st.getObject(p.idx)
@@ -197,15 +197,15 @@ trait Query extends QueryBuilder with TypedQuery {
     }.getOrElse(new DynamicArrayResult(if (result== null) outs else result :: outs))
   } catch {
     case ex: SQLException =>
-      throw new TresqlException(sql, bindVarsToMap(bindVariables), ex)
+      throw new TresqlException(sql, bindVarsToMap(registeredBindVariables), ex)
   }
 
   private def statement(sql: String, env: Env, call: Boolean = false) = {
     val conn = env.conn
     if (conn == null) throw new NullPointerException(
       """Connection not found in environment.""")
-    val bindValues = bindVariables.map(_())
-    log(sql, bindVariables)
+    val bindValues = registeredBindVariables.map(_())
+    log(sql, registeredBindVariables)
     val st = if (env.reusableExpr)
       if (env.statement == null) {
         val s = if (call) conn.prepareCall(sql) else {

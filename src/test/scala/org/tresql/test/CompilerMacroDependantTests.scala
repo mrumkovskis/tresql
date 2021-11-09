@@ -1100,21 +1100,109 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       Map("ename" -> "Ziko", "job" -> "Apprent" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
     ))
     assertResult(List(("Florida",
-      List(("Selina", "Observer", "KING"), ("Paul", "Observer", "Selina"), ("Ziko", "Apprent", "Selina"))))) {
+      List(("Paul", "Observer", "Selina"), ("Selina", "Observer", "KING"), ("Ziko", "Apprent", "Selina"))))) {
       ORT.update("dept[dname]", obj)
-      tresql"dept[dname = 'METEO']{loc, |emp e{ename, job, (emp m[m.empno = e.mgr]{m.ename}) mgr} emps}"
+      println(s"\nResult check:")
+      tresql"dept[dname = 'METEO']{loc, |emp e{ename, job, (emp m[m.empno = e.mgr]{m.ename}) mgr}#(1) emps}"
         .map(d => d.loc -> d.emps.map(e => (e.ename, e.job, e.mgr)).toList).toList
     }
 
     obj = Map("dname" -> "METEO", "loc" -> "Florida", "emp[ename, deptno][+-=]" -> List(
       Map("ename" -> "Selina", "job" -> "Observer" , "mgr" -> "KING", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
       Map("ename" -> "Paul", "job" -> "Gardener" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
+      Map("ename" -> "Mia", "job" -> "Gardener" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
     ))
     assertResult(List(("Florida",
-      List(("Selina", "Observer", "KING"), ("Paul", "Gardener", "Selina"))))) {
+      List(("Selina", "Observer", "KING"), ("Paul", "Gardener", "Selina"), ("Mia", "Gardener", "Selina"))))) {
       ORT.update("dept[dname]", obj)
-      tresql"dept[dname = 'METEO']{loc, |emp e{ename, job, (emp m[m.empno = e.mgr]{m.ename}) mgr} emps}"
+      println(s"\nResult check:")
+      tresql"dept[dname = 'METEO']{loc, |emp e{ename, job, (emp m[m.empno = e.mgr]{m.ename}) mgr}#(~1) emps}"
         .map(d => d.loc -> d.emps.map(e => (e.ename, e.job, e.mgr)).toList).toList
+    }
+
+    obj = Map("dname" -> "METEO", "loc" -> "Arizona", "emp[ename, deptno, mgr][+-=]" -> List(
+      Map("ename" -> "Selina", "job" -> "Driver" , "mgr" -> "KING", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
+      Map("ename" -> "Paul", "job" -> "Teacher" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
+    ))
+    assertResult(List(("Arizona",
+      List(("Paul", "Teacher", "Selina"), ("Selina", "Driver", "KING"))))) {
+      ORT.update("dept[dname]", obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'METEO']{loc, |emp e{ename, job, (emp m[m.empno = e.mgr]{m.ename}) mgr}#(1) emps}"
+        .map(d => d.loc -> d.emps.map(e => (e.ename, e.job, e.mgr)).toList).toList
+    }
+
+    obj = Map("dname" -> "METEO", "loc" -> "Nevada", "emp[ename, deptno][+-=]" ->
+      List(
+        Map("ename" -> "Selina", "job" -> "Driver" , "mgr" -> "Vytas", "mgr->" -> "mgr=emp[ename = :mgr]{empno}",
+          "car_usage[empno, car_nr][+-=]" -> Nil),
+        Map("ename" -> "Paul", "job" -> "Pilot" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}",
+          "car_usage[empno, car_nr][+-=]" ->
+          List(
+            Map("car" -> "VOLKSWAGEN", "car->" -> "car_nr=car[name = :car]{nr}", "date_from" -> "2021-11-10"),
+            Map("car" -> "FIAT", "car->" -> "car_nr=car[name = :car]{nr}", "date_from" -> "2021-11-11"),
+          ))
+      ),
+    )
+    assertResult(List(("Nevada",
+      List(
+        ("Paul", "Pilot", "Selina", List(("FIAT","2021-11-11"), ("VOLKSWAGEN","2021-11-10"))),
+        ("Selina", "Driver", "Vytas", Nil)
+      )
+    ))) {
+      ORT.update("dept[dname]", obj)
+      println(s"\nResult check:")
+      tresql"""dept[dname = 'METEO']{loc, |emp e{ename, job, (emp m[m.empno = e.mgr]{m.ename}) mgr,
+              |car_usage{(car[nr = car_nr]{name}) car, date_from}#(1) cars }#(1) emps}"""
+        .map(d => d.loc -> d.emps.map(e => (e.ename, e.job, e.mgr,
+          e.cars.map(c => c.car -> c.date_from.toString).toList)).toList).toList
+    }
+
+    obj = Map("dname" -> "METEO", "loc" -> "Montana", "emp[ename, deptno][+-=]" ->
+      List(
+        Map("ename" -> "Selina", "job" -> "Driver" , "mgr" -> "Martino", "mgr->" -> "mgr=emp[ename = :mgr]{empno}",
+          "car_usage[empno, car_nr][+-=]" ->
+            List(
+              Map("car" -> "Tesla", "car->" -> "car_nr=car[name = :car]{nr}", "date_from" -> "2021-11-15"),
+            )),
+        Map("ename" -> "Paul", "job" -> "Mechanic" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}",
+          "car_usage[empno, car_nr][+-=]" ->
+            List(
+              Map("car" -> "Mercedes Benz", "car->" -> "car_nr=car[name = :car]{nr}", "date_from" -> "2021-11-10"),
+              Map("car" -> "FIAT", "car->" -> "car_nr=car[name = :car]{nr}", "date_from" -> "2021-12-11"),
+            ))
+      ),
+    )
+    assertResult(List(("Montana",
+      List(
+        ("Paul", "Mechanic", "Selina", List(("FIAT", "2021-12-11"), ("Mercedes Benz", "2021-11-10"))),
+        ("Selina", "Driver", "Martino", List(("Tesla", "2021-11-15"))))))) {
+      ORT.update("dept[dname]", obj)
+      println(s"\nResult check:")
+      tresql"""dept[dname = 'METEO']{loc, |emp e{ename, job, (emp m[m.empno = e.mgr]{m.ename}) mgr,
+              |car_usage{(car[nr = car_nr]{name}) car, date_from}#(1) cars }#(1) emps}"""
+        .map(d => d.loc -> d.emps.map(e => (e.ename, e.job, e.mgr,
+          e.cars.map(c => c.car -> c.date_from.toString).toList)).toList).toList
+    }
+
+    obj = Map("car" -> "Tesla", "car->" -> "car_nr=car[name = :car]{nr}",
+      "emp" -> "Selina", "emp->" -> "empno=emp[ename = :emp]{empno}", "date_from" -> "2022-01-01")
+    assertResult(List("2022-01-01")) {
+      ORT.update("car_usage[car_nr, empno]", obj)
+      println(s"\nResult check:")
+      tresql"car_usage[empno = (emp e[ename = 'Selina']{e.empno}) & car_nr = (car[name = 'Tesla']{nr})]{date_from}"
+        .map(_.date_from.toString).toList
+    }
+
+    obj = Map("ename" -> "Selina", "hiredate" -> "2021-05-05",
+      "car_usage[empno, car_nr][+-=]|null, null, exists(car[name = :car & deptnr = (emp e[empno = :#emp] {e.deptno})]{1})" -> List(
+        Map("car" -> "Tesla", "car->" -> "car_nr=car[name = :car]{nr}", "date_from" -> "2000-10-05")
+      ))
+    assertResult(List(("2021-05-05", List(("Tesla", "2022-01-01"))))) {
+      ORT.update("emp[ename]", obj)
+      println(s"\nResult check:")
+      tresql"emp[ename = 'Selina'] {hiredate, |car_usage{(car[nr = car_nr]{name}) car, date_from}#(1) cars}"
+        .map(e => e.hiredate.toString -> e.cars.map(c => c.car -> c.date_from.toString).toList).toList
     }
   }
 
@@ -1154,7 +1242,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         case (x, y) => (x.head.concat, y.head.inc)
       })
 
-      assertResult((java.sql.Date.valueOf("1980-12-17"), java.sql.Date.valueOf("1983-01-12"),
+      assertResult((java.sql.Date.valueOf("1980-12-17"), java.sql.Date.valueOf("2021-05-05"),
         850.00, 5000.00))(
           tresql"emp{min(hiredate) minh, max(hiredate) maxh, min(sal) mins, max(sal) maxs}".map { r =>
             import r._

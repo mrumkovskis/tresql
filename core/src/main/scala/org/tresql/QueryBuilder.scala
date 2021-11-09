@@ -36,8 +36,34 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   val OPTIONAL_OPERAND_BIN_OPS = Set("++", "+",  "-", "&&", "||", "*", "/", "&", "|")
 
   //bind variables for jdbc prepared statement
-  private val _bindVariables = scala.collection.mutable.ListBuffer[Expr]()
-  private[tresql] lazy val bindVariables = _bindVariables.toList
+  class RegisteredBindVariables {
+    private val bindVariables = scala.collection.mutable.ListBuffer[Expr]()
+    private var bindVars: List[Expr] = null
+    private val registeredBindVars = scala.collection.mutable.Set[Int]()
+    private[tresql] def register(expr: Expr) = {
+      val hash = System.identityHashCode(expr)
+      if (!registeredBindVars.contains(hash)) {
+        bindVariables += expr
+        registeredBindVars += hash
+      }
+    }
+    private[tresql] def variables = {
+      if (bindVars != null) bindVars else {
+        bindVars = bindVariables.toList
+        bindVars
+      }
+    }
+
+    private[tresql] def clear = {
+      bindVariables.clear()
+      bindVars = null
+      registeredBindVars.clear()
+    }
+  }
+  private val bindVars = new RegisteredBindVariables
+  private[tresql] def clearRegisteredBindVariables() = bindVars.clear
+  private[tresql] def registeredBindVariables = bindVars.variables
+
   //children count. Is increased every time buildWithNew method is called or recursive expr created
   private[tresql] var childrenCount = 0
 
@@ -102,7 +128,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   case class VarExpr(name: String, members: List[String], opt: Boolean) extends BaseVarExpr {
     override def apply() = env(name, members)
     override def defaultSQL = {
-      if (!binded) QueryBuilder.this._bindVariables += this
+      QueryBuilder.this.bindVars.register(this)
       val s = if (!env.reusableExpr && (env contains name) && (members == null | members == Nil)) {
         this() match {
           case l: scala.collection.Iterable[_] =>
@@ -118,7 +144,6 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           case _ => "?"
         }
       } else "?"
-      binded = true
       s
     }
     def fullName = (name :: members).mkString(".")
@@ -164,9 +189,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   }
 
   class BaseVarExpr extends BaseExpr {
-    private[tresql] var binded = false
     def defaultSQL = {
-      if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
+      QueryBuilder.this.bindVars.register(this)
       "?"
     }
   }
