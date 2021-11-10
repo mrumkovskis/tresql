@@ -672,9 +672,8 @@ trait ORT extends Query {
         key.map(k => refsPk.collectFirst { case (n, v) if n == k => RefKeyCol(n) -> v }
           .getOrElse(KeyCol(k) ->
             ctx.view.properties
-              .collectFirst { case OrtMetadata.Property(p, TresqlValue(v)) if p == k =>
-                if (v == s":$k") v else s"$v"
-              }.getOrElse(s":$k")))
+              .collectFirst { case OrtMetadata.Property(p, TresqlValue(v)) if p == k => v }
+              .getOrElse(s":$k")))
       )
     }
 
