@@ -194,7 +194,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
         override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
       }
     )
-    val compiler = new QueryCompiler(testRes.metadata, testRes)
+    val compiler = new QueryCompiler(testRes.metadata, Map(), testRes)
     //set console compiler so it can be used from scala console
     ITConsoleResources.compiler = compiler
     import compiling.CompilerException
