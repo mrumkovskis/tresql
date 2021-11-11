@@ -42,7 +42,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     val conn = if (configMap.get("docker").isDefined) {
       val postgresDockerImage = configMap("docker")
       val hostPort = configMap.getOrElse("port", "5432")
-      val DockerCmd = s"docker run -d --rm --name tresql-it-tests -p $hostPort:5432 $postgresDockerImage"
+      val DockerCmd = s"docker run -d --rm --name tresql-it-tests -p $hostPort:5432 -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_PASSWORD=password $postgresDockerImage"
       println(s"Starting tresql test docker postgres container...")
       val process = Runtime.getRuntime.exec(DockerCmd)
       val baos = new ByteArrayOutputStream()
