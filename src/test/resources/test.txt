@@ -644,3 +644,9 @@ dummy{ ((dummy{sum(dummy)})::int - (dummy{dummy}@(1))::int) x} --> [[0]]
 +dummy{*} dummy[dummy = 10]{dummy dummy} --> [[0]]
 +dummy{*} d(#) { dummy[dummy = 10] } d{dummy} --> [[0]]
 +dummy{*} d(#) { dummy[dummy = 10] } d{dummy} ++ dummy[dummy = 10]{dummy} --> [[0]]
+
+// another schema test
+accounts.account --> []
+accounts.transaction --> []
+accounts.account/emp {ename, number, balance}#(1,2) --> []
+accounts.transaction t[t.originator_id o, t.beneficiary_id b]accounts.account{t.id, o.number, b.number, amount}#(1) --> []

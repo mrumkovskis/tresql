@@ -348,7 +348,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       Query("emp [name = ?]", n)
     } catch {
       case ex: TresqlException =>
-        assertResult(("select * from emp where name = ?/*1*/", Map("1" -> "SCOTT"))) {
+        assertResult(("select * from emp where name = ?/*1*/", List("1" -> "SCOTT"))) {
           ex.sql -> ex.bindVars
         }
       case x => throw x
@@ -1203,6 +1203,40 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       println(s"\nResult check:")
       tresql"emp[ename = 'Selina'] {hiredate, |car_usage{(car[nr = car_nr]{name}) car, date_from}#(1) cars}"
         .map(e => e.hiredate.toString -> e.cars.map(c => c.car -> c.date_from.toString).toList).toList
+    }
+
+    obj = Map("number" -> "000", "balance" -> 1000)
+    assertResult(List(("000",1000.00, null))) {
+      import OrtMetadata._
+      ORT.save(View(List(SaveTo("accounts.account", Set(),
+        List("number"))), SaveOptions(true, true, true), None, null,
+        List(Property("number", TresqlValue(":number")), Property("balance", TresqlValue(":balance")))),
+        obj)
+      println(s"\nResult check:")
+      tresql"accounts.account{number, balance, empno}#(number)".map(a => (a.number, a.balance, a.empno)).toList
+    }
+    obj = Map("ename" -> "Betty")
+
+    obj = Map("ename" -> "Betty", "accounts.account[empno, number][+-=]" -> List(
+      Map("number" -> "ABC123", "balance" -> 5, "accounts.transaction:beneficiary_id[+]" -> Nil),
+      Map("number" -> "ABC456", "balance" -> 15, "accounts.transaction:beneficiary_id[+]" ->
+        List(
+          Map("originator" -> "000", "originator->" -> "originator_id=accounts.account[number = :originator]{id}",
+            "amount" -> 10, "tr_date" -> "2021-11-11"),
+          Map("originator" -> "ABC123", "originator->" -> "originator_id=accounts.account[number = :originator]{id}",
+            "amount" -> 5, "tr_date" -> "2021-11-11"),
+        )),
+    ))
+    assertResult( List(("Betty", List(("ABC123", 5.00, Nil),
+      ("ABC456", 15.00, List((5.00, "2021-11-11", "ABC123"), (10.00, "2021-11-11", "000"))))))) {
+      ORT.update("emp[ename]", obj)
+      println(s"\nResult check:")
+      tresql"""emp[ename = 'Betty'] {ename, |accounts.account a{number, balance,
+              |[t.beneficiary_id]accounts.transaction t
+                { amount, tr_date, (accounts.account a[originator_id = a.id] {number}) from_acc }#(1,2,3) tr}#(1) acc}"""
+        .map(e => e.ename -> e.acc
+          .map(a => (a.number, a.balance, a.tr
+            .map(t => (t.amount, t.tr_date.toString, t.from_acc)).toList)).toList).toList
     }
   }
 

@@ -493,8 +493,10 @@ trait ORT extends Query {
             case (kc, kv) => (s"[${kc.mkString(", ")}]", s"[${kv.mkString(", ")}]")
           }
           val filter = filterString(data.filters, _.delete)
-          s"""_delete_missing_children('$name', $key_arr, $key_val_expr_arr, -${data
-            .table}[$refColsFilter & _not_delete_keys($key_arr, $key_val_expr_arr)$filter])"""
+          if (refCols.isEmpty || keyCols.isEmpty) null
+          else
+            s"""_delete_missing_children('$name', $key_arr, $key_val_expr_arr, -${data
+              .table}[$refColsFilter & _not_delete_keys($key_arr, $key_val_expr_arr)$filter])"""
       }
       save_tresql_internal(ctx.copy(view = ctx.view.copy(saveTo = List(saveTo))),
         del_children_tresql, null)

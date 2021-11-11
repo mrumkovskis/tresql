@@ -38,7 +38,7 @@ trait Query extends QueryBuilder with TypedQuery {
     params: Map[String, Any] = null,
     reusableExpr: Boolean = true
   )(implicit resources: Resources): Expr = {
-    resources.log(expr, Map(), LogTopic.tresql)
+    resources.log(expr, Nil, LogTopic.tresql)
     val pars =
       if (resources.params.isEmpty) params
       else if (params != null) resources.params ++ params else resources.params
@@ -78,7 +78,7 @@ trait Query extends QueryBuilder with TypedQuery {
     result
   } catch {
     case ex: SQLException =>
-      throw new TresqlException(sql, bindVarsToMap(registeredBindVariables), ex)
+      throw new TresqlException(sql, bindVarsValues(registeredBindVariables), ex)
   }
 
   private[this] def sel_result(sql: String, cols: QueryBuilder#ColsExpr):
@@ -127,7 +127,7 @@ trait Query extends QueryBuilder with TypedQuery {
     }
   } catch {
     case ex: SQLException =>
-      throw new TresqlException(sql, bindVarsToMap(registeredBindVariables), ex)
+      throw new TresqlException(sql, bindVarsValues(registeredBindVariables), ex)
   }
 
   private[tresql] def call(sql: String): Result[RowLike] = try {
@@ -197,7 +197,7 @@ trait Query extends QueryBuilder with TypedQuery {
     }.getOrElse(new DynamicArrayResult(if (result== null) outs else result :: outs))
   } catch {
     case ex: SQLException =>
-      throw new TresqlException(sql, bindVarsToMap(registeredBindVariables), ex)
+      throw new TresqlException(sql, bindVarsValues(registeredBindVariables), ex)
   }
 
   private def statement(sql: String, env: Env, call: Boolean = false) = {
@@ -311,19 +311,26 @@ trait Query extends QueryBuilder with TypedQuery {
     }
   }
 
-  private def bindVarsToMap(bindVars: List[Expr]): Map[String, Any] = {
+  private def bindVarsValues(bindVars: List[Expr]) = {
     bindVars.flatMap {
       case v: VarExpr => List(v.name ->
         Option(env.bindVarLogFilter).filter(_.isDefinedAt(v)).map(_(v)).getOrElse(v()))
       case r: ResExpr => List(r.name -> r())
+      case id: IdExpr => List(s"#${id.seqName}" -> "<seq value>")
+      case ir: IdRefExpr => List(s":#${ir.seqName}" -> ir())
       case _ => Nil
-    }.toMap
+    }
   }
 
   private def log(sql: String, bindVars: List[Expr]) = {
-    env.log(sql, Map(), LogTopic.sql)
-    env.log(sql, bindVarsToMap(bindVars), LogTopic.sql_with_params)
-    env.log(bindVarsToMap(bindVars).mkString("[", ", ", "]"), Map(), LogTopic.params)
+    env.log(sql, Nil, LogTopic.sql)
+    env.log(sql, bindVarsValues(bindVars), LogTopic.sql_with_params)
+    env.log(
+      bindVarsValues(bindVars)
+        .map { case (n, v) => s"$n -> ${String.valueOf(v)}"}
+        .mkString("[", ", ", "]"),
+      Nil, LogTopic.params
+    )
   }
 }
 

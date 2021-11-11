@@ -141,5 +141,23 @@ BEGIN ATOMIC
   SET newid = newid + 5;
   SET outstring = instring;
 END
-
+//
 CREATE SEQUENCE seq START WITH 10000
+//
+create schema accounts
+    create table account(id integer not null,
+        number varchar(20) not null, balance decimal(7, 2) not null, empno integer)
+    create table transaction(id integer not null,
+        originator_id integer not null, beneficiary_id integer not null,
+        amount decimal(7, 2) not null, tr_date date not null)
+    CREATE SEQUENCE seq START WITH 10000;
+//
+alter table accounts.account add primary key (id)
+//
+alter table accounts.account add constraint emp_ref foreign key (empno) references public.emp(empno)
+//
+alter table accounts.transaction add primary key (id)
+//
+alter table accounts.transaction add constraint originator_ref foreign key (originator_id) references account(id)
+//
+alter table accounts.transaction add constraint beneficiary_ref foreign key (beneficiary_id) references account(id)

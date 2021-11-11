@@ -416,7 +416,7 @@ trait CacheResources {
 }
 
 trait Logging {
-  type TresqlLogger = (=> String, => Map[String, Any], LogTopic) => Unit
+  type TresqlLogger = (=> String, => Seq[(String, Any)], LogTopic) => Unit
   type BindVarLogFilter = PartialFunction[Expr, String]
 
   def logger: TresqlLogger = null
@@ -424,7 +424,7 @@ trait Logging {
     case v: QueryBuilder#VarExpr if v.name == "password" => v.fullName + " = ***"
   }
 
-  def log(msg: => String, params: => Map[String, Any] = Map(), topic: LogTopic = LogTopic.info): Unit =
+  def log(msg: => String, params: => Seq[(String, Any)] = Nil, topic: LogTopic = LogTopic.info): Unit =
     if (logger != null) logger(msg, params, topic)
 }
 
@@ -435,7 +435,7 @@ private [tresql] trait EnvProvider {
 class MissingBindVariableException(val name: String)
   extends RuntimeException(s"Missing bind variable: $name")
 
-class TresqlException(val sql: String, val bindVars: Map[String, Any], sqlExc: SQLException)
+class TresqlException(val sql: String, val bindVars: List[(String, Any)], sqlExc: SQLException)
   extends RuntimeException(sqlExc)
 
 class ChildSaveException(val tableName: String, cause: Throwable) extends RuntimeException(cause)

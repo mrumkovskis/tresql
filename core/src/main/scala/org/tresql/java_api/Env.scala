@@ -8,7 +8,7 @@ import org.tresql.{ThreadLocalResources => TLR}
 
 trait IdExprFunc { def getIdExpr(table: String): String }
 trait LogMessage { def get: String }
-trait LogParams { def get: Map[String, Any] }
+trait LogParams { def get: Seq[(String, Any)] }
 trait Logger { def log(msg: LogMessage, params: LogParams, topic: LogTopic): Unit }
 object Dialects {
   def ANSISQL = dialects.ANSISQLDialect

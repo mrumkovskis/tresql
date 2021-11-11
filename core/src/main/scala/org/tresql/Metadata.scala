@@ -85,7 +85,7 @@ package metadata {
       Table(t("name").toString.toLowerCase, t("cols") match {
         case l: List[Map[String, String] @unchecked] => l map { c =>
           Col(
-            c("name").toString.toLowerCase,
+            c("name").toLowerCase,
             c("nullable").asInstanceOf[Boolean],
             c("sql-type").asInstanceOf[Int],
             c("scala-type").asInstanceOf[Manifest[_]]
