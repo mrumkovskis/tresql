@@ -1215,7 +1215,6 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       println(s"\nResult check:")
       tresql"accounts.account{number, balance, empno}#(number)".map(a => (a.number, a.balance, a.empno)).toList
     }
-    obj = Map("ename" -> "Betty")
 
     obj = Map("ename" -> "Betty", "accounts.account[empno, number][+-=]" -> List(
       Map("number" -> "ABC123", "balance" -> 5, "accounts.transaction:beneficiary_id[+]" -> Nil),
