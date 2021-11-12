@@ -11,9 +11,10 @@ jobs:
       postgres:
         image: postgres:latest
         env:
-          POSTGRES_DB:        tresql
-          POSTGRES_PASSWORD:  tresql
-          POSTGRES_USER:      tresql
+          POSTGRES_DB:                tresql
+          POSTGRES_PASSWORD:          tresql
+          POSTGRES_USER:              tresql
+          POSTGRES_HOST_AUTH_METHOD:  trust
         ports:
           - 5432:5432
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
@@ -25,5 +26,5 @@ jobs:
       with:
         java-version: ${{ matrix.java }}
         distribution: 'adopt'
-    - name: Compile and test and check version policy
+    - name: Compile and test
       run:  sbt clean update +compile +test +it:test
