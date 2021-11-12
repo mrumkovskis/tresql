@@ -1216,6 +1216,20 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       tresql"accounts.account{number, balance, empno}#(number)".map(a => (a.number, a.balance, a.empno)).toList
     }
 
+    obj = Map("number" -> "000", "balance" -> 2000)
+    assertResult(List(("000", 3000.00, null))) {
+      import OrtMetadata._
+      ORT.save(View(List(SaveTo("accounts.account", Set(),
+        List("number"))), SaveOptions(true, true, true), None, null,
+        List(
+          Property("number", TresqlValue(":number")),
+          Property("balance", TresqlValue("accounts.account[number = :number]{ balance + :balance}"))
+        )),
+        obj)
+      println(s"\nResult check:")
+      tresql"accounts.account{number, balance, empno}#(number)".map(a => (a.number, a.balance, a.empno)).toList
+    }
+
     obj = Map("ename" -> "Betty", "accounts.account[empno, number][+-=]" -> List(
       Map("number" -> "ABC123", "balance" -> 5, "accounts.transaction:beneficiary_id[+]" -> Nil),
       Map("number" -> "ABC456", "balance" -> 15, "accounts.transaction:beneficiary_id[+]" ->
