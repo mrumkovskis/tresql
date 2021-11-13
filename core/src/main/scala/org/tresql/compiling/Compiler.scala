@@ -600,7 +600,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
           case ColDef(_, All, _) => sql.tables.flatMap { td =>
             table(ctx.scopes)(td.name)(EnvMetadata, ctx.db).map(_.cols.map { c =>
               ColDef(c.name, createCol(s"${td.name}.${c.name}").col, c.scalaType)
-            }).getOrElse(error(s"Cannot find table: ${td.tresql}\nScopes:\n${ctx.scopes}"))
+            }).getOrElse(error(s"Cannot find table: ${td.name}\nScopes:\n${ctx.scopes}"))
           }
           case ColDef(_, IdentAll(Ident(ident)), _) =>
             val alias = ident mkString "."
