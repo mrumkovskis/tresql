@@ -102,23 +102,40 @@ trait Compiler extends QueryParsers { thisCompiler =>
       //collect table names in this sql (i.e. exclude tresql no join aliases)
       case TableDef(t, Obj(_: TableObj, _, _, _, _)) => t.toLowerCase
     }
-    def table(table: String): Option[Table] = tables.find(_.name.toLowerCase == table).flatMap {
-      case TableDef(_, Obj(TableObj(Ident(name)), _, _, _, _)) =>
-        Option(table_alias(name mkString "."))
-      case TableDef(n, Obj(TableObj(s: SelectDefBase), _, _, _, _)) =>
-        Option(table_from_selectdef(n, s))
-      case TableDef(_, Obj(TableObj(_: Null), _, _, _,_)) => Option(table_alias(null))
-      case TableDef(_, Obj(TableObj(FunAsTableDef(_, Some(cols), _)), alias, _, _, _)) =>
-        Option(Table(alias,
-          cols.map(c =>
-            org.tresql.metadata.Col(name = c.name,
-              nullable = true, -1,
-              scalaType =
-                c.typ
-                  .map(metadata.xsd_scala_type_map)
-                  .getOrElse(ManifestFactory.Any))), null, Map()))
-      case x => error(
-        s"Unrecognized table clause: '${x.tresql}'. Try using Query(...)")
+    def table(table: String): Option[Table] = {
+      def name_matches(name: String) =
+        name == table || {
+          val idx = name.indexOf('.')
+          idx != -1 && name.substring(idx + 1) == table
+        }
+      tables.filter(t => name_matches(t.name.toLowerCase)).flatMap {
+          case TableDef(_, Obj(TableObj(Ident(name)), _, _, _, _)) =>
+            List(table_alias(name mkString "."))
+          case TableDef(n, Obj(TableObj(s: SelectDefBase), _, _, _, _)) =>
+            List(table_from_selectdef(n, s))
+          case TableDef(_, Obj(TableObj(_: Null), _, _, _, _)) =>
+            List(table_alias(null))
+          case TableDef(_, Obj(TableObj(FunAsTableDef(_, Some(cols), _)), alias, _, _, _)) =>
+            List(Table(alias,
+              cols.map(c =>
+                org.tresql.metadata.Col(name = c.name,
+                  nullable = true, -1,
+                  scalaType =
+                    c.typ
+                      .map(metadata.xsd_scala_type_map)
+                      .getOrElse(ManifestFactory.Any))), null, Map()))
+          case TableDef(_, Obj(_: TableAlias, _, _, _, _)) => Nil
+          case x => error(
+            s"Unrecognized table clause: '${x.tresql}' [$x]. Try using Query(...)")
+        } match {
+        case Nil => None
+        case l @ List(_) => l.headOption
+        case x => x.filter(_.name == table) match {
+          case Nil => None
+          case t @ List(_) => t.headOption
+          case x => error(s"Ambiguous table name. Tables found - $x")
+        }
+      }
     }
     protected def table_from_selectdef(name: String, sd: SelectDefBase) =
       Table(name, sd.cols map col_from_coldef, null, Map())
@@ -380,13 +397,13 @@ trait Compiler extends QueryParsers { thisCompiler =>
       //process no join aliases
       val td2 = td1 map { case (table, idx) => table match {
           //NoJoin alias
-          case td @ TableDef(_, o @ Obj(TableObj(Ident(List(alias))), _,
+          case td @ TableDef(_, o @ Obj(TableObj(Ident(alias)), _,
             Join(_, _, true), _, _)) => //check if alias exists
-            if (td1.view(0, idx).exists(_._1.name == alias))
-              td.copy(exp = o.copy(obj = TableAlias(Ident(List(alias)))))
+            if (td1.view(0, idx).exists(_._1.name == alias.mkString(".")))
+              td.copy(exp = o.copy(obj = TableAlias(Ident(alias))))
             else error(s"No-join table not defined: $alias")
           case TableDef(_, Obj(x, _, Join(_, _, true), _, _)) =>
-            error(s"Unsupported no-join table: $x")
+            error(s"Unsupported no-join table: $x, ${td1.map(_._1.tresql)}, $td1")
           case x => x //ordinary table def
         }
       }
