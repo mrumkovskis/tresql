@@ -1251,6 +1251,53 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           .map(a => (a.number, a.balance, a.tr
             .map(t => (t.amount, t.tr_date.toString, t.from_acc)).toList)).toList).toList
     }
+
+    println("------ KEY UPDATE test ------")
+
+    obj = Map("number" -> "000", "new_number" -> "000000")
+    assertResult(List("000000")) {
+      import OrtMetadata._
+      ORT.save(View(List(SaveTo("accounts.account", Set(),
+        List("number"))), SaveOptions(true, true, true), None, null,
+        List(Property("number", KeyValue(":number", ":new_number")))),
+        obj)
+      println(s"\nResult check:")
+      tresql"accounts.account[number = '000000']{number}".map(_.number).toList
+    }
+
+    obj = Map("number" -> "111", "new_number" -> "111111", "balance" -> 100)
+    assertResult(List("111111")) {
+      import OrtMetadata._
+      ORT.save(
+        View(
+          List(SaveTo("accounts.account", Set(), List("number"))),
+          SaveOptions(true, true, true), None, null,
+          List(
+            Property("number", KeyValue(":number", ":new_number")),
+            Property("balance", TresqlValue(":balance"))
+          )),
+        obj
+      )
+      println(s"\nResult check:")
+      tresql"accounts.account[number = '111111']{number, balance}".map(_.number).toList
+    }
+
+    obj = Map("ename" -> "Betty", "new_ename" -> "Binny", "dept" -> "Temp", "new_dept" -> "Radio")
+    assertResult( List(("Binny", "Radio"))) {
+      import OrtMetadata._
+      ORT.save(
+        View(
+          List(SaveTo("emp", Set(), List("ename", "deptno"))),
+          SaveOptions(true, true, true), None, null,
+          List(
+            Property("ename", KeyValue(":ename", ":new_ename")),
+            Property("deptno", KeyValue("(dept[dname = :dept]{deptno})", "(dept[dname = :new_dept]{deptno})"))
+          )),
+        obj
+      )
+      println(s"\nResult check:")
+      tresql"emp/dept[ename = 'Binny']{ename, dname}".map(e => e.ename -> e.dname).toList
+    }
   }
 
   override def compilerMacro(implicit resources: Resources) = {

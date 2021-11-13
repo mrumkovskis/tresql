@@ -1,6 +1,6 @@
 package org.tresql
 
-import org.tresql.OrtMetadata.{Filters, SaveOptions, SaveTo, TresqlValue, View, ViewValue}
+import org.tresql.OrtMetadata.{Filters, KeyValue, SaveOptions, SaveTo, TresqlValue, View, ViewValue}
 
 import scala.util.matching.Regex
 import sys._
@@ -504,8 +504,9 @@ trait ORT extends Query {
     def upd = {
       def table_save_tresql(data: SaveData) = {
         import data._
-        val filteredColsVals =  // filter out key columns from updatable columns
-          if (keyVals.nonEmpty) colsVals.filter(cv => !keyVals.exists(_._1.name == cv._1))
+        val filteredColsVals =  // filter out key columns from updatable columns where value match key search value
+          if (keyVals.nonEmpty)
+            colsVals.filter { case (c, v) => !keyVals.exists { case (k, kv) => k.name == c && v == kv } }
           else colsVals
         val (upd_tresql, hasChildren) = Option(filteredColsVals.unzip match {
           case (cols: List[String], vals: List[String]) if cols.nonEmpty =>
@@ -614,6 +615,8 @@ trait ORT extends Query {
       val (refsAndPk, key) = refsPkAndKey
       ctx.view.properties.flatMap {
         case OrtMetadata.Property(col, _) if refsAndPk.exists(_._1 == col) => Nil
+        case OrtMetadata.Property(col, KeyValue(_, valueTresql)) =>
+          List(table.colOption(col).map(_.name).orNull -> valueTresql)
         case OrtMetadata.Property(col, TresqlValue(tresql)) =>
           List(table.colOption(col).map(_.name).orNull -> tresql)
         case OrtMetadata.Property(prop, ViewValue(v)) =>
@@ -674,7 +677,10 @@ trait ORT extends Query {
         key.map(k => refsPk.collectFirst { case (n, v) if n == k => RefKeyCol(n) -> v }
           .getOrElse(KeyCol(k) ->
             ctx.view.properties
-              .collectFirst { case OrtMetadata.Property(p, TresqlValue(v)) if p == k => v }
+              .collectFirst {
+                case OrtMetadata.Property(p, TresqlValue(v)) if p == k => v
+                case OrtMetadata.Property(p, KeyValue(whereTresql, _)) if p == k => whereTresql
+              }
               .getOrElse(s":$k")))
       )
     }
@@ -707,6 +713,12 @@ object OrtMetadata {
    * @param view      child view
    * */
   case class ViewValue(view: View) extends OrtValue
+
+  /** Column value
+   * @param whereTresql   key find tresql
+   * @param valueTresql   key value tresql
+   * */
+  case class KeyValue(whereTresql: String, valueTresql: String) extends OrtValue
 
   /** Saveable column.
    * @param col       Goes to dml column clause or child tresql alias
