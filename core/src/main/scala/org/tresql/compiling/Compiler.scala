@@ -104,10 +104,8 @@ trait Compiler extends QueryParsers { thisCompiler =>
     }
     def table(table: String): Option[Table] = {
       def name_matches(name: String) =
-        name == table || {
-          val idx = name.indexOf('.')
-          idx != -1 && name.substring(idx + 1) == table
-        }
+        name == table || name.substring(name.lastIndexOf('.') + 1) == table
+
       tables.filter(t => name_matches(t.name.toLowerCase)).flatMap {
           case TableDef(_, Obj(TableObj(Ident(name)), _, _, _, _)) =>
             List(table_alias(name mkString "."))
