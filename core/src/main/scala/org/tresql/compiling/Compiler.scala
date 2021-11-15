@@ -395,13 +395,15 @@ trait Compiler extends QueryParsers { thisCompiler =>
       //process no join aliases
       val td2 = td1 map { case (table, idx) => table match {
           //NoJoin alias
-          case td @ TableDef(_, o @ Obj(TableObj(Ident(alias)), _,
+          case td @ TableDef(_, o @ Obj(TableObj(Ident(name)), _,
             Join(_, _, true), _, _)) => //check if alias exists
-            if (td1.view(0, idx).exists(_._1.name == alias.mkString(".")))
-              td.copy(exp = o.copy(obj = TableAlias(Ident(alias))))
-            else error(s"No-join table not defined: $alias")
+            val qn = name.mkString(".")
+            if (td1.view(0, idx).exists {
+              case (TableDef(n, _), _) => n == qn || n.substring(n.lastIndexOf('.') + 1) == qn
+            }) td.copy(exp = o.copy(obj = TableAlias(Ident(name))))
+            else error(s"Referenced table not found in scope: $qn")
           case TableDef(_, Obj(x, _, Join(_, _, true), _, _)) =>
-            error(s"Unsupported no-join table: $x, ${td1.map(_._1.tresql)}, $td1")
+            error(s"Unsupported table reference: $x, ${td1.map(_._1.tresql)}, $td1")
           case x => x //ordinary table def
         }
       }

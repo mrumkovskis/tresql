@@ -653,3 +653,4 @@ accounts.transaction t[t.originator_id o, t.beneficiary_id b]accounts.account{t.
 []emp; emp / accounts.account! --> []
 accounts.transaction[transaction.originator_id = account.id]accounts.account{transaction.id, account.number, amount}#(1) --> []
 accounts.transaction[transaction.originator_id o, transaction.beneficiary_id b]accounts.account{transaction.id, o.number, b.number, amount}#(1) --> []
+accounts.transaction[transaction.originator_id o]accounts.account; transaction[transaction.beneficiary_id b]accounts.account{transaction.id, o.number, b.number, amount}#(1) --> []
