@@ -95,7 +95,7 @@ class Macros {
    * Like {{{ []dynamic_table(:table)[deptno = 10]{dname} }}}
    * */
   def dynamic_table(b: QueryBuilder, table_name: QueryBuilder#VarExpr): b.Table = {
-    b.Table(b.IdentExpr(List(String.valueOf(table_name()))), null, null, null, false)
+    b.Table(b.IdentExpr(List(String.valueOf(table_name()))), null, null, null, false, null)
   }
 
   def _lookup_edit(b: ORT,

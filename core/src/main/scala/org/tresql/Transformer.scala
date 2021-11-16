@@ -28,8 +28,8 @@ trait Transformer { self: QueryBuilder =>
         SelectExpr(tables map (t => cf(t).asInstanceOf[Table]), cf(filter),
           cf(cols).asInstanceOf[ColsExpr], distinct, cf(group), cf(order),
           cf(offset), cf(limit), aliases, parentJoin map cf)
-      case Table(texpr, alias, join, outerJoin, nullable) =>
-        Table(cf(texpr), alias, cf(join).asInstanceOf[TableJoin], outerJoin, nullable)
+      case Table(texpr, alias, join, outerJoin, nullable, schema) =>
+        Table(cf(texpr), alias, cf(join).asInstanceOf[TableJoin], outerJoin, nullable, schema)
       case TableJoin(default, expr, noJoin, defaultJoinCols) =>
         TableJoin(default, cf(expr), noJoin, defaultJoinCols)
       case WithTableExpr(n, c, r, q) => WithTableExpr(n, c, r, cf(q))
