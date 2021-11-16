@@ -998,11 +998,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     //build tables, set nullable flag for tables right to default join or foreign key shortcut join,
     //which is used for implicit left outer join, create aliases map
     def buildTables(tables: List[Obj]) = {
-      (tables map buildTable).foldLeft(List[Table]() -> Map[String, Table]()) { (ts, t) =>
-        val nt = ts._1.headOption.map(pt => (pt, t) match {
-          case (Table(IdentExpr(ptn), ptna, _, _, _), Table(IdentExpr(n), _, j, null, false)) =>
+      (tables map buildTable).foldLeft(List[Table]() -> Map[String, Table]()) { case ((ts, aliases), t) =>
+        val nt = ts.headOption.map(pt => (pt, t) match {
+          case (Table(IdentExpr(ptn), ptna, _, _, _), Table(_: IdentExpr, _, j, null, false)) =>
             //get previous table from aliases map if exists
-            val prevTable = ts._2.getOrElse(ptn.mkString("."), pt)
+            val prevTable = aliases.getOrElse(ptn.mkString("."), pt)
             j match {
               //foreign key of shortcut join must come from previous table i.e. ptn
               case TableJoin(false, IdentExpr(fk), _, _) if fk.size == 1 ||
@@ -1022,8 +1022,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
             }
           case _ => t
         }).getOrElse(t)
-        (nt :: ts._1) ->
-         (if (nt.alias != null && !ts._2.contains(nt.alias)) ts._2 + (nt.alias -> nt) else ts._2)
+        (nt :: ts) ->
+         (if (nt.alias != null && !aliases.contains(nt.alias)) aliases + (nt.alias -> nt) else aliases)
       } match {
         case (tables: List[Table], aliases: Map[String, Table]) => (tables.reverse, aliases)
       }
