@@ -1005,10 +1005,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
               schemas.get(n mkString ".")
                 .map(sch => (t.copy(schema = sch), schemas))
                 .getOrElse {
-                  ( t
-                    , if (n.size > 1) schemas + (n.last -> n.dropRight(1).mkString("."))
-                  else schemas
-                  )
+                  (t, if (n.size > 1) schemas + (n.last -> n.dropRight(1).mkString(".")) else schemas)
                 }
             case _ => (t, schemas)
           }
