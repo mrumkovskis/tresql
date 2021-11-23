@@ -177,4 +177,9 @@ trait ExpTransformer { this: QueryParsers =>
       case v: Variable => v :: vars
     }
   }
+  /** Extract database names. */
+  def dbExtractor: Traverser[List[String]] = dbs => {
+    case ChildQuery(_, db) => db.map(_ :: dbs).getOrElse(dbs)
+    case dml: DMLExp => dml.db.map(_ :: dbs).getOrElse(dbs)
+  }
 }
