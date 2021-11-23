@@ -7,7 +7,7 @@ import org.tresql.metadata.JDBCMetadata
 
 trait CompilerMetadata {
   def metadata: Metadata
-  def childrenMetadata: Map[String, Metadata]
+  def extraMetadata: Map[String, Metadata]
   def macros: Any
 }
 
@@ -75,8 +75,8 @@ class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
             override def compilerFunctionSignatures = f
           }
         }
-      /** Currently no children metadata are supported */
-      override def childrenMetadata: Map[String, Metadata] = Map()
+      /** Currently no extra metadata are supported */
+      override def extraMetadata: Map[String, Metadata] = Map()
       override def macros: Any =
         macrosClass.map(cn => Class.forName(cn).getDeclaredConstructor().newInstance()).getOrElse(null)
     }

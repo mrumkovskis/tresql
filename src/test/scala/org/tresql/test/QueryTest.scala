@@ -52,7 +52,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       .withIdExpr(_ => "nextval('seq1')")
       .withLogger((msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg))
 
-    tresqlResources = res.withChildren(Map("emp_db" -> res, "contact_db" -> res1))
+    tresqlResources = res.withExtraResources(Map("emp_db" -> res, "contact_db" -> res1))
 
     List(("/db.sql", conn), ("/db1.sql", conn1)) foreach { case (db, c) =>
       //create test db script
@@ -136,7 +136,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       }
     )
     val child_metadata = new JDBCMetadata with compiling.CompilerFunctionMetadata {
-      override def conn: Connection = testRes.children("contact_db").conn
+      override def conn: Connection = testRes.extraResources("contact_db").conn
       override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
     }
     println("\n-------------- TEST compiler ----------------\n")

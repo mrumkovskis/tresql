@@ -165,24 +165,24 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
 
   //resources methods
   private def get_res: Resources = provider.map(_.env.get_res).getOrElse(resources)
-  override def conn: java.sql.Connection = db.map(get_res.children(_).conn).getOrElse(get_res.conn)
-  override def metadata = db.map(get_res.children(_).metadata).getOrElse(get_res.metadata)
+  override def conn: java.sql.Connection = db.map(get_res.extraResources(_).conn).getOrElse(get_res.conn)
+  override def metadata = db.map(get_res.extraResources(_).metadata).getOrElse(get_res.metadata)
   /** for performance reasons dialect is val, so it does not need to be lifted on every call */
-  override val dialect: CoreTypes.Dialect = liftDialect(db.map(get_res.children(_).dialect).getOrElse(get_res.dialect))
-  override def idExpr = db.map(get_res.children(_).idExpr).getOrElse(get_res.idExpr)
-  override def queryTimeout: Int = db.map(get_res.children(_).queryTimeout).getOrElse(get_res.queryTimeout)
-  override def fetchSize: Int = db.map(get_res.children(_).fetchSize).getOrElse(get_res.fetchSize)
-  override def maxResultSize: Int = db.map(get_res.children(_).maxResultSize).getOrElse(get_res.maxResultSize)
-  override def recursiveStackDepth: Int = db.map(get_res.children(_).recursiveStackDepth).getOrElse(get_res.recursiveStackDepth)
-  override def cache: Cache = db.map(get_res.children(_).cache).getOrElse(get_res.cache)
-  override def logger: TresqlLogger = db.map(get_res.children(_).logger).getOrElse(get_res.logger)
-  override def bindVarLogFilter: BindVarLogFilter = db.map(get_res.children(_).bindVarLogFilter).getOrElse(get_res.bindVarLogFilter)
+  override val dialect: CoreTypes.Dialect = liftDialect(db.map(get_res.extraResources(_).dialect).getOrElse(get_res.dialect))
+  override def idExpr = db.map(get_res.extraResources(_).idExpr).getOrElse(get_res.idExpr)
+  override def queryTimeout: Int = db.map(get_res.extraResources(_).queryTimeout).getOrElse(get_res.queryTimeout)
+  override def fetchSize: Int = db.map(get_res.extraResources(_).fetchSize).getOrElse(get_res.fetchSize)
+  override def maxResultSize: Int = db.map(get_res.extraResources(_).maxResultSize).getOrElse(get_res.maxResultSize)
+  override def recursiveStackDepth: Int = db.map(get_res.extraResources(_).recursiveStackDepth).getOrElse(get_res.recursiveStackDepth)
+  override def cache: Cache = db.map(get_res.extraResources(_).cache).getOrElse(get_res.cache)
+  override def logger: TresqlLogger = db.map(get_res.extraResources(_).logger).getOrElse(get_res.logger)
+  override def bindVarLogFilter: BindVarLogFilter = db.map(get_res.extraResources(_).bindVarLogFilter).getOrElse(get_res.bindVarLogFilter)
   override def isMacroDefined(name: String): Boolean =
-    db.map(get_res.children(_).isMacroDefined(name)).getOrElse(get_res.isMacroDefined(name))
+    db.map(get_res.extraResources(_).isMacroDefined(name)).getOrElse(get_res.isMacroDefined(name))
   override def isBuilderMacroDefined(name: String): Boolean =
-    db.map(get_res.children(_).isBuilderMacroDefined(name)).getOrElse(get_res.isBuilderMacroDefined(name))
+    db.map(get_res.extraResources(_).isBuilderMacroDefined(name)).getOrElse(get_res.isBuilderMacroDefined(name))
   override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
-    db.map(get_res.children(_).invokeMacro(name, parser_or_builder, args))
+    db.map(get_res.extraResources(_).invokeMacro(name, parser_or_builder, args))
       .getOrElse(get_res.invokeMacro(name, parser_or_builder, args))
 
   protected def liftDialect(dialect: CoreTypes.Dialect) =
@@ -210,20 +210,20 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
 }
 
 final case class ResourcesTemplate(override val conn: java.sql.Connection,
-                             override val metadata: Metadata,
-                             override val dialect: CoreTypes.Dialect,
-                             override val idExpr: String => String,
-                             override val queryTimeout: Int,
-                             override val fetchSize: Int,
-                             override val maxResultSize: Int,
-                             override val recursiveStackDepth: Int,
-                             override val params: Map[String, Any],
-                             override val children: Map[String, Resources],
-                             macros: Any = null) extends Resources {
+                                   override val metadata: Metadata,
+                                   override val dialect: CoreTypes.Dialect,
+                                   override val idExpr: String => String,
+                                   override val queryTimeout: Int,
+                                   override val fetchSize: Int,
+                                   override val maxResultSize: Int,
+                                   override val recursiveStackDepth: Int,
+                                   override val params: Map[String, Any],
+                                   override val extraResources: Map[String, Resources],
+                                   macros: Any = null) extends Resources {
 
   private [tresql] def this(res: Resources) = this(
     res.conn, res.metadata, res.dialect, res.idExpr, res.queryTimeout,
-    res.fetchSize, res.maxResultSize, res.recursiveStackDepth, res.params, res.children)
+    res.fetchSize, res.maxResultSize, res.recursiveStackDepth, res.params, res.extraResources)
 
   private val macroResources = new MacroResourcesImpl(macros)
 
@@ -260,7 +260,7 @@ trait ThreadLocalResources extends Resources {
   override def fetchSize = threadResources.fetchSize
   override def maxResultSize = threadResources.maxResultSize
   override def recursiveStackDepth: Int = threadResources.recursiveStackDepth
-  override def children: Map[String, Resources] = threadResources.children
+  override def extraResources: Map[String, Resources] = threadResources.extraResources
   override def isMacroDefined(macroName: String) = threadResources.isMacroDefined(macroName)
   override def isBuilderMacroDefined(macroName: String) = threadResources.isBuilderMacroDefined(macroName)
   override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T = {
@@ -284,7 +284,7 @@ trait ThreadLocalResources extends Resources {
   def queryTimeout_=(timeout: Int) =  setProp(_.withQueryTimeout(timeout))
   def fetchSize_=(fetchSize: Int) =  setProp(_.withFetchSize(fetchSize))
   def maxResultSize_=(size: Int) = setProp(_.withMaxResultSize(size))
-  def children_=(children: Map[String, Resources]) = setProp(_.withChildren(children))
+  def extraResources_=(extra: Map[String, Resources]) = setProp(_.withExtraResources(extra))
   def setMacros(macros: Any) = setProp(_.withMacros(macros))
 
   def initFromTemplate: Unit = {
@@ -296,20 +296,20 @@ trait ThreadLocalResources extends Resources {
 trait Resources extends MacroResources with CacheResources with Logging {
 
   private [tresql] case class Resources_(
-    override val conn: java.sql.Connection,
-    override val metadata: Metadata,
-    override val dialect: CoreTypes.Dialect,
-    override val idExpr: String => String,
-    override val queryTimeout: Int,
-    override val fetchSize: Int,
-    override val maxResultSize: Int,
-    override val recursiveStackDepth: Int,
-    override val cache: Cache,
-    override val logger: TresqlLogger,
-    override val bindVarLogFilter: BindVarLogFilter,
-    override val params: Map[String, Any],
-    override val children: Map[String, Resources],
-    macros: MacroResources) extends Resources {
+                                          override val conn: java.sql.Connection,
+                                          override val metadata: Metadata,
+                                          override val dialect: CoreTypes.Dialect,
+                                          override val idExpr: String => String,
+                                          override val queryTimeout: Int,
+                                          override val fetchSize: Int,
+                                          override val maxResultSize: Int,
+                                          override val recursiveStackDepth: Int,
+                                          override val cache: Cache,
+                                          override val logger: TresqlLogger,
+                                          override val bindVarLogFilter: BindVarLogFilter,
+                                          override val params: Map[String, Any],
+                                          override val extraResources: Map[String, Resources],
+                                          macros: MacroResources) extends Resources {
     override def isMacroDefined(name: String) = macros.isMacroDefined(name)
     override def isBuilderMacroDefined(name: String) = macros.isBuilderMacroDefined(name)
     override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
@@ -333,7 +333,7 @@ trait Resources extends MacroResources with CacheResources with Logging {
   def maxResultSize = 0
   def recursiveStackDepth: Int = 50
   def params: Map[String, Any] = Map()
-  def children: Map[String, Resources] = Map()
+  def extraResources: Map[String, Resources] = Map()
 
   //resource construction convenience methods
   def withConn(conn: java.sql.Connection): Resources = copyResources.copy(conn = conn)
@@ -349,12 +349,12 @@ trait Resources extends MacroResources with CacheResources with Logging {
   def withBindVarLogFilter(filter: BindVarLogFilter): Resources = copyResources.copy(bindVarLogFilter = filter)
   def withParams(params: Map[String, Any]): Resources = copyResources.copy(params = params)
   def withMacros(macros: Any): Resources = copyResources.copy(macros = new MacroResourcesImpl(macros))
-  def withChildren(children: Map[String, Resources]) = copyResources.copy(children = children)
+  def withExtraResources(extra: Map[String, Resources]) = copyResources.copy(extraResources = extra)
 
   protected def copyResources: Resources#Resources_ =
     Resources_(conn, metadata, dialect, idExpr, queryTimeout,
       fetchSize, maxResultSize, recursiveStackDepth, cache, logger, bindVarLogFilter,
-      params, children, this)
+      params, extraResources, this)
 
   protected def defaultDialect: CoreTypes.Dialect = { case e => e.defaultSQL }
 }

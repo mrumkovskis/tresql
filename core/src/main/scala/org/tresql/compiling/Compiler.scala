@@ -14,7 +14,7 @@ class CompilerException(message: String,
 trait Compiler extends QueryParsers { thisCompiler =>
 
   protected def metadata: Metadata
-  protected def childrenMetadata: Map[String, Metadata] = Map()
+  protected def extraMetadata: Map[String, Metadata] = Map()
 
   protected def error(msg: String, cause: Exception = null) = throw new CompilerException(msg, cause = cause)
 
@@ -31,7 +31,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
   object EnvMetadata extends TableMetadata {
     override def tableOption(name: String)(database: Option[String]): Option[Table] =
       database
-        .flatMap(db => childrenMetadata.getOrElse(db, error(s"Unknown database: $db")).tableOption(name))
+        .flatMap(db => extraMetadata.getOrElse(db, error(s"Unknown database: $db")).tableOption(name))
         .orElse(metadata.tableOption(name))
   }
 
@@ -368,7 +368,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
   }
   def procedure(procedure: String)(database: Option[String]) =
     database
-      .flatMap(db => childrenMetadata
+      .flatMap(db => extraMetadata
         .getOrElse(db, error(s"Unknown database: $db"))
         .procedureOption(procedure))
       .orElse(metadata.procedureOption(procedure))
