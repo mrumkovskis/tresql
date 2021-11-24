@@ -50,6 +50,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
         case f: QueryBuilder#FunExpr if f.name == "current_time" && f.params.isEmpty => "current_time"
       })
       .withIdExpr(_ => "nextval('seq1')")
+      .withMacros(Macros)
       .withLogger((msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg))
 
     tresqlResources = res.withExtraResources(Map("emp_db" -> res, "contact_db" -> res1))

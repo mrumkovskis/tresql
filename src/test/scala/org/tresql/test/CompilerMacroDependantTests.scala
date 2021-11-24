@@ -1210,7 +1210,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       ORT.save(View(List(SaveTo("accounts.account", Set(),
         List("number"))), SaveOptions(true, true, true), None, null,
-        List(Property("number", TresqlValue(":number")), Property("balance", TresqlValue(":balance")))),
+        List(Property("number", TresqlValue(":number")), Property("balance", TresqlValue(":balance"))), null),
         obj)
       println(s"\nResult check:")
       tresql"accounts.account{number, balance, empno}#(number)".map(a => (a.number, a.balance, a.empno)).toList
@@ -1224,7 +1224,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         List(
           Property("number", TresqlValue(":number")),
           Property("balance", TresqlValue("accounts.account[number = :number]{ balance + :balance}"))
-        )),
+        ), null),
         obj)
       println(s"\nResult check:")
       tresql"accounts.account{number, balance, empno}#(number)".map(a => (a.number, a.balance, a.empno)).toList
@@ -1259,7 +1259,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       ORT.save(View(List(SaveTo("accounts.account", Set(),
         List("number"))), SaveOptions(true, true, true), None, null,
-        List(Property("number", KeyValue(":number", ":new_number")))),
+        List(Property("number", KeyValue(":number", ":new_number"))), null),
         obj)
       println(s"\nResult check:")
       tresql"accounts.account[number = '000000']{number}".map(_.number).toList
@@ -1275,7 +1275,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           List(
             Property("number", KeyValue(":number", ":new_number")),
             Property("balance", TresqlValue(":balance"))
-          )),
+          ), null),
         obj
       )
       println(s"\nResult check:")
@@ -1292,11 +1292,55 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           List(
             Property("ename", KeyValue(":ename", ":new_ename")),
             Property("deptno", KeyValue("(dept[dname = :dept]{deptno})", "(dept[dname = :new_dept]{deptno})"))
-          )),
+          ), null),
         obj
       )
       println(s"\nResult check:")
       tresql"emp/dept[ename = 'Binny']{ename, dname}".map(e => e.ename -> e.dname).toList
+    }
+
+    println("------ ORT on extra database --------")
+
+    obj = Map("name" -> "Dzidzis", "sex" -> "M", "birth_date" -> "1999-04-06", "email" -> "dzidzis@albatros.io",
+      "@contact_db:notes[note_date, note][+-=]" ->
+        List(
+          Map("note_date" -> new java.sql.Timestamp(System.currentTimeMillis), "note" -> "Mene, tekel, ufarsin")
+        )
+    )
+    assertResult(List(("M", "dzidzis@albatros.io", List("Mene, tekel, ufarsin")))) {
+      ORT.insert("@contact_db:contact[name]", obj)
+      println(s"\nResult check:")
+      // TODO rewrite to tresql when scala macro supports multi database metadata
+      Query("|contact_db:contact[name = 'Dzidzis']{sex, email, |contact_db:notes{note}#(1) notes}")
+        .map(c => (c.s.sex, c.s.email, c.r.notes.map(n => n.s("note")).toList)).toList
+    }
+
+    obj = Map("name" -> "Dzidzis", "sex" -> "M", "birth_date" -> "2000-04-06", "email" -> "dzidzis@albatros.io",
+      "@contact_db:notes[note][+-=]" ->
+        List(
+          Map("note_date" -> new java.sql.Timestamp(System.currentTimeMillis), "note" -> "Mene, tekel, ufarsin"),
+          Map("note_date" -> new java.sql.Timestamp(System.currentTimeMillis), "note" -> "Cicerons")
+        )
+    )
+    assertResult(List(("M", "2000-04-06", List("Cicerons", "Mene, tekel, ufarsin")))) {
+      ORT.update("@contact_db:contact[name]", obj)
+      println(s"\nResult check:")
+      // TODO rewrite to tresql when scala macro supports multi database metadata
+      Query("|contact_db:contact[name = 'Dzidzis']{sex, birth_date, |contact_db:notes{note}#(1) notes}")
+        .map(c => (c.s.sex, c.s.birth_date, c.r.notes.map(n => n.s("note")).toList)).toList
+    }
+
+    obj = Map("name" -> "Dzidzis", "@contact_db:notes[note]" ->
+        List(
+          Map("note_date" -> new java.sql.Timestamp(System.currentTimeMillis), "note" -> "Cicerons")
+        )
+    )
+    assertResult(List(("M", "2000-04-06", List("Cicerons")))) {
+      ORT.update("@contact_db:contact[name]", obj)
+      println(s"\nResult check:")
+      // TODO rewrite to tresql when scala macro supports multi database metadata
+      Query("|contact_db:contact[name = 'Dzidzis']{sex, birth_date, |contact_db:notes{note}#(1) notes}")
+        .map(c => (c.s.sex, c.s.birth_date, c.r.notes.map(n => n.s("note")).toList)).toList
     }
   }
 

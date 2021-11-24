@@ -37,7 +37,8 @@ trait ORT extends Query {
                       refsPkVals: Set[(String, String)],
                       keyVals: Seq[(KeyPart, String)],
                       filters: Option[Filters],
-                      upsert: Boolean)
+                      upsert: Boolean,
+                      db: String)
 
 
   /* Expression is built only from macros to ensure ORT lookup editing. */
@@ -317,8 +318,8 @@ trait ORT extends Query {
       else struct.flatMap { case (k, _) if resolvableProps(k) => Nil case x => List(x) }
     }
     def parseTables(name: String) = {
-      def saveTo(tables: String) = {
-        def multiSaveProp(names: Seq[String])(implicit resources: Resources) = {
+      def saveTo(tables: String, md: Metadata) = {
+        def multiSaveProp(names: Seq[String]) = {
           /* Returns zero or one imported key from table for each relation. In the case of multiple
            * imported keys pointing to the same relation the one specified after : symbol is chosen
            * or exception is thrown.
@@ -326,7 +327,7 @@ trait ORT extends Query {
            * Additionaly primary key of table is returned if it consist only of one column */
           def importedKeysAndPks(tableName: String, relations: List[String]) = {
             val x = tableName split ":"
-            val table = resources.metadata.table(x.head)
+            val table = md.table(x.head)
             relations.foldLeft(x.tail.toSet) { (keys, rel) =>
               val relation = rel.split(":").head
               val refs = table.refs(relation).filter(_.cols.size == 1)
@@ -352,7 +353,7 @@ trait ORT extends Query {
           }
         }
       }
-      val OrtMetadata.Patterns.prop(tables, options, alias, filterStr) = name
+      val OrtMetadata.Patterns.prop(db, tables, options, alias, filterStr) = name
       //insert update delete option
       val (i, u, d) = Option(options).map (_ =>
         (options contains "+", options contains "=", options contains "-")
@@ -369,7 +370,7 @@ trait ORT extends Query {
                              |Must consist of 3 comma separated tresql expressions: insertFilter, deleteFilter, updateFilter.
                              |In the case expression is not needed it must be set to 'null'.""".stripMargin)
         })
-      View(saveTo(tables), SaveOptions(i, u, d), filters, alias, Nil)
+      View(saveTo(tables, tresqlMetadata(db)), SaveOptions(i, u, d), filters, alias, Nil, db)
     }
     def resolver_tresql(property: String, resolverExp: String) = {
       import parsing._
@@ -394,13 +395,16 @@ trait ORT extends Query {
     parseTables(tables).copy(properties = props)
   }
 
+  private def tresqlMetadata(db: String)(implicit resources: Resources) =
+    if (db == null) resources.metadata else resources.extraResources(db).metadata
+
   private def save_tresql(name: String,
                           view: View,
                           parents: List[ParentRef],
                           save_tresql_func: SaveContext => String)(implicit
                                                                    resources: Resources): String = {
     val parent = parents.headOption.map(_.table).orNull
-    val md = resources.metadata
+    val md = tresqlMetadata(view.db)
     //find first imported key to parent in list of table links passed as a param.
     def importedKeyOption(tables: List[SaveTo]): Option[(metadata.Table, SaveTo, String)] = {
       def processLinkedTables(linkedTables: List[SaveTo]): Option[(metadata.Table, SaveTo, String)] = {
@@ -443,12 +447,16 @@ trait ORT extends Query {
     ).orNull
   }
 
+  private def tableWithDb(db: String, table: String) = {
+    (if (db == null) "" else db + ":") + table
+  }
+
   private def table_insert_tresql(saveData: SaveData) = {
     import saveData._
     colsVals ++ refsPkVals match {
       case cols_vals =>
         val (cols, vals) = cols_vals.unzip
-        cols.mkString(s"+$table {", ", ", "}") +
+        cols.mkString(s"+${tableWithDb(db, table)} {", ", ", "}") +
           (for {
             filters <- saveData.filters
             filter <- filters.insert
@@ -474,7 +482,8 @@ trait ORT extends Query {
     val parent = parents.headOption.map(_.table).orNull
     val tableName = table.name
 
-    def delAllChildren = s"-$tableName[$refToParent = :#$parent${filterString(ctx.view.filters, _.delete)}]"
+    def delAllChildren =
+      s"-${tableWithDb(view.db, tableName)}[$refToParent = :#$parent${filterString(ctx.view.filters, _.delete)}]"
     def delMissingChildren = {
       def del_children_tresql(data: SaveData) = {
         val (refCols, keyCols) =
@@ -495,8 +504,8 @@ trait ORT extends Query {
           val filter = filterString(data.filters, _.delete)
           if (refCols.isEmpty || keyCols.isEmpty) null
           else
-            s"""_delete_missing_children('$name', $key_arr, $key_val_expr_arr, -${data
-              .table}[$refColsFilter & _not_delete_keys($key_arr, $key_val_expr_arr)$filter])"""
+            s"""_delete_missing_children('$name', $key_arr, $key_val_expr_arr, -${tableWithDb(data.db,
+              data.table)}[$refColsFilter & _not_delete_keys($key_arr, $key_val_expr_arr)$filter])"""
       }
       save_tresql_internal(ctx.copy(view = ctx.view.copy(saveTo = List(saveTo))),
         del_children_tresql, null)
@@ -518,8 +527,8 @@ trait ORT extends Query {
             val updateFilter =
               updFilter(if (keyVals.nonEmpty && !hasChildren) keyVals.map(kp => (kp._1.name, kp._2)) else refsPkVals)
                 .mkString("[", " & ", s"$filter]")
-            (cols.mkString(s"=$tn $updateFilter {", ", ", "}") + filteredVals.mkString("[", ", ", "]"),
-              hasChildren)
+            (cols.mkString(s"=${tableWithDb(db, tn)} $updateFilter {", ", ", "}") +
+              filteredVals.mkString("[", ", ", "]"), hasChildren)
           case _ => (null, false)
         }).filter(_._1 != null)
           .map { case ut_hc@(ut, hc) =>
@@ -531,8 +540,9 @@ trait ORT extends Query {
 
         if (data.pk.size == 1 && keyVals.nonEmpty && hasChildren) { // if has key and children calculate and set pk for children use
           val pr_col = data.pk.head
-          s"|_update_by_key($table, :$pr_col = |_id_by_key($table[${
-            keyVals.map(kv => s"${kv._1.name} = ${kv._2}").mkString(" & ")}]{$pr_col}), $upd_tresql)"
+          s"|${if (db != null) db + ":" else ""}_update_by_key($table, :$pr_col = _id_by_key(|${
+            tableWithDb(db, table)}[${keyVals.map(kv => s"${kv._1.name} = ${kv._2}")
+            .mkString(" & ")}]{$pr_col}), $upd_tresql)"
         } else upd_tresql
       }
       save_tresql_internal(ctx, table_save_tresql, save_tresql(_, _, _, update_tresql))
@@ -557,7 +567,7 @@ trait ORT extends Query {
       if (saveTo.key.nonEmpty)
         s"|_upsert($upd, $ins)" //upsert for save by key since primary key is not accessible
       else
-        s"""|_update_or_insert('$tableName', $upd, $ins)"""
+        s"""|${if (view.db != null) view.db + ":" else ""}_update_or_insert('$tableName', $upd, $ins)"""
     }
 
     import view.options._
@@ -601,7 +611,7 @@ trait ORT extends Query {
                          view: View,
                          refColName: String,
                          name: String)(implicit resources: Resources) =
-        resources.metadata.tableOption(name).filter(_.key.cols.size == 1).map {
+        tresqlMetadata(view.db).tableOption(name).filter(_.key.cols.size == 1).map {
           table =>
             val pk = table.key.cols.headOption.filter(pk => view.properties
               .exists { case OrtMetadata.Property(col, _) => pk == col case _ => false }).orNull
@@ -639,7 +649,7 @@ trait ORT extends Query {
               case x if x.isEmpty && refsAndPk.isEmpty => null //no columns & refs found
               case cols_vals =>
                 table_save_tresql(SaveData(tableName,
-                  table.key.cols, alias, cols_vals, refsAndPk, key, ctx.view.filters, upsert))
+                  table.key.cols, alias, cols_vals, refsAndPk, key, ctx.view.filters, upsert, ctx.view.db))
             }
 
           (for {
@@ -652,7 +662,7 @@ trait ORT extends Query {
       }
     }
 
-    val md = resources.metadata
+    val md = tresqlMetadata(ctx.view.db)
     val headTable = ctx.view.saveTo.head
     val parent = ctx.parents.headOption.map(_.table).orNull
     def refsPkAndKey(tbl: metadata.Table,
@@ -733,13 +743,15 @@ object OrtMetadata {
    * @param filters       horizontal authentication filters
    * @param alias         table alias in DML statement
    * @param properties    saveable fields
+   * @param db            database name (can be null)
    *
    * */
   case class View(saveTo: List[SaveTo],
                   options: SaveOptions,
                   filters: Option[Filters],
                   alias: String,
-                  properties: List[Property])
+                  properties: List[Property],
+                  db: String)
 
   /** Table to save data to.
    * @param table         table name
@@ -766,7 +778,7 @@ object OrtMetadata {
    * Patterns are for debugging purposes to create {{{View}}} from {{{Map}}} using {{{ortMetadata}}} method.
    *
    * Children property format:
-   *  table[:ref]*[[key[,key]*]][#table[:ref]*[[key[,key]*]]]*[[options]] [alias][|insertFilterTresql, deleteFilterTresql, updateFilterTresql]
+   *  [@db:]table[:ref]*[[key[,key]*]][#table[:ref]*[[key[,key]*]]]*[[options]] [alias][|insertFilterTresql, deleteFilterTresql, updateFilterTresql]
    *  Options are to be specified in such order: insert, delete, update, i.e. '+-='
    *  Examples:
    *    dept#car:deptnr:nr#tyres:carnr:nr
@@ -780,8 +792,9 @@ object OrtMetadata {
                           resolverExp: Regex)
 
   val Patterns = {
-    val ident = """[^:\[\]\s#]+"""
+    val ident = """[^:\[\]\s#@]+"""
     val key = """\[\s*\w+(?:\s*,\s*\w+\s*)*\s*\]"""
+    val db = s"(?:@($ident):)?"
     val table = s"$ident(?::$ident)*(?:$key)?"
     val tables = s"""($table(?:#$table)*)"""
     val options = """(?:\[(\+?-?=?)\])?"""
@@ -800,7 +813,7 @@ object OrtMetadata {
     val ResolverPropPattern = "(.*?)->"r
     val ResolverExpPattern = "([^=]+)=(.*)"r
 
-    PropPatterns((tables + options + alias + filters)r, tables.r, ResolverPropPattern, ResolverExpPattern)
+    PropPatterns((db + tables + options + alias + filters)r, tables.r, ResolverPropPattern, ResolverExpPattern)
   }
 }
 
