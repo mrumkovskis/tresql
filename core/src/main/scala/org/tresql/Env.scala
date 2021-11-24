@@ -350,6 +350,8 @@ trait Resources extends MacroResources with CacheResources with Logging {
   def withParams(params: Map[String, Any]): Resources = copyResources.copy(params = params)
   def withMacros(macros: Any): Resources = copyResources.copy(macros = new MacroResourcesImpl(macros))
   def withExtraResources(extra: Map[String, Resources]) = copyResources.copy(extraResources = extra)
+  def withUpdatedExtra(name: String)(updater: Resources => Resources): Resources =
+    copyResources.copy(extraResources = extraResources ++ Map(name -> updater(extraResources(name))))
 
   protected def copyResources: Resources#Resources_ =
     Resources_(conn, metadata, dialect, idExpr, queryTimeout,
