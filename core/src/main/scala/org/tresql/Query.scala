@@ -12,7 +12,7 @@ trait Query extends QueryBuilder with TypedQuery {
   def compiledResult[T <: RowLike](expr: String, params: Any*)(
     implicit resources: Resources): CompiledResult[T] =
     exec(expr, normalizePars(params: _*), resources) match {
-      case r: CompiledResult[T] => r
+      case r: CompiledResult[T@unchecked] => r
       case x => sys.error(s"Expected `org.tresql.CompiledResult[_]`, but got ${
                           x.getClass}. Try call using Query(...)")
     }
@@ -222,9 +222,9 @@ trait Query extends QueryBuilder with TypedQuery {
     st
   }
 
-  private def bindVars(st: PreparedStatement, bindVariables: List[Any]) {
+  private def bindVars(st: PreparedStatement, bindVariables: List[Any]) = {
     var idx = 1
-    def bindVar(p: Any) {
+    def bindVar(p: Any): Unit = {
       try p match {
         case null => st.setNull(idx, java.sql.Types.NULL)
         case i: Int => st.setInt(idx, i)
@@ -281,7 +281,7 @@ trait Query extends QueryBuilder with TypedQuery {
     bindVariables.foreach { bindVar }
   }
 
-  private def registerOutPar(st: CallableStatement, par: OutPar, idx: Int) {
+  private def registerOutPar(st: CallableStatement, par: OutPar, idx: Int) = {
     import java.sql.Types._
     par.idx = idx
     par.value match {

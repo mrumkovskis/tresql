@@ -58,7 +58,7 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
     def tr(p: List[String], v: Option[Any]): Option[Any] = p match {
       case Nil => v
       case n :: rest => v flatMap {
-        case m: Map[String, _] => tr(rest, m.get(n))
+        case m: Map[String@unchecked, _] => tr(rest, m.get(n))
         case s: Seq[_] => tr(rest, Try(n.toInt).flatMap(i => Try(s(i))).toOption)
         case p: Product => tr(rest,
           Try(n.toInt).flatMap(v => Try(p.productElement(v - 1))).toOption)
@@ -78,7 +78,7 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
     def tr(p: List[String], v: Any): Boolean = p match {
       case Nil => true
       case n :: rest => v match {
-        case m: Map[String, _] => m.get(n).exists(tr(rest, _))
+        case m: Map[String@unchecked, _] => m.get(n).exists(tr(rest, _))
         case s: Seq[_] => Try(n.toInt)
           .flatMap(i => Try(tr(rest, s(i))))
           .getOrElse(false)
@@ -96,11 +96,11 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
   def containsNearest(name: String): Boolean =
     vars.map(_.contains(name)).getOrElse(provider.exists(_.env.containsNearest(name)))
 
-  private[tresql] def update(name: String, value: Any) {
+  private[tresql] def update(name: String, value: Any): Unit = {
     vars.map(_(name) = value) orElse provider.map(_.env(name) = value)
   }
 
-  private[tresql] def update(vars: Map[String, Any]) {
+  private[tresql] def update(vars: Map[String, Any]): Unit = {
     this.vars = if (vars == null) None else Some(scala.collection.mutable.Map(vars.toList: _*))
   }
 
@@ -126,7 +126,7 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
   private[tresql] def result = _result
   private[tresql] def result_=(r: Result[_ <: RowLike]) = _result = r
 
-  private[tresql] def closeStatement {
+  private[tresql] def closeStatement = {
     root.providedEnvs foreach (e=> if (e.statement != null) e.statement.close)
   }
 
@@ -149,7 +149,7 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
   private[tresql] def idRefOption(seqName: String) = provider.flatMap(_.env.currIdOption(seqName))
 
   private[tresql] def rowCount: Int = provider.map(_.env.rowCount).getOrElse(_rowCount)
-  private[tresql] def rowCount_=(rc: Int) {
+  private[tresql] def rowCount_=(rc: Int): Unit = {
     provider.map(_.env.rowCount = rc).getOrElse (this._rowCount = rc)
   }
 
@@ -159,7 +159,7 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
     Int /*child idx*/), RowConverter[_ <: RowLike]]] =
     provider.flatMap(_.env.rowConverters) orElse _rowConverters
   private[tresql] def rowConverters_=(rc: Map[(Int /*query depth*/,
-    Int /*child idx*/), RowConverter[_ <: RowLike]]) {
+    Int /*child idx*/), RowConverter[_ <: RowLike]]): Unit = {
     provider.map(_.env.rowConverters = rc).getOrElse (this._rowConverters = Option(rc))
   }
 

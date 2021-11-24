@@ -35,15 +35,15 @@ trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T]
   }
 
   /** Close underlying database resources related to this result. Default implementation does nothing. */
-  def close {}
+  def close: Unit = {}
 
   /** Close underlying database resources related to this result and also related database connection.
     * Default implementation does nothing.
     */
-  def closeWithDb {}
+  def closeWithDb: Unit = {}
 
   def head: T = try hasNext match {
-    case true => next
+    case true => next()
     case false => throw new NoSuchElementException("No rows in result")
   } finally close
 
@@ -53,14 +53,14 @@ trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T]
 
   def unique: T = try hasNext match {
     case true =>
-      val v = next
+      val v = next()
       if (hasNext) error("More than one row for unique result") else v
     case false => error("No rows in result")
   } finally close
 
   def uniqueOption: Option[T] = try hasNext match {
     case true =>
-      val v = next
+      val v = next()
       if (hasNext) error("More than one row for unique result") else Some(v)
     case false => None
   } finally close
@@ -102,7 +102,7 @@ trait SelectResult[T <: RowLike] extends Result[T] {
     }
     rsHasNext
   }
-  def next: T = {
+  def next(): T = {
     nextCalled = true
     if (maxSize > 0) {
       env.rowCount += 1
@@ -111,7 +111,7 @@ trait SelectResult[T <: RowLike] extends Result[T] {
     this.asInstanceOf[T]
   }
 
-  private def maxSizeControl {
+  private def maxSizeControl = {
     def msg = s"""Result max row count ($maxSize) exceeded. SQL:
       |$sql
       |Bind variables:
@@ -131,7 +131,7 @@ trait SelectResult[T <: RowLike] extends Result[T] {
   def columnCount = if (_columnCount == -1) cols.length else _columnCount
   override def column(idx: Int) = cols(idx)
   def jdbcResult = rs
-  override def close {
+  override def close: Unit = {
     if (closed) return
     rs.close
     env.result = null
@@ -295,7 +295,7 @@ class DynamicSelectResult private[tresql] (
 
   override def headOption: Option[DynamicRow] = try {
     if (hasNext) {
-      next
+      next()
       Some(DynamicRowImpl(values))
     } else None
   } finally close
@@ -320,7 +320,7 @@ trait ArrayResult[T <: RowLike] extends Result[T] {
     Column(i, s"_${i + 1}", null)
   }
 
-  def next: T = this.asInstanceOf[T]
+  def next(): T = this.asInstanceOf[T]
 
   def apply(name: String): Any = values(cols.indexWhere(_.name == name))
   def apply(idx: Int): Any = values(idx)
@@ -367,7 +367,7 @@ case class SingleValueResult[T](value: T)
   with DynamicResult
 {
   val col = Column(0, "value", null)
-  override def next = this
+  override def next() = this
   override def columnCount = 1
   override def column(idx: Int) = col
   override def apply(idx: Int) = value
@@ -387,8 +387,8 @@ class CompiledSelectResult[T <: RowLike] private[tresql] (
   private[tresql] val converter: RowConverter[T]
 ) extends SelectResult[T] with CompiledResult[T] {
 
-  override def next: T = {
-    converter(super.next)
+  override def next(): T = {
+    converter(super.next())
   }
 }
 
@@ -396,8 +396,8 @@ class CompiledArrayResult[T <: RowLike] private[tresql](
   override val values: List[Any], converter: RowConverter[T])
   extends ArrayResult[T] with CompiledResult[T] {
 
-  override def next: T = {
-    converter(super.next)
+  override def next(): T = {
+    converter(super.next())
   }
 }
 
@@ -407,7 +407,7 @@ trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
   def children: Map[String, Any]
   def id: Option[Any] = None
 
-  override def next = this
+  override def next() = this
   // Members declared in org.tresql.RowLike
   override def apply(name: String): Any = ???
   override def apply(idx: Int): Any = idx match {
@@ -442,6 +442,7 @@ trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
       case (None, ch, None) if ch.nonEmpty => compatibilityChildren
       case (Some(c), ch, Some(id)) if ch.isEmpty => c -> id
       case (Some(c), ch, Some(id)) if ch.nonEmpty => (c -> compatibilityChildren) -> id
+      case a => a
     }
     x
 }
