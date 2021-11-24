@@ -104,7 +104,7 @@ package object tresql extends CoreTypes {
       val compilerMetadata = metadata(macroSettings, verbose)
       info(s"Compiling: $tresqlString")
       val compiler = new QueryCompiler(
-        compilerMetadata.metadata, Map(), new MacroResourcesImpl(compilerMetadata.macros))
+        compilerMetadata.metadata, compilerMetadata.extraMetadata, new MacroResourcesImpl(compilerMetadata.macros))
       val compiledExp = try compiler.compile(tresqlString) catch {
         case ce: CompilerException => c.abort(c.enclosingPosition, ce.getMessage)
       }
