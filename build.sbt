@@ -6,7 +6,6 @@ lazy val commonSettings = Seq(
   crossScalaVersions := Seq(
       scalaV,
       "2.12.13",
-      "2.11.12",
     ),
   //coverageEnabled := true,
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",
@@ -26,8 +25,10 @@ lazy val commonSettings = Seq(
 )
 
 def coreDependencies(scalaVer: String) =
-  Seq("org.scala-lang" % "scala-reflect" % scalaVer) ++
-    ( if (scalaVer.startsWith("2.10.")) Nil else Seq("org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2"))
+  Seq(
+    "org.scala-lang" % "scala-reflect" % scalaVer,
+    "org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2"
+  )
 
 lazy val core = (project in file("core"))
   .disablePlugins(plugins.JUnitXmlReportPlugin)
@@ -42,7 +43,6 @@ lazy val macros = (project in file("macro"))
   .dependsOn(core)
   .settings(
     name := "macro",
-    unmanagedSources / excludeFilter := (if (scalaVersion.value.startsWith("2.10.")) "*.*" else ""),
     publish / skip := true,
 )
   .settings(commonSettings: _*)
@@ -64,12 +64,6 @@ lazy val tresql = (project in file("."))
   .disablePlugins(plugins.JUnitXmlReportPlugin)
   .dependsOn(core % "test->test;compile->compile", macros)
   .aggregate(core, macros)
-  .settings(
-    //compiler macro works only on scala 2.12.x and greater
-    Test / unmanagedSources / excludeFilter :=
-      (if (scalaVersion.value.startsWith("2.10") || scalaVersion.value.startsWith("2.11"))
-        "*CompilerMacroDependantTests.scala" else "")
-  )
   .settings(scalacOptions += "-Xmacro-settings:metadataFactoryClass=org.tresql.compiling.CompilerJDBCMetadataFactory," +
     " driverClass=org.hsqldb.jdbc.JDBCDriver, url=jdbc:hsqldb:mem:., dbCreateScript=src/test/resources/db.sql, " +
     "functionSignatures=org.tresql.test.TestFunctionSignatures, macros=org.tresql.test.Macros") //, verbose")

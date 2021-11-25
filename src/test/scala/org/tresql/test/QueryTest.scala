@@ -12,16 +12,8 @@ import sys._
 
 /** To run from console {{{org.scalatest.run(new test.QueryTest)}}} */
 class QueryTest extends FunSuite with BeforeAndAfterAll {
-  val executeCompilerMacroDependantTests =
-    !scala.util.Properties.versionNumberString.startsWith("2.10") &&
-    !scala.util.Properties.versionNumberString.startsWith("2.11")
 
-  val compilerMacroDependantTests =
-    if (executeCompilerMacroDependantTests)
-      Class.forName("org.tresql.test.CompilerMacroDependantTests").getDeclaredConstructor().newInstance()
-        .asInstanceOf[CompilerMacroDependantTestsApi]
-    else
-      null
+  val compilerMacroDependantTests = new CompilerMacroDependantTests()
 
   val hsqlDialect: CoreTypes.Dialect = dialects.HSQLDialect orElse dialects.VariableNameDialect orElse {
     case c: QueryBuilder#CastExpr => c.exp.sql
@@ -109,11 +101,11 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     })
   }
 
-  if (executeCompilerMacroDependantTests) test("API") {
+  test("API") {
     compilerMacroDependantTests.api(tresqlResources)
   }
 
-  if (executeCompilerMacroDependantTests) test("ORT") {
+  test("ORT") {
     compilerMacroDependantTests.ort(tresqlResources)
   }
 
@@ -256,7 +248,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     intercept[CompilerException](compiler.compile("+contact_db:contact{name}[:n] {namez}"))
   }
 
-  if (executeCompilerMacroDependantTests) test("compiler macro") {
+  test("compiler macro") {
     compilerMacroDependantTests.compilerMacro(tresqlResources)
   }
 
