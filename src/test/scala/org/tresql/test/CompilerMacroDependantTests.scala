@@ -1310,9 +1310,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(List(("M", "dzidzis@albatros.io", List("Mene, tekel, ufarsin")))) {
       ORT.insert("@contact_db:contact[name]", obj)
       println(s"\nResult check:")
-      // TODO rewrite to tresql when scala macro supports multi database metadata
-      Query("|contact_db:contact[name = 'Dzidzis']{sex, email, |contact_db:notes{note}#(1) notes}")
-        .map(c => (c.s.sex, c.s.email, c.r.notes.map(n => n.s("note")).toList)).toList
+      tresql"|contact_db:contact[name = 'Dzidzis']{sex, email, |contact_db:notes{note}#(1) notes}"
+        .map(c => (c.sex, c.email, c.notes.map(_.note).toList)).toList
     }
 
     obj = Map("name" -> "Dzidzis", "sex" -> "M", "birth_date" -> "2000-04-06", "email" -> "dzidzis@albatros.io",
@@ -1325,9 +1324,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(List(("M", "2000-04-06", List("Cicerons", "Mene, tekel, ufarsin")))) {
       ORT.update("@contact_db:contact[name]", obj)
       println(s"\nResult check:")
-      // TODO rewrite to tresql when scala macro supports multi database metadata
-      Query("|contact_db:contact[name = 'Dzidzis']{sex, birth_date, |contact_db:notes{note}#(1) notes}")
-        .map(c => (c.s.sex, c.s.birth_date, c.r.notes.map(n => n.s("note")).toList)).toList
+      tresql"|contact_db:contact[name = 'Dzidzis']{sex, birth_date, |contact_db:notes{note}#(1) notes}"
+        .map(c => (c.sex, c.birth_date.toString, c.notes.map(_.note).toList)).toList
     }
 
     obj = Map("name" -> "Dzidzis", "@contact_db:notes[note]" ->
@@ -1338,7 +1336,6 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(List(("M", "2000-04-06", List("Cicerons")))) {
       ORT.update("@contact_db:contact[name]", obj)
       println(s"\nResult check:")
-      // TODO rewrite to tresql when scala macro supports multi database metadata
       Query("|contact_db:contact[name = 'Dzidzis']{sex, birth_date, |contact_db:notes{note}#(1) notes}")
         .map(c => (c.s.sex, c.s.birth_date, c.r.notes.map(n => n.s("note")).toList)).toList
     }
@@ -1349,13 +1346,13 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         null
       )
       println(s"\nResult check:")
-      Query("|contact_db:notes[contact_id = (contact[name = 'Dzidzis']{id})]").toListOfVectors
+      tresql"|contact_db:notes[contact_id = (contact[name = 'Dzidzis']{id})]".toList
     }
 
     assertResult(Nil) {
       ORT.delete("@contact_db:contact", Query("|contact_db:contact[name = 'Dzidzis']{id}").unique[Long])
       println(s"\nResult check:")
-      Query("|contact_db:contact[name = 'Dzidzis']").toListOfVectors
+      tresql"|contact_db:contact[name = 'Dzidzis']".toList
     }
   }
 

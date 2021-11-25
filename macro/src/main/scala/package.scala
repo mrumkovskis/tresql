@@ -281,6 +281,8 @@ package object tresql extends CoreTypes {
               fieldTerm
             )
             ctx.copy(tree = l, colNames = ctx.colNames + name, colType = q"$colType")
+          case compiler.ChildDef(ch, _) =>
+            generator(ctx.copy(depth = ctx.depth + 1))(ch)
         })
         generator(Ctx(null, Nil, 0, 0, 0, Nil, Set(), null, None))(exp)
       }
