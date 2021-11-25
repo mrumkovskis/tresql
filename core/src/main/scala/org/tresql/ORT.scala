@@ -195,14 +195,15 @@ trait ORT extends Query {
 
   def delete(name: String, id: Any, filter: String = null, filterParams: Map[String, Any] = null)
             (implicit resources: Resources): Any = {
-    val Array(tableName, alias) = name.split("\\s+").padTo(2, null)
+    val OrtMetadata.Patterns.prop(db, tableName, _, alias, _) = name
+    val md = tresqlMetadata(db)
     val delete =
       (for {
-        table <- resources.metadata.tableOption(tableName)
+        table <- md.tableOption(tableName)
         pk <- table.key.cols.headOption
         if table.key.cols.size == 1
       } yield {
-        s"-${table.name}${Option(alias).map(" " + _).getOrElse("")}[$pk = ?${Option(filter)
+        s"-${tableWithDb(db, table.name)}${Option(alias).map(" " + _).getOrElse("")}[$pk = ?${Option(filter)
           .map(f => s" & ($f)").getOrElse("")}]"
       }) getOrElse {
         error(s"Table $name not found or table primary key not found or table primary key consists of more than one column")
@@ -263,11 +264,9 @@ trait ORT extends Query {
   }
 
   def deleteTresql(name: String, key: List[String], filter: String)(implicit resources: Resources): String = {
-    val Array(tableName, alias) = name.split("\\s+").padTo(2, null)
-    resources.metadata.tableOption(tableName).map { table =>
-      s"-${table.name}${if (alias == null) "" else " " + alias}[${
-        key.map(c => c + " = :" + c).mkString(" & ")}${if (filter == null) "" else s" & ($filter)"}]"
-    }.getOrElse(s"Table $name not found")
+    val OrtMetadata.Patterns.prop(db, tableName, _, alias, _) = name
+    s"-${tableWithDb(db, tableName)}${if (alias == null) "" else " " + alias}[${
+      key.map(c => c + " = :" + c).mkString(" & ")}${if (filter == null) "" else s" & ($filter)"}]"
   }
 
   private def save(name: String,

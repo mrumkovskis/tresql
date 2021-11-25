@@ -1342,6 +1342,21 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       Query("|contact_db:contact[name = 'Dzidzis']{sex, birth_date, |contact_db:notes{note}#(1) notes}")
         .map(c => (c.s.sex, c.s.birth_date, c.r.notes.map(n => n.s("note")).toList)).toList
     }
+
+    assertResult(Nil) {
+      ORT.delete("@contact_db:notes", List("contact_id", "note"),
+        Map("note" -> "Cicerons", "contact_id" -> Query("|contact_db:contact[name = 'Dzidzis']{id}").unique[Long]),
+        null
+      )
+      println(s"\nResult check:")
+      Query("|contact_db:notes[contact_id = (contact[name = 'Dzidzis']{id})]").toListOfVectors
+    }
+
+    assertResult(Nil) {
+      ORT.delete("@contact_db:contact", Query("|contact_db:contact[name = 'Dzidzis']{id}").unique[Long])
+      println(s"\nResult check:")
+      Query("|contact_db:contact[name = 'Dzidzis']").toListOfVectors
+    }
   }
 
   override def compilerMacro(implicit resources: Resources) = {
