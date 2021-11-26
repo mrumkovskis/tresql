@@ -1336,8 +1336,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(List(("M", "2000-04-06", List("Cicerons")))) {
       ORT.update("@contact_db:contact[name]", obj)
       println(s"\nResult check:")
-      Query("|contact_db:contact[name = 'Dzidzis']{sex, birth_date, |contact_db:notes{note}#(1) notes}")
-        .map(c => (c.s.sex, c.s.birth_date, c.r.notes.map(n => n.s("note")).toList)).toList
+      tresql"|contact_db:contact[name = 'Dzidzis']{sex, birth_date, |contact_db:notes{note}#(1) notes}"
+        .map(c => (c.sex, c.birth_date.toString, c.notes.map(_.note).toList)).toList
     }
 
     assertResult(Nil) {
