@@ -7,6 +7,7 @@ import org.tresql.metadata.JDBCMetadata
 
 trait CompilerMetadata {
   def metadata: Metadata
+  def extraMetadata: Map[String, Metadata]
   def macros: Any
 }
 
@@ -33,50 +34,82 @@ private[tresql] object MetadataCache {
 }
 
 class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
+
+  case class Conf(driverClassName: String,
+                  url: String,
+                  user: String,
+                  password: String,
+                  dbCreateScript: String,
+                  functionsClassName: String)
+
   def create(conf: Map[String, String]): CompilerMetadata = create(conf, false)
-  def create(conf: Map[String, String], verbose: Boolean) = {
-    val driverClassName = conf.getOrElse("driverClass", null)
-    val url = conf.getOrElse("url", null)
-    val user = conf.getOrElse("user", null)
-    val password = conf.getOrElse("password", null)
-    val dbCreateScript = conf.getOrElse("dbCreateScript", null)
-    val functions = conf.getOrElse("functionSignatures", null)
-    val macrosClass = conf.get("macros")
+  def create(conf: Map[String, String], verbose: Boolean): CompilerMetadata = {
+    val jdbc_metadata = {
+      def createMetadata(mdConf: Conf) = {
+        import mdConf._
+        if (verbose) println(s"Creating database metadata from: $url")
 
-    if (verbose) println(s"Creating database metadata from: $url")
-
-    Class.forName(driverClassName)
-    val connection =
-      if (user == null) DriverManager.getConnection(url)
-      else DriverManager.getConnection(url, user, password)
-    if (verbose) println(s"Compiling using jdbc connection: $connection")
-    if (dbCreateScript != null) {
-      if (verbose) println(s"Creating database for compiler from script $dbCreateScript...")
-      new scala.io.BufferedSource(
-        Option(getClass
-          .getResourceAsStream(dbCreateScript))
-          .getOrElse(new java.io.FileInputStream(dbCreateScript)))
-        .mkString
-        .split("//")
-        .foreach { sql =>
-          val st = connection.createStatement
-          st.execute(sql)
-          st.close
+        Class.forName(driverClassName)
+        val connection =
+          if (user == null) DriverManager.getConnection(url)
+          else DriverManager.getConnection(url, user, password)
+        if (verbose) println(s"Compiling using jdbc connection: $connection")
+        if (dbCreateScript != null) {
+          if (verbose) println(s"Creating database for compiler from script $dbCreateScript...")
+          new scala.io.BufferedSource(
+            Option(this.getClass
+              .getResourceAsStream(dbCreateScript))
+              .getOrElse(new java.io.FileInputStream(dbCreateScript)))
+            .mkString
+            .split("//")
+            .foreach { sql =>
+              val st = connection.createStatement
+              st.execute(sql)
+              st.close
+            }
+          if (verbose) println("Success")
         }
-      if (verbose) println("Success")
-    }
-    new CompilerMetadata {
-      override def metadata: Metadata =
-        if (functions == null) JDBCMetadata(connection) else {
-          val f = Class.forName(functions)
+        if (functionsClassName == null) JDBCMetadata(connection) else {
+          val f = Class.forName(functionsClassName)
           new JDBCMetadata with CompilerFunctionMetadata {
             override def conn = connection
             override def compilerFunctionSignatures = f
           }
         }
+      }
+      def createConf(c: Map[String, String]) = {
+        Conf(
+          c.getOrElse("driverClass", null),
+          c.getOrElse("url", null),
+          c.getOrElse("user", null),
+          c.getOrElse("password", null),
+          c.getOrElse("dbCreateScript", null),
+          c.getOrElse("functionSignatures", null)
+        )
+      }
+      def param(k: String) = {
+        val i = k.indexOf(".")
+        if (i == -1) k else k.substring(0, i)
+      }
+      def db(k: String) = {
+        val i = k.indexOf(".")
+        if (i == -1) "" else k.substring(i + 1)
+      }
+      conf
+        //.groupMapReduce { case (k, _) => db(k) } { case (k, v) => Map(param(k) -> v) } (_ ++ _) // scala 2.13.x
+        .groupBy { case (k, _) => db(k) }
+        .mapValues(_.map { case (k, v) => Map(param(k) -> v) }.reduce(_ ++ _))
+        .map { case (k, c) => (k, createMetadata(createConf(c))) }
+        .toMap
+    }
 
-      override def macros: Any =
-        macrosClass.map(cn => Class.forName(cn).getDeclaredConstructor().newInstance()).getOrElse(null)
+    new CompilerMetadata {
+      override def metadata: Metadata = jdbc_metadata("")
+      /** Currently no extra metadata are supported */
+      override def extraMetadata: Map[String, Metadata] = jdbc_metadata.filterNot(_._1 == "")
+      override def macros: Any = {
+        conf.get("macros").map(cn => Class.forName(cn).getDeclaredConstructor().newInstance()).getOrElse(null)
+      }
     }
   }
 }

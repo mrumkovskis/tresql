@@ -2,41 +2,39 @@
 //<statement> --> [<semicolon separated bind params (array elements are comma separated)>] --> <result as returned from method uniso.query.result.Jsonizer.jsonize(..., Jsonizer.Arrays)>
 // Part#1 - TreSQL functionality tests based on Postgresql 10 regression test suite -
 
-// abstime_tbl regression based on abstime.sql
+// abstime replaced with timestamp since 12.x
 // Verify session TimeZone. select name,setting from pg_settings where name='TimeZone';
 pg_settings[name='TimeZone']{name,setting} --> [["TimeZone","Europe/Riga"]]
 // INSERT badly formatted datetime result in <invalid> value. Explicit typecast.
-abstime_tbl{f1} + [cast('Jun 10, 1843','abstime')] --> [[1]]
+//timestamp_tbl{f1} + [cast('Jun 10, 1843','timestamp')] --> [[1]]
 // implicit typecast
-abstime_tbl{f1} + ['Jun 10, 1843'] --> [[1]]
+//timestamp_tbl{f1} + ['Jun 10, 1843'] --> [[1]]
 // INSERT Postgres style timezone
-abstime_tbl{f1} + [cast('Jan 14, 1973 03:14:21 PST','abstime')] --> [[1]]
+timestamp_tbl{f1} + [cast('Jan 14, 1973 03:14:21 PST','timestamp')] --> [[1]]
 // INSERT ISO 8601 SQL standard style timezone specification
-abstime_tbl{f1} + [cast('Jan 14, 1973 03:14:21-08','abstime')] --> [[1]]
+timestamp_tbl{f1} + [cast('Jan 14, 1973 03:14:21-08','timestamp')] --> [[1]]
 // INSERT SQL traditional (Ingres) style
-abstime_tbl{f1} + [cast('Jan 14, 1973 03:14:21.00 PST', 'abstime')] --> [[1]]
+timestamp_tbl{f1} + [cast('Jan 14, 1973 03:14:21.00 PST', 'timestamp')] --> [[1]]
 // select inserted data
-abstime_tbl{f1} --> [["invalid"],["invalid"],["1973-01-14 14:14:21+03"],["1973-01-14 14:14:21+03"],["1973-01-14 14:14:21+03"]]
-// special values: epoch, infinity, -infinity
-abstime_tbl{f1} + [cast('epoch','abstime')],[cast('infinity','abstime')],[cast('-infinity','abstime')] --> [[3]]
+timestamp_tbl{f1} --> [["1973-01-14 03:14:21"],["1973-01-14 03:14:21"],["1973-01-14 03:14:21"]]
+// special value: epoch
+timestamp_tbl{f1} + [cast('epoch','timestamp')] --> [[1]]
 //
-abstime_tbl{f1} --> [["invalid"],["invalid"],["1973-01-14 14:14:21+03"],["1973-01-14 14:14:21+03"],["1973-01-14 14:14:21+03"],["1970-01-01 03:00:00+03"],["infinity"],["-infinity"]]
+timestamp_tbl{f1} --> [["1973-01-14 03:14:21"],["1973-01-14 03:14:21"],["1973-01-14 03:14:21"],["1970-01-01 00:00:00"]]
 //
-abstime_tbl t[t.f1 < cast('Jun 30, 2001', 'abstime')] --> [["1973-01-14 14:14:21+03"],["1973-01-14 14:14:21+03"],["1973-01-14 14:14:21+03"],["1970-01-01 03:00:00+03"],["-infinity"]]
+timestamp_tbl t[t.f1 < cast('Jun 30, 2001', 'timestamp')] --> [["1973-01-14 03:14:21"],["1973-01-14 03:14:21"],["1973-01-14 03:14:21"],["1970-01-01 00:00:00"]]
 //
-abstime_tbl t[t.f1 > cast('-infinity', 'abstime')] --> [["invalid"],["invalid"],["1973-01-14 14:14:21+03"],["1973-01-14 14:14:21+03"],["1973-01-14 14:14:21+03"],["1970-01-01 03:00:00+03"],["infinity"]]
+timestamp_tbl t[t.f1 > cast('-infinity', 'timestamp')] --> [["1973-01-14 03:14:21"],["1973-01-14 03:14:21"],["1973-01-14 03:14:21"],["1970-01-01 00:00:00"]]
 // TODO Item? Postgresql dialect operator not equal "<>" currently unsupported
-// abstime_tbl t[t.f1 <> cast('May 10, 1947 23:59:12', 'abstime')] --> [["invalid"],["invalid"],["1973-01-14 14:14:21+03"],["1973-01-14 14:14:21+03"],["1973-01-14 14:14:21+03"],["1970-01-01 03:00:00+03"],["infinity"],["-infinity"]]
-abstime_tbl t[t.f1 != cast('May 10, 1947 23:59:12', 'abstime')] --> [["invalid"],["invalid"],["1973-01-14 14:14:21+03"],["1973-01-14 14:14:21+03"],["1973-01-14 14:14:21+03"],["1970-01-01 03:00:00+03"],["infinity"],["-infinity"]]
 //epoch in where clause
-abstime_tbl t[t.f1 <= 'epoch'] --> [["1970-01-01 03:00:00+03"],["-infinity"]]
+timestamp_tbl t[t.f1 <= 'epoch'] --> [["1970-01-01 00:00:00"]]
 //
-abstime_tbl t[t.f1 <= '1973-01-14 14:14:21'] --> [["1973-01-14 14:14:21+03"],["1973-01-14 14:14:21+03"],["1973-01-14 14:14:21+03"],["1970-01-01 03:00:00+03"],["-infinity"]]
+timestamp_tbl t[t.f1 <= '1973-01-14 14:14:21'] --> [["1973-01-14 03:14:21"],["1973-01-14 03:14:21"],["1973-01-14 03:14:21"],["1970-01-01 00:00:00"]]
 // TODO operator  <?> unsupported
-//abstime_tbl t[t.f1 <?> tinterval '["epoch" "epoch"]'] --> [["1970-01-01 03:00:00+03"]]
-abstime_tbl t[t.f1 >= 'epoch'][t.f1 <= 'epoch' ] --> [["1970-01-01 03:00:00+03"]]
+//timestamp_tbl t[t.f1 <?> tinterval '["epoch" "epoch"]'] --> [["1970-01-01 00:00:00"]]
+timestamp_tbl t[t.f1 >= 'epoch'][t.f1 <= 'epoch' ] --> [["1970-01-01 00:00:00"]]
 //isfinite
-abstime_tbl[isfinite(f1)]{f1 abstime, date_part('year',f1) year, date_part('month',f1) month, date_part('day',f1) day, date_part('hour',f1) hour, date_part('minute', f1) minute, date_part('second', f1) second} #(abstime) --> [["1970-01-01 03:00:00+03", 1970, 1.0, 1.0, 3.0, 0.0, 0.0],["1973-01-14 14:14:21+03", 1973.0, 1.0, 14.0, 14.0, 14.0, 21.0],["1973-01-14 14:14:21+03", 1973.0, 1.0, 14.0, 14.0, 14.0, 21.0],["1973-01-14 14:14:21+03", 1973.0, 1.0, 14.0, 14.0, 14.0, 21.0]]
+timestamp_tbl[isfinite(f1)]{f1 timestamp, date_part('year',f1) year, date_part('month',f1) month, date_part('day',f1) day, date_part('hour',f1) hour, date_part('minute', f1) minute, date_part('second', f1) second} #(timestamp) --> [["1970-01-01 00:00:00", 1970, 1.0, 1.0, 0.0, 0.0, 0.0],["1973-01-14 03:14:21", 1973.0, 1.0, 14.0, 3.0, 14.0, 21.0],["1973-01-14 03:14:21", 1973.0, 1.0, 14.0, 3.0, 14.0, 21.0],["1973-01-14 03:14:21", 1973.0, 1.0, 14.0, 3.0, 14.0, 21.0]]
 //
 // Generate data for lossy bitmaps
 //INSERT INTO bmscantest
@@ -635,6 +633,7 @@ dept{string_agg(dname,',')[deptno = 10]} --> [["ACCOUNTING"]]
 
 //cast
 dept{cast(deptno, 'integer')}#(1) --> [[10], [20], [30], [40]]
+//TODO: WHY???
 dummy {1::int + 2::'double precision'} --> [[3.0]]
 
 //string literal apostrophe escape

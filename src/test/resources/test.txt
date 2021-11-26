@@ -9,8 +9,8 @@ DUMMY {DUMMY} + [0] --> [[1]]
 DEPT {DEPTNO, DNAME, LOC} + [10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"] --> [[2]]
 DEPT {DEPTNO, DNAME, LOC} + [], [*] --> 30; 'SALES; 'CHICAGO; 40; 'OPERATIONS; 'BOSTON --> [[2]]
 //EMPS
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7839, "KING",   "PRESIDENT", null, "1981-11-17", 5000, null, 10] --> [[1]]
-EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7698, "BLAKE",  "MANAGER",   7839, "1981-05-01",  2850, null, *] --> 30 --> [[1]]
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO, +contact_db:contact{id, name, sex, birth_date, email}[7839, "Peter", "M", "1980-03-10", "peter@tresql.org"]} + [7839, "KING",   "PRESIDENT", null, "1981-11-17", 5000, null, 10] --> [[1, [[[1]]]]]
+EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO, +contact_db:contact{id, name, sex, birth_date, email}[7698, "John", "M", "1982-02-05", "john@tresql.org"]} + [7698, "BLAKE",  "MANAGER",   7839, "1981-05-01",  2850, null, 30] --> [[1, [[[1]]]]]
 EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7782, "CLARK",  *,   7839, "1981-06-9", 2450, null, 10] --> 'MANAGER --> [[1]]
 EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [*, "JONES",  "MANAGER",   7839, "1981-04-02",  2975, null, 20] --> 7566 --> [[1]]
 EMP {EMPNO, ENAME, JOB, MGR, HIREDATE, SAL, COMM, DEPTNO} + [7499, "ALLEN",  "SALESMAN",  7698, "1981-02-20", *] --> 1600; 300; 30 --> [[1]]
@@ -276,6 +276,27 @@ work[empno]emp{emp.empno, ename, sal, |[empno]work{hours, work.hours/(:1(sal)/10
 work[empno]emp{emp.empno, ename, sal, |[empno]work{hours, work.hours/(:1(sal) * 1)}#(1,2)}#(1) --> [[7788, "SCOTT", 3000.00, [[5, 0], [8, 0]]], [7788, "SCOTT", 3000.00, [[5, 0], [8, 0]]], [7839, "KING", 5000.00, [[3, 0], [4, 0]]], [7839, "KING", 5000.00, [[3, 0], [4, 0]]]]
 work[empno]emp{emp.empno, ename, sal, |[empno]work{hours, work.hours/:1(sal) * 1}#(1,2)}#(1) --> [[7788, "SCOTT", 3000.00, [[5, 0], [8, 0]]], [7788, "SCOTT", 3000.00, [[5, 0], [8, 0]]], [7839, "KING", 5000.00, [[3, 0], [4, 0]]], [7839, "KING", 5000.00, [[3, 0], [4, 0]]]]
 
+//hierarchical query with child from another database
+dept[dname ~~ 'acc%']{dname, |emp_db:emp {ename}#(1)} --> [["ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
+dept[dname ~~ 'acc%']{dname, |emp_db:[dept.deptno = emp.deptno]emp {ename}#(1)} --> [["ACCOUNTING", [["CLARK"], ["KING"], ["MILLER"]]]]
+emp[ename = 'BLAKE']{ ename, |contact_db:[id = emp.empno]contact{email} email} --> [["BLAKE", [["john@tresql.org"]]]]
+emp[ename = 'BLAKE']{ ename, |contact_db:[id = emp.empno]contact{*} email} --> [["BLAKE", [[7698, "John", "M", "1982-02-05", "john@tresql.org"]]]]
+
+//query from another database
+emp[ename = 'BLAKE'], |contact_db:contact[name = 'John'] --> [[[[7698, "BLAKE", "MANAGER", 7839, "1981-05-01", 2850.00, null, 30]], [[7698, "John", "M", "1982-02-05", "john@tresql.org"]]]]
+|contact_db:contact[name = 'John']{*} --> [[7698, "John", "M", "1982-02-05", "john@tresql.org"]]
+|contact_db:contact[name = 'John']{email} --> [["john@tresql.org"]]
+
+//insert, update, delete into another database
++contact_db:contact{id, name, sex, birth_date, email, +contact_db:notes{id, contact_id, note_date, note}[#notes, :#contact, current_time, 'Pick up the phone']}[#contact, 'Zia', 'F', '1988-07-31', 'zia@tresql.org'] --> [[1, [[[1, 100001]]], 100000]]
+|contact_db:contact[name = 'Zia'] {email, |contact_db:[notes.contact_id = contact.id]notes{note} notes} --> [["zia@tresql.org", [["Pick up the phone"]]]]
+=contact_db:contact[name = 'Zia'] { birth_date, =contact_db:notes[contact_id = (contact[name = 'Zia']{id})]{note}['All good'] } ['1988-10-01'] --> [[1, [[[1]]]]]
+|contact_db:contact[name = 'Zia'] {birth_date, |contact_db:[notes.contact_id = contact.id]notes{note} notes} --> [["1988-10-01", [["All good"]]]]
+|contact_db:c(#) {contact} c{name, |contact_db:[n.contact_id = c.id]n(#){notes} n{note}#(id)}#(id) --> [["John", []], ["Peter", []], ["Zia", [["All good"]]]]
+=contact_db:contact[name = 'Zia'] { -contact_db:notes[contact_id = (contact[name = 'Zia']{id})] } [] --> [[[[[1]]]]]
+|contact_db:contact[name = 'Zia'] {|contact_db:[notes.contact_id = contact.id]notes{note} notes} --> [[[]]]
+
+
 //union
 dept[?]{deptno} ++ emp[?]{empno} ++ salgrade[?]{grade} --> 10;7839;1 --> [[10], [7839], [1]]
 (dept{deptno} + salgrade{grade})#(~1 null) --> [[40], [30], [20], [10], [5], [4], [3], [2], [1]]
@@ -437,6 +458,8 @@ emp[7876] {ename, sal} --> [["kukuzis", 1000.00]]
 
 //child update
 emp{empno, job, emp[empno = :1(1)]{job} = [:1(2)]}#(1) --> [[7369, "CLERK", [[1]]], [7499, "SALESMAN", [[1]]], [7521, "SALESMAN", [[1]]], [7566, "MANAGER", [[1]]], [7654, "SALESMAN", [[1]]], [7698, "MANAGER", [[1]]], [7782, "MANAGER", [[1]]], [7788, "ANALYST", [[1]]], [7839, "PRESIDENT", [[1]]], [7844, "SALESMAN", [[1]]], [7876, null, [[1]]], [7900, "CLERK", [[1]]], [7902, "ANALYST", [[1]]], [7934, "CLERK", [[1]]]]
+//child update in another database
+emp{empno, job, =emp_db: emp[empno = :1(1)]{job} [:1(2)]}#(1) --> [[7369, "CLERK", [[1]]], [7499, "SALESMAN", [[1]]], [7521, "SALESMAN", [[1]]], [7566, "MANAGER", [[1]]], [7654, "SALESMAN", [[1]]], [7698, "MANAGER", [[1]]], [7782, "MANAGER", [[1]]], [7788, "ANALYST", [[1]]], [7839, "PRESIDENT", [[1]]], [7844, "SALESMAN", [[1]]], [7876, null, [[1]]], [7900, "CLERK", [[1]]], [7902, "ANALYST", [[1]]], [7934, "CLERK", [[1]]]]
 
 //----DELETE----
 salgrade - [?] --> 5 --> [[1]]
@@ -621,3 +644,14 @@ dummy{ ((dummy{sum(dummy)})::int - (dummy{dummy}@(1))::int) x} --> [[0]]
 +dummy{*} dummy[dummy = 10]{dummy dummy} --> [[0]]
 +dummy{*} d(#) { dummy[dummy = 10] } d{dummy} --> [[0]]
 +dummy{*} d(#) { dummy[dummy = 10] } d{dummy} ++ dummy[dummy = 10]{dummy} --> [[0]]
+
+// another schema test
+accounts.account --> []
+accounts.transaction --> []
+accounts.account/emp {ename, number, balance}#(1,2) --> []
+accounts.account;account/emp{ename, number, balance}#(1,2) --> []
+accounts.transaction t[t.originator_id o, t.beneficiary_id b]accounts.account{t.id, o.number, b.number, amount}#(1) --> []
+[]emp; emp / accounts.account! --> []
+accounts.transaction[transaction.originator_id = account.id]accounts.account{transaction.id, account.number, amount}#(1) --> []
+accounts.transaction[transaction.originator_id o, transaction.beneficiary_id b]accounts.account{transaction.id, o.number, b.number, amount}#(1) --> []
+accounts.transaction[transaction.originator_id o]accounts.account; transaction[transaction.beneficiary_id b]accounts.account{transaction.id, o.number, b.number, amount}#(1) --> []

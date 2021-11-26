@@ -38,11 +38,14 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     //initialize environment
     Class.forName("org.postgresql.Driver")
     val jdbcPort = configMap.getOptional[String]("port").map(":" + _).getOrElse("")
-    val (dbUri, dbUser, dbPwd) = (s"jdbc:postgresql://localhost$jdbcPort/postgres", "postgres", "")
+    val (dbUri, dbUser, dbPwd) = (s"jdbc:postgresql://localhost$jdbcPort/tresql", "tresql", "tresql")
     val conn = if (configMap.get("docker").isDefined) {
       val postgresDockerImage = configMap("docker")
       val hostPort = configMap.getOrElse("port", "5432")
-      val DockerCmd = s"docker run -d --rm --name tresql-it-tests -p $hostPort:5432 $postgresDockerImage"
+      val DockerCmd =
+        s"""docker run -d --rm --name tresql-it-tests -p $hostPort:5432
+           | -e POSTGRES_DB=tresql -e POSTGRES_USER=tresql -e POSTGRES_PASSWORD=tresql -e POSTGRES_HOST_AUTH_METHOD=trust
+           | $postgresDockerImage""".stripMargin
       println(s"Starting tresql test docker postgres container...")
       val process = Runtime.getRuntime.exec(DockerCmd)
       val baos = new ByteArrayOutputStream()
@@ -194,7 +197,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
         override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
       }
     )
-    val compiler = new QueryCompiler(testRes.metadata, testRes)
+    val compiler = new QueryCompiler(testRes.metadata, Map(), testRes)
     //set console compiler so it can be used from scala console
     ITConsoleResources.compiler = compiler
     import compiling.CompilerException

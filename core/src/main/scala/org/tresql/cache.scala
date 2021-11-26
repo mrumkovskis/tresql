@@ -9,7 +9,7 @@ import parsing.Exp
 trait Cache extends CacheBase[Exp]
 trait CacheBase[E] {
   def get(tresql: String): Option[E]
-  def put(tresql: String, expr: E)
+  def put(tresql: String, expr: E): Unit
   def size: Int = ???
 }
 

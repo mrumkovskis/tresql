@@ -272,6 +272,12 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         Vector("WARD", "SALES"))) {
       Query("[]sql('emp')[emp.deptno = dept.deptno]sql('dept')[dname = 'SALES']{ename, dname}#(1,2)").toListOfVectors
     }
+    assertResult(List(Vector("ACCOUNTING"))) {
+      Query("[]dynamic_table(:table)[deptno = 10]{dname}", Map("table" -> "dept")).toListOfVectors
+    }
+    assertResult(List(Vector("ACCOUNTING"))) {
+      Query("c(#) { []dynamic_table(:table)[deptno = 10]{dname} } c", Map("table" -> "dept")).toListOfVectors
+    }
 
     //path bind variable access (dotted syntax)
     assertResult(List(Vector("SALES")))(
@@ -293,7 +299,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       Query("dept[dname = 'SALES' | dname = :dept.name?] {dname}#(1)", Map("dept" -> Map("name" -> "RESEARCH"))).toListOfVectors)
     assertResult( List(Vector(null)))(
       Query("(dept[dname = 'SALES']{dname} + {null})[case(:dept.name? = null, dname = null, dname = :dept.name?)]{dname}#(null 1)", Map("dept" -> Map("name" -> null))).toListOfVectors)
-    assertResult( List(Vector(null)))(
+    assertResult(List(Vector(null), Vector("SALES")) )(
       Query("(dept[dname = 'SALES']{dname} + {null})[case(:dept.name? = null, dname = null, dname = :dept.name?)]{dname}#(null 1)", Map("dept" -> null)).toListOfVectors)
     assertResult(List(Vector(null), Vector("SALES")))(
       Query("(dept[dname = 'SALES']{dname} + {null})[case(:dept.name? = null, dname = null, dname = :dept.name?)]{dname}#(null 1)", Map("dept" -> "x")).toListOfVectors)
@@ -301,7 +307,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       Query("(dept{dname} + {null})[case(:dept.2.name? = null, dname = null, dname = :dept.2.name?)]{dname}#(null 1)", Map("dept" -> (1 -> Map("name" -> "RESEARCH")))).toListOfVectors)
     assertResult(List(Vector(null), Vector("ACCOUNTING"), Vector("LAW"), Vector("OPERATIONS"), Vector("RESEARCH"), Vector("SALES")))(
       Query("(dept{dname} + {null})[case(:dept.1.name? = null, dname = null, dname = :dept.1.name?)]{dname}#(null 1)", Map("dept" -> (1 -> Map("name" -> "RESEARCH")))).toListOfVectors)
-    assertResult(List(Vector(null)))(
+    assertResult(List(Vector(null), Vector("ACCOUNTING"), Vector("LAW"), Vector("OPERATIONS"), Vector("RESEARCH"), Vector("SALES")))(
       Query("(dept{dname} + {null})[case(:dept.2.name? = null, dname = null, dname = :dept.2.name?)]{dname}#(null 1)", Map("dept" -> (1 -> null))).toListOfVectors)
     assertResult(List(Vector(null), Vector("ACCOUNTING"), Vector("LAW"), Vector("OPERATIONS"), Vector("RESEARCH"), Vector("SALES")))(
       Query("(dept{dname} + {null})[case(:dept.2.name? = null, dname = null, dname = :dept.2.name?)]{dname}#(null 1)", Map("dept" -> (1 -> "a"))).toListOfVectors)
@@ -342,11 +348,16 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       Query("emp [name = ?]", n)
     } catch {
       case ex: TresqlException =>
-        assertResult(("select * from emp where name = ?/*1*/", Map("1" -> "SCOTT"))) {
+        assertResult(("select * from emp where name = ?/*1*/", List("1" -> "SCOTT"))) {
           ex.sql -> ex.bindVars
         }
       case x => throw x
     }
+
+    //if_defined macro test for nested bind vars structure
+    assertResult("n")(Query("if_defined_or_else(:a.x, 'y', 'n')", Map("a" -> null)).head(0))
+    assertResult("n")(Query("if_defined_or_else(:a.x, 'y', 'n')", Map("a" -> 1)).head(0))
+    assertResult("y")(Query("if_defined_or_else(:a.x, 'y', 'n')", Map("a" -> Map("x" -> 2))).head(0))
   }
 
   override def ort(implicit resources: Resources) = {
@@ -1080,6 +1091,269 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         case e: ChildSaveException => e.tableName
       }
     }
+
+    println("------ UPDATE by key test ------")
+
+    obj = Map("dname" -> "METEO", "loc" -> "Florida", "emp[ename, deptno][+-=]" -> List(
+      Map("ename" -> "Selina", "job" -> "Observer" , "mgr" -> "KING", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
+      Map("ename" -> "Paul", "job" -> "Observer" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
+      Map("ename" -> "Ziko", "job" -> "Apprent" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
+    ))
+    assertResult(List(("Florida",
+      List(("Paul", "Observer", "Selina"), ("Selina", "Observer", "KING"), ("Ziko", "Apprent", "Selina"))))) {
+      ORT.update("dept[dname]", obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'METEO']{loc, |emp e{ename, job, (emp m[m.empno = e.mgr]{m.ename}) mgr}#(1) emps}"
+        .map(d => d.loc -> d.emps.map(e => (e.ename, e.job, e.mgr)).toList).toList
+    }
+
+    obj = Map("dname" -> "METEO", "loc" -> "Florida", "emp[ename, deptno][+-=]" -> List(
+      Map("ename" -> "Selina", "job" -> "Observer" , "mgr" -> "KING", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
+      Map("ename" -> "Paul", "job" -> "Gardener" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
+      Map("ename" -> "Mia", "job" -> "Gardener" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
+    ))
+    assertResult(List(("Florida",
+      List(("Selina", "Observer", "KING"), ("Paul", "Gardener", "Selina"), ("Mia", "Gardener", "Selina"))))) {
+      ORT.update("dept[dname]", obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'METEO']{loc, |emp e{ename, job, (emp m[m.empno = e.mgr]{m.ename}) mgr}#(~1) emps}"
+        .map(d => d.loc -> d.emps.map(e => (e.ename, e.job, e.mgr)).toList).toList
+    }
+
+    obj = Map("dname" -> "METEO", "loc" -> "Arizona", "emp[ename, deptno, mgr][+-=]" -> List(
+      Map("ename" -> "Selina", "job" -> "Driver" , "mgr" -> "KING", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
+      Map("ename" -> "Paul", "job" -> "Teacher" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
+    ))
+    assertResult(List(("Arizona",
+      List(("Paul", "Teacher", "Selina"), ("Selina", "Driver", "KING"))))) {
+      ORT.update("dept[dname]", obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'METEO']{loc, |emp e{ename, job, (emp m[m.empno = e.mgr]{m.ename}) mgr}#(1) emps}"
+        .map(d => d.loc -> d.emps.map(e => (e.ename, e.job, e.mgr)).toList).toList
+    }
+
+    obj = Map("dname" -> "METEO", "loc" -> "Nevada", "emp[ename, deptno][+-=]" ->
+      List(
+        Map("ename" -> "Selina", "job" -> "Driver" , "mgr" -> "Vytas", "mgr->" -> "mgr=emp[ename = :mgr]{empno}",
+          "car_usage[empno, car_nr][+-=]" -> Nil),
+        Map("ename" -> "Paul", "job" -> "Pilot" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}",
+          "car_usage[empno, car_nr][+-=]" ->
+          List(
+            Map("car" -> "VOLKSWAGEN", "car->" -> "car_nr=car[name = :car]{nr}", "date_from" -> "2021-11-10"),
+            Map("car" -> "FIAT", "car->" -> "car_nr=car[name = :car]{nr}", "date_from" -> "2021-11-11"),
+          ))
+      ),
+    )
+    assertResult(List(("Nevada",
+      List(
+        ("Paul", "Pilot", "Selina", List(("FIAT","2021-11-11"), ("VOLKSWAGEN","2021-11-10"))),
+        ("Selina", "Driver", "Vytas", Nil)
+      )
+    ))) {
+      ORT.update("dept[dname]", obj)
+      println(s"\nResult check:")
+      tresql"""dept[dname = 'METEO']{loc, |emp e{ename, job, (emp m[m.empno = e.mgr]{m.ename}) mgr,
+              |car_usage{(car[nr = car_nr]{name}) car, date_from}#(1) cars }#(1) emps}"""
+        .map(d => d.loc -> d.emps.map(e => (e.ename, e.job, e.mgr,
+          e.cars.map(c => c.car -> c.date_from.toString).toList)).toList).toList
+    }
+
+    obj = Map("dname" -> "METEO", "loc" -> "Montana", "emp[ename, deptno][+-=]" ->
+      List(
+        Map("ename" -> "Selina", "job" -> "Driver" , "mgr" -> "Martino", "mgr->" -> "mgr=emp[ename = :mgr]{empno}",
+          "car_usage[empno, car_nr][+-=]" ->
+            List(
+              Map("car" -> "Tesla", "car->" -> "car_nr=car[name = :car]{nr}", "date_from" -> "2021-11-15"),
+            )),
+        Map("ename" -> "Paul", "job" -> "Mechanic" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}",
+          "car_usage[empno, car_nr][+-=]" ->
+            List(
+              Map("car" -> "Mercedes Benz", "car->" -> "car_nr=car[name = :car]{nr}", "date_from" -> "2021-11-10"),
+              Map("car" -> "FIAT", "car->" -> "car_nr=car[name = :car]{nr}", "date_from" -> "2021-12-11"),
+            ))
+      ),
+    )
+    assertResult(List(("Montana",
+      List(
+        ("Paul", "Mechanic", "Selina", List(("FIAT", "2021-12-11"), ("Mercedes Benz", "2021-11-10"))),
+        ("Selina", "Driver", "Martino", List(("Tesla", "2021-11-15"))))))) {
+      ORT.update("dept[dname]", obj)
+      println(s"\nResult check:")
+      tresql"""dept[dname = 'METEO']{loc, |emp e{ename, job, (emp m[m.empno = e.mgr]{m.ename}) mgr,
+              |car_usage{(car[nr = car_nr]{name}) car, date_from}#(1) cars }#(1) emps}"""
+        .map(d => d.loc -> d.emps.map(e => (e.ename, e.job, e.mgr,
+          e.cars.map(c => c.car -> c.date_from.toString).toList)).toList).toList
+    }
+
+    obj = Map("car" -> "Tesla", "car->" -> "car_nr=car[name = :car]{nr}",
+      "emp" -> "Selina", "emp->" -> "empno=emp[ename = :emp]{empno}", "date_from" -> "2022-01-01")
+    assertResult(List("2022-01-01")) {
+      ORT.update("car_usage[car_nr, empno]", obj)
+      println(s"\nResult check:")
+      tresql"car_usage[empno = (emp e[ename = 'Selina']{e.empno}) & car_nr = (car[name = 'Tesla']{nr})]{date_from}"
+        .map(_.date_from.toString).toList
+    }
+
+    obj = Map("ename" -> "Selina", "hiredate" -> "2021-05-05",
+      "car_usage[empno, car_nr][+-=]|null, null, exists(car[name = :car & deptnr = (emp e[empno = :#emp] {e.deptno})]{1})" -> List(
+        Map("car" -> "Tesla", "car->" -> "car_nr=car[name = :car]{nr}", "date_from" -> "2000-10-05")
+      ))
+    assertResult(List(("2021-05-05", List(("Tesla", "2022-01-01"))))) {
+      ORT.update("emp[ename]", obj)
+      println(s"\nResult check:")
+      tresql"emp[ename = 'Selina'] {hiredate, |car_usage{(car[nr = car_nr]{name}) car, date_from}#(1) cars}"
+        .map(e => e.hiredate.toString -> e.cars.map(c => c.car -> c.date_from.toString).toList).toList
+    }
+
+    obj = Map("number" -> "000", "balance" -> 1000)
+    assertResult(List(("000",1000.00, null))) {
+      import OrtMetadata._
+      ORT.save(View(List(SaveTo("accounts.account", Set(),
+        List("number"))), SaveOptions(true, true, true), None, null,
+        List(Property("number", TresqlValue(":number")), Property("balance", TresqlValue(":balance"))), null),
+        obj)
+      println(s"\nResult check:")
+      tresql"accounts.account{number, balance, empno}#(number)".map(a => (a.number, a.balance, a.empno)).toList
+    }
+
+    obj = Map("number" -> "000", "balance" -> 2000)
+    assertResult(List(("000", 3000.00, null))) {
+      import OrtMetadata._
+      ORT.save(View(List(SaveTo("accounts.account", Set(),
+        List("number"))), SaveOptions(true, true, true), None, null,
+        List(
+          Property("number", TresqlValue(":number")),
+          Property("balance", TresqlValue("accounts.account[number = :number]{ balance + :balance}"))
+        ), null),
+        obj)
+      println(s"\nResult check:")
+      tresql"accounts.account{number, balance, empno}#(number)".map(a => (a.number, a.balance, a.empno)).toList
+    }
+
+    obj = Map("ename" -> "Betty", "accounts.account[empno, number][+-=]" -> List(
+      Map("number" -> "ABC123", "balance" -> 5, "accounts.transaction:beneficiary_id[+]" -> Nil),
+      Map("number" -> "ABC456", "balance" -> 15, "accounts.transaction:beneficiary_id[+]" ->
+        List(
+          Map("originator" -> "000", "originator->" -> "originator_id=accounts.account[number = :originator]{id}",
+            "amount" -> 10, "tr_date" -> "2021-11-11"),
+          Map("originator" -> "ABC123", "originator->" -> "originator_id=accounts.account[number = :originator]{id}",
+            "amount" -> 5, "tr_date" -> "2021-11-11"),
+        )),
+    ))
+    assertResult( List(("Betty", List(("ABC123", 5.00, Nil),
+      ("ABC456", 15.00, List((5.00, "2021-11-11", "ABC123"), (10.00, "2021-11-11", "000"))))))) {
+      ORT.update("emp[ename]", obj)
+      println(s"\nResult check:")
+      tresql"""emp[ename = 'Betty'] {ename, |accounts.account a{number, balance,
+              |[t.beneficiary_id]accounts.transaction t
+                { amount, tr_date, (accounts.account a[originator_id = a.id] {number}) from_acc }#(1,2,3) tr}#(1) acc}"""
+        .map(e => e.ename -> e.acc
+          .map(a => (a.number, a.balance, a.tr
+            .map(t => (t.amount, t.tr_date.toString, t.from_acc)).toList)).toList).toList
+    }
+
+    println("------ KEY UPDATE test ------")
+
+    obj = Map("number" -> "000", "new_number" -> "000000")
+    assertResult(List("000000")) {
+      import OrtMetadata._
+      ORT.save(View(List(SaveTo("accounts.account", Set(),
+        List("number"))), SaveOptions(true, true, true), None, null,
+        List(Property("number", KeyValue(":number", ":new_number"))), null),
+        obj)
+      println(s"\nResult check:")
+      tresql"accounts.account[number = '000000']{number}".map(_.number).toList
+    }
+
+    obj = Map("number" -> "111", "new_number" -> "111111", "balance" -> 100)
+    assertResult(List("111111")) {
+      import OrtMetadata._
+      ORT.save(
+        View(
+          List(SaveTo("accounts.account", Set(), List("number"))),
+          SaveOptions(true, true, true), None, null,
+          List(
+            Property("number", KeyValue(":number", ":new_number")),
+            Property("balance", TresqlValue(":balance"))
+          ), null),
+        obj
+      )
+      println(s"\nResult check:")
+      tresql"accounts.account[number = '111111']{number, balance}".map(_.number).toList
+    }
+
+    obj = Map("ename" -> "Betty", "new_ename" -> "Binny", "dept" -> "Temp", "new_dept" -> "Radio")
+    assertResult( List(("Binny", "Radio"))) {
+      import OrtMetadata._
+      ORT.save(
+        View(
+          List(SaveTo("emp", Set(), List("ename", "deptno"))),
+          SaveOptions(true, true, true), None, null,
+          List(
+            Property("ename", KeyValue(":ename", ":new_ename")),
+            Property("deptno", KeyValue("(dept[dname = :dept]{deptno})", "(dept[dname = :new_dept]{deptno})"))
+          ), null),
+        obj
+      )
+      println(s"\nResult check:")
+      tresql"emp/dept[ename = 'Binny']{ename, dname}".map(e => e.ename -> e.dname).toList
+    }
+
+    println("------ ORT on extra database --------")
+
+    obj = Map("name" -> "Dzidzis", "sex" -> "M", "birth_date" -> "1999-04-06", "email" -> "dzidzis@albatros.io",
+      "@contact_db:notes[note_date, note][+-=]" ->
+        List(
+          Map("note_date" -> new java.sql.Timestamp(System.currentTimeMillis), "note" -> "Mene, tekel, ufarsin")
+        )
+    )
+    assertResult(List(("M", "dzidzis@albatros.io", List("Mene, tekel, ufarsin")))) {
+      ORT.insert("@contact_db:contact[name]", obj)
+      println(s"\nResult check:")
+      tresql"|contact_db:contact[name = 'Dzidzis']{sex, email, |contact_db:notes{note}#(1) notes}"
+        .map(c => (c.sex, c.email, c.notes.map(_.note).toList)).toList
+    }
+
+    obj = Map("name" -> "Dzidzis", "sex" -> "M", "birth_date" -> "2000-04-06", "email" -> "dzidzis@albatros.io",
+      "@contact_db:notes[note][+-=]" ->
+        List(
+          Map("note_date" -> new java.sql.Timestamp(System.currentTimeMillis), "note" -> "Mene, tekel, ufarsin"),
+          Map("note_date" -> new java.sql.Timestamp(System.currentTimeMillis), "note" -> "Cicerons")
+        )
+    )
+    assertResult(List(("M", "2000-04-06", List("Cicerons", "Mene, tekel, ufarsin")))) {
+      ORT.update("@contact_db:contact[name]", obj)
+      println(s"\nResult check:")
+      tresql"|contact_db:contact[name = 'Dzidzis']{sex, birth_date, |contact_db:notes{note}#(1) notes}"
+        .map(c => (c.sex, c.birth_date.toString, c.notes.map(_.note).toList)).toList
+    }
+
+    obj = Map("name" -> "Dzidzis", "@contact_db:notes[note]" ->
+        List(
+          Map("note_date" -> new java.sql.Timestamp(System.currentTimeMillis), "note" -> "Cicerons")
+        )
+    )
+    assertResult(List(("M", "2000-04-06", List("Cicerons")))) {
+      ORT.update("@contact_db:contact[name]", obj)
+      println(s"\nResult check:")
+      tresql"|contact_db:contact[name = 'Dzidzis']{sex, birth_date, |contact_db:notes{note}#(1) notes}"
+        .map(c => (c.sex, c.birth_date.toString, c.notes.map(_.note).toList)).toList
+    }
+
+    assertResult(Nil) {
+      ORT.delete("@contact_db:notes", List("contact_id", "note"),
+        Map("note" -> "Cicerons", "contact_id" -> Query("|contact_db:contact[name = 'Dzidzis']{id}").unique[Long]),
+        null
+      )
+      println(s"\nResult check:")
+      tresql"|contact_db:notes[contact_id = (contact[name = 'Dzidzis']{id})]".toList
+    }
+
+    assertResult(Nil) {
+      ORT.delete("@contact_db:contact", Query("|contact_db:contact[name = 'Dzidzis']{id}").unique[Long])
+      println(s"\nResult check:")
+      tresql"|contact_db:contact[name = 'Dzidzis']".toList
+    }
   }
 
   override def compilerMacro(implicit resources: Resources) = {
@@ -1118,7 +1392,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         case (x, y) => (x.head.concat, y.head.inc)
       })
 
-      assertResult((java.sql.Date.valueOf("1980-12-17"), java.sql.Date.valueOf("1983-01-12"),
+      assertResult((java.sql.Date.valueOf("1980-12-17"), java.sql.Date.valueOf("2021-05-05"),
         850.00, 5000.00))(
           tresql"emp{min(hiredate) minh, max(hiredate) maxh, min(sal) mins, max(sal) maxs}".map { r =>
             import r._
@@ -1222,6 +1496,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     }
     assertResult(java.sql.Timestamp.valueOf("2009-02-22 00:00:00.0"))(
       tresql"""date_add ( sql("date '2008-11-22'"), sql("interval 3 month"))""")
+
+    assertResult(6000)(tresql"1000 + (emp[ename = 'KING']{sal})")
 
     assertResult("ACCOUNTING")(tresql"macro_interpolator_test4(dept, dname)".map(_.dname).toList.head)
   }

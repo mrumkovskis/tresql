@@ -17,6 +17,7 @@ trait JDBCMetadata extends Metadata {
 
   def conn: java.sql.Connection
   def defaultSchema: String = null
+  def publicSchemaName = "PUBLIC"
 
   override def table(name: String) = tableOption(name)
     .getOrElse(sys.error(s"Table not found: $name"))
@@ -38,6 +39,8 @@ trait JDBCMetadata extends Metadata {
     while (rs.next) {
       val schema = rs.getString("TABLE_SCHEM")
       val tableName = rs.getString("TABLE_NAME")
+      val qualifiedTableName =
+        s"${if (schema == null || schema.equalsIgnoreCase(publicSchemaName)) "" else schema + "."}$tableName"
       m += Option(schema).getOrElse("<null>") -> tableName
       if (m.size > 1) {
         tableCache remove name
@@ -48,7 +51,7 @@ trait JDBCMetadata extends Metadata {
       }
       val tableType = rs.getString("TABLE_TYPE")
       val remarks = rs.getString("REMARKS")
-      val mdh = Map("name" -> tableName, "comments" -> remarks,
+      val mdh = Map("name" -> qualifiedTableName, "comments" -> remarks,
         "cols" -> cols(dmd.getColumns(null, schema, tableName, null)),
         "key" -> key(dmd.getPrimaryKeys(null, schema, tableName)),
         "refs" -> refs(dmd.getImportedKeys(null, schema, tableName)))
@@ -148,7 +151,10 @@ trait JDBCMetadata extends Metadata {
     var trfs: ListBuffer[ListBuffer[(String, String)]] = null
     var crfs: ListBuffer[(String, String)] = null
     while (rs.next) {
-      val pkTable = rs.getString("PKTABLE_NAME");
+      val pkSchema = rs.getString("PKTABLE_SCHEM")
+      val pkTable =
+        (if (pkSchema == null || pkSchema.equalsIgnoreCase(publicSchemaName)) "" else pkSchema + ".") +
+          rs.getString("PKTABLE_NAME");
       val fkColName = rs.getString("FKCOLUMN_NAME");
       val pkColName = rs.getString("PKCOLUMN_NAME");
       val keySeq = rs.getShort("KEY_SEQ");

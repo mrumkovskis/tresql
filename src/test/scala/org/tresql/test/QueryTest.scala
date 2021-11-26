@@ -1,7 +1,7 @@
 package org.tresql.test
 
 import org.scalatest.{BeforeAndAfterAll, FunSuite}
-import java.sql.{Connection, DriverManager, ResultSet}
+import java.sql.{Connection, DriverManager}
 
 import org.tresql._
 import org.tresql.metadata.JDBCMetadata
@@ -12,16 +12,8 @@ import sys._
 
 /** To run from console {{{org.scalatest.run(new test.QueryTest)}}} */
 class QueryTest extends FunSuite with BeforeAndAfterAll {
-  val executeCompilerMacroDependantTests =
-    !scala.util.Properties.versionNumberString.startsWith("2.10") &&
-    !scala.util.Properties.versionNumberString.startsWith("2.11")
 
-  val compilerMacroDependantTests =
-    if (executeCompilerMacroDependantTests)
-      Class.forName("org.tresql.test.CompilerMacroDependantTests").getDeclaredConstructor().newInstance()
-        .asInstanceOf[CompilerMacroDependantTestsApi]
-    else
-      null
+  val compilerMacroDependantTests = new CompilerMacroDependantTests()
 
   val hsqlDialect: CoreTypes.Dialect = dialects.HSQLDialect orElse dialects.VariableNameDialect orElse {
     case c: QueryBuilder#CastExpr => c.exp.sql
@@ -32,8 +24,8 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
   override def beforeAll = {
     //initialize environment
     Class.forName("org.hsqldb.jdbc.JDBCDriver")
-    val conn = DriverManager.getConnection("jdbc:hsqldb:mem:.")
-    tresqlResources = new Resources {}
+    val conn = DriverManager.getConnection("jdbc:hsqldb:mem:db")
+    val res = new Resources {}
       .withMetadata(JDBCMetadata(conn))
       .withConn(conn)
       .withDialect(hsqlDialect)
@@ -41,9 +33,26 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       .withMacros(Macros)
       .withCache(new SimpleCache(-1))
       .withLogger((msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg))
-    //create test db script
-    new scala.io.BufferedSource(getClass.getResourceAsStream("/db.sql")).mkString.split("//").foreach {
-      sql => val st = conn.createStatement; tresqlResources.log("Creating database:\n" + sql); st.execute(sql); st.close
+
+    val conn1 = DriverManager.getConnection("jdbc:hsqldb:mem:db1")
+    val res1 = new Resources {}
+      .withMetadata(JDBCMetadata(conn1))
+      .withConn(conn1)
+      .withDialect(hsqlDialect orElse {
+        case f: QueryBuilder#FunExpr if f.name == "current_time" && f.params.isEmpty => "current_time"
+      })
+      .withIdExpr(_ => "nextval('seq1')")
+      .withMacros(Macros)
+      .withLogger((msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg))
+
+    tresqlResources = res.withExtraResources(Map("emp_db" -> res, "contact_db" -> res1))
+
+    List(("/db.sql", conn), ("/db1.sql", conn1)) foreach { case (db, c) =>
+      //create test db script
+      tresqlResources.log(s"Creating database from file ($db)")
+      new scala.io.BufferedSource(getClass.getResourceAsStream(db)).mkString.split("//").foreach {
+        sql => val st = c.createStatement; tresqlResources.log(sql); st.execute(sql); st.close
+      }
     }
     //set resources for console
     ConsoleResources.resources = tresqlResources
@@ -92,11 +101,11 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     })
   }
 
-  if (executeCompilerMacroDependantTests) test("API") {
+  test("API") {
     compilerMacroDependantTests.api(tresqlResources)
   }
 
-  if (executeCompilerMacroDependantTests) test("ORT") {
+  test("ORT") {
     compilerMacroDependantTests.ort(tresqlResources)
   }
 
@@ -119,8 +128,13 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
         override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
       }
     )
+    val child_metadata = new JDBCMetadata with compiling.CompilerFunctionMetadata {
+      override def conn: Connection = testRes.extraResources("contact_db").conn
+      override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
+    }
     println("\n-------------- TEST compiler ----------------\n")
-    val compiler = new QueryCompiler(testRes.metadata, testRes)
+    val compiler = new QueryCompiler(testRes.metadata,
+      Map("contact_db" -> child_metadata, "emp_db" -> testRes.metadata), testRes)
     //set console compiler so it can be used from scala console
     ConsoleResources.compiler = compiler
     import compiling.CompilerException
@@ -176,6 +190,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     //returing compilation
     compile("i(#) { +dummy{dummy} [:v] {*} }, u(#) {=dummy [dummy = :v] {dummy = :v + 1} {*}}, d (#) {dummy - [dummy = :v] {*}} i ++ u ++ d")
     compile("d1(# *) { dummy a[]dummy b { b.dummy col }}, d2(# *) { d1[]dummy? {dummy.dummy d, d1.col c} }, i(# *) { +dummy {dummy} d1[col = 1]{col} {dummy} }, u(# *) { =dummy[dummy = d2.c]d2 {dummy = d2.c} {d2.c u } } u")
+    compile("+contact_db:contact{name}[:n] {name}")
 
     //values from select compilation errors
     intercept[CompilerException](compiler.compile("=dept_addr da [da.addr_nr = a.nr] (address a {a.addr}) a {da.addr = a.addr}"))
@@ -219,11 +234,21 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     //insert with asterisk column
     intercept[CompilerException](compiler.compile("+dummy{*} dummy{dummy kiza}"))
 
+    //hierarchical recursive query
+    intercept[CompilerException](compiler.compile("emp[mgr = null]{empno, ename, |[:1(empno) = kiza]}"))
+
     //two aliases
-    intercept[Exception](compiler.compile("dummy {dummy a b}"))
+    intercept[CompilerException](compiler.compile("dummy {dummy a b}"))
+
+    //child database error
+    intercept[CompilerException](compiler.compile("emp[ename = 'BLAKE']{ ename, |contact_db:[ids = emp.empno]contact{email} email}"))
+    intercept[CompilerException](compiler.compile("emp[ename = 'BLAKE']{ ename, |contact_db:[id = emp.empno]contacts{email} email}"))
+    intercept[CompilerException](compiler.compile("emp[ename = 'BLAKE']{ ename, |contact_db:[id = emp.empno]contact{eml} email}"))
+    intercept[CompilerException](compiler.compile("emp[ename = 'BLAKE']{ ename, |contact:[id = emp.empno]contact{eml} email}"))
+    intercept[CompilerException](compiler.compile("+contact_db:contact{name}[:n] {namez}"))
   }
 
-  if (executeCompilerMacroDependantTests) test("compiler macro") {
+  test("compiler macro") {
     compilerMacroDependantTests.compilerMacro(tresqlResources)
   }
 

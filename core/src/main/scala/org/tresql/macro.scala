@@ -15,8 +15,12 @@ package object macro_ {
 class Macros {
   def sql(b: QueryBuilder, const: QueryBuilder#ConstExpr) = b.SQLExpr(String valueOf const.value, Nil)
 
+  private def containsVar(b: QueryBuilder, v: QueryBuilder#VarExpr) =
+    if (v.members != null && v.members.nonEmpty) b.env.contains(v.name, v.members)
+    else b.env contains v.name
+
   def if_defined(b: QueryBuilder, v: Expr, e: Expr) = v match {
-    case ve: QueryBuilder#VarExpr => if (b.env contains ve.name) e else null
+    case ve: QueryBuilder#VarExpr => if (containsVar(b, ve)) e else null
     case null => null
     case _ => e
   }
@@ -25,7 +29,7 @@ class Macros {
     Option(if_defined(b, v, e1)).getOrElse(e2)
 
   def if_missing(b: QueryBuilder, v: Expr, e: Expr) = v match {
-    case ve: QueryBuilder#VarExpr => if (b.env contains ve.name) null else e
+    case ve: QueryBuilder#VarExpr => if (containsVar(b, ve)) null else e
     case null => e
     case _ => null
   }
@@ -35,7 +39,7 @@ class Macros {
     val vars = e dropRight 1
     val expr = e.last
     if (vars forall {
-      case v: QueryBuilder#VarExpr => b.env contains v.name
+      case v: QueryBuilder#VarExpr => containsVar(b, v)
       case null => false
       case _ => true
     }) expr
@@ -47,7 +51,7 @@ class Macros {
     val vars = e dropRight 1
     val expr = e.last
     if (vars exists {
-      case v: QueryBuilder#VarExpr => b.env contains v.name
+      case v: QueryBuilder#VarExpr => containsVar(b, v)
       case null => false
       case _ => true
     }) expr
@@ -59,7 +63,7 @@ class Macros {
     val vars = e dropRight 1
     val expr = e.last
     if (vars forall {
-      case v: QueryBuilder#VarExpr => !(b.env contains v.name)
+      case v: QueryBuilder#VarExpr => !containsVar(b, v)
       case null => true
       case _ => false
     }) expr
@@ -71,7 +75,7 @@ class Macros {
     val vars = e dropRight 1
     val expr = e.last
     if (vars exists {
-      case v: QueryBuilder#VarExpr => !(b.env contains v.name)
+      case v: QueryBuilder#VarExpr => !containsVar(b, v)
       case null => true
       case _ => false
     }) expr
@@ -87,6 +91,13 @@ class Macros {
   def !~~ (b: QueryBuilder, lop: Expr, rop: Expr) =
     b.BinExpr("!~", b.FunExpr("lower", List(lop)), b.FunExpr("lower", List(rop)))
 
+  /** Allows to specify table name as bind variable value.
+   * Like {{{ []dynamic_table(:table)[deptno = 10]{dname} }}}
+   * */
+  def dynamic_table(b: QueryBuilder, table_name: QueryBuilder#VarExpr): b.Table = {
+    b.Table(b.IdentExpr(List(String.valueOf(table_name()))), null, null, null, false, null)
+  }
+
   def _lookup_edit(b: ORT,
     objName: QueryBuilder#ConstExpr,
     idName: QueryBuilder#ConstExpr,
@@ -97,24 +108,37 @@ class Macros {
         if (idName.value == null) null else String valueOf idName.value,
         insertExpr, updateExpr)
 
-  def _insert_or_update(b: ORT,
-    table: QueryBuilder#ConstExpr, insertExpr: Expr, updateExpr: Expr) =
-    b.InsertOrUpdateExpr(String valueOf table.value, insertExpr, updateExpr)
+  def _update_or_insert(b: ORT,
+                        table: QueryBuilder#ConstExpr, updateExpr: Expr, insertExpr: Expr) =
+    b.UpdateOrInsertExpr(String valueOf table.value, updateExpr, insertExpr)
 
   def _upsert(b: ORT, updateExpr: Expr, insertExpr: Expr) = b.UpsertExpr(updateExpr, insertExpr)
 
-  def _delete_children(b: ORT,
-    objName: QueryBuilder#ConstExpr,
-    tableName: QueryBuilder#ConstExpr,
-    deleteExpr: Expr) = b.DeleteChildrenExpr(
+  def _delete_missing_children(b: ORT,
+                               objName: QueryBuilder#ConstExpr,
+                               key: QueryBuilder#ArrExpr,
+                               keyValExprs: QueryBuilder#ArrExpr,
+                               deleteExpr: Expr) =
+    b.DeleteMissingChildrenExpr(
       String valueOf objName.value,
-      String valueOf tableName.value,
+      key.elements.collect {
+        case b.IdentExpr(n) => n.mkString(".")
+        case x => sys.error(s"Unrecognized key type - $x")
+      },
+      keyValExprs.elements,
       deleteExpr)
 
-  def _not_delete_ids(b: ORT, idsExpr: Expr) = b.NotDeleteIdsExpr(idsExpr)
+  def _not_delete_keys(b: ORT, key: QueryBuilder#ArrExpr, keyValExprs: QueryBuilder#ArrExpr) =
+    b.NotDeleteKeysExpr(key.elements, keyValExprs.elements)
 
   def _id_ref_id(b: ORT,
     idRef: QueryBuilder#IdentExpr,
     id: QueryBuilder#IdentExpr) =
     b.IdRefIdExpr(idRef.name.mkString("."), id.name.mkString("."))
+
+  def _id_by_key(b: ORT, idExpr: Expr) = b.IdByKeyExpr(idExpr)
+
+  def _update_by_key(b: ORT, table: QueryBuilder#IdentExpr, setIdExpr: Expr, updateExpr: Expr) = {
+    b.UpdateByKeyExpr(table.name.mkString("."), setIdExpr, updateExpr)
+  }
 }

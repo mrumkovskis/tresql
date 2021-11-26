@@ -8,7 +8,7 @@ import org.tresql.{ThreadLocalResources => TLR}
 
 trait IdExprFunc { def getIdExpr(table: String): String }
 trait LogMessage { def get: String }
-trait LogParams { def get: Map[String, Any] }
+trait LogParams { def get: Seq[(String, Any)] }
 trait Logger { def log(msg: LogMessage, params: LogParams, topic: LogTopic): Unit }
 object Dialects {
   def ANSISQL = dialects.ANSISQLDialect
@@ -25,15 +25,15 @@ trait ThreadLocalResources extends TLR {
   var javaLogger: Logger = null
 
   def getConnection: Connection = conn
-  def setConnection(c: Connection) { conn = c }
+  def setConnection(c: Connection): Unit = { conn = c }
   def getDialect: Dialect = dialect
-  def setDialect(d: Dialect) { dialect = d }
+  def setDialect(d: Dialect): Unit = { dialect = d }
   def getIdExprFunc: IdExprFunc = new IdExprFunc {
     override def getIdExpr(table: String) = idExpr(table)
   }
-  def setIdExprFunc(f: IdExprFunc) { idExpr = f.getIdExpr }
+  def setIdExprFunc(f: IdExprFunc): Unit = { idExpr = f.getIdExpr }
   def getMetadata: Metadata = metadata
-  def setMetadata(md: Metadata) { metadata = md }
+  def setMetadata(md: Metadata): Unit = { metadata = md }
 
   def getCache = cache
 

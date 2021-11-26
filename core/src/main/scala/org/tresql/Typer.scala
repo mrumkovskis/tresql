@@ -48,17 +48,17 @@ trait Typer { this: QueryBuilder =>
 
   def defs(tables: List[Table]) = {
     def extractDef(table: Table): Def = table match {
-      case Table(IdentExpr(n), a, null | TableJoin(_, _, false, _), _, _) =>
-        val name = n mkString "."
+      case Table(IdentExpr(n), a, null | TableJoin(_, _, false, _), _, _, schema) =>
+        val name = table.tableNameWithSchema
         TableDef(name, if (a == null) name else a)
-      case Table(sel: SelectExpr, a, null | TableJoin(_, _, false, _), _, _) if a != null =>
+      case Table(sel: SelectExpr, a, null | TableJoin(_, _, false, _), _, _, _) if a != null =>
         SelectDef(sel.tables map extractDef filter (_ != null), a)
-      case Table(_: WithExpr, a, null | TableJoin(_, _, false, _), _, _) if a != null =>
+      case Table(_: WithExpr, a, null | TableJoin(_, _, false, _), _, _, _) if a != null =>
         TableDef(a, a)
-      case Table(BracesExpr(sel: SelectExpr), a, null | TableJoin(_, _, false, _), _, _) if a != null =>
+      case Table(BracesExpr(sel: SelectExpr), a, null | TableJoin(_, _, false, _), _, _, _) if a != null =>
         SelectDef(sel.tables map extractDef filter (_ != null), a)
       //extract def from deep braces
-      case t @ Table(b: BracesExpr, _, _, _, _) => extractDef(t.copy(table = b.expr))
+      case t @ Table(b: BracesExpr, _, _, _, _, _) => extractDef(t.copy(table = b.expr))
       case _ => null
     }
     tables map extractDef filter (_ != null)

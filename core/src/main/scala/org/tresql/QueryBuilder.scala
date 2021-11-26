@@ -12,6 +12,7 @@ object QueryBuildCtx {
   trait Ctx
   object ARR_CTX extends Ctx
   object QUERY_CTX extends Ctx
+  object DML_CTX extends Ctx
   object FROM_CTX extends Ctx
   object JOIN_CTX extends Ctx
   object WHERE_CTX extends Ctx
@@ -26,8 +27,6 @@ object QueryBuildCtx {
   object WITH_TABLE_CTX extends Ctx
 }
 
-class ChildSaveException(val tableName: String, cause: Throwable) extends RuntimeException(cause)
-
 trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { this: org.tresql.Query =>
 
   import QueryBuildCtx._
@@ -37,8 +36,34 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   val OPTIONAL_OPERAND_BIN_OPS = Set("++", "+",  "-", "&&", "||", "*", "/", "&", "|")
 
   //bind variables for jdbc prepared statement
-  private val _bindVariables = scala.collection.mutable.ListBuffer[Expr]()
-  private[tresql] lazy val bindVariables = _bindVariables.toList
+  class RegisteredBindVariables {
+    private val bindVariables = scala.collection.mutable.ListBuffer[Expr]()
+    private var bindVars: List[Expr] = null
+    private val registeredBindVars = scala.collection.mutable.Set[Int]()
+    private[tresql] def register(expr: Expr) = {
+      val hash = System.identityHashCode(expr)
+      if (!registeredBindVars.contains(hash)) {
+        bindVariables += expr
+        registeredBindVars += hash
+      }
+    }
+    private[tresql] def variables = {
+      if (bindVars != null) bindVars else {
+        bindVars = bindVariables.toList
+        bindVars
+      }
+    }
+
+    private[tresql] def clear = {
+      bindVariables.clear()
+      bindVars = null
+      registeredBindVars.clear()
+    }
+  }
+  private val bindVars = new RegisteredBindVariables
+  private[tresql] def clearRegisteredBindVariables() = bindVars.clear
+  private[tresql] def registeredBindVariables = bindVars.variables
+
   //children count. Is increased every time buildWithNew method is called or recursive expr created
   private[tresql] var childrenCount = 0
 
@@ -103,9 +128,9 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   case class VarExpr(name: String, members: List[String], opt: Boolean) extends BaseVarExpr {
     override def apply() = env(name, members)
     override def defaultSQL = {
-      if (!binded) QueryBuilder.this._bindVariables += this
+      QueryBuilder.this.bindVars.register(this)
       val s = if (!env.reusableExpr && (env contains name) && (members == null | members == Nil)) {
-        apply() match {
+        this() match {
           case l: scala.collection.Iterable[_] =>
             if (l.nonEmpty) "?," * (l size) dropRight 1 else {
               //return null for empty collection (not to fail in 'in' operator)
@@ -119,7 +144,6 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           case _ => "?"
         }
       } else "?"
-      binded = true
       s
     }
     def fullName = (name :: members).mkString(".")
@@ -144,7 +168,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   case class IdRefExpr(seqName: String) extends BaseVarExpr {
     override def apply() = getId(seqName).getOrElse(
         error(s"Current id not found for sequence $seqName in environment:\n$env"))
-    private def getId(name: String): Option[Any] = env.refOption(name).orElse {
+    private def getId(name: String): Option[Any] = env.idRefOption(name).orElse {
       env.tableOption(name).flatMap(t=> t.refTable.get(t.key.cols).map(getId))
     }
     override def toString = s":#$seqName = ${getId(seqName).getOrElse("?")}"
@@ -165,9 +189,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   }
 
   class BaseVarExpr extends BaseExpr {
-    private[tresql] var binded = false
     def defaultSQL = {
-      if (!binded) { QueryBuilder.this._bindVariables += this; binded = true }
+      QueryBuilder.this.bindVars.register(this)
       "?"
     }
   }
@@ -313,7 +336,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     private val rowConverter = env.rowConverter(QueryBuilder.this.queryDepth, initChildIdx)
     if (queryDepth >= env.recursiveStackDepth)
       error(s"Recursive execution stack depth $queryDepth exceeded, check for loops in data or increase {{{Resources#recursiveStackDepth}}} setting.")
-    val qBuilder = newInstance(new Env(QueryBuilder.this, env.reusableExpr),
+    val qBuilder = newInstance(new Env(QueryBuilder.this, env.db, env.reusableExpr),
       queryDepth + 1, 0, initChildIdx)
     qBuilder.recursiveQueryExp = recursiveQueryExp
     //TODO pass rowConverter to built SelectExpr!
@@ -325,8 +348,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   case class ArrExpr(elements: List[Expr]) extends BaseExpr {
     override def apply() = {
       val result = elements map {
-        case e: ConstExpr => executeAsSelect(e)
-        case e: VarExpr => executeAsSelect(e)
+        case e: ConstExpr => wrapExprInSelect(e)()
+        case e: VarExpr => wrapExprInSelect(e)()
         case e => e()
       }
       env.rowConverter(queryDepth, childIdx).map { conv =>
@@ -344,7 +367,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     def defaultSQL = "select " + (if (distinct) "distinct " else "") +
       cols.sql +
       (tables match {
-        case List(Table(ConstExpr(Null), _, _, _, _)) => ""
+        case List(Table(ConstExpr(Null), _, _, _, _, _)) => ""
         case _ => " from " + tables.head.sql + join(tables)
       }) +
       //(filter map where).getOrElse("")
@@ -356,7 +379,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     def join(tables: List[Table]): String = {
       //used to find table if alias join is used
       def find(t: Table) = t match {
-        case t @ Table(IdentExpr(n), null, _, _, _) => aliases.getOrElse(n.mkString("."), t)
+        case t @ Table(IdentExpr(n), null, _, _, _, _) => aliases.getOrElse(n.mkString("."), t)
         case t => t
       }
       (tables: @unchecked) match {
@@ -375,24 +398,29 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         "    " * (queryDepth + 1) + _.toString
       }.mkString
   }
-  case class Table(table: Expr, alias: String, join: TableJoin, outerJoin: String, nullable: Boolean)
+  case class Table(table: Expr, alias: String, join: TableJoin, outerJoin: String, nullable: Boolean, schema: String)
   extends PrimitiveExpr {
     def name = table.sql
     def aliasOrName = if (alias != null) alias else name
+    def tableNameWithSchema = table match {
+      case IdentExpr(n) => (if (schema == null) n else schema :: n) mkString "."
+      case x => error(s"Cannot get table name with schema since table expr is no primitive: $x")
+    }
     def sqlJoinCondition(joinTable: Table) = {
       def fkAliasJoin(i: IdentExpr) = (if (i.name.size < 2 && joinTable.alias != null)
         i.copy(name = joinTable.alias :: i.name) else i).sql +
-        " = " + aliasOrName + "." + env.table(joinTable.name).ref(name, List(i.name.last)).refCols.mkString
+        " = " + aliasOrName + "." +
+        env.table(joinTable.tableNameWithSchema).ref(tableNameWithSchema, List(i.name.last)).refCols.mkString
       def defaultJoin(jcols: (key_, key_)) = {
         //may be default join columns had been calculated during table build implicit left outer join calculation
-        val j = if (jcols != null) jcols else env.join(joinTable.name, name)
+        val j = if (jcols != null) jcols else env.join(joinTable.tableNameWithSchema, tableNameWithSchema)
         (j._1.cols zip j._2.cols map { t =>
           joinTable.aliasOrName + "." + t._1 + " = " + aliasOrName + "." + t._2
         }) mkString " and "
       }
       join match {
         //foreign key join shortcut syntax
-        case TableJoin(false, e @ IdentExpr(_), _, _) => fkAliasJoin(e)
+        case TableJoin(false, e: IdentExpr, _, _) => fkAliasJoin(e)
         //product join
         case TableJoin(false, null, _, _) => null //no join condition
         //normal join
@@ -683,7 +711,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       env update params
       apply()
     }
-    override def apply(): Any = executeAsSelect(this)
+    override def apply(): Any = wrapExprInSelect(this)()
     override def close = {
       env.closeStatement
       childUpdates foreach { t => t._1.close }
@@ -700,10 +728,12 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     }
   }
 
-  private def executeAsSelect(expr: Expr) = {
-    SelectExpr(List(Table(ConstExpr(Null), null, null, null, true)),
+  private def wrapExprInSelect(expr: Expr) = {
+    SelectExpr(
+      List(Table(ConstExpr(Null), null, null, null, true, null)),
       null, ColsExpr(List(ColExpr(expr, null, Some(false))), false, false, false),
-      false, null, null, null, null, Map(), None)()
+      false, null, null, null, null, Map(), None
+    )
   }
 
   private def executeChildren: Map[String, Any] = {
@@ -919,7 +949,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       //establish link with ancestors
       val parentJoin =
         if (ctx != QUERY_CTX || !hasParentQuery) None else {
-          def parentChildJoinExpr(table: Table, qname: List[String], refCol: Option[String] = None) = {
+          def parentChildJoinExpr(table: Table, refCol: Option[String] = None) = {
             def exp(childCol: String, parentCol: String) = BinExpr("=",
               IdentExpr(List(table.aliasOrName, childCol)), ResExpr(1, parentCol))
             def exps(cols: List[(String, String)]): Expr = cols match {
@@ -927,32 +957,27 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
               case c :: l => BinExpr("&", exp(c._1, c._2), exps(l))
               case _ => sys.error("Unexpected cols type")
             }
-            joinWithParent(qname mkString ".", refCol).map(t => exps(t._1 zip t._2))
+            joinWithParent(table.tableNameWithSchema, refCol).map(t => exps(t._1 zip t._2))
           }
           tablesAndAliases._1.headOption.flatMap {
             //default join
-            case tb @ Table(x, _, null, _, _) => x match {
-              case IdentExpr(t) => parentChildJoinExpr(tb, t)
-              case _ => error("At the moment default join with parent query cannot be performed on table: " + x)
-            }
-            case tb @ Table(x, _, TableJoin(true, null, _, _), _, _) => x match {
-              case IdentExpr(t) => parentChildJoinExpr(tb, t)
-              case _ => error("At the moment default join with parent query cannot be performed on table: " + x)
-            }
+            case tb @ Table(IdentExpr(t), _, null, _, _, _) =>
+              parentChildJoinExpr(tb)
+            case tb @ Table(IdentExpr(t), _, TableJoin(true, null, _, _), _, _, _) =>
+              parentChildJoinExpr(tb)
             //foreign key join shortcut syntax
-            case tb @ Table(x, _, TableJoin(false, IdentExpr(fk), _, _), _, _) => x match {
-              case IdentExpr(t) => parentChildJoinExpr(tb, t, fk.lastOption)
-              case _ => error("At the moment foreign key shortcut join with parent query cannot be performed on table: " + x)
-            }
+            case tb @ Table(IdentExpr(t), _, TableJoin(false, IdentExpr(fk), _, _), _, _, _) =>
+              parentChildJoinExpr(tb, fk.lastOption)
             //product join, i.e. no join
-            case Table(_, _, TableJoin(false, ArrExpr(Nil) | null, _, _), _, _) => None
+            case Table(_, _, TableJoin(false, ArrExpr(Nil) | null, _, _), _, _, _) => None
             //ancestor join
             //transform ancestor reference: replace IdentExpr referencing parent queries with ResExpr
-            case tb @ Table(_, _, TableJoin(false, e, _, _), _, _) if e != null =>
+            case tb @ Table(_, _, TableJoin(false, e, _, _), _, _, _) if e != null =>
               Some(transform(e, {
                 case ie @ IdentExpr(List(tab, col)) =>
                   joinWithAncestor(tab, col).getOrElse(ie)
               }))
+            case x => error(s"Cannot join with parent, unrecognized table: $x")
           }
         }
       val sel = SelectExpr(tablesAndAliases._1, filter, cols, distinct, group, order, offset, limit,
@@ -973,40 +998,54 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     //build tables, set nullable flag for tables right to default join or foreign key shortcut join,
     //which is used for implicit left outer join, create aliases map
     def buildTables(tables: List[Obj]) = {
-      (tables map buildTable).foldLeft(List[Table]() -> Map[String, Table]()) { (ts, t) =>
-        val nt = ts._1.headOption.map(pt => (pt, t) match {
-          case (Table(IdentExpr(ptn), ptna, _, _, _), Table(IdentExpr(n), _, j, null, false)) =>
-            //get previous table from aliases map if exists
-            val prevTable = ts._2.getOrElse(ptn.mkString("."), pt)
-            j match {
-              //foreign key of shortcut join must come from previous table i.e. ptn
-              case TableJoin(false, IdentExpr(fk), _, _) if fk.size == 1 ||
-                fk.dropRight(1) == (if (ptna == null) ptn else List(ptna)) =>
-                env.colOption(prevTable.name, fk.last).map(col =>
-                  //set current table to nullable if foreign key column or previous table is nullable
-                  if (prevTable.nullable || col.nullable) t.copy(nullable = true) else t).getOrElse(t)
-              //default join
-              case TableJoin(true, _, _, _) =>
-                val dj = env.join(prevTable.name, t.name)
-                if (prevTable.nullable
-                    || dj._2.isInstanceOf[metadata.fk] // (uk, fk) or (fk, fk) then nullable
-                    || dj._1.cols.exists(env.col(prevTable.name, _).nullable))
-                  t.copy(join = t.join.copy(defaultJoinCols = dj), nullable = true)
-                else t.copy(join = t.join.copy(defaultJoinCols = dj))
-              case _ => t
-            }
-          case _ => t
-        }).getOrElse(t)
-        (nt :: ts._1) ->
-         (if (nt.alias != null && !ts._2.contains(nt.alias)) ts._2 + (nt.alias -> nt) else ts._2)
+      (tables map buildTable).foldLeft((List[Table](), Map[String, Table](), Map[String, String]())) {
+        case ((ts, aliases, schemas), t) =>
+          val (tbl_with_sch, new_schemas) = t match {
+            case Table(IdentExpr(n), _, _, _, _, _) =>
+              schemas.get(n mkString ".")
+                .map(sch => (t.copy(schema = sch), schemas))
+                .getOrElse {
+                  (t, if (n.size > 1) schemas + (n.last -> n.dropRight(1).mkString(".")) else schemas)
+                }
+            case _ => (t, schemas)
+          }
+          val nt = ts.headOption.map((_, tbl_with_sch)).map {
+            case (pt @ Table(IdentExpr(ptn), ptna, _, _, _, _), Table(_: IdentExpr, _, j, null, false, _)) =>
+              //get previous table from aliases map if exists
+              val prevTable = aliases.getOrElse(ptn.mkString("."), pt)
+              j match {
+                //foreign key of shortcut join must come from previous table i.e. ptn
+                case TableJoin(false, IdentExpr(fk), _, _) if fk.size == 1 ||
+                  fk.dropRight(1) == (if (ptna == null) ptn else List(ptna)) =>
+                  env.colOption(prevTable.tableNameWithSchema, fk.last).map(col =>
+                    //set current table to nullable if foreign key column or previous table is nullable
+                    if (prevTable.nullable || col.nullable) tbl_with_sch.copy(nullable = true)
+                    else tbl_with_sch).getOrElse(tbl_with_sch)
+                //default join
+                case TableJoin(true, _, _, _) =>
+                  val dj = env.join(prevTable.tableNameWithSchema, tbl_with_sch.tableNameWithSchema)
+                  if (prevTable.nullable
+                      || dj._2.isInstanceOf[metadata.fk] // (uk, fk) or (fk, fk) then nullable
+                      || dj._1.cols.exists(env.col(prevTable.tableNameWithSchema, _).nullable))
+                    tbl_with_sch.copy(join = tbl_with_sch.join.copy(defaultJoinCols = dj), nullable = true)
+                  else tbl_with_sch.copy(join = tbl_with_sch.join.copy(defaultJoinCols = dj))
+                case _ => tbl_with_sch
+              }
+            case _ => tbl_with_sch
+          }.getOrElse(tbl_with_sch)
+
+          ( nt :: ts
+          , if (nt.alias != null && !aliases.contains(nt.alias)) aliases + (nt.alias -> nt) else aliases
+          , new_schemas
+          )
       } match {
-        case (tables: List[Table], aliases: Map[String, Table]) => (tables.reverse, aliases)
+        case (tables: List[Table], aliases: Map[String, Table], _) => (tables.reverse, aliases)
       }
     }
     def buildTable(t: Obj) = Table(buildInternal(t.obj, FROM_CTX), t.alias,
       if (t.join != null) TableJoin(t.join.default, buildInternal(t.join.expr, JOIN_CTX),
         t.join.noJoin, null)
-      else null, t.outerJoin, t.nullable)
+      else null, t.outerJoin, t.nullable, null)
     def buildIdentOrBracesExpr(i: Obj) = i match {
       case Obj(Ident(i), null, _, _, _) => IdentExpr(i)
       case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
@@ -1071,9 +1110,9 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       )
     }
 
-    def buildWithNew(buildFunc: QueryBuilder => Expr) = {
+    def buildWithNew(db: Option[String], buildFunc: QueryBuilder => Expr) = {
       val b = newInstance(
-        new Env(QueryBuilder.this, QueryBuilder.this.env.reusableExpr),
+        new Env(QueryBuilder.this, db, QueryBuilder.this.env.reusableExpr),
         queryDepth + 1, bindIdx, this.childrenCount)
       val ex = buildFunc(b)
       this.separateQueryFlag = true
@@ -1092,22 +1131,25 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case Null => ConstExpr(Null)
         case NullUpdate => ConstExpr(NullUpdate)
         //insert
-        case i @ Insert(t, a, c, v, r) => parseCtx match {
-          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(_.buildInternal(i, QUERY_CTX))
+        case i @ Insert(t, a, c, v, r, db) => parseCtx match {
+          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(db, _.buildInternal(i, DML_CTX))
+          case QUERY_CTX if db.nonEmpty => buildWithNew(db, _.buildInternal(i, DML_CTX))
           case _ => buildInsert(t, a, c, v, r, parseCtx)
         }
         //update
-        case u @ Update(t, a, f, c, v, r) => parseCtx match {
-          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(_.buildInternal(u, QUERY_CTX))
+        case u @ Update(t, a, f, c, v, r, db) => parseCtx match {
+          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(db, _.buildInternal(u, DML_CTX))
+          case QUERY_CTX if db.nonEmpty => buildWithNew(db, _.buildInternal(u, DML_CTX))
           case _ => buildUpdate(t, a, f, c, v, r, parseCtx)
         }
         //delete
-        case d @ Delete(t, a, f, u, r) => parseCtx match {
-          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(_.buildInternal(d, QUERY_CTX))
+        case d @ Delete(t, a, f, u, r, db) => parseCtx match {
+          case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(db, _.buildInternal(d, DML_CTX))
+          case QUERY_CTX if db.nonEmpty => buildWithNew(db, _.buildInternal(d, DML_CTX))
           case _ => buildDelete(t, a, f, u, r, parseCtx)
         }
         //recursive child query
-        case UnOp("|", join: Arr) =>
+        case ChildQuery(join: Arr, db) =>
           if (recursiveQueryExp != null) {
             val e = RecursiveExpr({
               val t = recursiveQueryExp.tables
@@ -1124,22 +1166,22 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
             e
         } else null
         //child query
-        case UnOp("|", oper) => buildWithNew(_.buildInternal(oper, QUERY_CTX))
+        case ChildQuery(q, db) => buildWithNew(db, _.buildInternal(q, QUERY_CTX))
         case t: Obj => parseCtx match {
           case ARR_CTX =>
-            buildWithNew(_.buildInternal(t, QUERY_CTX)) //may have other elements in array
+            buildWithNew(None, _.buildInternal(t, QUERY_CTX)) //may have other elements in array
           //table in from clause of top level query or in any other subquery
           case QUERY_CTX | FROM_CTX | WITH_CTX | WITH_TABLE_CTX => buildSelectFromObj(t, parseCtx)
           case _ => buildIdentOrBracesExpr(t)
         }
         case q: parsing.Query => parseCtx match {
-          case ARR_CTX => buildWithNew(_.buildInternal(q, QUERY_CTX)) //may have other elements in array
+          case ARR_CTX => buildWithNew(None, _.buildInternal(q, QUERY_CTX)) //may have other elements in array
           case _ =>
             if (recursiveQueryExp == null) recursiveQueryExp = q //set for potential use in RecursiveExpr
             buildSelect(q, parseCtx)
         }
         case wq @ With(tables, query) => parseCtx match {
-          case ARR_CTX => buildWithNew(_.buildInternal(wq, QUERY_CTX)) //may have other elements in array
+          case ARR_CTX => buildWithNew(None, _.buildInternal(wq, QUERY_CTX)) //may have other elements in array
           case _ =>
             val withTables = tables.map(buildInternal(_, parseCtx).asInstanceOf[WithTableExpr])
             buildInternal(query, if (parseCtx == QUERY_CTX) QUERY_CTX else WITH_CTX) match {
@@ -1157,7 +1199,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           val o = buildInternal(oper, parseCtx)
           if (o == null) null else UnExpr(op, o)
         case c @ Cast(exp, typ) => parseCtx match {
-          case ARR_CTX => buildWithNew(_.buildInternal(c, QUERY_CTX))
+          case ARR_CTX => buildWithNew(None, _.buildInternal(c, QUERY_CTX))
           case ctx => buildInternal(exp, ctx) match {
             case null => null
             case e => CastExpr(e, typ)
@@ -1165,7 +1207,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         }
         case e @ BinOp(op, lop, rop) => parseCtx match {
           case ARR_CTX if op != "=" /*do not create new query builder for assignment or equals operation*/=>
-            buildWithNew(_.buildInternal(e, QUERY_CTX))
+            buildWithNew(None, _.buildInternal(e, QUERY_CTX))
           case ctx =>
             val l = buildInternal(lop, ctx)
             val r = buildInternal(rop, ctx)
@@ -1176,7 +1218,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         }
         case t: TerOp => buildInternal(t.content, parseCtx)
         case in @ In(lop, rop, not) => parseCtx match {
-          case ARR_CTX => buildWithNew(_.buildInternal(in, QUERY_CTX))
+          case ARR_CTX => buildWithNew(None, _.buildInternal(in, QUERY_CTX))
           case _ =>
             val l = buildInternal(lop, parseCtx)
             if (l == null) null else {
@@ -1185,7 +1227,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
             }
         }
         case fun @ Fun(n, pl: List[_], d, o, f) => parseCtx match  {
-          case ARR_CTX => buildWithNew(_.buildInternal(fun, FUN_CTX))
+          case ARR_CTX => buildWithNew(None, _.buildInternal(fun, FUN_CTX))
           case _ =>
             val pars = pl map { buildInternal(_, FUN_CTX) }
             val order = o.map(buildInternal(_, FUN_CTX))
@@ -1198,7 +1240,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => IdentAllExpr(i.ident)
         case a: Arr => parseCtx match {
-          case ARR_CTX => buildWithNew(_.buildArray(a))
+          case ARR_CTX => buildWithNew(None, _.buildArray(a))
           case QUERY_CTX => buildArray(a)
           case ctx => buildArray(a, ctx)
         }

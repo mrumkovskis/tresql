@@ -29,6 +29,7 @@ trait DMLExp extends Exp {
   def filter: Arr
   def vals: Exp
   def returning: Option[Cols]
+  def db: Option[String]
 }
 
 case class Const(value: Any) extends Exp {
@@ -66,6 +67,9 @@ case class Cast(exp: Exp, typ: String) extends Exp {
 }
 case class UnOp(operation: String, operand: Exp) extends Exp {
   def tresql = operation + operand.tresql
+}
+case class ChildQuery(query: Exp, db: Option[String]) extends Exp {
+  def tresql = "|" + db.map(_ + ":").mkString + query.tresql
 }
 case class Fun(
                 name: String,
@@ -162,21 +166,24 @@ case class With(tables: List[WithTable], query: Exp) extends Exp {
 case class Values(values: List[Arr]) extends Exp {
   def tresql = values map (_.tresql) mkString ", "
 }
-case class Insert(table: Ident, alias: String, cols: List[Col], vals: Exp, returning: Option[Cols])
+case class Insert(table: Ident, alias: String, cols: List[Col], vals: Exp, returning: Option[Cols],
+                  db: Option[String])
   extends DMLExp {
   override def filter = null
-  def tresql = "+" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
+  def tresql = "+" + db.map(_ + ":").mkString + table.tresql +
+    Option(alias).map(" " + _).getOrElse("") +
     (if (cols.nonEmpty) cols.map(_.tresql).mkString("{", ",", "}") else "") +
     (if (vals != null) any2tresql(vals) else "") +
     returning.map(_.tresql).getOrElse("")
 }
-case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp, returning: Option[Cols])
+case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp,
+                  returning: Option[Cols], db: Option[String])
   extends DMLExp {
   def tresql = {
     val filterTresql = if (filter != null) filter.tresql else ""
     val colsTresql = if (cols.nonEmpty) cols.map(_.tresql).mkString("{", ",", "}") else ""
     val valsTresql = if (vals != null) any2tresql(vals) else ""
-    "=" + table.tresql + Option(alias).map(" " + _).getOrElse("") +
+    "=" + db.map(_ + ":").mkString + table.tresql + Option(alias).map(" " + _).getOrElse("") +
       (vals match {
         case vfs: ValuesFromSelect => valsTresql + filterTresql + colsTresql
         case _ => filterTresql + colsTresql + valsTresql
@@ -189,13 +196,15 @@ case class ValuesFromSelect(select: Query) extends Exp {
     if (select.tables.size > 1) select.copy(tables = select.tables.tail).tresql
     else ""
 }
-case class Delete(table: Ident, alias: String, filter: Arr, using: Exp, returning: Option[Cols])
+case class Delete(table: Ident, alias: String, filter: Arr, using: Exp, returning: Option[Cols],
+                  db: Option[String])
   extends DMLExp {
   override def cols = null
   override def vals = using
   def tresql = {
     val tbl =
-      table.tresql + Option(alias).map(" " + _).getOrElse("") + (if (using == null) "" else using.tresql)
+      db.map(_ + ":").mkString + table.tresql + Option(alias).map(" " + _).getOrElse("") +
+        (if (using == null) "" else using.tresql)
 
     "-" + tbl + filter.tresql + returning.map(_.tresql).getOrElse("")
   }
@@ -285,8 +294,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     case ((i: String) :: (m: List[String @unchecked])) ~ o =>
       Variable(i, m, o != None)
   } named "variable"
-  def id: MemParser[Id] = "#" ~> ident ^^ Id named "id"
-  def idref: MemParser[IdRef] = ":#" ~> ident ^^ IdRef named "id-ref"
+  def id: MemParser[Id] = "#" ~> qualifiedIdent ^^ (id => Id(id.ident.mkString("."))) named "id"
+  def idref: MemParser[IdRef] = ":#" ~> qualifiedIdent ^^ (id => IdRef(id.ident.mkString("."))) named "id-ref"
   def result: MemParser[Res] = (":" ~> wholeNumber <~ "(") ~ (wholeNumber | stringLiteral |
     qualifiedIdent) <~ ")" ^^ {
       case r ~ c => Res(r.toInt,
@@ -438,6 +447,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
         case o@UnOp(_, op) =>
           val x = extractAlias(op)
           (x._1, o.copy(operand = x._2))
+        case o@ChildQuery(op, _) =>
+          val x = extractAlias(op)
+          (x._1, o.copy(query = x._2))
         case o@Obj(_, alias, _, null, _) if alias != null => (alias, o.copy(alias = null))
         case o => (null, o)
       }
@@ -525,39 +537,45 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       case name ~ distinct ~ (cols: List[String]) ~ exp => WithTable(name, cols, distinct.isEmpty, exp)
       case name ~ distinct ~ All ~ exp => WithTable(name, Nil, distinct.isEmpty, exp)
     } named "with-table"
-  def withQuery: MemParser[With] = opt(join) ~ rep1sep(withTable, ",") ~ opt(expr) ^? ({
-    case optJoin ~ (wts @ List(wt)) ~ None =>
-      val q = Obj(Ident(List(wt.name)), null, null, null, false) // select * from <wt.name>
+  def withQuery: MemParser[With] = opt(join) ~ rep1sep(withTable, ",") ~ opt(expr) ^^ {
+    case optJoin ~ wts ~ None =>
+      val q = Obj(Ident(List(wts.last.name)), null, null, null) // select * from <last cursor>
       With(wts, optJoin.map(transformHeadJoin(_)(q)).getOrElse(q))
     case optJoin ~ wts ~ Some(q) => With(wts, optJoin.map(transformHeadJoin(_)(q)).getOrElse(q))
-  }, {
-    case _ ~ wts ~ _ => s"If query is omitted only one with cursor definition is allowed, instead found: ${
-      wts.map(_.tresql).mkString(",")}"
-  }) named "with-query"
+  } named "with-query"
 
   def values: MemParser[Values] = rep1sep(array, ",") ^^ Values named "values"
   def valuesSelect: MemParser[Exp] = (withQuery | queryWithCols) ~ rep(
     ("++" | "+" | "-" | "&&") ~ (withQuery | queryWithCols)) ^^ binOp named "values-select"
 
   def insert: MemParser[Insert] =
-    (("+" ~> qualifiedIdent ~ opt(ident) ~ opt(columns) ~ opt(valuesSelect | repsep(array, ","))) |
+    (("+" ~> opt(ident <~ ":") ~ qualifiedIdent ~ opt(ident) ~ opt(columns) ~ opt(valuesSelect | repsep(array, ","))) |
     ((qualifiedIdent ~ opt(ident) ~ opt(columns) <~ "+") ~ values)) ~ opt(columns) ^^ {
-      case t ~ a ~ c ~ (v: Option[_]) ~ maybeCols =>
+      case (db: Option[String]) ~ (t: Ident) ~ a ~ c ~ (v: Option[_]) ~ maybeCols =>
         Insert(
           t, a.orNull, c.map(_.cols).getOrElse(Nil),
           v.map { case v: List[Arr] @unchecked => Values(v) case s: Exp @unchecked => s } orNull,
-          maybeCols
+          maybeCols, db
         )
-      case t ~ a ~ c ~ (v: Values @unchecked) ~ maybeCols =>
-        Insert(t, a.orNull, c.map(_.cols).getOrElse(Nil), v, maybeCols)
+      case (t: Ident) ~ a ~ c ~ (v: Values @unchecked) ~ maybeCols =>
+        Insert(t, a.orNull, c.map(_.cols).getOrElse(Nil), v, maybeCols, None)
       case x => sys.error(s"Unexpected insert parse result: $x")
     } named "insert"
 
   //UPDATE parsers
   // update table set col1 = val1, col2 = val2 where ...
   private def simpleUpdate: MemParser[Update] =
-    (("=" ~> qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) ~ opt(array)) |
+    (("=" ~> opt(ident <~ ":") ~ qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) ~ opt(array)) |
       ((qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) <~ "=") ~ array)) ~ opt(columns) ^^ {
+        case (db: Option[String]) ~ (t: Ident) ~ (a: Option[String] @unchecked) ~ f ~ c ~ v ~ maybeCols =>
+          Update(
+            t, a orNull, f orNull, c.map(_.cols).getOrElse(Nil), v match {
+              case a: Arr => a
+              case Some(vals: Exp @unchecked) => vals
+              case None => null
+            },
+            maybeCols, db
+          )
         case (t: Ident) ~ (a: Option[String] @unchecked) ~ f ~ c ~ v ~ maybeCols =>
           Update(
             t, a orNull, f orNull, c.map(_.cols).getOrElse(Nil), v match {
@@ -565,15 +583,15 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
               case Some(vals: Exp @unchecked) => vals
               case None => null
             },
-            maybeCols
+            maybeCols, None
           )
      } named "simple-update"
   //update table set (col1, col2) = (select col1, col2 from table 2 ...) where ...
   private def updateColsSelect: MemParser[Update] =
-    "=" ~> qualifiedIdent ~ opt(ident) ~ opt(filter) ~ columns ~ valuesSelect ~ opt(columns) ^^
+    "=" ~> opt(ident <~ ":") ~ qualifiedIdent ~ opt(ident) ~ opt(filter) ~ columns ~ valuesSelect ~ opt(columns) ^^
       {
-        case (t: Ident) ~ (a: Option[String] @unchecked) ~ f ~ c ~ v ~ maybeCols =>
-          Update(t, a orNull, f orNull, c.cols, v, maybeCols)
+        case (db: Option[String]) ~ (t: Ident) ~ (a: Option[String] @unchecked) ~ f ~ c ~ v ~ maybeCols =>
+          Update(t, a orNull, f orNull, c.cols, v, maybeCols, db)
       } ^?
       ({
         case u if u.cols.nonEmpty && u.cols.forall {
@@ -584,8 +602,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
         case x => s"Columns must not contain assignement operation. Instead encountered: ${x.tresql}"
       }) named "update-cols-select"
   //update table set col1 = sel_col1, col2 = sel_col2 from (select sel_col1, sel_col2 from table2 ...) values_table where ....
-  private def updateFromSelect: MemParser[Update] = "=" ~> objs ~ opt(filter) ~ columns ~ opt(columns) ^? ({
-    case (tables @ Obj(updateTable @ Ident(_), alias, _, _, _) :: _) ~ f ~ c ~ maybeCols =>
+  private def updateFromSelect: MemParser[Update] =
+    "=" ~> opt(ident <~ ":") ~ objs ~ opt(filter) ~ columns ~ opt(columns) ^? ({
+    case (db: Option[String]) ~  (tables @ Obj(updateTable @ Ident(_), alias, _, _, _) :: _) ~ f ~ c ~ maybeCols =>
       Update(
         updateTable,
         alias,
@@ -594,7 +613,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
         ValuesFromSelect(
           Query(tables = tables, Filters(Nil), null, null, null, null, null)
         ),
-        maybeCols
+        maybeCols, db
       )
   }, {
     case (objs: List[Obj] @unchecked) ~ _ ~ _ ~ _ => "Update tables clause must as the first element have " +
@@ -615,32 +634,40 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   def update: MemParser[Update] = (updateColsSelect | updateFromSelect | simpleUpdate) named "update"
   //END UPDATE parsers
 
-  def delete: MemParser[Delete] = (("-" ~> objs ~ filter) |
-    ((objs <~ "-") ~ filter)) ~ opt(columns) ^? ({
-      case (tables @ Obj(delTable @ Ident(_), alias, _, _, _) :: using) ~ f ~ maybeCols =>
-        val vfs =
-          if (using.nonEmpty)
-            ValuesFromSelect(
-              Query(
-                tables = tables,
-                Filters(Nil),
-                null, null, null, null, null
-              )
+  def delete: MemParser[Delete] = {
+    def valsFromSel(tables: Any) = tables match {
+      case t: List[Obj] =>
+        if (t.tail.nonEmpty)
+          ValuesFromSelect(
+            Query(
+              tables = t,
+              Filters(Nil),
+              null, null, null, null, null
             )
-          else null
-        Delete(delTable, alias, f, vfs, maybeCols)
+          )
+        else null
+    }
+    (("-" ~> opt(ident <~ ":") ~ objs ~ filter) | ((objs <~ "-") ~ filter)) ~ opt(columns) ^? ({
+      case (db: Option[String]) ~ (tables @ Obj(delTable: Ident, alias, _, _, _) :: _) ~ (f: Arr) ~
+        (maybeCols: Option[Cols]) =>
+        Delete(delTable, alias, f, valsFromSel(tables), maybeCols, db)
+      case (tables @ Obj(delTable: Ident, alias, _, _, _) :: _) ~ (f: Arr) ~ (maybeCols: Option[Cols]) =>
+        Delete(delTable, alias, f, valsFromSel(tables), maybeCols, None)
     }, {
       case (objs: List[Obj] @unchecked) ~ _ ~ _ => "Delete tables clause must as the first element have " +
         "qualifiedIdent with optional alias as a table to be deleted from" +
         s"Instead encountered: ${objs.map(_.tresql).mkString}"
     }) named "delete"
+  }
   //operation parsers
   //delete must be before alternative since it can start with - sign and
   //so it is not translated into minus expression!
-  def unaryExpr: MemParser[Exp] = delete | (opt("-" | "!" | "|" | "~") ~ operand) ^^ {
-      case a ~ (b: Exp) => a.map(UnOp(_, b)).getOrElse(b)
-      case x: Exp => x
-    } named "unary-exp"
+  def unaryExpr: MemParser[Exp] = delete | (opt(("|" ~ opt(ident <~ ":")) | "-" | "!" | "~") ~ operand) ^^ {
+    case None ~ e => e
+    case Some(o: String) ~ (e: Exp) => UnOp(o, e)
+    case Some(_ ~ (db: Option[String]@unchecked)) ~ (q: Exp) => ChildQuery(q, db)
+    case del: Exp => del
+  } named "unary-exp"
   private def cast = "::" ~> (ident | stringLiteral)
   def castExpr: MemParser[Exp] = unaryExpr ~ opt(cast) ^^ {
     case e ~ Some(t) => Cast(e, t)
