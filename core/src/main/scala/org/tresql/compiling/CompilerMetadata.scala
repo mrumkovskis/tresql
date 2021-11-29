@@ -2,7 +2,7 @@ package org.tresql.compiling
 
 import java.sql._
 
-import org.tresql.{Metadata, Resources}
+import org.tresql.Metadata
 import org.tresql.metadata.JDBCMetadata
 
 trait CompilerMetadata {
