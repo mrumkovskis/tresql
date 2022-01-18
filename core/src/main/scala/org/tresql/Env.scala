@@ -219,11 +219,15 @@ final case class ResourcesTemplate(override val conn: java.sql.Connection,
                                    override val recursiveStackDepth: Int,
                                    override val params: Map[String, Any],
                                    override val extraResources: Map[String, Resources],
+                                   override val logger: Logging#TresqlLogger,
+                                   override val cache: Cache,
+                                   override val bindVarLogFilter: Logging#BindVarLogFilter,
                                    macros: Any = null) extends Resources {
 
   private [tresql] def this(res: Resources) = this(
     res.conn, res.metadata, res.dialect, res.idExpr, res.queryTimeout,
-    res.fetchSize, res.maxResultSize, res.recursiveStackDepth, res.params, res.extraResources)
+    res.fetchSize, res.maxResultSize, res.recursiveStackDepth, res.params, res.extraResources,
+    res.logger, res.cache, res.bindVarLogFilter)
 
   private val macroResources = new MacroResourcesImpl(macros)
 
@@ -240,8 +244,15 @@ final case class ResourcesTemplate(override val conn: java.sql.Connection,
 /** Implementation of [[Resources]] with thread local instance based on template */
 trait ThreadLocalResources extends Resources {
 
-  /** Creates resources template with default values from {{{Resources}}}. Subclasses can override this method. */
-  def resourcesTemplate: ResourcesTemplate = new ResourcesTemplate(new Resources {}) // empty resources
+  /** Creates resources template with default values from {{{Resources}}}.
+   * {{{cache, logger, bindVarLogFilter}}} are taken from this object instance
+   * Subclasses can override this method.
+   * */
+  def resourcesTemplate: ResourcesTemplate = new ResourcesTemplate(new Resources {
+    override def cache: Cache = ThreadLocalResources.this.cache
+    override def logger: TresqlLogger = ThreadLocalResources.this.logger
+    override def bindVarLogFilter: BindVarLogFilter = ThreadLocalResources.this.bindVarLogFilter
+  })
 
   private val _threadResources = new ThreadLocal[Resources] {
     override def initialValue(): Resources = resourcesTemplate
