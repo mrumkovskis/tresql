@@ -52,6 +52,8 @@ class Macros extends org.tresql.Macros {
   def macro_interpolator_str_test(implicit p: parsing.QueryParsers,
                                e1: Exp,
                                e2: Exp) = macro_"($e1 || $e2)"
+  def macro_interpolator_noargs_test(implicit p: parsing.QueryParsers) =
+    macro_"'no_args'"
 }
 
 object Macros extends Macros
