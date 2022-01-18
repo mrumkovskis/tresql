@@ -418,7 +418,12 @@ class MacroResourcesImpl(macros: Any) extends MacroResources {
         m.invoke(invocationTarget, _args: _*).asInstanceOf[T]
       }
     } catch {
-      case e: Exception => throw new RuntimeException(s"Error invoking macro function - $name (${e.getMessage})", e)
+      case e: Exception =>
+        def msg(e: Throwable): List[String] = {
+          if (e == null) Nil
+          else s"""${e.getClass}${if (e.getMessage != null) ": " + e.getMessage else ""}""" :: msg(e.getCause)
+        }
+        throw new RuntimeException(s"Error invoking macro function - $name (${msg(e).mkString(" ")})", e)
     }
   }
 }
