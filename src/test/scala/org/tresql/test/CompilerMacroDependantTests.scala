@@ -1386,7 +1386,6 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       println(s"\nResult check:")
       tresql"dept[dname = 'Cafe']{dname, loc}".map(d => d.dname -> d.loc).toList
     }
-
   }
 
   override def compilerMacro(implicit resources: Resources) = {
