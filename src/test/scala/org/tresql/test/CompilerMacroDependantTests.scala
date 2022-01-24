@@ -1209,10 +1209,16 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     obj = Map("number" -> "000", "balance" -> 1000)
     assertResult(List(("000",1000.00, null))) {
       import OrtMetadata._
-      ORT.save(View(List(SaveTo("accounts.account", Set(),
-        List("number"))), SaveOptions(true, true, true), None, null,
-        List(Property("number", TresqlValue(":number")), Property("balance", TresqlValue(":balance"))), null),
-        obj)
+      ORT.save(
+        View(
+          List(SaveTo("accounts.account", Set(), List("number"))),
+          SaveOptions(true, true, true), None, null,
+          List(
+            Property("number", TresqlValue(":number"),true, true),
+            Property("balance", TresqlValue(":balance"), true, true)
+          ),
+          null
+        ), obj)
       println(s"\nResult check:")
       tresql"accounts.account{number, balance, empno}#(number)".map(a => (a.number, a.balance, a.empno)).toList
     }
@@ -1223,8 +1229,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       ORT.save(View(List(SaveTo("accounts.account", Set(),
         List("number"))), SaveOptions(true, true, true), None, null,
         List(
-          Property("number", TresqlValue(":number")),
-          Property("balance", TresqlValue("accounts.account[number = :number]{ balance + :balance}"))
+          Property("number", TresqlValue(":number"), true, true),
+          Property("balance", TresqlValue("accounts.account[number = :number]{ balance + :balance}"), true, true)
         ), null),
         obj)
       println(s"\nResult check:")
@@ -1260,7 +1266,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       ORT.save(View(List(SaveTo("accounts.account", Set(),
         List("number"))), SaveOptions(true, true, true), None, null,
-        List(Property("number", KeyValue(":number", ":new_number"))), null),
+        List(Property("number", KeyValue(":number", ":new_number"), true, true)), null),
         obj)
       println(s"\nResult check:")
       tresql"accounts.account[number = '000000']{number}".map(_.number).toList
@@ -1274,8 +1280,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           List(SaveTo("accounts.account", Set(), List("number"))),
           SaveOptions(true, true, true), None, null,
           List(
-            Property("number", KeyValue(":number", ":new_number")),
-            Property("balance", TresqlValue(":balance"))
+            Property("number", KeyValue(":number", ":new_number"), true, true),
+            Property("balance", TresqlValue(":balance"), true, true)
           ), null),
         obj
       )
@@ -1291,8 +1297,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           List(SaveTo("emp", Set(), List("ename", "deptno"))),
           SaveOptions(true, true, true), None, null,
           List(
-            Property("ename", KeyValue(":ename", ":new_ename")),
-            Property("deptno", KeyValue("(dept[dname = :dept]{deptno})", "(dept[dname = :new_dept]{deptno})"))
+            Property("ename", KeyValue(":ename", ":new_ename"), true, true),
+            Property("deptno", KeyValue("(dept[dname = :dept]{deptno})", "(dept[dname = :new_dept]{deptno})"), true, true)
           ), null),
         obj
       )
@@ -1355,6 +1361,32 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       println(s"\nResult check:")
       tresql"|contact_db:contact[name = 'Dzidzis']".toList
     }
+
+    println("------ ORT forInsert, forUpdate flags --------")
+
+    obj = Map("dname" -> "Cafe", "loc" -> "Purvciems")
+    var view = {
+      import OrtMetadata._
+      View(
+        List(SaveTo("dept", Set(), Nil)),
+        SaveOptions(true, true, true), None, null,
+        List(
+          Property("dname", TresqlValue(":dname"), true, false),
+          Property("loc", TresqlValue(":loc"), false, true)
+        ), null)
+    }
+    assertResult(List(("Cafe", null))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Cafe']{dname, loc}".map(d => d.dname -> d.loc).toList
+    }
+    obj = Map("deptno" -> tresql"dept[dname = 'Cafe']".unique[Long], "dname" -> "Cafez", "loc" -> "Purvciems")
+    assertResult(List(("Cafe", "Purvciems"))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Cafe']{dname, loc}".map(d => d.dname -> d.loc).toList
+    }
+
   }
 
   override def compilerMacro(implicit resources: Resources) = {
