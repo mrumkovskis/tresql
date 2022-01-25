@@ -1,6 +1,8 @@
 package org.tresql.test
 
+import org.tresql.OrtMetadata.SaveTo
 import org.tresql._
+
 import java.sql.{Date, SQLException}
 
 class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMacroDependantTestsApi  {
@@ -1385,6 +1387,18 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       ORT.save(view, obj)
       println(s"\nResult check:")
       tresql"dept[dname = 'Cafe']{dname, loc}".map(d => d.dname -> d.loc).toList
+    }
+    view = view.copy(saveTo = List(SaveTo("dept", Set(), key = List("dname"))))
+    obj = Map("dname" -> "Pizza", "loc" -> "Imanta")
+    assertResult(List(("Pizza", null))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Pizza']{dname, loc}".map(d => d.dname -> d.loc).toList
+    }
+    assertResult(List(("Pizza", "Imanta"))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Pizza']{dname, loc}".map(d => d.dname -> d.loc).toList
     }
   }
 
