@@ -81,8 +81,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         r.d.hiredate.toString))
     assertResult("1982-12-09 00:00:00.0")(Query("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) =>
         r.t.hiredate.toString))
-    assertResult("KING PRESIDENT")(Query("emp[7839] {ename, job}").foldLeft("")((x, r) =>
-        r.ename + " " + r.job))
+    assertResult("KING PRESIDENT")(Query("emp[7839] {ename, job}").foldLeft("")((_, r) =>
+        r.s.ename + " " + r.s.job))
     //typed tests
     assertResult(("MILLER", BigDecimal(2300.35)))(Query.head[(String, BigDecimal)]("emp[hiredate = '1982-01-23']{ename, sal}"))
     assertResult(List(("CLARK", "ACCOUNTING", 2450.00), ("KING", "ACCOUNTING", 5000.00),
@@ -102,7 +102,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult((10, 10)) {
       val r = tresql"dept[deptno = 10]{deptno}"
       r.hasNext
-      r.next
+      r.next()
       val (id1, id2) = (r.typed[Int]("deptno"), r.typed("deptno")(scala.reflect.ManifestFactory.Int))
       r.close
       (id1, id2)
@@ -354,7 +354,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         assertResult(("select * from emp where name = ?/*1*/", List("1" -> "SCOTT"))) {
           ex.sql -> ex.bindVars
         }
-      case x => throw x
+      case x: Throwable => throw x
     }
 
     //if_defined macro test for nested bind vars structure
@@ -1366,7 +1366,6 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
 
     println("------ ORT forInsert, forUpdate flags --------")
 
-    obj = Map("dname" -> "Cafe", "loc" -> "Purvciems")
     var view = {
       import OrtMetadata._
       View(
@@ -1377,6 +1376,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           Property("loc", TresqlValue(":loc"), false, true)
         ), null)
     }
+    obj = Map("dname" -> "Cafe", "loc" -> "Purvciems")
     assertResult(List(("Cafe", null))) {
       ORT.save(view, obj)
       println(s"\nResult check:")
