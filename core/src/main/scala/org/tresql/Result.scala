@@ -432,8 +432,8 @@ trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
   */
   override def hashCode = compatibilityObj.hashCode
   override def equals(obj: Any) = obj match {
-    case dml: DMLResult => compatibilityObj.equals(dml.compatibilityObj)
-    case x => compatibilityObj.equals(x)
+    case dml: DMLResult => compatibilityObj == dml.compatibilityObj
+    case x => compatibilityObj == x
   }
   def compatibilityObj: Any = {
     val x = (count, children, id) match {

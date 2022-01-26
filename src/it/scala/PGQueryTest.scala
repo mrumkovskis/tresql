@@ -34,7 +34,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
 
   var tresqlResources: Resources = null
 
-  override def beforeAll(configMap: ConfigMap) {
+  override def beforeAll(configMap: ConfigMap) = {
     //initialize environment
     Class.forName("org.postgresql.Driver")
     val jdbcPort = configMap.getOptional[String]("port").map(":" + _).getOrElse("")
@@ -100,7 +100,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     ITConsoleResources.resources = tresqlResources
   }
 
-  override def afterAll(configMap: ConfigMap) {
+  override def afterAll(configMap: ConfigMap) = {
     if (configMap.contains("docker") &&
       !configMap.get("remove").filter(_ == "false").isDefined) {
       val DockerCmd = "docker stop tresql-it-tests"
@@ -260,7 +260,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
   def testTresqls(resource: String, testFunction: (String, String, String, Int) => Unit) = {
     var nr = 0
     new scala.io.BufferedSource(getClass.getResourceAsStream(resource))("UTF-8")
-      .getLines.foreach {
+      .getLines().foreach {
         case l if (l.trim.startsWith("//")) =>
         case l if (l.trim.length > 0) =>
           val (st, params, patternRes) = l.split("-->") match {

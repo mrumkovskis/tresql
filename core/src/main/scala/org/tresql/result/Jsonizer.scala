@@ -16,7 +16,7 @@ object Jsonizer {
   class ResultTypeException(message: String)
     extends RuntimeException(message: String)
 
-  def jsonize(result: Any, buf: Writer, rType: ResultType = Objects) {
+  def jsonize(result: Any, buf: Writer, rType: ResultType = Objects): Unit = {
     result match {
       case r: Result[RowLike] =>
         var done = false
@@ -36,8 +36,8 @@ object Jsonizer {
             }
           }
         }
-      case a: Seq[_] => jsonizeArray(a, buf, rType)
-      case a: Array[_] => jsonizeArray(a, buf, rType)
+      case a: Seq[_] => jsonizeArray(a.iterator, buf, rType)
+      case a: Array[_] => jsonizeArray(a.iterator, buf, rType)
       case p: Product => jsonizeArray(p productIterator, buf, rType)
       case m: Map[String @unchecked, _] => jsonizeMap(m, buf, rType)
       case b: Boolean => buf append b.toString
@@ -66,7 +66,7 @@ object Jsonizer {
     w.toString
   }
 
-  def jsonizeResult(result: Result[RowLike], buf: Writer, rType: ResultType = Objects) {
+  def jsonizeResult(result: Result[RowLike], buf: Writer, rType: ResultType = Objects) = {
     if (rType != Object) buf append '['
     var i = 0
     result foreach { r =>
@@ -100,7 +100,7 @@ object Jsonizer {
     if (rType != Object) buf append ']'
   }
 
-  def jsonizeMap(map: Map[String, Any], buf: Writer, rType: ResultType = Objects) {
+  def jsonizeMap(map: Map[String, Any], buf: Writer, rType: ResultType = Objects) = {
     buf append (if (rType == Arrays) '[' else '{')
     var i = 0
     map.foreach(t=> {
@@ -118,7 +118,7 @@ object Jsonizer {
     buf append (if (rType == Arrays) ']' else '}')
   }
 
-  def jsonizeArray(result: TraversableOnce[_], buf: Writer, rType: ResultType = Objects) {
+  def jsonizeArray(result: Iterator[_], buf: Writer, rType: ResultType = Objects) = {
     buf append '['
     var i = 0
     result foreach { r: Any =>

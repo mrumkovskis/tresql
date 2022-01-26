@@ -19,9 +19,9 @@ trait MemParsers extends scala.util.parsing.combinator.Parsers {
     new Parser[T] {
       def apply(in: Input) = {
         try {
-          intermediateResults.get.clear
+          intermediateResults.get.clear()
           phrp(in)
-        } finally intermediateResults.get.clear
+        } finally intermediateResults.get.clear()
       }
     }
   }

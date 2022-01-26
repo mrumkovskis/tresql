@@ -43,7 +43,7 @@ trait Typed { this: RowLike =>
 trait TypedResult[+R <: RowLike] { this: Result[R] =>
   def head[T](implicit converter: CoreTypes.Converter[T], m: Manifest[T]): T = try hasNext match {
     case true =>
-      next
+      next()
       this.asInstanceOf[RowLike].typed[T]
     case false => throw new NoSuchElementException("No rows in result")
   } finally close
@@ -56,7 +56,7 @@ trait TypedResult[+R <: RowLike] { this: Result[R] =>
   def unique[T](implicit converter: CoreTypes.Converter[T],
     m: Manifest[T]): T = try hasNext match {
     case true =>
-      next
+      next()
       val v = this.asInstanceOf[RowLike].typed[T]
       if (hasNext) error("More than one row for unique result") else v
     case false => error("No rows in result")
@@ -65,7 +65,7 @@ trait TypedResult[+R <: RowLike] { this: Result[R] =>
   def uniqueOption[T](implicit converter: CoreTypes.Converter[T],
     m: Manifest[T]): Option[T] = try hasNext match {
     case true =>
-      next
+      next()
       val v = this.asInstanceOf[RowLike].typed[T]
       if (hasNext) error("More than one row for unique result") else Some(v)
     case false => None

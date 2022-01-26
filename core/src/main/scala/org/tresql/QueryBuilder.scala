@@ -516,7 +516,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       } else res(idx)
     }
     override def defaultSQL = expr.sql
-    override def toString = expr + ":" + resType
+    override def toString() = expr + ":" + resType
   }
   case class IdentExpr(name: List[String]) extends PrimitiveExpr {
     def defaultSQL = name.mkString(".")
@@ -744,7 +744,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     childUpdates.map {
       case (ex, n) if !env.contains(n) => (n, exec(n, ex, None))
       case (ex, n) => (n, env(n) match {
-        case m: Map[String @unchecked, Any] => exec(n, ex, Some(m))
+        case m: Map[String @unchecked, _] => exec(n, ex, Some(m))
         case t: Iterable[Map[String, _] @unchecked] => t.map(m => exec(n, ex, Some(m)))
         case a: Array[Map[String, _] @unchecked] => (a map {m => exec(n, ex, Some(m)) }).toList
         case _ => exec(n, ex, None)
@@ -990,6 +990,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case x :: _ if x != FUN_CTX => false
         case Nil => false
         case FUN_CTX :: tail => isWhere(tail)
+        case _ => false
       }
       if ((ctx == WHERE_CTX || isWhere(ctxStack)) && q.filter.filters != Nil && sel.filter == null) null else sel
     }
@@ -1052,7 +1053,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       case o => error("unsupported expression at this place: " + o)
     }
     def buildFilter(pkTable: Table, filterList: List[Arr]): Expr = {
-      def transformExpr(e: Expr) = e match {
+      def transformExpr: PartialFunction[Expr, Expr] = {
         case ArrExpr(List(b @ ConstExpr(true | false))) => b
         case a @ ArrExpr(List(_: ConstExpr | _: VarExpr | _: ResExpr)) => BinExpr("=",
           IdentExpr(List(pkTable.aliasOrName, env.tableOption(pkTable.name)
@@ -1276,7 +1277,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
 
   //for debugging purposes
   def printBuilderChain: Unit = {
-    println(s"$this#$envId")
+    println(s"$this#${envId()}")
     env.provider.foreach {
       case b: QueryBuilder => b.printBuilderChain
       case _ =>
@@ -1292,7 +1293,7 @@ sealed abstract class Expr extends (() => Any) {
   def builder: QueryBuilder
   def sql: String = if (builder.env.dialect != null) builder.env.dialect(this) else defaultSQL
 
-  def apply: Any = ???
+  def apply(): Any = ???
   def apply(params: Map[String, Any]): Any = ???
   def close: Unit = ???
 

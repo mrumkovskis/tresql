@@ -11,7 +11,7 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
   case class Car(nr: Int, brand: String) extends Poha
   case class Tyre(carNr: Int, brand: String) extends Poha
 
-  override def api(implicit resources: Resources) {
+  override def api(implicit resources: Resources) = {
     println("\n---------------- Test API ----------------------\n")
     assertResult(10)(Query.head[Int]("dept{deptno}#(deptno)"))
     assertResult(10)(Query.unique[Int]("dept[10]{deptno}#(deptno)"))
@@ -94,7 +94,7 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
     assertResult((10, 10)) {
       val r = tresql"dept[deptno = 10]{deptno}"
       r.hasNext
-      r.next
+      r.next()
       val (id1, id2) = (r.typed[Int]("deptno"), r.typed("deptno")(scala.reflect.ManifestFactory.Int))
       r.close
       (id1, id2)
@@ -228,7 +228,7 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
       tresql"dept{deptno, dname}#(1)@(2)".list[Int, String])
   }
 
-  override def ort(implicit resources: Resources) {
+  override def ort(implicit resources: Resources) = {
     println("\n----------- ORT tests ------------\n")
     println("\n--- INSERT ---\n")
 
@@ -853,7 +853,7 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
 //    assertResult(List("DEVOP"))(tresql"dept[10079]{dname}".map(_.dname).toList)
     assertResult(List("ATTORNEY"))(tresql"dept[10042]{dname}".map(_.dname).toList)
   }
-  override def compilerMacro(implicit resources: Resources) {
+  override def compilerMacro(implicit resources: Resources) = {
     println("\n-------------- TEST compiler macro ----------------\n")
 
     assertResult(("ACCOUNTING",

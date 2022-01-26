@@ -15,7 +15,7 @@ case class JSONMetadata(val metadata:Map[String, Table]) extends Metadata {
 }
 
 object JSONMetadata {
-  def main(args: Array[String]) {
+  def main(args: Array[String]) = {
     args.length match {
       case 0 => println("usage: <meta data file>")
       case _ => println(fromFile(args(0)))

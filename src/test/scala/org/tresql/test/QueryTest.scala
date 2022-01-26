@@ -21,7 +21,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
 
   var tresqlResources: Resources = null
 
-  override def beforeAll = {
+  override def beforeAll() = {
     //initialize environment
     Class.forName("org.hsqldb.jdbc.JDBCDriver")
     val conn = DriverManager.getConnection("jdbc:hsqldb:mem:db")
@@ -297,7 +297,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
   def testTresqls(resource: String, testFunction: (String, String, String, Int) => Unit) = {
     var nr = 0
     new scala.io.BufferedSource(getClass.getResourceAsStream(resource))("UTF-8")
-      .getLines.foreach {
+      .getLines().foreach {
         case l if l.trim.startsWith("//") =>
         case l if l.trim.length > 0 =>
           val (st, params, patternRes) = l.split("-->") match {

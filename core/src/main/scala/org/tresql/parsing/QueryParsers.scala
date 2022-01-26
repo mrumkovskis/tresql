@@ -534,7 +534,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
 
   def withTable: MemParser[WithTable] =
     ((ident <~ "(") ~ opt("#") ~ (ALL | repsep(ident, ",")) <~ (")" ~ "{")) ~ (expr <~ "}") ^^ {
-      case name ~ distinct ~ (cols: List[String]) ~ exp => WithTable(name, cols, distinct.isEmpty, exp)
+      case name ~ distinct ~ (cols: List[String@unchecked]) ~ exp => WithTable(name, cols, distinct.isEmpty, exp)
       case name ~ distinct ~ All ~ exp => WithTable(name, Nil, distinct.isEmpty, exp)
     } named "with-table"
   def withQuery: MemParser[With] = opt(join) ~ rep1sep(withTable, ",") ~ opt(expr) ^^ {
@@ -551,7 +551,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   def insert: MemParser[Insert] =
     (("+" ~> opt(ident <~ ":") ~ qualifiedIdent ~ opt(ident) ~ opt(columns) ~ opt(valuesSelect | repsep(array, ","))) |
     ((qualifiedIdent ~ opt(ident) ~ opt(columns) <~ "+") ~ values)) ~ opt(columns) ^^ {
-      case (db: Option[String]) ~ (t: Ident) ~ a ~ c ~ (v: Option[_]) ~ maybeCols =>
+      case (db: Option[String@unchecked]) ~ (t: Ident) ~ a ~ c ~ (v: Option[_]) ~ maybeCols =>
         Insert(
           t, a.orNull, c.map(_.cols).getOrElse(Nil),
           v.map { case v: List[Arr] @unchecked => Values(v) case s: Exp @unchecked => s } orNull,
@@ -567,7 +567,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   private def simpleUpdate: MemParser[Update] =
     (("=" ~> opt(ident <~ ":") ~ qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) ~ opt(array)) |
       ((qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) <~ "=") ~ array)) ~ opt(columns) ^^ {
-        case (db: Option[String]) ~ (t: Ident) ~ (a: Option[String] @unchecked) ~ f ~ c ~ v ~ maybeCols =>
+        case (db: Option[String@unchecked]) ~ (t: Ident) ~ (a: Option[String@unchecked] ) ~ f ~ c ~ v ~ maybeCols =>
           Update(
             t, a orNull, f orNull, c.map(_.cols).getOrElse(Nil), v match {
               case a: Arr => a
@@ -636,7 +636,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
 
   def delete: MemParser[Delete] = {
     def valsFromSel(tables: Any) = tables match {
-      case t: List[Obj] =>
+      case t: List[Obj@unchecked] =>
         if (t.tail.nonEmpty)
           ValuesFromSelect(
             Query(
@@ -648,13 +648,13 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
         else null
     }
     (("-" ~> opt(ident <~ ":") ~ objs ~ filter) | ((objs <~ "-") ~ filter)) ~ opt(columns) ^? ({
-      case (db: Option[String]) ~ (tables @ Obj(delTable: Ident, alias, _, _, _) :: _) ~ (f: Arr) ~
+      case (db: Option[String@unchecked]) ~ (tables @ Obj(delTable: Ident, alias, _, _, _) :: _) ~ (f: Arr) ~
         (maybeCols: Option[Cols]) =>
         Delete(delTable, alias, f, valsFromSel(tables), maybeCols, db)
       case (tables @ Obj(delTable: Ident, alias, _, _, _) :: _) ~ (f: Arr) ~ (maybeCols: Option[Cols]) =>
         Delete(delTable, alias, f, valsFromSel(tables), maybeCols, None)
     }, {
-      case (objs: List[Obj] @unchecked) ~ _ ~ _ => "Delete tables clause must as the first element have " +
+      case (objs: List[Obj@unchecked]) ~ _ ~ _ => "Delete tables clause must as the first element have " +
         "qualifiedIdent with optional alias as a table to be deleted from" +
         s"Instead encountered: ${objs.map(_.tresql).mkString}"
     }) named "delete"

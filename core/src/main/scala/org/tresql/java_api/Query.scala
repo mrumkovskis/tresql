@@ -40,8 +40,8 @@ object Query {
 
     // iterator
     override def hasNext = x.hasNext
-    override def next = { x.next; this }
-    override def remove { throw new UnsupportedOperationException }
+    override def next = { x.next(); this }
+    override def remove: Unit = { throw new UnsupportedOperationException }
   }
 
   private trait RowWrapper extends Row { this: RowDelegate =>
