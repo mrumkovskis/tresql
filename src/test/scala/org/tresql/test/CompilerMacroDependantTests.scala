@@ -1216,8 +1216,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           List(SaveTo("accounts.account", Set(), List("number"))),
           SaveOptions(true, true, true), None, null,
           List(
-            Property("number", TresqlValue(":number"),true, true),
-            Property("balance", TresqlValue(":balance"), true, true)
+            Property("number", TresqlValue(":number",true, true)),
+            Property("balance", TresqlValue(":balance", true, true))
           ),
           null
         ), obj)
@@ -1231,8 +1231,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       ORT.save(View(List(SaveTo("accounts.account", Set(),
         List("number"))), SaveOptions(true, true, true), None, null,
         List(
-          Property("number", TresqlValue(":number"), true, true),
-          Property("balance", TresqlValue("accounts.account[number = :number]{ balance + :balance}"), true, true)
+          Property("number", TresqlValue(":number", true, true)),
+          Property("balance", TresqlValue("accounts.account[number = :number]{ balance + :balance}", true, true))
         ), null),
         obj)
       println(s"\nResult check:")
@@ -1268,7 +1268,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       ORT.save(View(List(SaveTo("accounts.account", Set(),
         List("number"))), SaveOptions(true, true, true), None, null,
-        List(Property("number", KeyValue(":number", ":new_number"), true, true)), null),
+        List(Property("number", KeyValue(":number", ":new_number"))), null),
         obj)
       println(s"\nResult check:")
       tresql"accounts.account[number = '000000']{number}".map(_.number).toList
@@ -1282,8 +1282,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           List(SaveTo("accounts.account", Set(), List("number"))),
           SaveOptions(true, true, true), None, null,
           List(
-            Property("number", KeyValue(":number", ":new_number"), true, true),
-            Property("balance", TresqlValue(":balance"), true, true)
+            Property("number", KeyValue(":number", ":new_number")),
+            Property("balance", TresqlValue(":balance", true, true))
           ), null),
         obj
       )
@@ -1299,8 +1299,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           List(SaveTo("emp", Set(), List("ename", "deptno"))),
           SaveOptions(true, true, true), None, null,
           List(
-            Property("ename", KeyValue(":ename", ":new_ename"), true, true),
-            Property("deptno", KeyValue("(dept[dname = :dept]{deptno})", "(dept[dname = :new_dept]{deptno})"), true, true)
+            Property("ename", KeyValue(":ename", ":new_ename")),
+            Property("deptno", KeyValue("(dept[dname = :dept]{deptno})", "(dept[dname = :new_dept]{deptno})"))
           ), null),
         obj
       )
@@ -1372,8 +1372,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         List(SaveTo("dept", Set(), Nil)),
         SaveOptions(true, true, true), None, null,
         List(
-          Property("dname", TresqlValue(":dname"), true, false),
-          Property("loc", TresqlValue(":loc"), false, true)
+          Property("dname", TresqlValue(":dname", true, false)),
+          Property("loc", TresqlValue(":loc", false, true))
         ), null)
     }
     obj = Map("dname" -> "Cafe", "loc" -> "Purvciems")

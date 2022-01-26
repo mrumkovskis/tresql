@@ -379,16 +379,16 @@ trait ORT extends Query {
       OrtMetadata.Property(col, TresqlValue(
         parser.transformer {
           case Ident(List("_")) => Variable(prop, Nil, opt = false)
-        } (parser.parseExp(if (exp startsWith "(" ) exp else s"($exp)")).tresql
-      ), true, true)
+        } (parser.parseExp(if (exp startsWith "(" ) exp else s"($exp)")).tresql, true, true
+      ))
     }
     val struct = tresql_structure(saveableMap)
     val props =
       struct.map {
         case (prop, value) => value match {
-          case m: Map[String, Any]@unchecked => OrtMetadata.Property(prop, ViewValue(ortMetadata(prop, m)), true, true)
+          case m: Map[String, Any]@unchecked => OrtMetadata.Property(prop, ViewValue(ortMetadata(prop, m)))
           case v: String if prop.indexOf("->") != -1 => resolver_tresql(prop, v)
-          case _ => OrtMetadata.Property(prop, TresqlValue(s":$prop"), true, true)
+          case _ => OrtMetadata.Property(prop, TresqlValue(s":$prop", true, true))
         }
       }.toList
     parseTables(tables).copy(properties = props)
@@ -617,7 +617,7 @@ trait ORT extends Query {
         tresqlMetadata(view.db).tableOption(name).filter(_.key.cols.size == 1).map {
           table =>
             val pk = table.key.cols.headOption.filter(pk => view.properties
-              .exists { case OrtMetadata.Property(col, _, _, _) => pk == col case _ => false }).orNull
+              .exists { case OrtMetadata.Property(col, _) => pk == col case _ => false }).orNull
             val insert = save_tresql(null, view, Nil, insert_tresql)
             val update = save_tresql(null, view, Nil, update_tresql)
             List(
@@ -627,17 +627,17 @@ trait ORT extends Query {
         }.orNull
       val (refsAndPk, key) = refsPkAndKey
       ctx.view.properties.flatMap {
-        case OrtMetadata.Property(col, _, _, _) if refsAndPk.exists(_._1 == col) => Nil
-        case OrtMetadata.Property(col, KeyValue(_, valueTresql), forInsert, forUpdate) =>
-          List(ColVal(table.colOption(col).map(_.name).orNull, valueTresql, forInsert, forUpdate))
-        case OrtMetadata.Property(col, TresqlValue(tresql), forInsert, forUpdate) =>
+        case OrtMetadata.Property(col, _) if refsAndPk.exists(_._1 == col) => Nil
+        case OrtMetadata.Property(col, KeyValue(_, valueTresql)) =>
+          List(ColVal(table.colOption(col).map(_.name).orNull, valueTresql, true, true))
+        case OrtMetadata.Property(col, TresqlValue(tresql, forInsert, forUpdate)) =>
           List(ColVal(table.colOption(col).map(_.name).orNull, tresql, forInsert, forUpdate))
-        case OrtMetadata.Property(prop, ViewValue(v), forInsert, forUpdate) =>
+        case OrtMetadata.Property(prop, ViewValue(v)) =>
           if (children_save_tresql != null) {
             table.refTable.get(List(prop)).map(lookupTable => // FIXME perhaps take lookup table from metadata since 'prop' may not match fk name
               lookup_tresql(v.copy(saveTo = List(SaveTo(lookupTable, Set(), Nil))), prop, lookupTable)).getOrElse {
               val chtresql = children_save_tresql(prop, v, ParentRef(table.name, ctx.refToParent) :: ctx.parents)
-              List(ColVal(Option(chtresql).map(_ + s" '$prop'").orNull, null, forInsert, forUpdate))
+              List(ColVal(Option(chtresql).map(_ + s" '$prop'").orNull, null, true, true))
             }
           } else Nil
       }.partition(_.isInstanceOf[String]) match {
@@ -691,8 +691,8 @@ trait ORT extends Query {
           .getOrElse(KeyCol(k) ->
             ctx.view.properties
               .collectFirst {
-                case OrtMetadata.Property(p, TresqlValue(v), _, _) if p == k => v
-                case OrtMetadata.Property(p, KeyValue(whereTresql, _), _, _) if p == k => whereTresql
+                case OrtMetadata.Property(p, TresqlValue(v, _, _)) if p == k => v
+                case OrtMetadata.Property(p, KeyValue(whereTresql, _)) if p == k => whereTresql
               }
               .getOrElse(s":$k")))
       )
@@ -719,8 +719,10 @@ object OrtMetadata {
 
   /** Column value
    * @param tresql        tresql statement
+   * @param forInsert     Column is to be included into insert statement if true
+   * @param forUpdate     Column is to be included into update statement if true
    * */
-  case class TresqlValue(tresql: String) extends OrtValue
+  case class TresqlValue(tresql: String, forInsert: Boolean, forUpdate: Boolean) extends OrtValue
 
   /** Column value
    * @param view          child view
@@ -736,10 +738,8 @@ object OrtMetadata {
   /** Saveable column.
    * @param col           Goes to dml column clause or child tresql alias
    * @param value         Goes to dml values clause or column clause as child tresql
-   * @param forInsert     Column is to be included into insert statement if true
-   * @param forUpdate     Column is to be included into update statement if true
    * */
-  case class Property(col: String, value: OrtValue, forInsert: Boolean, forUpdate: Boolean)
+  case class Property(col: String, value: OrtValue)
 
   /** Saveable view.
    * @param saveTo        destination tables. If first table has {{{refs}}} parameter
