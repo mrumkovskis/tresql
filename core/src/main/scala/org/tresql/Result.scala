@@ -302,6 +302,16 @@ class DynamicSelectResult private[tresql] (
 
   override def head: DynamicRow =
     headOption.getOrElse(throw new NoSuchElementException("No rows in result"))
+
+  override def uniqueOption: Option[DynamicRow] = try if (hasNext) {
+    next()
+    val v = DynamicRowImpl(values) // detach row from db cursor since hasNext may close it
+    if (hasNext) error("More than one row for unique result") else Some(v)
+  } else None
+  finally close
+
+  override def unique: DynamicRow =
+    uniqueOption.getOrElse(throw new NoSuchElementException("No rows in result"))
 }
 
 object ArrayResult {
