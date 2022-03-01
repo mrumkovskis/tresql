@@ -150,7 +150,6 @@ create schema accounts
     create table transaction(id integer not null,
         originator_id integer not null, beneficiary_id integer not null,
         amount decimal(7, 2) not null, tr_date date not null)
-    CREATE SEQUENCE seq START WITH 10000;
 //
 alter table accounts.account add primary key (id)
 //
