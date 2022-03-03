@@ -71,10 +71,10 @@ trait Metadata extends metadata.TypeMapper {
 package metadata {
   case class Table(name: String, cols: List[Col[_]], key: Key,
       rfs: Map[String, List[Ref]]) {
-    private val colMap: Map[String, Col[_]] = cols map (c => c.name -> c) toMap
+    private val colMap: Map[String, Col[_]] = cols map (c => c.name.toLowerCase -> c) toMap
     val refTable: Map[List[String], String] = rfs.flatMap(t => t._2.map(_.cols -> t._1))
-    def col(name: String) = colMap(name)
-    def colOption(name: String) = colMap.get(name)
+    def col(name: String) = colMap(name.toLowerCase)
+    def colOption(name: String) = colMap.get(name.toLowerCase)
     def refs(table: String) = rfs.getOrElse(table, Nil)
     def ref(table: String, ref: List[String]) = rfs(table)
     .find(_.cols == ref)
