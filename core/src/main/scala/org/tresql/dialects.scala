@@ -119,7 +119,7 @@ package object dialects {
   }
 
   val PostgresqlRawDialect: CoreTypes.Dialect = {
-    case c: QueryBuilder#ColExpr if c.alias != null => c.col.sql + " as " + c.alias
+    case c: QueryBuilder#ColExpr if c.alias != null => Option(c.col).map(_.sql).getOrElse("null") + " as " + c.alias
     case c: QueryBuilder#CastExpr => c.exp.sql + "::" + (c.typ match {
       case "string" => "text"
       case "long" => "bigint"
