@@ -1,6 +1,6 @@
 package org.tresql
 
-import org.tresql.OrtMetadata.{Filters, KeyValue, SaveOptions, SaveTo, TresqlValue, View, ViewValue}
+import org.tresql.OrtMetadata.{Filters, KeyValue, LookupViewValue, SaveOptions, SaveTo, TresqlValue, View, ViewValue}
 
 import scala.util.matching.Regex
 import sys._
@@ -610,11 +610,9 @@ trait ORT extends Query {
       children: List[String],
       upsert: Boolean
     ) = {
-      def lookup_tresql(
-                         view: View,
-                         refColName: String,
-                         name: String)(implicit resources: Resources) =
-        tresqlMetadata(view.db).tableOption(name).filter(_.key.cols.size == 1).map {
+      def lookup_tresql(view: View,
+                        refColName: String)(implicit resources: Resources) = {
+        view.saveTo.headOption.map(_.table).flatMap(tresqlMetadata(view.db).tableOption).map {
           table =>
             val pk = table.key.cols.headOption.filter(pk => view.properties
               .exists { case OrtMetadata.Property(col, _) => pk == col case _ => false }).orNull
@@ -625,6 +623,8 @@ trait ORT extends Query {
                 if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
               ColVal(refColName, s":$refColName", true, true))
         }.orNull
+      }
+
       val (refsAndPk, key) = refsPkAndKey
       ctx.view.properties.flatMap {
         case OrtMetadata.Property(col, _) if refsAndPk.exists(_._1 == col) => Nil
@@ -635,10 +635,14 @@ trait ORT extends Query {
         case OrtMetadata.Property(prop, ViewValue(v)) =>
           if (children_save_tresql != null) {
             table.refTable.get(List(prop)).map(lookupTable => // FIXME perhaps take lookup table from metadata since 'prop' may not match fk name
-              lookup_tresql(v.copy(saveTo = List(SaveTo(lookupTable, Set(), Nil))), prop, lookupTable)).getOrElse {
+              lookup_tresql(v.copy(saveTo = List(SaveTo(lookupTable, Set(), Nil))), prop)).getOrElse {
               val chtresql = children_save_tresql(prop, v, ParentRef(table.name, ctx.refToParent) :: ctx.parents)
               List(ColVal(Option(chtresql).map(_ + s" '$prop'").orNull, null, true, true))
             }
+          } else Nil
+        case OrtMetadata.Property(refColName, LookupViewValue(v)) =>
+          if (children_save_tresql != null) {
+            lookup_tresql(v, refColName)
           } else Nil
       }.partition(_.isInstanceOf[String]) match {
         case (lookups: List[String@unchecked], colsVals: List[ColVal@unchecked]) =>
@@ -728,6 +732,11 @@ object OrtMetadata {
    * @param view          child view
    * */
   case class ViewValue(view: View) extends OrtValue
+
+  /** Column value
+   * @param view          child view
+   * */
+  case class LookupViewValue(view: View) extends OrtValue
 
   /** Column value
    * @param whereTresql   key find tresql
