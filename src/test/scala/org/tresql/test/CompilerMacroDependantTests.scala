@@ -1264,6 +1264,26 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
             .map(t => (t.amount, t.tr_date.toString, t.from_acc)).toList)).toList).toList
     }
 
+    obj = Map("dname" -> "ADVERTISING", "emp[empno][+=]" -> List(
+      Map("empno" -> null, "ename" -> "Ibo", "job" -> "clerk"),
+      Map("empno" -> 10036, "ename" -> "Andy", "job" -> "clerk"),
+    ))
+    assertResult(List(List(("Andy", "clerk"), ("Ibo", "clerk")))) {
+      ORT.update("dept[dname]", obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'ADVERTISING'] { |emp {ename, job}#(ename) e}".map(_.e.map(e => e.ename -> e.job).toList).toList
+    }
+
+    obj = Map("dname" -> "ADVERTISING", "emp[deptno, empno][+-=]" -> List(
+      Map("empno" -> null, "ename" -> "Solomon", "job" -> "operator"),
+      Map("empno" -> 10036, "ename" -> "Andy", "job" -> "operator"),
+    ))
+    assertResult(List(List(("Andy", "operator"), ("Solomon", "operator")))) {
+      ORT.update("dept[dname]", obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'ADVERTISING'] { |emp {ename, job}#(ename) e}".map(_.e.map(e => e.ename -> e.job).toList).toList
+    }
+
     println("------ KEY UPDATE test ------")
 
     obj = Map("number" -> "000", "new_number" -> "000000")

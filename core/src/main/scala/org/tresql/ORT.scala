@@ -687,7 +687,7 @@ trait ORT extends Query {
             .filterNot(tbl.name == ctx.table.name && _ == ctx.refToParent)
             .map(_ -> idRefId(headTable.table, tbl.name)))
       (refsPk,
-        key.map(k => refsPk.collectFirst { case (n, v) if n == k => RefKeyCol(n) -> v }
+        key.map(k => refsPk.collectFirst { case (n, v) if n == k && k != pk => RefKeyCol(n) -> v }
           .getOrElse(KeyCol(k) ->
             ctx.view.properties
               .collectFirst {
