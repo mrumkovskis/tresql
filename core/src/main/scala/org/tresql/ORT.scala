@@ -611,7 +611,8 @@ trait ORT extends Query {
       upsert: Boolean
     ) = {
       def lookup_tresql(view: View,
-                        refColName: String)(implicit resources: Resources) = {
+                        refColName: String,
+                        propName: String)(implicit resources: Resources) = {
         view.saveTo.headOption.map(_.table).flatMap(tresqlMetadata(view.db).tableOption).map {
           table =>
             val pk = table.key.cols.headOption.filter(pk => view.properties
@@ -619,7 +620,7 @@ trait ORT extends Query {
             val insert = save_tresql(null, view, Nil, insert_tresql)
             val update = save_tresql(null, view, Nil, update_tresql)
             List(
-              s":$refColName = |_lookup_edit('$refColName', ${
+              s":$refColName = |_lookup_edit('$propName', ${
                 if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
               ColVal(refColName, s":$refColName", true, true))
         }.orNull
@@ -635,14 +636,14 @@ trait ORT extends Query {
         case OrtMetadata.Property(prop, ViewValue(v)) =>
           if (children_save_tresql != null) {
             table.refTable.get(List(prop)).map(lookupTable => // FIXME perhaps take lookup table from metadata since 'prop' may not match fk name
-              lookup_tresql(v.copy(saveTo = List(SaveTo(lookupTable, Set(), Nil))), prop)).getOrElse {
+              lookup_tresql(v.copy(saveTo = List(SaveTo(lookupTable, Set(), Nil))), prop, prop)).getOrElse {
               val chtresql = children_save_tresql(prop, v, ParentRef(table.name, ctx.refToParent) :: ctx.parents)
               List(ColVal(Option(chtresql).map(_ + s" '$prop'").orNull, null, true, true))
             }
           } else Nil
-        case OrtMetadata.Property(refColName, LookupViewValue(v)) =>
+        case OrtMetadata.Property(refColName, LookupViewValue(propName, v)) =>
           if (children_save_tresql != null) {
-            lookup_tresql(v, refColName)
+            lookup_tresql(v, refColName, propName)
           } else Nil
       }.partition(_.isInstanceOf[String]) match {
         case (lookups: List[String@unchecked], colsVals: List[ColVal@unchecked]) =>
@@ -734,9 +735,10 @@ object OrtMetadata {
   case class ViewValue(view: View) extends OrtValue
 
   /** Column value
+   * @param propName      property name (from environment)
    * @param view          child view
    * */
-  case class LookupViewValue(view: View) extends OrtValue
+  case class LookupViewValue(propName: String, view: View) extends OrtValue
 
   /** Column value
    * @param whereTresql   key find tresql
