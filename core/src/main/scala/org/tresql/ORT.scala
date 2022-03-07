@@ -405,8 +405,8 @@ trait ORT extends Query {
     val parent = parents.headOption.map(_.table).orNull
     val md = tresqlMetadata(view.db)
     //find first imported key to parent in list of table links passed as a param.
-    def importedKeyOption(tables: List[SaveTo]): Option[(metadata.Table, SaveTo, String)] = {
-      def processLinkedTables(linkedTables: List[SaveTo]): Option[(metadata.Table, SaveTo, String)] = {
+    def importedKeyOption(tables: Seq[SaveTo]): Option[(metadata.Table, SaveTo, String)] = {
+      def processLinkedTables(linkedTables: Seq[SaveTo]): Option[(metadata.Table, SaveTo, String)] = {
         def imported_key_option(childTable: metadata.Table) =
           Option(childTable.refs(parent).filter(_.cols.size == 1)).flatMap {
             case Nil => None
@@ -607,7 +607,7 @@ trait ORT extends Query {
       table: metadata.Table,
       alias: String,
       refsPkAndKey: (Set[(String, String)], Seq[(KeyPart, String)]),
-      children: List[String],
+      children: Seq[String],
       upsert: Boolean
     ) = {
       def lookup_tresql(view: View,
@@ -761,11 +761,11 @@ object OrtMetadata {
    * @param properties    saveable fields
    * @param db            database name (can be null)
    * */
-  case class View(saveTo: List[SaveTo],
+  case class View(saveTo: Seq[SaveTo],
                   options: SaveOptions,
                   filters: Option[Filters],
                   alias: String,
-                  properties: List[Property],
+                  properties: Seq[Property],
                   db: String)
 
   /** Table to save data to.
