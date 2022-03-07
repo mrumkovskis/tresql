@@ -383,15 +383,22 @@ trait ORT extends Query {
       ))
     }
     val struct = tresql_structure(saveableMap)
+    val view = parseTables(tables)
     val props =
       struct.map {
         case (prop, value) => value match {
-          case m: Map[String, Any]@unchecked => OrtMetadata.Property(prop, ViewValue(ortMetadata(prop, m)))
+          case m: Map[String, Any]@unchecked =>
+            val md = tresqlMetadata(view.db)
+            view.saveTo.collectFirst {
+              case st if md.tableOption(st.table).exists(_.refTable.contains(List(prop))) => //lookup table found
+                val lookupTable = md.table(st.table).refTable(List(prop))
+                OrtMetadata.Property(prop, LookupViewValue(prop, ortMetadata(lookupTable, m)))
+            }.getOrElse(OrtMetadata.Property(prop, ViewValue(ortMetadata(prop, m))))
           case v: String if prop.indexOf("->") != -1 => resolver_tresql(prop, v)
           case _ => OrtMetadata.Property(prop, TresqlValue(s":$prop", true, true))
         }
       }.toList
-    parseTables(tables).copy(properties = props)
+    view.copy(properties = props)
   }
 
   private def tresqlMetadata(db: String)(implicit resources: Resources) =
@@ -610,22 +617,6 @@ trait ORT extends Query {
       children: Seq[String],
       upsert: Boolean
     ) = {
-      def lookup_tresql(view: View,
-                        refColName: String,
-                        propName: String)(implicit resources: Resources) = {
-        view.saveTo.headOption.map(_.table).flatMap(tresqlMetadata(view.db).tableOption).map {
-          table =>
-            val pk = table.key.cols.headOption.filter(pk => view.properties
-              .exists { case OrtMetadata.Property(col, _) => pk == col case _ => false }).orNull
-            val insert = save_tresql(null, view, Nil, insert_tresql)
-            val update = save_tresql(null, view, Nil, update_tresql)
-            List(
-              s":$refColName = |_lookup_edit('$propName', ${
-                if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
-              ColVal(refColName, s":$refColName", true, true))
-        }.orNull
-      }
-
       val (refsAndPk, key) = refsPkAndKey
       ctx.view.properties.flatMap {
         case OrtMetadata.Property(col, _) if refsAndPk.exists(_._1 == col) => Nil
@@ -635,16 +626,25 @@ trait ORT extends Query {
           List(ColVal(table.colOption(col).map(_.name).orNull, tresql, forInsert, forUpdate))
         case OrtMetadata.Property(prop, ViewValue(v)) =>
           if (children_save_tresql != null) {
-            table.refTable.get(List(prop)).map(lookupTable => // FIXME perhaps take lookup table from metadata since 'prop' may not match fk name
-              lookup_tresql(v.copy(saveTo = List(SaveTo(lookupTable, Set(), Nil))), prop, prop)).getOrElse {
-              val chtresql = children_save_tresql(prop, v, ParentRef(table.name, ctx.refToParent) :: ctx.parents)
-              List(ColVal(Option(chtresql).map(_ + s" '$prop'").orNull, null, true, true))
-            }
+            val chtresql = children_save_tresql(prop, v, ParentRef(table.name, ctx.refToParent) :: ctx.parents)
+            List(ColVal(Option(chtresql).map(_ + s" '$prop'").orNull, null, true, true))
           } else Nil
         case OrtMetadata.Property(refColName, LookupViewValue(propName, v)) =>
-          if (children_save_tresql != null) {
-            lookup_tresql(v, refColName, propName)
-          } else Nil
+          (for {
+            // check whether refColName exists in table, only then generate lookup tresql
+            _ <- table.colOption(refColName) if children_save_tresql != null
+            lookupTableName <- v.saveTo.headOption.map(_.table)
+            lookupTable <- tresqlMetadata(v.db).tableOption(lookupTableName)
+          } yield {
+            val pk = lookupTable.key.cols.headOption.filter(pk => v.properties
+              .exists { case OrtMetadata.Property(col, _) => pk == col case _ => false }).orNull
+            val insert = save_tresql(null, v, Nil, insert_tresql)
+            val update = save_tresql(null, v, Nil, update_tresql)
+            List(
+              s":$refColName = |_lookup_edit('$propName', ${
+                if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
+              ColVal(refColName, s":$refColName", true, true))
+          }).getOrElse(Nil)
       }.partition(_.isInstanceOf[String]) match {
         case (lookups: List[String@unchecked], colsVals: List[ColVal@unchecked]) =>
           val tableName = table.name
