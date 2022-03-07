@@ -632,7 +632,7 @@ trait ORT extends Query {
         case OrtMetadata.Property(refColName, LookupViewValue(propName, v)) =>
           (for {
             // check whether refColName exists in table, only then generate lookup tresql
-            _ <- table.colOption(refColName) if children_save_tresql != null
+            _ <- table.colOption(refColName)
             lookupTableName <- v.saveTo.headOption.map(_.table)
             lookupTable <- tresqlMetadata(v.db).tableOption(lookupTableName)
           } yield {
