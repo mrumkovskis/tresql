@@ -320,7 +320,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     ")" ~ opt(order) /* aggregate order */ ^^ {
     case Ident(n) ~ d ~ p ~ _ ~ o =>
       Fun(n.mkString("."), p, d.isDefined, o, None)
-  }
+  }  named "fun-without-filter"
   /* function(<#> <arglist> <order by>)<[filter]> */
   def function: MemParser[Exp] = (qualifiedIdent /* name */ <~ "(") ~
     opt("#") /* distinct */ ~ repsep(expr, ",") /* arglist */ ~
