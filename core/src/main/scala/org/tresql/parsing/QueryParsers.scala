@@ -294,7 +294,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     case ((i: String) :: (m: List[String @unchecked])) ~ o =>
       Variable(i, m, o != None)
   } named "variable"
-  def id: MemParser[Id] = "#" ~> qualifiedIdent ^^ (id => Id(id.ident.mkString("."))) named "id"
+  def id: MemParser[Id] = "#" ~> qualifiedIdent ~ opt(":" ~> ident) ^^ {
+    case id ~ mayBeBindVar => Id(id.ident.mkString(".") + mayBeBindVar.map(":" + _).getOrElse(""))
+  } named "id"
   def idref: MemParser[IdRef] = ":#" ~> qualifiedIdent ^^ (id => IdRef(id.ident.mkString("."))) named "id-ref"
   def result: MemParser[Res] = (":" ~> wholeNumber <~ "(") ~ (wholeNumber | stringLiteral |
     qualifiedIdent) <~ ")" ^^ {

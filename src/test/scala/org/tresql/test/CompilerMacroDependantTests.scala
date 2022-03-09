@@ -193,20 +193,21 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(List(10, 20, 30))(Query.list[Int]("dept[deptno in ?]{deptno}#(1)", List(30, 20, 10)))
     assertResult(List(10, 20, 30))(Query.list[Int]("dept[deptno in ?]{deptno}#(1)", scala.Array(30, 20, 10)))
     //hierarchical inserts, updates test
-    assertResult((1, List(List(1, 1))))(Query(
-      """dept{deptno, dname, loc, +emp {empno, ename, deptno}[:empno, :ename, :deptno] emps} +
-        [:deptno, :dname, :loc]""",
-      Map("deptno" -> 50, "dname" -> "LAW", "loc" -> "DALLAS",
-        "emps" -> List(Map("empno" -> 1111, "ename" -> "SMITH", "deptno" -> 50),
-          Map("empno" -> 2222, "ename" -> "LEWIS", "deptno" -> 50)))))
+    assertResult(((1, List(List(1, 1))), 50)) {
+      Query("""dept{deptno, dname, loc, +emp {empno, ename, deptno}[:empno, :ename, :#dept] emps} +
+        [#dept:dept_id, :dname, :loc]""",
+      Map("dept_id" -> 50, "dname" -> "LAW", "loc" -> "DALLAS",
+        "emps" -> List(Map("empno" -> 1111, "ename" -> "SMITH"),
+          Map("empno" -> 2222, "ename" -> "LEWIS"))))
+    }
     assertResult((1,List(2, List(1, 1))))(Query(
-      """dept[:deptno]{deptno, dname, loc,
-               -emp[deptno = :deptno],
-               +emp {empno, ename, deptno} [:empno, :ename, :deptno] emps} =
-        [:deptno, :dname, :loc]""",
-      Map("deptno" -> 50, "dname" -> "LAW", "loc" -> "FLORIDA",
-        "emps" -> List(Map("empno" -> 1111, "ename" -> "BROWN", "deptno" -> 50),
-          Map("empno" -> 2222, "ename" -> "CHRIS", "deptno" -> 50)))))
+      """dept[deptno = #dept:dept_id]{ dname, loc,
+               -emp[deptno = :#dept],
+               +emp {empno, ename, deptno} [:empno, :ename, :#dept] emps} =
+        [:dname, :loc]""",
+      Map("dept_id" -> 50, "dname" -> "LAW", "loc" -> "FLORIDA",
+        "emps" -> List(Map("empno" -> 1111, "ename" -> "BROWN"),
+          Map("empno" -> 2222, "ename" -> "CHRIS")))))
     assertResult(List(2, 1))(Query("emp - [deptno = 50], dept - [50]"))
     assertResult(((1,List(List((1,10002), (1,10003)))),10001))(Query(
       """dept{deptno, dname, loc, +emp {empno, ename, deptno} [#emp, :ename, :#dept] emps} +
