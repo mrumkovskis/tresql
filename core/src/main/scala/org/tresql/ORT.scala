@@ -362,8 +362,8 @@ trait ORT extends Query {
         Option(filterStr).flatMap(new QueryParser(resources, resources.cache).parseExp(_) match {
           case Arr(List(insert, delete, update)) => Some(Filters(
             insert = Some(insert).filter(_ != Null).map(_.tresql),
+            update = Some(update).filter(_ != Null).map(_.tresql),
             delete = Some(delete).filter(_ != Null).map(_.tresql),
-            update = Some(update).filter(_ != Null).map(_.tresql)
           ))
           case _ => error(s"""Unrecognized filter declaration '$filterStr'.
                              |Must consist of 3 comma separated tresql expressions: insertFilter, deleteFilter, updateFilter.
@@ -787,7 +787,7 @@ object OrtMetadata {
    *  @param delete       delete statement where clause
    *  @param update       update statement where clause
    * */
-  case class Filters(insert: Option[String] = None, delete: Option[String] = None, update: Option[String] = None)
+  case class Filters(insert: Option[String] = None, update: Option[String] = None, delete: Option[String] = None)
 
   /**
    * Patterns are for debugging purposes to create {{{View}}} from {{{Map}}} using {{{ortMetadata}}} method.
