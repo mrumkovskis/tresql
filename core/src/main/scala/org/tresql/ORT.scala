@@ -677,15 +677,23 @@ trait ORT extends Query {
                      refs: Set[String],
                      key: Seq[String]): (Set[(String, String)], Seq[(KeyPart, String)]) = {
       def idRefId(idRef: String, id: String) = s"_id_ref_id($idRef, $id)"
-      val pk = ctx.table.key.cols match { case List(c) => c case _ => null }
+      def getPk(t: metadata.Table) = t.key.cols match { case List(c) => c case _ => null }
+      def idExp(t: metadata.Table) = {
+        val pk = getPk(t)
+        ctx.view.properties.collectFirst {
+          case OrtMetadata.Property(`pk`, TresqlValue(tresql, _, _))
+            if tresql.startsWith(":") && tresql.substring(1) != pk => s"#${t.name}$tresql"
+        }.getOrElse(s"#${t.name}")
+      }
+      val pk = getPk(ctx.table)
       val refsPk =
         //ref table (set fk and pk)
         (if (tbl.name == ctx.table.name && ctx.refToParent != null) if (ctx.refToParent == pk)
           Set(pk -> idRefId(parent, tbl.name)) else Set(ctx.refToParent -> s":#$parent") ++
-            (if (pk == null || refs.contains(pk)) Set() else Set(pk -> s"#${tbl.name}"))
+            (if (pk == null || refs.contains(pk)) Set() else Set(pk -> idExp(tbl)))
         //not ref table (set pk)
         else Option(tbl.key.cols)
-          .filter(k=> k.size == 1 && !refs.contains(k.head)).map(_.head -> s"#${tbl.name}").toSet) ++
+          .filter(k=> k.size == 1 && !refs.contains(k.head)).map(_.head -> idExp(tbl)).toSet) ++
         //set refs
         (if(tbl.name == headTable.table) Set() else refs
             //filter out pk of the linked table in case it matches refToParent

@@ -1424,6 +1424,31 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       println(s"\nResult check:")
       tresql"dept[dname = 'Pizza']{dname, loc}".map(d => d.dname -> d.loc).toList
     }
+
+    println("-------- ORT table pk name differs from corresponding bind variable name --------")
+    view = {
+      import OrtMetadata._
+      View(
+        List(SaveTo("dept", Set(), Nil)),
+        SaveOptions(true, true, true), None, null,
+        List(
+          Property("deptno", TresqlValue(":dept_id", true, true)),
+          Property("dname", TresqlValue(":dname", true, true)),
+          Property("loc", TresqlValue(":loc", true, true))
+        ), null)
+    }
+    obj = Map("dept_id" -> 4321, "dname" -> "Fish", "loc" -> "Vecaki")
+    assertResult(List((4321, "Fish", "Vecaki"))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Fish']{deptno, dname, loc}".map(d => (d.deptno, d.dname, d.loc)).toList
+    }
+    obj = Map("dept_id" -> 4321, "dname" -> "Fish", "loc" -> "Gauja")
+    assertResult(List((4321, "Fish", "Gauja"))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Fish']{deptno, dname, loc}".map(d => (d.deptno, d.dname, d.loc)).toList
+    }
   }
 
   override def compilerMacro(implicit resources: Resources) = {
