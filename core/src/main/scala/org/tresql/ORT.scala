@@ -122,7 +122,7 @@ trait ORT extends Query {
   }
   case class NotDeleteKeysExpr(key: List[Expr], key_val_exprs: List[Expr]) extends BaseExpr {
     override def defaultSQL = env.get("keys").map {
-      case keyVals: Seq[_] if keyVals.isEmpty => "true"
+      case keyVals: Seq[_] if keyVals.isEmpty => ConstExpr(true).sql
       case keyVals: Seq[_] => key_val_exprs match {
         case List(_: VarExpr | _: IdExpr) =>
           InExpr(key.head, List(VarExpr("keys", Nil, false)), true).sql
@@ -144,7 +144,7 @@ trait ORT extends Query {
           val orRes = or(key zip key_val_exprs, kvs - 1)
           UnExpr("!", if (kvs > 1 || key.size == 1) BracesExpr(orRes) else orRes).sql
       }
-    }.getOrElse("true")
+    }.getOrElse(ConstExpr(true).sql)
   }
   /* Expression is built from macro.
    * Effectively env.currId(idSeq, IdRefExpr(idRefSeq)())*/
