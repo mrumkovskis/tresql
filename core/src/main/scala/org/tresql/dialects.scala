@@ -67,6 +67,7 @@ package object dialects {
     def isDefinedAt(e: Expr) = {
       val b = e.builder
       e match {
+        case b.ConstExpr(_: Boolean) => true
         case b.BinExpr("-", _, _) => true
         case e: QueryBuilder#SelectExpr if e.limit != null || e.offset != null => true
         case e: QueryBuilder#SelectExpr if e.cols.cols.headOption.exists(_.col match {
