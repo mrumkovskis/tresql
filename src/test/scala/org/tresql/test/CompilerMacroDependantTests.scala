@@ -1217,8 +1217,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       ORT.save(
         View(
-          List(SaveTo("accounts.account", Set(), List("number"))),
-          SaveOptions(true, true, true), None, null,
+          List(SaveTo("accounts.account", Set(), List("number"))), None, null,
           List(
             Property("number", TresqlValue(":number",true, true)),
             Property("balance", TresqlValue(":balance", true, true))
@@ -1233,7 +1232,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(List(("000", 3000.00, null))) {
       import OrtMetadata._
       ORT.save(View(List(SaveTo("accounts.account", Set(),
-        List("number"))), SaveOptions(true, true, true), None, null,
+        List("number"))), None, null,
         List(
           Property("number", TresqlValue(":number", true, true)),
           Property("balance", TresqlValue("accounts.account[number = :number]{ balance + :balance}", true, true))
@@ -1291,7 +1290,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(List("000000")) {
       import OrtMetadata._
       ORT.save(View(List(SaveTo("accounts.account", Set(),
-        List("number"))), SaveOptions(true, true, true), None, null,
+        List("number"))), None, null,
         List(Property("number", KeyValue(":number", ":new_number"))), null),
         obj)
       println(s"\nResult check:")
@@ -1303,8 +1302,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       ORT.save(
         View(
-          List(SaveTo("accounts.account", Set(), List("number"))),
-          SaveOptions(true, true, true), None, null,
+          List(SaveTo("accounts.account", Set(), List("number"))), None, null,
           List(
             Property("number", KeyValue(":number", ":new_number")),
             Property("balance", TresqlValue(":balance", true, true))
@@ -1320,8 +1318,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       ORT.save(
         View(
-          List(SaveTo("emp", Set(), List("ename", "deptno"))),
-          SaveOptions(true, true, true), None, null,
+          List(SaveTo("emp", Set(), List("ename", "deptno"))), None, null,
           List(
             Property("ename", KeyValue(":ename", ":new_ename")),
             Property("deptno", KeyValue("(dept[dname = :dept]{deptno})", "(dept[dname = :new_dept]{deptno})"))
@@ -1393,8 +1390,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     var view = {
       import OrtMetadata._
       View(
-        List(SaveTo("dept", Set(), Nil)),
-        SaveOptions(true, true, true), None, null,
+        List(SaveTo("dept", Set(), Nil)), None, null,
         List(
           Property("dname", TresqlValue(":dname", true, false)),
           Property("loc", TresqlValue(":loc", false, true))
@@ -1429,8 +1425,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     view = {
       import OrtMetadata._
       View(
-        List(SaveTo("dept", Set(), Nil)),
-        SaveOptions(true, true, true), None, null,
+        List(SaveTo("dept", Set(), Nil)), None, null,
         List(
           Property("deptno", TresqlValue(":dept_id", true, true)),
           Property("dname", TresqlValue(":dname", true, true)),

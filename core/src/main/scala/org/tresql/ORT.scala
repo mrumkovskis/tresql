@@ -26,6 +26,7 @@ trait ORT extends Query {
   case class SaveContext(name: String,
                          view: View,
                          parents: List[ParentRef],
+                         saveOptions: SaveOptions,
                          table: metadata.Table,
                          saveTo: SaveTo,
                          refToParent: String)
@@ -256,11 +257,15 @@ trait ORT extends Query {
   }
 
   def insertTresql(metadata: View)(implicit resources: Resources): String = {
-    save_tresql(null, metadata, Nil, insert_tresql)
+    save_tresql(null, metadata, Nil,
+      SaveOptions(doInsert = true, doUpdate = false, doDelete = true),
+      insert_tresql)
   }
 
   def updateTresql(metadata: View)(implicit resources: Resources): String = {
-    save_tresql(null, metadata, Nil, update_tresql)
+    save_tresql(null, metadata, Nil,
+      SaveOptions(doInsert = true, doUpdate = false, doDelete = true),
+      update_tresql)
   }
 
   def deleteTresql(name: String, key: List[String], filter: String)(implicit resources: Resources): String = {
@@ -273,15 +278,16 @@ trait ORT extends Query {
                    obj: Map[String, Any],
                    save_tresql_fun: SaveContext => String,
                    errorMsg: String)(implicit resources: Resources): Any = {
-    val view = ortMetadata(name, obj)
+    val (view, saveOptions) = ortMetadata(name, obj)
     resources log s"$view"
-    val tresql = save_tresql(null, view, Nil, save_tresql_fun)
+    val tresql = save_tresql(null, view, Nil, saveOptions,
+      save_tresql_fun)
     if(tresql == null) error(errorMsg)
     build(tresql, obj, reusableExpr = false)(resources)()
   }
 
   /** This method is for debugging purposes. */
-  def ortMetadata(tables: String, saveableMap: Map[String, Any])(implicit resources: Resources): View = {
+  def ortMetadata(tables: String, saveableMap: Map[String, Any])(implicit resources: Resources): (View, SaveOptions) = {
     def tresql_structure(obj: Map[String, Any]): Map[String, Any] = {
       def merge(lm: Seq[Map[String, Any]]): Map[String, Any] =
         lm.tail.foldLeft(tresql_structure(lm.head)) {(l, m) =>
@@ -369,7 +375,7 @@ trait ORT extends Query {
                              |Must consist of 3 comma separated tresql expressions: insertFilter, deleteFilter, updateFilter.
                              |In the case expression is not needed it must be set to 'null'.""".stripMargin)
         })
-      View(saveTo(tables, tresqlMetadata(db)), SaveOptions(i, u, d), filters, alias, Nil, db)
+      (View(saveTo(tables, tresqlMetadata(db)), filters, alias, Nil, db), SaveOptions(i, u, d))
     }
     def resolver_tresql(property: String, resolverExp: String) = {
       import parsing._
@@ -383,7 +389,7 @@ trait ORT extends Query {
       ))
     }
     val struct = tresql_structure(saveableMap)
-    val view = parseTables(tables)
+    val (view, saveOptions) = parseTables(tables)
     val props =
       struct.map {
         case (prop, value) => value match {
@@ -392,13 +398,16 @@ trait ORT extends Query {
             view.saveTo.collectFirst {
               case st if md.tableOption(st.table).exists(_.refTable.contains(List(prop))) => //lookup table found
                 val lookupTable = md.table(st.table).refTable(List(prop))
-                OrtMetadata.Property(prop, LookupViewValue(prop, ortMetadata(lookupTable, m)))
-            }.getOrElse(OrtMetadata.Property(prop, ViewValue(ortMetadata(prop, m))))
+                OrtMetadata.Property(prop, LookupViewValue(prop, ortMetadata(lookupTable, m)._1))
+            }.getOrElse {
+              val (v, so) = ortMetadata(prop, m)
+              OrtMetadata.Property(prop, ViewValue(v, so))
+            }
           case v: String if prop.indexOf("->") != -1 => resolver_tresql(prop, v)
           case _ => OrtMetadata.Property(prop, TresqlValue(s":$prop", true, true))
         }
       }.toList
-    view.copy(properties = props)
+    (view.copy(properties = props), saveOptions)
   }
 
   private def tresqlMetadata(db: String)(implicit resources: Resources) =
@@ -407,6 +416,7 @@ trait ORT extends Query {
   private def save_tresql(name: String,
                           view: View,
                           parents: List[ParentRef],
+                          saveOptions: SaveOptions,
                           save_tresql_func: SaveContext => String)(implicit
                                                                    resources: Resources): String = {
     val parent = parents.headOption.map(_.table).orNull
@@ -432,24 +442,24 @@ trait ORT extends Query {
           case Nil => None //no ref to parent
         }
       }
-      val st = tables.head
-      md.tableOption(st.table) //no parent no ref to parent
+      val saveTo = tables.head
+      md.tableOption(saveTo.table) //no parent no ref to parent
         .filter(_ => parent == null)
-        .map((_, st, null))
+        .map((_, saveTo, null))
         .orElse {
-          if (st.refs.nonEmpty) //ref to parent in first table found must be resolved!
-            md.tableOption(st.table).flatMap(table =>
-              st.refs.
+          if (saveTo.refs.nonEmpty) //ref to parent in first table found must be resolved!
+            md.tableOption(saveTo.table).flatMap(table =>
+              saveTo.refs.
                 find(r => table.refs(parent).filter(_.cols.size == 1).exists(_.cols.head == r))
-                .map((table, st, _)))
+                .map((table, saveTo, _)))
           else processLinkedTables(tables) //search for ref to parent
         }
     }
 
     (for {
-      (table, st, ref) <- importedKeyOption(view.saveTo)
+      (table, saveTo, ref) <- importedKeyOption(view.saveTo)
     } yield
-        save_tresql_func(SaveContext(name, view, parents, table, st, ref))
+        save_tresql_func(SaveContext(name, view, parents, saveOptions, table, saveTo, ref))
     ).orNull
   }
 
@@ -476,7 +486,7 @@ trait ORT extends Query {
   }
 
   private def insert_tresql(ctx: SaveContext)(implicit resources: Resources): String = {
-    save_tresql_internal(ctx, table_insert_tresql, save_tresql(_, _, _, insert_tresql))
+    save_tresql_internal(ctx, table_insert_tresql, save_tresql(_, _, _, _, insert_tresql))
   }
 
   private def update_tresql(ctx: SaveContext)(implicit resources: Resources): String = {
@@ -555,7 +565,7 @@ trait ORT extends Query {
             .mkString(" & ")}]{$pr_col}), $upd_tresql)"
         } else upd_tresql
       }
-      save_tresql_internal(ctx, table_save_tresql, save_tresql(_, _, _, update_tresql))
+      save_tresql_internal(ctx, table_save_tresql, save_tresql(_, _, _, _, update_tresql))
     }
     def ins = {
       def table_save_tresql(data: SaveData) = {
@@ -571,7 +581,7 @@ trait ORT extends Query {
           } else data
         table_insert_tresql(ndata)
       }
-      save_tresql_internal(ctx, table_save_tresql, save_tresql(_, _, _, insert_tresql))
+      save_tresql_internal(ctx, table_save_tresql, save_tresql(_, _, _, _, insert_tresql))
     }
     def updOrIns = {
       if (saveTo.key.nonEmpty)
@@ -580,7 +590,7 @@ trait ORT extends Query {
         s"""|${if (view.db != null) view.db + ":" else ""}_update_or_insert('$tableName', $upd, $ins)"""
     }
 
-    import view.options._
+    import ctx.saveOptions._
     val pk = table.key.cols
     if (parent == null) if (saveTo.key.isEmpty && pk.isEmpty) null else upd
     else if (pk.size == 1 && refToParent == pk.head) upd else
@@ -606,7 +616,8 @@ trait ORT extends Query {
     children_save_tresql: (
       String, //table property
       View,
-      List[ParentRef] //parent chain
+      List[ParentRef], //parent chain
+      SaveOptions
     ) => String)
     (implicit resources: Resources) = {
 
@@ -624,9 +635,9 @@ trait ORT extends Query {
           List(ColVal(table.colOption(col).map(_.name).orNull, valueTresql, true, true))
         case OrtMetadata.Property(col, TresqlValue(tresql, forInsert, forUpdate)) =>
           List(ColVal(table.colOption(col).map(_.name).orNull, tresql, forInsert, forUpdate))
-        case OrtMetadata.Property(prop, ViewValue(v)) =>
+        case OrtMetadata.Property(prop, ViewValue(v, so)) =>
           if (children_save_tresql != null) {
-            val chtresql = children_save_tresql(prop, v, ParentRef(table.name, ctx.refToParent) :: ctx.parents)
+            val chtresql = children_save_tresql(prop, v, ParentRef(table.name, ctx.refToParent) :: ctx.parents, so)
             List(ColVal(Option(chtresql).map(_ + s" '$prop'").orNull, null, true, true))
           } else Nil
         case OrtMetadata.Property(refColName, LookupViewValue(propName, v)) =>
@@ -638,8 +649,8 @@ trait ORT extends Query {
           } yield {
             val pk = lookupTable.key.cols.headOption.filter(pk => v.properties
               .exists { case OrtMetadata.Property(col, _) => pk == col case _ => false }).orNull
-            val insert = save_tresql(null, v, Nil, insert_tresql)
-            val update = save_tresql(null, v, Nil, update_tresql)
+            val insert = save_tresql(null, v, Nil, SaveOptions(true, false, true), insert_tresql)
+            val update = save_tresql(null, v, Nil, SaveOptions(true, false, true), update_tresql)
             List(
               s":$refColName = |_lookup_edit('$propName', ${
                 if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
@@ -739,8 +750,9 @@ object OrtMetadata {
 
   /** Column value
    * @param view          child view
+   * @param saveOptions   saveable options [+-=]
    * */
-  case class ViewValue(view: View) extends OrtValue
+  case class ViewValue(view: View, saveOptions: SaveOptions) extends OrtValue
 
   /** Column value
    * @param propName      property name (from environment)
@@ -763,14 +775,12 @@ object OrtMetadata {
   /** Saveable view.
    * @param saveTo        destination tables. If first table has {{{refs}}} parameter
    *                      it indicates reference field to parent.
-   * @param options       saveable options [+-=]. Relevant for child views
    * @param filters       horizontal authentication filters
    * @param alias         table alias in DML statement
    * @param properties    saveable fields
    * @param db            database name (can be null)
    * */
   case class View(saveTo: Seq[SaveTo],
-                  options: SaveOptions,
                   filters: Option[Filters],
                   alias: String,
                   properties: Seq[Property],
