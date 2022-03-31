@@ -1444,6 +1444,114 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       println(s"\nResult check:")
       tresql"dept[dname = 'Fish']{deptno, dname, loc}".map(d => (d.deptno, d.dname, d.loc)).toList
     }
+
+    println("-------- ORT view forInsert, forUpdate test --------")
+    view = {
+      import OrtMetadata._
+      View(
+        List(SaveTo("dept", Set(), Nil)), None, null, false, true,
+        List(
+          Property("deptno", TresqlValue(":deptno", true, true)),
+          Property("dname", TresqlValue(":dname", true, true)),
+          Property("loc", TresqlValue(":loc", true, true))
+        ), null)
+    }
+    obj = Map("dname" -> "Space", "loc" -> "Mars")
+    assertResult(Nil) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Space']{deptno, dname, loc}".map(d => (d.deptno, d.dname, d.loc)).toList
+    }
+    view = view.copy(forInsert = true)
+    obj = Map("dname" -> "Space", "loc" -> "Mars")
+    assertResult(List(("Space", "Mars"))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Space']{dname, loc}".map(d => (d.dname, d.loc)).toList
+    }
+    var childView = {
+      import OrtMetadata._
+      View(
+        List(SaveTo("emp", Set(), Nil)), None, null, true, true,
+        List(
+          Property("empno", TresqlValue(":empno", true, true)),
+          Property("ename", TresqlValue(":ename", true, true)),
+        ), null)
+    }
+    view = {
+      import OrtMetadata._
+      view.copy(properties = view.properties :+
+        Property("emps", ViewValue(childView, SaveOptions(true, true, true))))
+    }
+    obj = Map("deptno" -> tresql"dept[dname = 'Space']{deptno}".unique[Long], "dname" -> "Space", "loc" -> "Venus",
+      "emps" -> List(Map("ename" -> "Boris")))
+    assertResult(List(("Space", "Venus" ,List("Boris")))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Space']{dname, loc, |emp{ename} emps}"
+        .map(d => (d.dname, d.loc, d.emps.map(_.ename).toList)).toList
+    }
+    childView = childView.copy(forUpdate = false)
+    view = {
+      import OrtMetadata._
+      view.copy(properties = view.properties.dropRight(1) :+
+        Property("emps", ViewValue(childView, SaveOptions(true, true, true))))
+    }
+    obj = Map("deptno" -> tresql"dept[dname = 'Space']{deptno}".unique[Long], "dname" -> "Space", "loc" -> "Venus",
+      "emps" -> List(Map("ename" -> "Zina")))
+    assertResult(List(("Space", "Venus" ,List("Boris")))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Space']{dname, loc, |emp{ename} emps}"
+        .map(d => (d.dname, d.loc, d.emps.map(_.ename).toList)).toList
+    }
+    view = {
+      import OrtMetadata._
+      val lookupView =
+        View(
+          List(SaveTo("dept", Set(), Nil)), None, null, false, true,
+          List(
+            Property("deptno", TresqlValue(":deptno", true, true)),
+            Property("dname", TresqlValue(":dname", true, true)),
+            Property("loc", TresqlValue(":loc", true, true))
+          ), null)
+      View(
+        List(SaveTo("emp", Set(), Nil)), None, null, true, true,
+        List(
+          Property("empno", TresqlValue(":empno", true, true)),
+          Property("ename", TresqlValue(":ename", true, true)),
+          Property("deptno", LookupViewValue("dept", lookupView))
+        ), null)
+    }
+    obj = Map("ename" -> "Gogi", "dept" -> Map("dname" -> "Mount", "loc" -> "Georgia"))
+    intercept[Exception] { // should not save because lookup value - dept cannot be inserted
+      ORT.save(view, obj)
+    }
+    view = {
+      import OrtMetadata._
+      val lookupView =
+        View(
+          List(SaveTo("dept", Set(), Nil)), None, null, true, false,
+          List(
+            Property("deptno", TresqlValue(":deptno", true, true)),
+            Property("dname", TresqlValue(":dname", true, true)),
+            Property("loc", TresqlValue(":loc", true, true))
+          ), null)
+      View(
+        List(SaveTo("emp", Set(), Nil)), None, null, true, true,
+        List(
+          Property("empno", TresqlValue(":empno", true, true)),
+          Property("ename", TresqlValue(":ename", true, true)),
+          Property("deptno", LookupViewValue("dept", lookupView))
+        ), null)
+    }
+    // FIXME make lookup values work in upsert statements
+//    assertResult(List(("Space", "Venus" ,List("Boris")))) {
+//      ORT.save(view, obj)
+//      println(s"\nResult check:")
+//      tresql"emp[ename = 'Gogi']{ename, (dept d[d.deptno = emp.deptno]{dname}) dept}"
+//        .map(e => (e.ename, e.dept)).toList
+//    }
   }
 
   override def compilerMacro(implicit resources: Resources) = {
