@@ -62,6 +62,7 @@ trait ORT extends Query {
     def extractId(result: Any) = result match {
       case i: InsertResult => i.id.get //insert expression
       case a: ArrayResult[_] => a.values.last match { case i: InsertResult => i.id.get } //array expression
+      case null => null // no insert
       case x => error(s"Unable to extract id from expr result: $x, expr: $insertExpr")
     }
     def defaultSQL = s"LookupEditExpr($obj, $idName, $insertExpr, $updateExpr)"
@@ -375,7 +376,7 @@ trait ORT extends Query {
                              |Must consist of 3 comma separated tresql expressions: insertFilter, deleteFilter, updateFilter.
                              |In the case expression is not needed it must be set to 'null'.""".stripMargin)
         })
-      (View(saveTo(tables, tresqlMetadata(db)), filters, alias, Nil, db), SaveOptions(i, u, d))
+      (View(saveTo(tables, tresqlMetadata(db)), filters, alias, true, true, Nil, db), SaveOptions(i, u, d))
     }
     def resolver_tresql(property: String, resolverExp: String) = {
       import parsing._
@@ -486,10 +487,13 @@ trait ORT extends Query {
   }
 
   private def insert_tresql(ctx: SaveContext)(implicit resources: Resources): String = {
-    save_tresql_internal(ctx, table_insert_tresql, save_tresql(_, _, _, _, insert_tresql))
+    if (ctx.view.forInsert)
+      save_tresql_internal(ctx, table_insert_tresql, save_tresql(_, _, _, _, insert_tresql))
+    else null
   }
 
   private def update_tresql(ctx: SaveContext)(implicit resources: Resources): String = {
+    if (!ctx.view.forUpdate) return null
 
     def filterString(filters: Option[Filters], extraction: Filters => Option[String]): String =
       filters.flatMap(extraction).map(f => s" & ($f)").getOrElse("")
@@ -777,12 +781,16 @@ object OrtMetadata {
    *                      it indicates reference field to parent.
    * @param filters       horizontal authentication filters
    * @param alias         table alias in DML statement
+   * @param forInsert     view is only designated for insert statement
+   * @param forUpdate     view is only designated for update statement (according to save options in case of child view)
    * @param properties    saveable fields
    * @param db            database name (can be null)
    * */
   case class View(saveTo: Seq[SaveTo],
                   filters: Option[Filters],
                   alias: String,
+                  forInsert: Boolean,
+                  forUpdate: Boolean,
                   properties: Seq[Property],
                   db: String)
 
