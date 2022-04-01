@@ -71,14 +71,13 @@ trait ORT extends Query {
    * Differs from {{{UpsertExpr}}} in a way that if pk value is not available in the environment do directly insert
    * statement not trying to execute update statement before.
    * */
-  case class UpdateOrInsertExpr(table: String, updateExpr: Expr, insertExpr: Expr)
+  case class UpdateOrInsertExpr(idProp: String, updateExpr: Expr, insertExpr: Expr)
   extends BaseExpr {
-    val idName = env.table(table).key.cols.headOption.orNull
     private val upsertExpr = UpsertExpr(updateExpr, insertExpr)
     override def apply() =
-      if (idName != null && env.containsNearest(idName) && env(idName) != null)
+      if (idProp != null && env.containsNearest(idProp) && env(idProp) != null)
         upsertExpr() else insertExpr()
-    def defaultSQL = s"InsertOrUpdateExpr($idName, $updateExpr, $insertExpr)"
+    def defaultSQL = s"InsertOrUpdateExpr($idProp, $updateExpr, $insertExpr)"
   }
   /**
    * Try to execute {{{updateExpr}}} and if no rows affected execute {{{insertExpr}}}
@@ -590,8 +589,14 @@ trait ORT extends Query {
     def updOrIns = {
       if (saveTo.key.nonEmpty)
         s"|_upsert($upd, $ins)" //upsert for save by key since primary key is not accessible
-      else
-        s"""|${if (view.db != null) view.db + ":" else ""}_update_or_insert('$tableName', $upd, $ins)"""
+      else {
+        val pk = table.key.cols match { case List(c) => c case _ => null }
+        val idProp = view.properties.collectFirst {
+          case OrtMetadata.Property(`pk`, TresqlValue(tresql, _, _))
+            if tresql.startsWith(":") && tresql.substring(1) != pk => tresql.substring(1)
+        }.getOrElse(pk)
+        s"""|${if (view.db != null) view.db + ":" else ""}_update_or_insert('$idProp', $upd, $ins)"""
+      }
     }
 
     import ctx.saveOptions._

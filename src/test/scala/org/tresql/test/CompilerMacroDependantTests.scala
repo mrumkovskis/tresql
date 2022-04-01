@@ -1444,6 +1444,37 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       println(s"\nResult check:")
       tresql"dept[dname = 'Fish']{deptno, dname, loc}".map(d => (d.deptno, d.dname, d.loc)).toList
     }
+    var childView = {
+      import OrtMetadata._
+      View(
+        List(SaveTo("emp", Set(), Nil)), None, null, true, true,
+        List(
+          Property("empno", TresqlValue(":emp_id", true, true)),
+          Property("ename", TresqlValue(":ename", true, true)),
+          Property("job", TresqlValue(":job", true, true)),
+        ), null)
+    }
+    view = {
+      import OrtMetadata._
+      view.copy(properties = view.properties :+
+        Property("emps", ViewValue(childView, SaveOptions(true, true, false))))
+    }
+    obj = Map("dept_id" -> 4321, "dname" -> "Fish", "loc" -> "Roja", "emps" ->
+      List(Map("ename" -> "Girts", "job" -> "Fisherman")))
+    assertResult(List(("Fish", "Roja", List(("Girts", "Fisherman"))))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Fish']{dname, loc, |emp{ename, job}#(1) emps}"
+        .map(d => (d.dname, d.loc, d.emps.map(e => (e.ename, e.job)).toList)).toList
+    }
+    obj = Map("dept_id" -> 4321, "dname" -> "Fish", "loc" -> "Roja", "emps" ->
+      List(Map("emp_id" -> Query("emp[ename = 'Girts']{empno}").unique[Any], "ename" -> "Gatis", "job" -> "Fisher")))
+    assertResult(List(("Fish", "Roja", List(("Gatis", "Fisher"))))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Fish']{dname, loc, |emp{ename, job}#(1) emps}"
+        .map(d => (d.dname, d.loc, d.emps.map(e => (e.ename, e.job)).toList)).toList
+    }
 
     println("-------- ORT view forInsert, forUpdate test --------")
     view = {
@@ -1469,7 +1500,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       println(s"\nResult check:")
       tresql"dept[dname = 'Space']{dname, loc}".map(d => (d.dname, d.loc)).toList
     }
-    var childView = {
+    childView = {
       import OrtMetadata._
       View(
         List(SaveTo("emp", Set(), Nil)), None, null, true, true,

@@ -109,8 +109,8 @@ class Macros {
         insertExpr, updateExpr)
 
   def _update_or_insert(b: ORT,
-                        table: QueryBuilder#ConstExpr, updateExpr: Expr, insertExpr: Expr) =
-    b.UpdateOrInsertExpr(String valueOf table.value, updateExpr, insertExpr)
+                        idProp: QueryBuilder#ConstExpr, updateExpr: Expr, insertExpr: Expr) =
+    b.UpdateOrInsertExpr(String valueOf idProp.value, updateExpr, insertExpr)
 
   def _upsert(b: ORT, updateExpr: Expr, insertExpr: Expr) = b.UpsertExpr(updateExpr, insertExpr)
 
