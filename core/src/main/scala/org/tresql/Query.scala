@@ -313,7 +313,7 @@ trait Query extends QueryBuilder with TypedQuery {
 
   private def bindVarsValues(bindVars: List[Expr]) = {
     bindVars.flatMap {
-      case v: VarExpr => List(v.name ->
+      case v: VarExpr => List(v.fullName ->
         Option(env.bindVarLogFilter).filter(_.isDefinedAt(v)).map(_(v)).getOrElse(v()))
       case r: ResExpr => List(r.name -> r())
       case id: IdExpr => List(s"#${id.seqName}" -> id.peek)
