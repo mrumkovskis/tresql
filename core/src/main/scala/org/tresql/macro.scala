@@ -98,15 +98,17 @@ class Macros {
     b.Table(b.IdentExpr(List(String.valueOf(table_name()))), null, null, null, false, null)
   }
 
-  def _lookup_edit(b: ORT,
-    objName: QueryBuilder#ConstExpr,
-    idName: QueryBuilder#ConstExpr,
-    insertExpr: Expr,
-    updateExpr: Expr) =
-      b.LookupEditExpr(
-        String valueOf objName.value,
-        if (idName.value == null) null else String valueOf idName.value,
-        insertExpr, updateExpr)
+  def _lookup_upsert(b: ORT,
+                     objProp: QueryBuilder#ConstExpr,
+                     idProp: QueryBuilder#ConstExpr,
+                     lookupUpsertExpr: Expr,
+                     idSelExpr: Expr) =
+    b.LookupUpsertExpr(
+      String valueOf objProp.value,
+      String valueOf idProp.value,
+      lookupUpsertExpr,
+      idSelExpr
+    )
 
   def _update_or_insert(b: ORT,
                         idProp: QueryBuilder#ConstExpr, updateExpr: Expr, insertExpr: Expr) =

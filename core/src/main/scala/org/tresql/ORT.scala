@@ -42,30 +42,35 @@ trait ORT extends Query {
                       db: String)
 
 
-  /* Expression is built only from macros to ensure ORT lookup editing. */
-  case class LookupEditExpr(
-    obj: String,
-    idName: String,
-    insertExpr: Expr,
-    updateExpr: Expr)
-  extends BaseExpr {
-    override def apply() = env(obj) match {
-      case m: Map[String @unchecked, Any @unchecked] =>
-        if (idName != null && (m contains idName) && m(idName) != null) {
-          val lookupObjId = m(idName)
-          updateExpr(m)
-          lookupObjId
-        } else extractId(insertExpr(m))
-      case null => null
-      case x => error(s"Cannot set environment variables for the expression. $x is not a map.")
+  /** Expression is built only from macros to ensure ORT lookup editing.
+   * Expression executes {{{upsertExpr}}} on {{{objProp}}} environment variable
+   * which is expected to be {{{Map[String, Any]}}} and tries to return id of inserted or updated object.
+   * */
+  case class LookupUpsertExpr(objProp: String,
+                              idProp: String,
+                              upsertExpr: Expr,
+                              idSelExpr: Expr) extends BaseExpr {
+    override def apply() = {
+      env(objProp) match {
+        case m: Map[String @unchecked, Any @unchecked] =>
+          import CoreTypes._
+          def id(res: Any) = res match {
+            case r: Result[_] => r.uniqueOption[Any].orNull
+            case x => x
+          }
+          def res(r: Any): Any = r match {
+            case i: InsertResult => i.id.orNull
+            case u: UpdateResult =>
+              if (u.count.getOrElse(0) > 0) m.getOrElse(idProp, id(idSelExpr(m))) else null
+            case a: ArrayResult[_] if a.values.nonEmpty => res(a.values.last)
+            case x => error(s"Unexpected $this result: $x")
+          }
+          res(upsertExpr(m))
+        case null => null
+        case x => error(s"Cannot set environment variables for the LookupUpsertExpr from $objProp. $x is not a map.")
+      }
     }
-    def extractId(result: Any) = result match {
-      case i: InsertResult => i.id.get //insert expression
-      case a: ArrayResult[_] => a.values.last match { case i: InsertResult => i.id.get } //array expression
-      case null => null // no insert
-      case x => error(s"Unable to extract id from expr result: $x, expr: $insertExpr")
-    }
-    def defaultSQL = s"LookupEditExpr($obj, $idName, $insertExpr, $updateExpr)"
+    def defaultSQL = s"LookupUpsertExpr($objProp, $idProp, $upsertExpr, $idSelExpr)"
   }
   /** Expression is built from macros to ensure ORT children editing
    * Differs from {{{UpsertExpr}}} in a way that if pk value is not available in the environment do directly insert
@@ -77,16 +82,20 @@ trait ORT extends Query {
     override def apply() =
       if (idProp != null && env.containsNearest(idProp) && env(idProp) != null)
         upsertExpr() else insertExpr()
-    def defaultSQL = s"InsertOrUpdateExpr($idProp, $updateExpr, $insertExpr)"
+    def defaultSQL = s"UpdateOrInsertExpr($idProp, $updateExpr, $insertExpr)"
   }
   /**
    * Try to execute {{{updateExpr}}} and if no rows affected execute {{{insertExpr}}}
    * Expression is built from macros to ensure ORT one to one relationship setting
    * */
   case class UpsertExpr(updateExpr: Expr, insertExpr: Expr) extends BaseExpr {
-    override def apply() = updateExpr() match {
-      case r: DMLResult if r.count.getOrElse(0) > 0 || r.children.nonEmpty => r // return result if update affects some row
-      case _ => insertExpr() // execute insert if update affects no rows
+    override def apply() = {
+      def resOrInsert(res: Any): Any = res match {
+        case r: DMLResult if r.count.getOrElse(0) > 0 || r.children.nonEmpty => r // return result if update affects some row
+        case a: ArrayResult[_] if a.values.nonEmpty => resOrInsert(a.values.last)
+        case _ => insertExpr() // execute insert if update affects no rows
+      }
+      resOrInsert(updateExpr())
     }
     def defaultSQL = s"UpsertExpr($updateExpr, $insertExpr)"
   }
@@ -647,22 +656,56 @@ trait ORT extends Query {
         case OrtMetadata.Property(prop, ViewValue(v, so)) =>
           if (children_save_tresql != null) {
             val chtresql = children_save_tresql(prop, v, ParentRef(table.name, ctx.refToParent) :: ctx.parents, so)
-            List(ColVal(Option(chtresql).map(_ + s" '$prop'").orNull, null, true, true))
+            val chtresql_alias = Option(prop).map(p => s" '$p'").mkString
+            List(ColVal(Option(chtresql).map(_ + chtresql_alias).orNull, null, true, true))
           } else Nil
-        case OrtMetadata.Property(refColName, LookupViewValue(propName, v)) =>
+        case OrtMetadata.Property(refColName, LookupViewValue(propName, lookupView)) =>
           (for {
             // check whether refColName exists in table, only then generate lookup tresql
             _ <- table.colOption(refColName)
-            lookupTableName <- v.saveTo.headOption.map(_.table)
-            lookupTable <- tresqlMetadata(v.db).tableOption(lookupTableName)
+            lookupTableName <- lookupView.saveTo.headOption.map(_.table)
+            lookupTable <- tresqlMetadata(lookupView.db).tableOption(lookupTableName)
           } yield {
-            val pk = lookupTable.key.cols.headOption.filter(pk => v.properties
-              .exists { case OrtMetadata.Property(col, _) => pk == col case _ => false }).orNull
-            val insert = save_tresql(null, v, Nil, SaveOptions(true, false, true), insert_tresql)
-            val update = save_tresql(null, v, Nil, SaveOptions(true, false, true), update_tresql)
+            def pkCol(t: metadata.Table) = t.key.cols match { case List(c) => c case _ => null }
+            def saveTo(v: View, tn: String) = v.saveTo.find(_.table == tn)
+            def idSelExpr(v: View, t: metadata.Table) = {
+              def key_val(v: View, tn: String) = {
+                val key = saveTo(v, tn).map(_.key.toSet).getOrElse(Set())
+                v.properties.flatMap {
+                  case OrtMetadata.Property(col, TresqlValue(v, _, _)) if key.contains(col) =>
+                    List((col, v))
+                  case _ => Nil
+                }
+              }
+              val pk_col = pkCol(t)
+              if (pk_col != null) {
+                val where = s"${key_val(v, t.name).map { case (k, v) => s"$k = $v"}.mkString(" & ") }"
+                if (where.nonEmpty) s"(${t.name}[$where]{$pk_col})"
+                else "null"
+              } else "null"
+            }
+            def idProp(v: View, t: metadata.Table) = {
+              Option(pkCol(t)).flatMap { pk =>
+                v.properties.collectFirst {
+                  case OrtMetadata.Property(`pk`, TresqlValue(v, _, _)) =>
+                    if (v.startsWith(":")) v.substring(1) else pk
+                }
+              }.orNull
+            }
+            val idPropName = idProp(lookupView, lookupTable)
+            val update = save_tresql(null, lookupView, Nil, SaveOptions(true, false, true), update_tresql)
+            val insert = save_tresql(null, lookupView, Nil, SaveOptions(true, false, true), insert_tresql)
+            val lookupUpsert =
+              if (saveTo(lookupView, lookupTable.name).exists(_.key.nonEmpty)) {
+                s"|_upsert($update, $insert)"
+              } else {
+                s"|_update_or_insert('$idPropName', $update, $insert)"
+              }
+            val lookupIdSel = idSelExpr(lookupView, lookupTable)
+
             List(
-              s":$refColName = |_lookup_edit('$propName', ${
-                if (pk == null) "null" else s"'$pk'"}, $insert, $update)",
+              s":$refColName = |_lookup_upsert('$propName', ${
+                if (idPropName == null) "null" else s"'$idPropName'"}, $lookupUpsert, $lookupIdSel)",
               ColVal(refColName, s":$refColName", true, true))
           }).getOrElse(Nil)
       }.partition(_.isInstanceOf[String]) match {

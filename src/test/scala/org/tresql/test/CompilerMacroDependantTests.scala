@@ -1562,27 +1562,31 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       val lookupView =
         View(
-          List(SaveTo("dept", Set(), Nil)), None, null, true, false,
+          List(SaveTo("dept", Set(), List("dname"))), None, null, true, true,
           List(
-            Property("deptno", TresqlValue(":deptno", true, true)),
             Property("dname", TresqlValue(":dname", true, true)),
             Property("loc", TresqlValue(":loc", true, true))
           ), null)
       View(
-        List(SaveTo("emp", Set(), Nil)), None, null, true, true,
+        List(SaveTo("emp", Set(), List("ename"))), None, null, true, true,
         List(
-          Property("empno", TresqlValue(":empno", true, true)),
           Property("ename", TresqlValue(":ename", true, true)),
           Property("deptno", LookupViewValue("dept", lookupView))
         ), null)
     }
-    // FIXME make lookup values work in upsert statements
-//    assertResult(List(("Space", "Venus" ,List("Boris")))) {
-//      ORT.save(view, obj)
-//      println(s"\nResult check:")
-//      tresql"emp[ename = 'Gogi']{ename, (dept d[d.deptno = emp.deptno]{dname}) dept}"
-//        .map(e => (e.ename, e.dept)).toList
-//    }
+    assertResult(List(("Gogi", "Mount"))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"emp[ename = 'Gogi']{ename, (dept d[d.deptno = emp.deptno]{dname}) dept}"
+        .map(e => (e.ename, e.dept)).toList
+    }
+    obj = Map("ename" -> "Gogi", "dept" -> Map("dname" -> "Mount", "loc" -> "Tbilisi"))
+    assertResult(List(("Gogi", "Tbilisi"))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"emp[ename = 'Gogi']{ename, (dept d[d.deptno = emp.deptno]{loc}) dept}"
+        .map(e => (e.ename, e.dept)).toList
+    }
   }
 
   override def compilerMacro(implicit resources: Resources) = {
