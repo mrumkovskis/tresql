@@ -316,7 +316,7 @@ trait Query extends QueryBuilder with TypedQuery {
       case v: VarExpr => List(v.name ->
         Option(env.bindVarLogFilter).filter(_.isDefinedAt(v)).map(_(v)).getOrElse(v()))
       case r: ResExpr => List(r.name -> r())
-      case id: IdExpr => List(s"#${id.seqName}" -> "<seq value>")
+      case id: IdExpr => List(s"#${id.seqName}" -> id.peek)
       case ir: IdRefExpr => List(s":#${ir.seqName}" -> ir())
       case _ => Nil
     }

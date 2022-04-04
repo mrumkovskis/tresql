@@ -165,7 +165,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       if (updateCurrId) env.currId(seq, id)
       id
     }
-    override def toString = s"#$seqName = ${idFromEnv(false) getOrElse "<sequence next value>"}"
+    def peek = idFromEnv(false) getOrElse "<seq value>"
+    override def toString = s"#$seqName = $peek"
   }
 
   case class IdRefExpr(seqName: String) extends BaseVarExpr {
