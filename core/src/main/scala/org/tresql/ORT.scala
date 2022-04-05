@@ -259,7 +259,7 @@ trait ORT extends Query {
     build(tresql, obj, reusableExpr = false)(resources)()
   }
 
-  def delete(name: String, key: List[String], params: Map[String, Any], filter: String)(implicit
+  def delete(name: String, key: Seq[String], params: Map[String, Any], filter: String)(implicit
                                                                                         resources: Resources): Any = {
     val tresql = deleteTresql(name, key, filter)
     build(tresql, params, reusableExpr = false)(resources)()
@@ -277,7 +277,7 @@ trait ORT extends Query {
       update_tresql)
   }
 
-  def deleteTresql(name: String, key: List[String], filter: String)(implicit resources: Resources): String = {
+  def deleteTresql(name: String, key: Seq[String], filter: String)(implicit resources: Resources): String = {
     val OrtMetadata.Patterns.prop(db, tableName, _, alias, _) = name
     s"-${tableWithDb(db, tableName)}${if (alias == null) "" else " " + alias}[${
       key.map(c => c + " = :" + c).mkString(" & ")}${if (filter == null) "" else s" & ($filter)"}]"
