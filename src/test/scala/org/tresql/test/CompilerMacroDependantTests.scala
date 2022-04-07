@@ -1297,7 +1297,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         .map(d => d.dname -> d.e.map(e => e.ename -> e.job).toList).toList
     }
 
-    obj = Map("dname" -> "Security", "loc" -> "Warsaw", "emp[deptno, ename]" -> List(
+    obj = Map("dname" -> "Security", "loc" -> "Warsaw", "emp[ename]" -> List(
       Map("ename" -> "Pawel", "job" -> "Analyst"),
       Map("ename" -> "Marta", "job" -> "Tester"),
     ))
