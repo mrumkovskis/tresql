@@ -256,7 +256,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     println("\n------------------ Test dialects -----------------\n")
     implicit val testRes = tresqlResources.withDialect(dialects.PostgresqlDialect)
     assertResult(Query.build("a::'b'").sql)("select * from a::b")
-    assertResult(Query.build("a {1::int + 2::'double precision'}").sql)("select 1::int + 2::double precision from a")
+    assertResult(Query.build("a {1::int + 2::'double precision'}").sql)("select 1::integer + 2::double precision from a")
     assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] (addr a {a.addr}) a {da.addr = a.addr}").sql)(
       "update dept_addr da set da.addr = a.addr from (select a.addr from addr a) a where da.addr_nr = a.nr")
     assertResult(Query.build("=dept_addr da [da.addr_nr = a.nr] addr a {da.addr = a.addr}").sql)(

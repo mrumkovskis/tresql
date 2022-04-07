@@ -120,27 +120,41 @@ package object dialects {
   }
 
   val PostgresqlRawDialect: CoreTypes.Dialect = {
-    case c: QueryBuilder#ColExpr if c.alias != null => Option(c.col).map(_.sql).getOrElse("null") + " as " + c.alias
-    case c: QueryBuilder#CastExpr => c.exp.sql + "::" + (c.typ match {
-      case "string" => "text"
-      case "long" => "bigint"
-      case x => x
-    })
-    case u: QueryBuilder#UpdateExpr
-      if !u.isInstanceOf[QueryBuilder#WithUpdateExpr] &&
-        u.vals.isInstanceOf[QueryBuilder#SelectExpr] =>
-      val b = u.builder
+    // TODO support conversions for types with sizes
+    val mojozPgTypeMap = Map(
+      "string"    -> "text",
+      "short"     -> "smallint",
+      "int"       -> "integer",
+      "long"      -> "bigint",
+      "integer"   -> "numeric",
+      "float"     -> "float",
+      "double"    -> "double precision",
+      "decimal"   -> "numeric",
+      "boolean"   -> "bool",
+      "date"      -> "date",
+      "time"      -> "time",
+      "dateTime"  -> "timestamp",
+      "bytes"     -> "bytea",
+    )
+    ({
+      case c: QueryBuilder#ColExpr if c.alias != null => Option(c.col).map(_.sql).getOrElse("null") + " as " + c.alias
+      case c: QueryBuilder#CastExpr => c.exp.sql + "::" + mojozPgTypeMap.getOrElse(c.typ, c.typ)
+      case u: QueryBuilder#UpdateExpr
+        if !u.isInstanceOf[QueryBuilder#WithUpdateExpr] &&
+          u.vals.isInstanceOf[QueryBuilder#SelectExpr] =>
+        val b = u.builder
 
-      def applyAliases(q: b.SelectExpr, aliases: List[String]) = {
-        val cols = q.cols.copy(cols = (q.cols.cols zip aliases).map(ca => ca._1.copy(alias = ca._2)))
-        q.copy(cols = cols)
-      }
-      val vals = u.vals.asInstanceOf[b.SelectExpr]
-      val alias = Option(u.alias).map(_ + "_q").getOrElse(u.table.name.last + "_q")
-      "update " + u.table.sql + (if (u.alias == null) "" else " " + u.alias) +
-        " set " + u.cols.map(c => c.sql + s" = $alias." + c.sql).mkString(", ") + " from " + "(" +
-        applyAliases(vals, u.cols.map(_.sql)).sql + s") $alias" +
-        (if (u.filter == null) "" else " where " + u.where) + u.returningSql
+        def applyAliases(q: b.SelectExpr, aliases: List[String]) = {
+          val cols = q.cols.copy(cols = (q.cols.cols zip aliases).map(ca => ca._1.copy(alias = ca._2)))
+          q.copy(cols = cols)
+        }
+        val vals = u.vals.asInstanceOf[b.SelectExpr]
+        val alias = Option(u.alias).map(_ + "_q").getOrElse(u.table.name.last + "_q")
+        "update " + u.table.sql + (if (u.alias == null) "" else " " + u.alias) +
+          " set " + u.cols.map(c => c.sql + s" = $alias." + c.sql).mkString(", ") + " from " + "(" +
+          applyAliases(vals, u.cols.map(_.sql)).sql + s") $alias" +
+          (if (u.filter == null) "" else " where " + u.where) + u.returningSql
+    }): CoreTypes.Dialect
   }
 
   def HSQLDialect = HSQLRawDialect orElse CommonDialect orElse ANSISQLDialect
