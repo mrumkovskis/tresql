@@ -1101,7 +1101,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
 
     println("------ UPDATE by key test ------")
 
-    obj = Map("dname" -> "METEO", "loc" -> "Florida", "emp[ename, deptno][+-=]" -> List(
+    obj = Map("dname" -> "METEO", "loc" -> "Florida", "emp[ename][+-=]" -> List(
       Map("ename" -> "Selina", "job" -> "Observer" , "mgr" -> "KING", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
       Map("ename" -> "Paul", "job" -> "Observer" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
       Map("ename" -> "Ziko", "job" -> "Apprent" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
@@ -1114,7 +1114,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         .map(d => d.loc -> d.emps.map(e => (e.ename, e.job, e.mgr)).toList).toList
     }
 
-    obj = Map("dname" -> "METEO", "loc" -> "Florida", "emp[ename, deptno][+-=]" -> List(
+    obj = Map("dname" -> "METEO", "loc" -> "Florida", "emp[ename][+-=]" -> List(
       Map("ename" -> "Selina", "job" -> "Observer" , "mgr" -> "KING", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
       Map("ename" -> "Paul", "job" -> "Gardener" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
       Map("ename" -> "Mia", "job" -> "Gardener" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
@@ -1165,7 +1165,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           e.cars.map(c => c.car -> c.date_from.toString).toList)).toList).toList
     }
 
-    obj = Map("dname" -> "METEO", "loc" -> "Montana", "emp[ename, deptno][+-=]" ->
+    obj = Map("dname" -> "METEO", "loc" -> "Montana", "emp[ename][+-=]" ->
       List(
         Map("ename" -> "Selina", "job" -> "Driver" , "mgr" -> "Martino", "mgr->" -> "mgr=emp[ename = :mgr]{empno}",
           "car_usage[empno, car_nr][+-=]" ->

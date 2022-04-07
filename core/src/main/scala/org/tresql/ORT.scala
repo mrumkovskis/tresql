@@ -514,17 +514,21 @@ trait ORT extends Query {
       s"-${tableWithDb(view.db, tableName)}[$refToParent = :#$parent${filterString(ctx.view.filters, _.delete)}]"
     def delMissingChildren = {
       def del_children_tresql(data: SaveData) = {
+        def refsAndKey(rk: Set[(String, String)]) = {
+          val pk = data.pk.headOption.orNull
+          data.refsPkVals.partition(_._1 != pk) match {
+            case (refs: Set[(String, String)@unchecked], pk: Set[(String, String)@unchecked]) =>
+              (refs.toList, pk.toList)
+          }
+        }
         val (refCols, keyCols) =
           if (data.keyVals.nonEmpty) data.keyVals.partition(_._1.isInstanceOf[RefKeyCol]) match {
             case (refCols: List[(RefKeyCol, String)@unchecked], keyCols: List[(KeyCol, String)@unchecked]) =>
-              (refCols.map { case (k, v) => (k.name, v) }, keyCols.map { case (k, v) => (k.name, v) })
-          } else {
-            val pk = data.pk.headOption.orNull
-            data.refsPkVals.partition(_._1 != pk) match {
-              case (refs: Set[(String, String)@unchecked], pk: Set[(String, String)@unchecked]) =>
-                (refs.toList, pk.toList)
-            }
-          }
+              val (rc, kc) =
+                (refCols.map { case (k, v) => (k.name, v) }, keyCols.map { case (k, v) => (k.name, v) })
+              if (rc.nonEmpty) (rc, kc) else (refsAndKey(data.refsPkVals)._1, kc)
+          } else refsAndKey(data.refsPkVals)
+
           val refColsFilter = refCols.map { case (n, v) => s"$n = $v"}.mkString("&")
           val (key_arr, key_val_expr_arr) = keyCols.unzip match {
             case (kc, kv) => (s"[${kc.mkString(", ")}]", s"[${kv.mkString(", ")}]")
