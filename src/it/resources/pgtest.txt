@@ -507,7 +507,7 @@ salgrade[?] {grade} + dummy, "A" || " " || "B", dept[dname ~~ ?]{deptno} + dummy
 
 //----Scala and DB PROCEDURE CALL
 inc_val_5(5) --> [[10]]
-inc_val_5(?::integer) --> 10 --> [[15]]
+inc_val_5(?::int) --> 10 --> [[15]]
 
 //sequence test
 nextval("seq") --> [[10000]]
