@@ -1284,6 +1284,32 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       tresql"dept[dname = 'ADVERTISING'] { |emp {ename, job}#(ename) e}".map(_.e.map(e => e.ename -> e.job).toList).toList
     }
 
+    obj = Map("dname" -> "Security", "loc" -> "Warsaw", "emp[deptno, ename]" -> List(
+      Map("ename" -> "Carol", "job" -> "Analyst"),
+      Map("ename" -> "Marta", "job" -> "Tester"),
+    ))
+    assertResult(List(("Security", List(("Carol", "Analyst"), ("Marta", "Tester"))))) {
+      val md = ORT.ortMetadata("dept[dname]", obj)._1
+      resources log s"$md"
+      ORT.save(md, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Security'] { dname, |emp {ename, job}#(ename) e}"
+        .map(d => d.dname -> d.e.map(e => e.ename -> e.job).toList).toList
+    }
+
+    obj = Map("dname" -> "Security", "loc" -> "Warsaw", "emp[deptno, ename]" -> List(
+      Map("ename" -> "Pawel", "job" -> "Analyst"),
+      Map("ename" -> "Marta", "job" -> "Tester"),
+    ))
+    assertResult(List(("Security", List(("Marta", "Tester"), ("Pawel", "Analyst"))))) {
+      val md = ORT.ortMetadata("dept[dname]", obj)._1
+      resources log s"$md"
+      ORT.save(md, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Security'] { dname, |emp {ename, job}#(ename) e}"
+        .map(d => d.dname -> d.e.map(e => e.ename -> e.job).toList).toList
+    }
+
     println("------ KEY UPDATE test ------")
 
     obj = Map("number" -> "000", "new_number" -> "000000")
