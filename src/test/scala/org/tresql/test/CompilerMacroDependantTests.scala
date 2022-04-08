@@ -1584,6 +1584,9 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     intercept[Exception] { // should not save because lookup value - dept cannot be inserted
       ORT.save(view, obj)
     }
+
+    println("-------- ORT LOOKUP edit by key test --------")
+
     view = {
       import OrtMetadata._
       val lookupView =
