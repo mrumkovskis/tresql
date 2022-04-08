@@ -1,7 +1,6 @@
 package org.tresql
 
 import java.sql.{CallableStatement, PreparedStatement, ResultSet, SQLException}
-import sys._
 import CoreTypes.RowConverter
 
 trait Query extends QueryBuilder with TypedQuery {
@@ -311,13 +310,14 @@ trait Query extends QueryBuilder with TypedQuery {
     }
   }
 
-  private def bindVarsValues(bindVars: List[Expr]) = {
+  protected def bindVarsValues(bindVars: List[Expr]) = {
     bindVars.flatMap {
       case v: VarExpr => List(v.fullName ->
         Option(env.bindVarLogFilter).filter(_.isDefinedAt(v)).map(_(v)).getOrElse(v()))
       case r: ResExpr => List(r.name -> r())
       case id: IdExpr => List(s"#${id.seqName}" -> id.peek)
       case ir: IdRefExpr => List(s":#${ir.seqName}" -> ir())
+      case irid: ORT#IdRefIdExpr => List(s":#${irid.idRefSeq}#${irid.idSeq}" -> irid())
       case _ => Nil
     }
   }
