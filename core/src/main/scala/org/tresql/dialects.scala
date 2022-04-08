@@ -27,6 +27,9 @@ package object dialects {
       case s => s + s"/*${v.fullName}*/"
     }
     case r: QueryBuilder#ResExpr => r.defaultSQL + s"/*${r.name}*/"
+    case id: QueryBuilder#IdExpr => id.defaultSQL + s"/*#${id.seqName}*/"
+    case idref: QueryBuilder#IdRefExpr => idref.defaultSQL + s"/*:#${idref.seqName}*/"
+    case idrefid: ORT#IdRefIdExpr => idrefid.defaultSQL + s"/*:#${idrefid.idRefSeq}#${idrefid.idSeq}*/"
   }
 
   val CommonDialect: CoreTypes.Dialect = {
