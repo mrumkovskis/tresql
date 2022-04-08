@@ -565,7 +565,20 @@ trait ORT extends Query {
                 .mkString("[", " & ", s"$filter]")
             (cols.mkString(s"=${tableWithDb(db, tn)} $updateFilter {", ", ", "}") +
               filteredVals.mkString("[", ", ", "]"), hasChildren)
-          case _ => (null, false)
+          case _ => // no updatable columns, update primary key with self to return create empty update in the case this is used in upsert expression
+            val pkVals =
+              if (keyVals.nonEmpty) keyVals.map { case (kp, v) => (kp.name, v)}
+              else refsPkVals.filter(x => data.pk.contains(x._1))
+            val u =
+              if (pkVals.isEmpty) null
+              else {
+                val tn = table + (if (alias == null) "" else " " + alias)
+                val pkStr = data.pk.mkString(", ")
+                val filter = filterString(data.filters, _.update)
+                s"=${tableWithDb(db, tn)} [${
+                  pkVals.map {case (c, v) => s"$c = $v"} mkString(" & ")}$filter] {$pkStr} [$pkStr]"
+              }
+            (u, false)
         }).filter(_._1 != null)
           .map { case ut_hc@(ut, hc) =>
             if (upsert) {

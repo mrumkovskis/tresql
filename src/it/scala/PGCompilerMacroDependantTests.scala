@@ -439,7 +439,8 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
 
     //update only first table in one to one relationship
     obj = Map("deptno" -> 60, "dname" -> "POLAR BEAR", "loc" -> "ALASKA")
-    assertResult(1)(ORT.updateMultiple(obj, "dept", "dept_addr")())
+    assertResult(new UpdateResult(Some(1),Map("_1" -> new UpdateResult(Some(1)))))(
+      ORT.updateMultiple(obj, "dept", "dept_addr")())
 
     println("\n-------- EXTENDED CASES --------\n")
 
@@ -486,7 +487,9 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
     assertResult(((1,List((1,10036), (1,10036))),10036)) { ORT.insertMultiple(obj, "dept", "emp", "work:empno")() }
 
     obj = Map("deptno" -> 10036, "wdate" -> java.sql.Date.valueOf("2015-10-01"), "hours" -> 4)
-    assertResult(List(1)) { ORT.updateMultiple(obj, "dept", "emp", "work:empno")() }
+    assertResult(new UpdateResult(None, Map("_1" -> new UpdateResult(Some(1)), "_2" -> new UpdateResult(Some(1))))) {
+      ORT.updateMultiple(obj, "dept", "emp", "work:empno")()
+    }
 
     obj = Map("deptno" -> 10036, "work:empno" -> List(Map("wdate" -> java.sql.Date.valueOf("2015-10-10"), "hours" -> 5)))
     assertResult(List(List(1, List(1)))) { ORT.updateMultiple(obj, "dept", "emp")() }
