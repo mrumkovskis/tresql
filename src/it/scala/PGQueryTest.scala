@@ -145,8 +145,8 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
         case D(d) => DF.parse(d)
         case T(t) => TF.parse(t)
         case N(n,_) => BigDecimal(n)
-        case A(a, ac) =>
-          if (ac.length == 0) List()
+        case A(_, ac) =>
+          if (ac.isEmpty) List()
           else ac.split(",").map(par).toList
         case x => error("unparseable parameter: " + x)
       }
