@@ -165,16 +165,30 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       if (updateCurrId) env.currId(seq, id)
       id
     }
-    def peek = idFromEnv(false) getOrElse "<seq value>"
+    def peek: Any = idFromEnv(false) getOrElse "<seq value>"
     override def toString = s"#$seqName = $peek"
   }
 
   case class IdRefExpr(seqName: String) extends BaseVarExpr {
-    override def apply() = getId(seqName).getOrElse(
+    private val (seq, bind_var) = {
+      val idx = seqName.indexOf(':')
+      if (idx == -1) (seqName, None)
+      else (seqName.substring(0, idx), Option(seqName.substring(idx + 1)))
+    }
+    override def apply() = {
+      bind_var.map { key =>
+        if (env.containsNearest(key) && env(key) != null) {
+          val id = env(key)
+          env.currId(seq, id)
+          id
+        } else null
+      }.orElse(getId(seq)).getOrElse(
         error(s"Current id not found for sequence '$seqName' in environment:\n$env"))
+    }
     private def getId(name: String): Option[Any] = env.idRefOption(name).orElse {
       env.tableOption(name).flatMap(t=> t.refTable.get(t.key.cols).map(getId))
     }
+    def peek: Any = bind_var.flatMap(env.get).orElse(getId(seq)).getOrElse(null)
     override def toString = s":#$seqName = ${getId(seqName).getOrElse("?")}"
   }
 

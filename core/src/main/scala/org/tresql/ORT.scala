@@ -20,6 +20,15 @@ trait ORT extends Query {
     }
 
   case class ParentRef(table: String, ref: String)
+  sealed trait IdOrRefVal { def name: String; def value: String }
+  /** This is used in insert expression */
+  case class IdVal(name: String, value: String) extends IdOrRefVal
+  /** This is use in update and missing children delete expression */
+  case class IdRefVal(name: String, value: String) extends IdOrRefVal
+  /** This is used for save to multiple linked tables or if reference to parent matches primary key */
+  case class IdRefIdVal(name: String, value: String) extends IdOrRefVal
+  /** This is used to set child reference to parent */
+  case class IdParentVal(name: String, value: String) extends IdOrRefVal
   sealed trait KeyPart { def name: String }
   case class KeyCol(name: String) extends KeyPart
   case class RefKeyCol(name: String) extends KeyPart
@@ -35,7 +44,7 @@ trait ORT extends Query {
                       pk: List[String],
                       alias: String,
                       colsVals: List[ColVal],
-                      refsPkVals: Set[(String, String)],
+                      refsPkVals: Set[IdOrRefVal],
                       keyVals: Seq[(KeyPart, String)],
                       filters: Option[Filters],
                       upsert: Boolean,
@@ -67,22 +76,10 @@ trait ORT extends Query {
           }
           res(upsertExpr(m))
         case null => null
-        case x => error(s"Cannot set environment variables for the LookupUpsertExpr from $objProp. $x is not a map.")
+        case x => x
       }
     }
     def defaultSQL = s"LookupUpsertExpr($objProp, $idProp, $upsertExpr, $idSelExpr)"
-  }
-  /** Expression is built from macros to ensure ORT children editing
-   * Differs from {{{UpsertExpr}}} in a way that if pk value is not available in the environment do directly insert
-   * statement not trying to execute update statement before.
-   * */
-  case class UpdateOrInsertExpr(idProp: String, updateExpr: Expr, insertExpr: Expr)
-  extends BaseExpr {
-    private val upsertExpr = UpsertExpr(updateExpr, insertExpr)
-    override def apply() =
-      if (idProp != null && env.containsNearest(idProp) && env(idProp) != null)
-        upsertExpr() else insertExpr()
-    def defaultSQL = s"UpdateOrInsertExpr($idProp, $updateExpr, $insertExpr)"
   }
   /**
    * Try to execute {{{updateExpr}}} and if no rows affected execute {{{insertExpr}}}
@@ -478,7 +475,8 @@ trait ORT extends Query {
 
   private def table_insert_tresql(saveData: SaveData) = {
     import saveData._
-    colsVals.filter(_.forInsert).map(cv => cv.col -> cv.value) ++ refsPkVals match {
+    val refsAndPk = refsPkVals.collect {case x if !x.isInstanceOf[IdRefVal] => (x.name, x.value)}
+    colsVals.filter(_.forInsert).map(cv => cv.col -> cv.value) ++ refsAndPk match {
       case cols_vals =>
         val (cols, vals) = cols_vals.unzip
         cols.mkString(s"+${tableWithDb(db, table)} {", ", ", "}") +
@@ -514,9 +512,10 @@ trait ORT extends Query {
       s"-${tableWithDb(view.db, tableName)}[$refToParent = :#$parent${filterString(ctx.view.filters, _.delete)}]"
     def delMissingChildren = {
       def del_children_tresql(data: SaveData) = {
-        def refsAndKey(rk: Set[(String, String)]) = {
+        def refsAndKey(rk: Set[IdOrRefVal]) = {
+          val rkf = rk.collect {case x if !x.isInstanceOf[IdRefVal] => (x.name, x.value)}
           val pk = data.pk.headOption.orNull
-          data.refsPkVals.partition(_._1 != pk) match {
+          rkf.partition(_._1 != pk) match {
             case (refs: Set[(String, String)@unchecked], pk: Set[(String, String)@unchecked]) =>
               (refs.toList, pk.toList)
           }
@@ -529,7 +528,7 @@ trait ORT extends Query {
               if (rc.nonEmpty) (rc, kc) else (refsAndKey(data.refsPkVals)._1, kc)
           } else refsAndKey(data.refsPkVals)
 
-          val refColsFilter = refCols.map { case (n, v) => s"$n = $v"}.mkString("&")
+          val refColsFilter = refCols.map { case (n, v) => s"$n = $v"}.mkString(" & ")
           val (key_arr, key_val_expr_arr) = keyCols.unzip match {
             case (kc, kv) => (s"[${kc.mkString(", ")}]", s"[${kv.mkString(", ")}]")
           }
@@ -553,6 +552,7 @@ trait ORT extends Query {
             }
           else colsVals.filter(_.forUpdate))
             .map(cv => cv.col -> cv.value)
+        val refsAndPk = refsPkVals.collect {case x if !x.isInstanceOf[IdVal] => (x.name, x.value)}
         val (upd_tresql, hasChildren) = Option(filteredColsVals.unzip match {
           case (cols: List[String], vals: List[String]) if cols.nonEmpty =>
             val tn = table + (if (alias == null) "" else " " + alias)
@@ -561,14 +561,14 @@ trait ORT extends Query {
             val hasChildren = cols.size > filteredVals.size
             def updFilter(f: Iterable[(String, String)]) = f.map(fc => s"${fc._1} = ${fc._2}")
             val updateFilter =
-              updFilter(if (keyVals.nonEmpty && !hasChildren) keyVals.map(kp => (kp._1.name, kp._2)) else refsPkVals)
+              updFilter(if (keyVals.nonEmpty && !hasChildren) keyVals.map(kp => (kp._1.name, kp._2)) else refsAndPk)
                 .mkString("[", " & ", s"$filter]")
             (cols.mkString(s"=${tableWithDb(db, tn)} $updateFilter {", ", ", "}") +
               filteredVals.mkString("[", ", ", "]"), hasChildren)
           case _ => // no updatable columns, update primary key with self to return create empty update in the case this is used in upsert expression
             val pkVals =
               if (keyVals.nonEmpty) keyVals.map { case (kp, v) => (kp.name, v)}
-              else refsPkVals.filter(x => data.pk.contains(x._1))
+              else refsAndPk.filter(x => data.pk.contains(x._1))
             val u =
               if (pkVals.isEmpty) null
               else {
@@ -612,18 +612,7 @@ trait ORT extends Query {
       }
       save_tresql_internal(ctx, table_save_tresql, save_tresql(_, _, _, _, insert_tresql))
     }
-    def updOrIns = {
-      if (saveTo.key.nonEmpty)
-        s"|_upsert($upd, $ins)" //upsert for save by key since primary key is not accessible
-      else {
-        val pk = table.key.cols match { case List(c) => c case _ => null }
-        val idProp = view.properties.collectFirst {
-          case OrtMetadata.Property(`pk`, TresqlValue(tresql, _, _))
-            if tresql.startsWith(":") && tresql.substring(1) != pk => tresql.substring(1)
-        }.getOrElse(pk)
-        s"""|${if (view.db != null) view.db + ":" else ""}_update_or_insert('$idProp', $upd, $ins)"""
-      }
-    }
+    def updOrIns = s"|_upsert($upd, $ins)"
 
     import ctx.saveOptions._
     val pk = table.key.cols
@@ -659,13 +648,13 @@ trait ORT extends Query {
     def tresql_string(
       table: metadata.Table,
       alias: String,
-      refsPkAndKey: (Set[(String, String)], Seq[(KeyPart, String)]),
+      refsPkAndKey: (Set[IdOrRefVal], Seq[(KeyPart, String)]),
       children: Seq[String],
       upsert: Boolean
     ) = {
       val (refsAndPk, key) = refsPkAndKey
       ctx.view.properties.flatMap {
-        case OrtMetadata.Property(col, _) if refsAndPk.exists(_._1 == col) => Nil
+        case OrtMetadata.Property(col, _) if refsAndPk.exists(_.name == col) => Nil
         case OrtMetadata.Property(col, KeyValue(_, valueTresql)) =>
           List(ColVal(table.colOption(col).map(_.name).orNull, valueTresql, true, true))
         case OrtMetadata.Property(col, TresqlValue(tresql, forInsert, forUpdate)) =>
@@ -712,12 +701,7 @@ trait ORT extends Query {
             val idPropName = idProp(lookupView, lookupTable)
             val update = save_tresql(null, lookupView, Nil, SaveOptions(true, false, true), update_tresql)
             val insert = save_tresql(null, lookupView, Nil, SaveOptions(true, false, true), insert_tresql)
-            val lookupUpsert =
-              if (saveTo(lookupView, lookupTable.name).exists(_.key.nonEmpty)) {
-                s"|_upsert($update, $insert)"
-              } else {
-                s"|_update_or_insert('$idPropName', $update, $insert)"
-              }
+            val lookupUpsert = s"|_upsert($update, $insert)"
             val lookupIdSel = idSelExpr(lookupView, lookupTable)
 
             List(
@@ -755,32 +739,40 @@ trait ORT extends Query {
     val parent = ctx.parents.headOption.map(_.table).orNull
     def refsPkAndKey(tbl: metadata.Table,
                      refs: Set[String],
-                     key: Seq[String]): (Set[(String, String)], Seq[(KeyPart, String)]) = {
+                     key: Seq[String]): (Set[IdOrRefVal], Seq[(KeyPart, String)]) = {
       def idRefId(idRef: String, id: String) = s"_id_ref_id($idRef, $id)"
       def getPk(t: metadata.Table) = t.key.cols match { case List(c) => c case _ => null }
-      def idExp(t: metadata.Table) = {
-        val pk = getPk(t)
+      def idExp(t: String, pk: String): Set[IdOrRefVal] = {
         ctx.view.properties.collectFirst {
           case OrtMetadata.Property(`pk`, TresqlValue(tresql, _, _))
-            if tresql.startsWith(":") && tresql.substring(1) != pk => s"#${t.name}$tresql"
-        }.getOrElse(s"#${t.name}")
+            if tresql.startsWith(":") && tresql.substring(1) != pk =>
+            Set[IdOrRefVal](IdVal(pk, s"#$t$tresql"), IdRefVal(pk, s":#$t$tresql"))
+        }.getOrElse(Set[IdOrRefVal](IdVal(pk, s"#$t"), IdRefVal(pk, s":#$t:$pk")))
       }
       val pk = getPk(ctx.table)
-      val refsPk =
+      val refsPk: Set[IdOrRefVal] =
         //ref table (set fk and pk)
-        (if (tbl.name == ctx.table.name && ctx.refToParent != null) if (ctx.refToParent == pk)
-          Set(pk -> idRefId(parent, tbl.name)) else Set(ctx.refToParent -> s":#$parent") ++
-            (if (pk == null || refs.contains(pk)) Set() else Set(pk -> idExp(tbl)))
+        (if (tbl.name == ctx.table.name && ctx.refToParent != null)
+          if (ctx.refToParent == pk)
+            Set(IdRefIdVal(pk, idRefId(parent, tbl.name)))
+          else
+            Set(IdParentVal(ctx.refToParent, s":#$parent")) ++
+              (if (pk == null || refs.contains(pk)) Set() else idExp(tbl.name, pk))
         //not ref table (set pk)
-        else Option(tbl.key.cols)
-          .filter(k=> k.size == 1 && !refs.contains(k.head)).map(_.head -> idExp(tbl)).toSet) ++
-        //set refs
-        (if(tbl.name == headTable.table) Set() else refs
-            //filter out pk of the linked table in case it matches refToParent
-            .filterNot(tbl.name == ctx.table.name && _ == ctx.refToParent)
-            .map(_ -> idRefId(headTable.table, tbl.name)))
+        else
+          Option(tbl.key.cols)
+            .collectFirst{ case k if k.size == 1 && !refs.contains(k.head) => k.head }
+            .map(idExp(tbl.name, _)).getOrElse(Set())
+        ) ++ //set refs
+        ( if(tbl.name == headTable.table)
+            Set()
+          else //filter out pk of the linked table in case it matches refToParent
+            refs
+              .filterNot(tbl.name == ctx.table.name && _ == ctx.refToParent)
+              .map(IdRefIdVal(_, idRefId(headTable.table, tbl.name)))
+        )
       (refsPk,
-        key.map(k => refsPk.collectFirst { case (n, v) if n == k && k != pk => RefKeyCol(n) -> v }
+        key.map(k => refsPk.collectFirst { case x if x.name == k && k != pk => RefKeyCol(x.name) -> x.value }
           .getOrElse(KeyCol(k) ->
             ctx.view.properties
               .collectFirst {

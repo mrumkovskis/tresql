@@ -110,10 +110,6 @@ class Macros {
       idSelExpr
     )
 
-  def _update_or_insert(b: ORT,
-                        idProp: QueryBuilder#ConstExpr, updateExpr: Expr, insertExpr: Expr) =
-    b.UpdateOrInsertExpr(String valueOf idProp.value, updateExpr, insertExpr)
-
   def _upsert(b: ORT, updateExpr: Expr, insertExpr: Expr) = b.UpsertExpr(updateExpr, insertExpr)
 
   def _delete_missing_children(b: ORT,
