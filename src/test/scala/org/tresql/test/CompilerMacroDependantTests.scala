@@ -1588,9 +1588,14 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       ORT.save(view, obj)
     }
 
+    ortLookupByKey
+  }
+
+  private def ortLookupByKey(implicit resources: Resources) = {
     println("-------- ORT LOOKUP edit by key test --------")
 
-    view = {
+    var obj = Map("ename" -> "Gogi", "dept" -> Map("dname" -> "Mount", "loc" -> "Georgia"))
+    var view = {
       import OrtMetadata._
       val lookupView =
         View(
@@ -1612,6 +1617,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       tresql"emp[ename = 'Gogi']{ename, (dept d[d.deptno = emp.deptno]{dname}) dept}"
         .map(e => (e.ename, e.dept)).toList
     }
+
     obj = Map("ename" -> "Gogi", "dept" -> Map("dname" -> "Mount", "loc" -> "Tbilisi"))
     assertResult(List(("Gogi", "Tbilisi"))) {
       ORT.save(view, obj)
@@ -1621,6 +1627,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     }
 
     println("-------- ORT LOOKUP ref update, empty LOOKUP update test --------")
+
     view = {
       import OrtMetadata._
       val lookupView =
@@ -1692,6 +1699,37 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       ORT.save(view, obj)
       println(s"\nResult check:")
       tresql"emp[ename = 'Christina']{ename, (dept d[d.deptno = emp.deptno]{loc}) dept}"
+        .map(e => (e.ename, e.dept)).toList
+    }
+
+    // lookup obj key equals table primary key
+    view = {
+      import OrtMetadata._
+      val lookupView =
+        View(
+          List(SaveTo("dept", Set(), List("deptno"))), None, null, true, true,
+          List(
+            Property("deptno", TresqlValue(":deptno", true, true)),
+          ), null)
+      View(
+        List(SaveTo("emp", Set(), List("ename"))), None, null, true, true,
+        List(
+          Property("ename", TresqlValue(":ename", true, true)),
+          Property("deptno", LookupViewValue("dept", lookupView))
+        ), null)
+    }
+    obj = Map("ename" -> "Britney", "dept" -> Map("deptno" -> tresql"dept[dname = 'Space']{deptno}".unique[Long]))
+    assertResult(List(("Britney", "Venus"))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"emp[ename = 'Britney']{ename, (dept d[d.deptno = emp.deptno]{loc}) dept}"
+        .map(e => (e.ename, e.dept)).toList
+    }
+    obj = Map("ename" -> "Britney", "dept" -> Map("deptno" -> tresql"dept[dname = 'Mount']{deptno}".unique[Long]))
+    assertResult(List(("Britney", "Tbilisi"))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"emp[ename = 'Britney']{ename, (dept d[d.deptno = emp.deptno]{loc}) dept}"
         .map(e => (e.ename, e.dept)).toList
     }
   }
