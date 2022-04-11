@@ -284,136 +284,12 @@ trait ORT extends Query {
                    obj: Map[String, Any],
                    save_tresql_fun: SaveContext => String,
                    errorMsg: String)(implicit resources: Resources): Any = {
-    val (view, saveOptions) = ortMetadata(name, obj)
+    val (view, saveOptions) = OrtMetadata.ortMetadata(name, obj)
     resources log s"$view"
     val tresql = save_tresql(null, view, Nil, saveOptions,
       save_tresql_fun)
     if(tresql == null) error(errorMsg)
     build(tresql, obj, reusableExpr = false)(resources)()
-  }
-
-  /** This method is for debugging purposes. */
-  def ortMetadata(tables: String, saveableMap: Map[String, Any])(implicit resources: Resources): (View, SaveOptions) = {
-    def tresql_structure(obj: Map[String, Any]): Map[String, Any] = {
-      def merge(lm: Seq[Map[String, Any]]): Map[String, Any] =
-        lm.tail.foldLeft(tresql_structure(lm.head)) {(l, m) =>
-          val x = tresql_structure(m)
-          l map (t => (t._1, (t._2, x.getOrElse(t._1, null)))) map {
-            case (k, (v1: Map[String @unchecked, _], v2: Map[String @unchecked, _])) if v1.nonEmpty && v2.nonEmpty =>
-              (k, merge(List(v1, v2)))
-            case (k, (v1: Map[String @unchecked, _], _)) if v1.nonEmpty => (k, v1)
-            case (k, (_, v2: Map[String @unchecked, _])) if v2.nonEmpty => (k, v2)
-            case (k, (v1, _)) => (k, v1 match {
-              case _: Map[_, _] | _: Seq[_] => v1
-              case _ if k endsWith "->" => v1
-              case _ => "***"
-            })
-          }
-        }
-      var resolvableProps = Set[String]()
-      val struct: Map[String, Any] = obj.map { case (key, value) =>
-        (key, value match {
-          case Seq() | Array() => Map()
-          case l: Seq[Map[String, _] @unchecked] => merge(l)
-          case l: Array[Map[String, _] @unchecked] => merge(l.toIndexedSeq)
-          case m: Map[String, Any] @unchecked => tresql_structure(m)
-          case x =>
-            //filter out properties which are duplicated because of resolver
-            if (key endsWith "->") {
-              resolvableProps += key.substring(0, key.length - "->".length)
-              value
-            } else "***"
-        })
-      }
-      if (resolvableProps.isEmpty) struct
-      else struct.flatMap { case (k, _) if resolvableProps(k) => Nil case x => List(x) }
-    }
-    def parseTables(name: String) = {
-      def saveTo(tables: String, md: Metadata) = {
-        def multiSaveProp(names: Seq[String]) = {
-          /* Returns zero or one imported key from table for each relation. In the case of multiple
-           * imported keys pointing to the same relation the one specified after : symbol is chosen
-           * or exception is thrown.
-           * This is used to find relation columns for insert/update multiple methods.
-           * Additionaly primary key of table is returned if it consist only of one column */
-          def importedKeysAndPks(tableName: String, relations: List[String]) = {
-            val x = tableName split ":"
-            val table = md.table(x.head)
-            relations.foldLeft(x.tail.toSet) { (keys, rel) =>
-              val relation = rel.split(":").head
-              val refs = table.refs(relation).filter(_.cols.size == 1)
-              (if (refs.size == 1) keys + refs.head.cols.head
-              else if (refs.isEmpty || refs.exists(r => keys.contains(r.cols.head))) keys
-              else error(s"Ambiguous refs: $refs from table ${table.name} to table $relation")) ++
-                (table.key.cols match {case List(k) => Set(k) case _ => Set()})
-            }
-          }
-          names.tail.foldLeft(List(names.head)) { (ts, t) => (t.split(":")
-            .head + importedKeysAndPks(t, ts).mkString(":", ":", "")) :: ts
-          }.reverse
-        }
-        tables.split("#").map { t =>
-          val ki = t.indexOf("[")
-          if (ki != -1) {
-            (t.substring(0, ki), t.substring(ki + 1, t.length - 1).split("\\s*,\\s*").toList)
-          } else (t, Nil)
-        }.unzip match {
-          case (names, keys) => multiSaveProp(names.toIndexedSeq) zip keys map { case (table, key) =>
-            val t = table.split(":")
-            SaveTo(t.head, t.tail.toSet, key)
-          }
-        }
-      }
-      val OrtMetadata.Patterns.prop(db, tables, options, alias, filterStr) = name
-      //insert update delete option
-      val (i, u, d) = Option(options).map (_ =>
-        (options contains "+", options contains "=", options contains "-")
-      ).getOrElse {(true, false, true)}
-      import parsing.{Arr, Null}
-      val filters =
-        Option(filterStr).flatMap(new QueryParser(resources, resources.cache).parseExp(_) match {
-          case Arr(List(insert, delete, update)) => Some(Filters(
-            insert = Some(insert).filter(_ != Null).map(_.tresql),
-            update = Some(update).filter(_ != Null).map(_.tresql),
-            delete = Some(delete).filter(_ != Null).map(_.tresql),
-          ))
-          case _ => error(s"""Unrecognized filter declaration '$filterStr'.
-                             |Must consist of 3 comma separated tresql expressions: insertFilter, deleteFilter, updateFilter.
-                             |In the case expression is not needed it must be set to 'null'.""".stripMargin)
-        })
-      (View(saveTo(tables, tresqlMetadata(db)), filters, alias, true, true, Nil, db), SaveOptions(i, u, d))
-    }
-    def resolver_tresql(property: String, resolverExp: String) = {
-      import parsing._
-      val OrtMetadata.Patterns.resolverProp(prop) = property
-      val OrtMetadata.Patterns.resolverExp(col, exp) = resolverExp
-      val parser = new QueryParser(resources, resources.cache)
-      OrtMetadata.Property(col, TresqlValue(
-        parser.transformer {
-          case Ident(List("_")) => Variable(prop, Nil, opt = false)
-        } (parser.parseExp(if (exp startsWith "(" ) exp else s"($exp)")).tresql, true, true
-      ))
-    }
-    val struct = tresql_structure(saveableMap)
-    val (view, saveOptions) = parseTables(tables)
-    val props =
-      struct.map {
-        case (prop, value) => value match {
-          case m: Map[String, Any]@unchecked =>
-            val md = tresqlMetadata(view.db)
-            view.saveTo.collectFirst {
-              case st if md.tableOption(st.table).exists(_.refTable.contains(List(prop))) => //lookup table found
-                val lookupTable = md.table(st.table).refTable(List(prop))
-                OrtMetadata.Property(prop, LookupViewValue(prop, ortMetadata(lookupTable, m)._1))
-            }.getOrElse {
-              val (v, so) = ortMetadata(prop, m)
-              OrtMetadata.Property(prop, ViewValue(v, so))
-            }
-          case v: String if prop.indexOf("->") != -1 => resolver_tresql(prop, v)
-          case _ => OrtMetadata.Property(prop, TresqlValue(s":$prop", true, true))
-        }
-      }.toList
-    (view.copy(properties = props), saveOptions)
   }
 
   private def tresqlMetadata(db: String)(implicit resources: Resources) =
@@ -912,6 +788,132 @@ object OrtMetadata {
     val ResolverExpPattern = "([^=]+)=(.*)"r
 
     PropPatterns((db + tables + options + alias + filters)r, tables.r, ResolverPropPattern, ResolverExpPattern)
+  }
+
+  /** This method is for debugging purposes. */
+  def ortMetadata(tables: String, saveableMap: Map[String, Any])(implicit resources: Resources): (View, SaveOptions) = {
+    def tresqlMetadata(db: String)(implicit resources: Resources) =
+      if (db == null) resources.metadata else resources.extraResources(db).metadata
+    def tresql_structure(obj: Map[String, Any]): Map[String, Any] = {
+      def merge(lm: Seq[Map[String, Any]]): Map[String, Any] =
+        lm.tail.foldLeft(tresql_structure(lm.head)) {(l, m) =>
+          val x = tresql_structure(m)
+          l map (t => (t._1, (t._2, x.getOrElse(t._1, null)))) map {
+            case (k, (v1: Map[String @unchecked, _], v2: Map[String @unchecked, _])) if v1.nonEmpty && v2.nonEmpty =>
+              (k, merge(List(v1, v2)))
+            case (k, (v1: Map[String @unchecked, _], _)) if v1.nonEmpty => (k, v1)
+            case (k, (_, v2: Map[String @unchecked, _])) if v2.nonEmpty => (k, v2)
+            case (k, (v1, _)) => (k, v1 match {
+              case _: Map[_, _] | _: Seq[_] => v1
+              case _ if k endsWith "->" => v1
+              case _ => "***"
+            })
+          }
+        }
+      var resolvableProps = Set[String]()
+      val struct: Map[String, Any] = obj.map { case (key, value) =>
+        (key, value match {
+          case Seq() | Array() => Map()
+          case l: Seq[Map[String, _] @unchecked] => merge(l)
+          case l: Array[Map[String, _] @unchecked] => merge(l.toIndexedSeq)
+          case m: Map[String, Any] @unchecked => tresql_structure(m)
+          case x =>
+            //filter out properties which are duplicated because of resolver
+            if (key endsWith "->") {
+              resolvableProps += key.substring(0, key.length - "->".length)
+              value
+            } else "***"
+        })
+      }
+      if (resolvableProps.isEmpty) struct
+      else struct.flatMap { case (k, _) if resolvableProps(k) => Nil case x => List(x) }
+    }
+    def parseTables(name: String) = {
+      def saveTo(tables: String, md: Metadata) = {
+        def multiSaveProp(names: Seq[String]) = {
+          /* Returns zero or one imported key from table for each relation. In the case of multiple
+           * imported keys pointing to the same relation the one specified after : symbol is chosen
+           * or exception is thrown.
+           * This is used to find relation columns for insert/update multiple methods.
+           * Additionaly primary key of table is returned if it consist only of one column */
+          def importedKeysAndPks(tableName: String, relations: List[String]) = {
+            val x = tableName split ":"
+            val table = md.table(x.head)
+            relations.foldLeft(x.tail.toSet) { (keys, rel) =>
+              val relation = rel.split(":").head
+              val refs = table.refs(relation).filter(_.cols.size == 1)
+              (if (refs.size == 1) keys + refs.head.cols.head
+              else if (refs.isEmpty || refs.exists(r => keys.contains(r.cols.head))) keys
+              else error(s"Ambiguous refs: $refs from table ${table.name} to table $relation")) ++
+                (table.key.cols match {case List(k) => Set(k) case _ => Set()})
+            }
+          }
+          names.tail.foldLeft(List(names.head)) { (ts, t) => (t.split(":")
+            .head + importedKeysAndPks(t, ts).mkString(":", ":", "")) :: ts
+          }.reverse
+        }
+        tables.split("#").map { t =>
+          val ki = t.indexOf("[")
+          if (ki != -1) {
+            (t.substring(0, ki), t.substring(ki + 1, t.length - 1).split("\\s*,\\s*").toList)
+          } else (t, Nil)
+        }.unzip match {
+          case (names, keys) => multiSaveProp(names.toIndexedSeq) zip keys map { case (table, key) =>
+            val t = table.split(":")
+            SaveTo(t.head, t.tail.toSet, key)
+          }
+        }
+      }
+      val OrtMetadata.Patterns.prop(db, tables, options, alias, filterStr) = name
+      //insert update delete option
+      val (i, u, d) = Option(options).map (_ =>
+        (options contains "+", options contains "=", options contains "-")
+      ).getOrElse {(true, false, true)}
+      import parsing.{Arr, Null}
+      val filters =
+        Option(filterStr).flatMap(new QueryParser(resources, resources.cache).parseExp(_) match {
+          case Arr(List(insert, delete, update)) => Some(Filters(
+            insert = Some(insert).filter(_ != Null).map(_.tresql),
+            update = Some(update).filter(_ != Null).map(_.tresql),
+            delete = Some(delete).filter(_ != Null).map(_.tresql),
+          ))
+          case _ => error(s"""Unrecognized filter declaration '$filterStr'.
+                             |Must consist of 3 comma separated tresql expressions: insertFilter, deleteFilter, updateFilter.
+                             |In the case expression is not needed it must be set to 'null'.""".stripMargin)
+        })
+      (View(saveTo(tables, tresqlMetadata(db)), filters, alias, true, true, Nil, db), SaveOptions(i, u, d))
+    }
+    def resolver_tresql(property: String, resolverExp: String) = {
+      import parsing._
+      val OrtMetadata.Patterns.resolverProp(prop) = property
+      val OrtMetadata.Patterns.resolverExp(col, exp) = resolverExp
+      val parser = new QueryParser(resources, resources.cache)
+      OrtMetadata.Property(col, TresqlValue(
+        parser.transformer {
+          case Ident(List("_")) => Variable(prop, Nil, opt = false)
+        } (parser.parseExp(if (exp startsWith "(" ) exp else s"($exp)")).tresql, true, true
+      ))
+    }
+    val struct = tresql_structure(saveableMap)
+    val (view, saveOptions) = parseTables(tables)
+    val props =
+      struct.map {
+        case (prop, value) => value match {
+          case m: Map[String, Any]@unchecked =>
+            val md = tresqlMetadata(view.db)
+            view.saveTo.collectFirst {
+              case st if md.tableOption(st.table).exists(_.refTable.contains(List(prop))) => //lookup table found
+                val lookupTable = md.table(st.table).refTable(List(prop))
+                OrtMetadata.Property(prop, LookupViewValue(prop, ortMetadata(lookupTable, m)._1))
+            }.getOrElse {
+              val (v, so) = ortMetadata(prop, m)
+              OrtMetadata.Property(prop, ViewValue(v, so))
+            }
+          case v: String if prop.indexOf("->") != -1 => resolver_tresql(prop, v)
+          case _ => OrtMetadata.Property(prop, TresqlValue(s":$prop", true, true))
+        }
+      }.toList
+    (view.copy(properties = props), saveOptions)
   }
 }
 

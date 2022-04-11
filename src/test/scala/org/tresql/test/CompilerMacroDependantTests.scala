@@ -1292,7 +1292,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       Map("ename" -> "Marta", "job" -> "Tester"),
     ))
     assertResult(List(("Security", List(("Carol", "Analyst"), ("Marta", "Tester"))))) {
-      val md = ORT.ortMetadata("dept[dname]", obj)._1
+      val md = OrtMetadata.ortMetadata("dept[dname]", obj)._1
       resources log s"$md"
       ORT.save(md, obj)
       println(s"\nResult check:")
@@ -1305,7 +1305,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       Map("ename" -> "Marta", "job" -> "Tester"),
     ))
     assertResult(List(("Security", List(("Marta", "Tester"), ("Pawel", "Analyst"))))) {
-      val md = ORT.ortMetadata("dept[dname]", obj)._1
+      val md = OrtMetadata.ortMetadata("dept[dname]", obj)._1
       resources log s"$md"
       ORT.save(md, obj)
       println(s"\nResult check:")
