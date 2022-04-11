@@ -106,7 +106,7 @@ trait ORT extends Query {
       // clear bind variables in the case expression is repeatedly executed and bind variable count has changed
       delExpr.builder.clearRegisteredBindVariables()
       key_val_exprs match {
-        case List(_: VarExpr | _: IdExpr) =>
+        case List(_: BaseVarExpr) =>
           delExpr(Map("keys" -> {
             env(obj) match {
               case s: Seq[Map[String, _] @unchecked] =>
@@ -131,7 +131,7 @@ trait ORT extends Query {
     override def defaultSQL = env.get("keys").map {
       case keyVals: Seq[_] if keyVals.isEmpty => ConstExpr(true).sql
       case keyVals: Seq[_] => key_val_exprs match {
-        case List(_: VarExpr | _: IdExpr) =>
+        case List(_: BaseVarExpr) =>
           InExpr(key.head, List(VarExpr("keys", Nil, false)), true).sql
         case _ =>
           def comp(key_part_and_expr: (Expr, Expr), i: Int) =
@@ -394,7 +394,7 @@ trait ORT extends Query {
     def delMissingChildren = {
       def del_children_tresql(data: SaveData) = {
         def refsAndKey(rk: Set[IdOrRefVal]) = {
-          val rkf = rk.collect {case x if !x.isInstanceOf[IdRefVal] => (x.name, x.value)}
+          val rkf = rk.collect {case x if !x.isInstanceOf[IdVal] => (x.name, x.value)}
           val pk = data.pk.headOption.orNull
           rkf.partition(_._1 != pk) match {
             case (refs: Set[(String, String)@unchecked], pk: Set[(String, String)@unchecked]) =>
