@@ -242,16 +242,19 @@ trait ORT extends Query {
   }
 
   def insert(metadata: View, obj: Map[String, Any])(implicit resources: Resources): Any = {
+    resources.log(s"$metadata", Nil, LogTopic.ort)
     val tresql = insertTresql(metadata)
     build(tresql, obj, reusableExpr = false)(resources)()
   }
 
   def update(metadata: View, obj: Map[String, Any])(implicit resources: Resources): Any = {
+    resources.log(s"$metadata", Nil, LogTopic.ort)
     val tresql = updateTresql(metadata)
     build(tresql, obj, reusableExpr = false)(resources)()
   }
 
   def save(metadata: View, obj: Map[String, Any])(implicit resources: Resources): Any = {
+    resources.log(s"$metadata", Nil, LogTopic.ort)
     val tresql = s"_upsert(${updateTresql(metadata)}, ${insertTresql(metadata)})"
     build(tresql, obj, reusableExpr = false)(resources)()
   }
@@ -263,15 +266,11 @@ trait ORT extends Query {
   }
 
   def insertTresql(metadata: View)(implicit resources: Resources): String = {
-    save_tresql(null, metadata, Nil,
-      SaveOptions(doInsert = true, doUpdate = false, doDelete = true),
-      insert_tresql)
+    saveTresql(metadata, SaveOptions(doInsert = true, doUpdate = false, doDelete = true), insert_tresql)
   }
 
   def updateTresql(metadata: View)(implicit resources: Resources): String = {
-    save_tresql(null, metadata, Nil,
-      SaveOptions(doInsert = true, doUpdate = false, doDelete = true),
-      update_tresql)
+    saveTresql(metadata, SaveOptions(doInsert = true, doUpdate = false, doDelete = true), update_tresql)
   }
 
   def deleteTresql(name: String, key: Seq[String], filter: String)(implicit resources: Resources): String = {
@@ -285,15 +284,21 @@ trait ORT extends Query {
                    save_tresql_fun: SaveContext => String,
                    errorMsg: String)(implicit resources: Resources): Any = {
     val (view, saveOptions) = OrtMetadata.ortMetadata(name, obj)
-    resources log s"$view"
-    val tresql = save_tresql(null, view, Nil, saveOptions,
-      save_tresql_fun)
+    resources.log(s"$view", Nil, LogTopic.ort)
+    val tresql = saveTresql(view, saveOptions, save_tresql_fun)
     if(tresql == null) error(errorMsg)
     build(tresql, obj, reusableExpr = false)(resources)()
   }
 
   private def tresqlMetadata(db: String)(implicit resources: Resources) =
     if (db == null) resources.metadata else resources.extraResources(db).metadata
+
+  private def saveTresql(view: View,
+                         saveOptions: SaveOptions,
+                         saveFunc: SaveContext => String)(implicit
+                                                          resources: Resources): String = {
+    save_tresql(null, view, Nil, saveOptions, saveFunc)
+  }
 
   private def save_tresql(name: String,
                           view: View,

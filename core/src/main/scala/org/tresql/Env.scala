@@ -464,5 +464,6 @@ object LogTopic {
   case object sql extends LogTopic
   case object params extends LogTopic
   case object sql_with_params extends LogTopic
+  case object ort extends LogTopic
   case object info extends LogTopic
 }
