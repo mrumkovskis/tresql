@@ -553,13 +553,24 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     ("++" | "+" | "-" | "&&") ~ (withQuery | queryWithCols)) ^^ binOp named "values-select"
 
   def insert: MemParser[Insert] =
-    (("+" ~> opt(ident <~ ":") ~ qualifiedIdent ~ opt(ident) ~ opt(columns) ~ opt(valuesSelect | repsep(array, ","))) |
+    (("+" ~> opt(ident <~ ":") ~ qualifiedIdent ~ opt(ident) ~ opt(columns) ~ opt(valuesSelect | rep1sep(array, ","))) |
     ((qualifiedIdent ~ opt(ident) ~ opt(columns) <~ "+") ~ values)) ~ opt(columns) ^^ {
-      case (db: Option[String@unchecked]) ~ (t: Ident) ~ a ~ c ~ (v: Option[_]) ~ maybeCols =>
+      case (db: Option[String@unchecked]) ~ (t: Ident) ~ a ~ Some(c) ~ None ~ maybeReturning if
+        c.cols.nonEmpty && c.cols.forall {
+          case Col(BinOp("=", Obj(_: Ident, _, _, _, _), _), _) => true
+          case _ => false
+        } =>
+        val (cols, vals) = c.cols.map {
+          case Col(BinOp("=", col, value), a) => (Col(col, a), value)
+          case x => sys.error(s"Knipis: $x")
+        }.unzip
+        // insert in form +table{col1 = val2, col2 = val2, ...}
+        Insert(t, a.orNull, cols, Values(List(Arr(vals))), maybeReturning, db)
+      case (db: Option[String@unchecked]) ~ (t: Ident) ~ a ~ c ~ (v: Option[_]) ~ maybeReturning =>
         Insert(
           t, a.orNull, c.map(_.cols).getOrElse(Nil),
-          v.map { case v: List[Arr] @unchecked => Values(v) case s: Exp @unchecked => s } orNull,
-          maybeCols, db
+          v.map { case v: List[Arr] @unchecked => Values(v) case s: Exp @unchecked => s }.getOrElse(Values(Nil)),
+          maybeReturning, db
         )
       case (t: Ident) ~ a ~ c ~ (v: Values @unchecked) ~ maybeCols =>
         Insert(t, a.orNull, c.map(_.cols).getOrElse(Nil), v, maybeCols, None)
