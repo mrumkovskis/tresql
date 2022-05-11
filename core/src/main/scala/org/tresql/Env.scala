@@ -456,7 +456,10 @@ class MissingBindVariableException(val name: String)
 class TresqlException(val sql: String, val bindVars: List[(String, Any)], sqlExc: SQLException)
   extends RuntimeException(sqlExc)
 
-class ChildSaveException(val tableName: String, cause: Throwable) extends RuntimeException(cause)
+class ChildSaveException(val name: String, msg: String, cause: Throwable) extends RuntimeException(msg, cause) {
+  def this(name: String, cause: Throwable) = this(name, null, cause)
+  def this(name: String, msg: String) = this(name, msg, null)
+}
 
 trait LogTopic
 object LogTopic {

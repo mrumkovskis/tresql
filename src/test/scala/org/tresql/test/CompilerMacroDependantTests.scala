@@ -1098,7 +1098,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
             "work:empno" -> List(Map("hours" -> 4)))))
         ORT.update("dept", obj)
       } catch {
-        case e: ChildSaveException => e.tableName
+        case e: ChildSaveException => e.name
       }
     }
 

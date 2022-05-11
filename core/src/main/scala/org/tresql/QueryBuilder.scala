@@ -768,8 +768,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case x =>
           val bvt = Option(x).map(_.getClass.getName).orNull
           throw new ChildSaveException(n,
-            new RuntimeException(s"Unexpected type for child query '$n' environment: '$bvt'. " +
-              s"Expected map or sequence."))
+            s"Unexpected type for child query '$n' environment: '$bvt'. Expected map or sequence."
+          )
       })
     }.foldLeft(scala.collection.immutable.ListMap[String, Any]()) {_ + _} //use list map to preserve children order
   }
