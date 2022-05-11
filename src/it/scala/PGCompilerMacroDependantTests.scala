@@ -460,13 +460,13 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
     println("\n-------- LOOKUP object editing --------\n")
     //edit lookup object
     obj = Map("brand" -> "DUNLOP", "season" -> "W", "carnr" -> Map("name" -> "VW"))
-    assertResult(List(10028, (1,10029))) { ORT.insert("tyres", obj) }
+    assertResult((1,10029)) { ORT.insert("tyres", obj) }
     obj = Map("brand" -> "CONTINENTAL", "season" -> "W", "carnr" -> Map("nr" -> "UUU", "name" -> "VW"))
-    assertResult(List("UUU", (1,10030))) { ORT.insert("tyres", obj) }
+    assertResult((1,10030)) { ORT.insert("tyres", obj) }
     obj = Map("nr" -> 10029, "season" -> "S", "carnr" -> Map("name" -> "SKODA"))
-    assertResult(List(10031, 1)) { ORT.update("tyres", obj) }
+    assertResult(1) { ORT.update("tyres", obj) }
     obj = Map("nr" -> 10029, "brand" -> "DUNLOP", "carnr" -> Map("nr" -> "UUU", "name" -> "VOLKSWAGEN"))
-    assertResult(List("UUU", 1)) { ORT.update("tyres", obj) }
+    assertResult(1) { ORT.update("tyres", obj) }
     //one to one relationship with lookup for extended table
     obj = Map("dname" -> "MARKETING", "addr" -> "Valkas str. 1",
         "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Riga"))
@@ -479,7 +479,7 @@ class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompil
     assertResult((1,List(List(10034, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
     //insert of lookup object where it's pk is present but null
     obj = Map("nr" -> 10029, "brand" -> "DUNLOP", "carnr" -> Map("nr" -> null, "name" -> "AUDI"))
-    assertResult(List(10035, 1)) { ORT.update("tyres", obj) }
+    assertResult(1) { ORT.update("tyres", obj) }
 
     println("\n----------------- Multiple table INSERT UPDATE extended cases ----------------------\n")
 
