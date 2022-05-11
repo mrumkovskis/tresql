@@ -597,13 +597,33 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     println("\n-------- LOOKUP object editing --------\n")
     //edit lookup object
     obj = Map("brand" -> "DUNLOP", "season" -> "W", "carnr" -> Map("name" -> "VW"))
-    assertResult(List(10028, (1,10029))) { ORT.insert("tyres", obj) }
+    assertResult(List(("DUNLOP", "W"))) {
+      ORT.insert("tyres", obj)
+      println(s"\nResult check:")
+      tresql"tyres[brand = 'DUNLOP' & season = 'W' & carnr = (car[name = 'VW']{nr})]{brand, season}"
+        .map(r => r.brand -> r.season).toList
+    }
     obj = Map("brand" -> "CONTINENTAL", "season" -> "W", "carnr" -> Map("nr" -> "UUU", "name" -> "VW"))
-    assertResult(List("UUU", (1,10030))) { ORT.insert("tyres", obj) }
+    assertResult(List(("CONTINENTAL", "W"))) {
+      ORT.insert("tyres", obj)
+      println(s"\nResult check:")
+      tresql"tyres[brand = 'CONTINENTAL' & season = 'W' & carnr = (car[nr = 'UUU']{nr})]{brand, season}"
+        .map(r => r.brand -> r.season).toList
+    }
     obj = Map("nr" -> 10029, "season" -> "S", "carnr" -> Map("name" -> "SKODA"))
-    assertResult(List(10031, 1)) { ORT.update("tyres", obj) }
+    assertResult(List(("DUNLOP", "S"))) {
+      ORT.update("tyres", obj)
+      println(s"\nResult check:")
+      tresql"tyres[season = 'S' & carnr = (car[name = 'SKODA']{nr})]{brand, season}"
+        .map(r => r.brand -> r.season).toList
+    }
     obj = Map("nr" -> 10029, "brand" -> "DUNLOP", "carnr" -> Map("nr" -> "UUU", "name" -> "VOLKSWAGEN"))
-    assertResult(List("UUU", 1)) { ORT.update("tyres", obj) }
+    assertResult(List(("DUNLOP", "S", "VOLKSWAGEN"))) {
+      ORT.update("tyres", obj)
+      println(s"\nResult check:")
+      tresql"tyres[brand = 'DUNLOP' & carnr = (car[nr = 'UUU']{nr})]{brand, season, (car[nr = tyres.carnr]{name}) car}"
+        .map(r => (r.brand, r.season, r.car)).toList
+    }
     //one to one relationship with lookup for extended table
     obj = Map("dname" -> "MARKETING", "addr" -> "Valkas str. 1",
         "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Riga"))
@@ -616,7 +636,12 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult((1,List(List(10034, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
     //insert of lookup object where it's pk is present but null
     obj = Map("nr" -> 10029, "brand" -> "DUNLOP", "carnr" -> Map("nr" -> null, "name" -> "AUDI"))
-    assertResult(List(10035, 1)) { ORT.update("tyres", obj) }
+    assertResult( List(("DUNLOP", "S", "AUDI"))) {
+      ORT.update("tyres", obj)
+      println(s"\nResult check:")
+      tresql"tyres[brand = 'DUNLOP' & carnr = (car[name = 'AUDI']{nr})]{brand, season, (car[nr = tyres.carnr]{name}) car}"
+        .map(r => (r.brand, r.season, r.car)).toList
+    }
 
     println("\n----------------- Multiple table INSERT UPDATE extended cases ----------------------\n")
 
@@ -658,11 +683,21 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
 
     obj = Map("brand" -> "Nokian", "season" -> "W", "carnr" ->
       Map("name" -> "Mercedes", "deptnr" -> Map("dname" -> "Logistics")))
-    assertResult(List(10044, (1,10045))) { ORT.insert("tyres", obj) }
+    assertResult(List(("Nokian", "W"))) {
+      ORT.insert("tyres", obj)
+      println(s"\nResult check:")
+      tresql"tyres[brand = 'Nokian' & season = 'W' & carnr = (car[name = 'Mercedes' & deptnr = (dept[dname = 'Logistics']{deptno})]{nr})]{brand, season}"
+        .map(r => r.brand -> r.season).toList
+    }
 
     obj = Map("nr" -> 10045, "brand" -> "Nokian", "season" -> "S", "carnr" ->
       Map("nr" -> 10044, "name" -> "Mercedes Benz", "deptnr" -> Map("deptno" -> 10043, "dname" -> "Logistics dept")))
-    assertResult(List(10044, 1)) { ORT.update("tyres", obj) }
+    assertResult(List(("Nokian", "S"))) {
+      ORT.update("tyres", obj)
+      println(s"\nResult check:")
+      tresql"tyres[brand = 'Nokian' & season = 'S' & carnr = (car[name = 'Mercedes Benz' & deptnr = (dept[dname = 'Logistics dept']{deptno})]{nr})]{brand, season}"
+        .map(r => r.brand -> r.season).toList
+    }
 
     obj = Map("dname" -> "MILITARY", "loc" -> "Alabama", "emp" -> List(
       Map("ename" -> "Selina", "mgr" -> null),

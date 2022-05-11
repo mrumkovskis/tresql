@@ -188,20 +188,24 @@ trait ORT extends Query {
   }
 
   def insert(name: String, obj: Map[String, Any], filter: String = null)
-    (implicit resources: Resources): Any = {
+    (implicit resources: Resources): InsertResult = {
     val name_with_filter = if (filter == null) name else s"$name|$filter, null, null"
-    save(name_with_filter, obj, insert_tresql, "Cannot insert data. Table not found for object: " + name)
+    unwrapDMLResult(
+      save(name_with_filter, obj, insert_tresql, "Cannot insert data. Table not found for object: " + name)
+    )
   }
 
   def update(name: String, obj: Map[String, Any], filter: String = null)
-    (implicit resources: Resources): Any = {
+    (implicit resources: Resources): UpdateResult = {
     val name_with_filter = if (filter == null) name else s"$name|null, null, $filter"
-    save(name_with_filter, obj, update_tresql,
+    unwrapDMLResult(
+      save(name_with_filter, obj, update_tresql,
       s"Cannot update data. Table not found or no primary key or no updateable columns found for the object: $name")
+    )
   }
 
   def delete(name: String, id: Any, filter: String = null, filterParams: Map[String, Any] = null)
-            (implicit resources: Resources): Any = {
+            (implicit resources: Resources): DeleteResult = {
     val OrtMetadata.Patterns.prop(db, tableName, _, alias, _) = name
     val md = tresqlMetadata(db)
     val delete =
@@ -215,54 +219,59 @@ trait ORT extends Query {
       }) getOrElse {
         error(s"Table $name not found or table primary key not found or table primary key consists of more than one column")
       }
-    build(delete, Map("1" -> id) ++ Option(filterParams).getOrElse(Map()),
-      reusableExpr = false)(resources)()
+    unwrapDMLResult(build(delete, Map("1" -> id) ++ Option(filterParams).getOrElse(Map()),
+      reusableExpr = false)(resources)())
   }
 
   /** insert methods to multiple tables
-   *  Tables must be ordered in parent -> child direction. */
+   * Tables must be ordered in parent -> child direction. */
   def insertMultiple(obj: Map[String, Any], names: String*)(filter: String = null)
-                    (implicit resources: Resources): Any = insert(names.mkString("#"), obj, filter)
+                    (implicit resources: Resources): InsertResult =
+    unwrapDMLResult(insert(names.mkString("#"), obj, filter))
 
   /** update to multiple tables
    *  Tables must be ordered in parent -> child direction. */
   def updateMultiple(obj: Map[String, Any], names: String*)(filter: String = null)
-                    (implicit resources: Resources): Any = update(names.mkString("#"), obj, filter)
+                    (implicit resources: Resources): UpdateResult =
+    unwrapDMLResult(update(names.mkString("#"), obj, filter))
 
   //object methods
   def insertObj[T](obj: T, filter: String = null)(
-    implicit resources: Resources, conv: ObjToMapConverter[T]): Any = {
+    implicit resources: Resources, conv: ObjToMapConverter[T]): InsertResult = {
     val v = conv(obj)
     insert(v._1, v._2, filter)
   }
+
   def updateObj[T](obj: T, filter: String = null)(
-    implicit resources: Resources, conv: ObjToMapConverter[T]): Any = {
+    implicit resources: Resources, conv: ObjToMapConverter[T]): UpdateResult = {
     val v = conv(obj)
     update(v._1, v._2, filter)
   }
 
-  def insert(metadata: View, obj: Map[String, Any])(implicit resources: Resources): Any = {
+  def insert(metadata: View, obj: Map[String, Any])(implicit resources: Resources): InsertResult = {
     resources.log(s"$metadata", Nil, LogTopic.ort)
     val tresql = insertTresql(metadata)
-    build(tresql, obj, reusableExpr = false)(resources)()
+    unwrapDMLResult(build(tresql, obj, reusableExpr = false)(resources)())
   }
 
-  def update(metadata: View, obj: Map[String, Any])(implicit resources: Resources): Any = {
+  def update(metadata: View, obj: Map[String, Any])(implicit resources: Resources): UpdateResult = {
     resources.log(s"$metadata", Nil, LogTopic.ort)
     val tresql = updateTresql(metadata)
-    build(tresql, obj, reusableExpr = false)(resources)()
+    unwrapDMLResult(build(tresql, obj, reusableExpr = false)(resources)())
   }
 
-  def save(metadata: View, obj: Map[String, Any])(implicit resources: Resources): Any = {
+  def save(metadata: View, obj: Map[String, Any])(implicit resources: Resources): DMLResult = {
     resources.log(s"$metadata", Nil, LogTopic.ort)
     val tresql = s"_upsert(${updateTresql(metadata)}, ${insertTresql(metadata)})"
-    build(tresql, obj, reusableExpr = false)(resources)()
+    unwrapDMLResult(build(tresql, obj, reusableExpr = false)(resources)())
   }
 
-  def delete(name: String, key: Seq[String], params: Map[String, Any], filter: String)(implicit
-                                                                                        resources: Resources): Any = {
+  def delete(name: String, key: Seq[String],
+             params: Map[String, Any],
+             filter: String)(implicit
+                             resources: Resources): DeleteResult = {
     val tresql = deleteTresql(name, key, filter)
-    build(tresql, params, reusableExpr = false)(resources)()
+    unwrapDMLResult[DeleteResult](build(tresql, params, reusableExpr = false)(resources)())
   }
 
   def insertTresql(metadata: View)(implicit resources: Resources): String = {
@@ -292,6 +301,13 @@ trait ORT extends Query {
 
   private def tresqlMetadata(db: String)(implicit resources: Resources) =
     if (db == null) resources.metadata else resources.extraResources(db).metadata
+
+  private def unwrapDMLResult[T <: DMLResult](res: Any): T = res match {
+    case _: InsertResult | _: UpdateResult | _: DeleteResult => res.asInstanceOf[T]
+    case a: ArrayResult[_] if a.values.nonEmpty => unwrapDMLResult(a.values.last)
+    case null => res.asInstanceOf[T]
+    case x => sys.error(s"Not dml result: $x")
+  }
 
   private def saveTresql(view: View,
                          saveOptions: SaveOptions,

@@ -469,7 +469,6 @@ trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
   private def countToString = count.map(c => s"Row count = Some($c)").getOrElse("None")
   private def childrenToString = if (children.isEmpty) "" else s", children = $children"
   private def idToString = id.map(id => s", id = Some($id)").getOrElse("")
-
 }
 
 class DeleteResult(
