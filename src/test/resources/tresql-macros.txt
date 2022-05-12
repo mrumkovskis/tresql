@@ -1,0 +1,12 @@
+include /tresql-default-macros.txt
+
+in_twice(expr, in) = $expr in ($in, $in)
+macro_interpolator_test1(e1, e2) = ($e1 + $e2)
+macro_interpolator_test2(e1, e2) =
+  (macro_interpolator_test1($e1, $e1) + macro_interpolator_test1($e2, $e2))
+macro_interpolator_test3(e1, e2) = (macro_interpolator_test2($e1 * $e1, $e2 * $e2))
+macro_interpolator_test4(table, col) = $table { $table.$col }#(1)
+macro_interpolator_null_test(from, leftOp, rightOp, col) =
+  $from[$leftOp = $rightOp]{$col}#(1)
+macro_interpolator_str_test(e1::string, e2::string) = $e1 || $e2
+macro_interpolator_noargs_test() = 'no_args'
