@@ -271,7 +271,7 @@ trait ORT extends Query {
              filter: String)(implicit
                              resources: Resources): DeleteResult = {
     val tresql = deleteTresql(name, key, filter)
-    unwrapDMLResult[DeleteResult](build(tresql, params, reusableExpr = false)(resources)())
+    unwrapDMLResult(build(tresql, params, reusableExpr = false)(resources)())
   }
 
   def insertTresql(metadata: View)(implicit resources: Resources): String = {
@@ -303,9 +303,8 @@ trait ORT extends Query {
     if (db == null) resources.metadata else resources.extraResources(db).metadata
 
   private def unwrapDMLResult[T <: DMLResult](res: Any): T = res match {
-    case _: InsertResult | _: UpdateResult | _: DeleteResult => res.asInstanceOf[T]
+    case _: InsertResult | _: UpdateResult | _: DeleteResult | null => res.asInstanceOf[T]
     case a: ArrayResult[_] if a.values.nonEmpty => unwrapDMLResult(a.values.last)
-    case null => res.asInstanceOf[T]
     case x => sys.error(s"Not dml result: $x")
   }
 
