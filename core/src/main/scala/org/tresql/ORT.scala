@@ -551,8 +551,8 @@ trait ORT extends Query {
       val (refsAndPk, key) = refsPkAndKey
       ctx.view.properties.flatMap {
         case OrtMetadata.Property(col, _) if refsAndPk.exists(_.name == col) => Nil
-        case OrtMetadata.Property(col, KeyValue(_, valueTresql)) =>
-          List(ColVal(table.colOption(col).map(_.name).orNull, valueTresql, true, true))
+        case OrtMetadata.Property(col, KeyValue(_, TresqlValue(valueTresql, forInsert, forUpdate))) =>
+          List(ColVal(table.colOption(col).map(_.name).orNull, valueTresql, forInsert, forUpdate))
         case OrtMetadata.Property(col, TresqlValue(tresql, forInsert, forUpdate)) =>
           List(ColVal(table.colOption(col).map(_.name).orNull, tresql, forInsert, forUpdate))
         case OrtMetadata.Property(prop, ViewValue(v, so)) =>
@@ -721,7 +721,7 @@ object OrtMetadata {
    * @param whereTresql   key find tresql
    * @param valueTresql   key value tresql
    * */
-  case class KeyValue(whereTresql: String, valueTresql: String) extends OrtValue
+  case class KeyValue(whereTresql: String, valueTresql: TresqlValue) extends OrtValue
 
   /** Saveable column.
    * @param col           Goes to dml column clause or child tresql alias
