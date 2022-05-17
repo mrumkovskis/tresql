@@ -371,7 +371,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     println("\n----------- ORT tests ------------\n")
     println("\n--- INSERT ---\n")
 
-    var obj:Map[String, Any] = Map("deptno" -> null, "dname" -> "LAW2", "loc" -> "DALLAS",
+    var obj: Map[String, Any] = Map("deptno" -> null, "dname" -> "LAW2", "loc" -> "DALLAS",
       "calculated_field"->333, "another_calculated_field"->"A",
       "emp" -> scala.Array(Map("empno" -> null, "ename" -> "SMITH", "deptno" -> null,
           "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")),
@@ -1137,9 +1137,127 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       }
     }
 
+    ortKeyTests
+
+    println("------ ORT on extra database --------")
+
+    obj = Map("name" -> "Dzidzis", "sex" -> "M", "birth_date" -> "1999-04-06", "email" -> "dzidzis@albatros.io",
+      "@contact_db:notes[note_date, note][+-=]" ->
+        List(
+          Map("note_date" -> new java.sql.Timestamp(System.currentTimeMillis), "note" -> "Mene, tekel, ufarsin")
+        )
+    )
+    assertResult(List(("M", "dzidzis@albatros.io", List("Mene, tekel, ufarsin")))) {
+      ORT.insert("@contact_db:contact[name]", obj)
+      println(s"\nResult check:")
+      tresql"|contact_db:contact[name = 'Dzidzis']{sex, email, |contact_db:notes{note}#(1) notes}"
+        .map(c => (c.sex, c.email, c.notes.map(_.note).toList)).toList
+    }
+
+    obj = Map("name" -> "Dzidzis", "sex" -> "M", "birth_date" -> "2000-04-06", "email" -> "dzidzis@albatros.io",
+      "@contact_db:notes[note][+-=]" ->
+        List(
+          Map("note_date" -> new java.sql.Timestamp(System.currentTimeMillis), "note" -> "Mene, tekel, ufarsin"),
+          Map("note_date" -> new java.sql.Timestamp(System.currentTimeMillis), "note" -> "Cicerons")
+        )
+    )
+    assertResult(List(("M", "2000-04-06", List("Cicerons", "Mene, tekel, ufarsin")))) {
+      ORT.update("@contact_db:contact[name]", obj)
+      println(s"\nResult check:")
+      tresql"|contact_db:contact[name = 'Dzidzis']{sex, birth_date, |contact_db:notes{note}#(1) notes}"
+        .map(c => (c.sex, c.birth_date.toString, c.notes.map(_.note).toList)).toList
+    }
+
+    obj = Map("name" -> "Dzidzis", "@contact_db:notes[note]" ->
+        List(
+          Map("note_date" -> new java.sql.Timestamp(System.currentTimeMillis), "note" -> "Cicerons")
+        )
+    )
+    assertResult(List(("M", "2000-04-06", List("Cicerons")))) {
+      ORT.update("@contact_db:contact[name]", obj)
+      println(s"\nResult check:")
+      tresql"|contact_db:public.contact c[c.name = 'Dzidzis']{c.sex, c.birth_date, |contact_db:public.notes n{n.note}#(1) notes}"
+        .map(c => (c.sex, c.birth_date.toString, c.notes.map(_.note).toList)).toList
+    }
+
+    assertResult(Nil) {
+      ORT.delete("@contact_db:notes", List("contact_id", "note"),
+        Map("note" -> "Cicerons", "contact_id" -> Query("|contact_db:contact[name = 'Dzidzis']{id}").unique[Long]),
+        null
+      )
+      println(s"\nResult check:")
+      tresql"|contact_db:notes[contact_id = (contact[name = 'Dzidzis']{id})]".toList
+    }
+
+    assertResult(Nil) {
+      ORT.delete("@contact_db:contact", Query("|contact_db:contact[name = 'Dzidzis']{id}").unique[Long])
+      println(s"\nResult check:")
+      tresql"|contact_db:contact[name = 'Dzidzis']".toList
+    }
+
+    println("-------- ORT table pk name differs from corresponding bind variable name --------")
+    var view = {
+      import OrtMetadata._
+      View(
+        List(SaveTo("dept", Set(), Nil)), None, null, true, true,
+        List(
+          Property("deptno", TresqlValue(":dept_id", true, true)),
+          Property("dname", TresqlValue(":dname", true, true)),
+          Property("loc", TresqlValue(":loc", true, true))
+        ), null)
+    }
+    obj = Map("dept_id" -> 4321, "dname" -> "Fish", "loc" -> "Vecaki")
+    assertResult(List((4321, "Fish", "Vecaki"))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Fish']{deptno, dname, loc}".map(d => (d.deptno, d.dname, d.loc)).toList
+    }
+    obj = Map("dept_id" -> 4321, "dname" -> "Fish", "loc" -> "Gauja")
+    assertResult(List((4321, "Fish", "Gauja"))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Fish']{deptno, dname, loc}".map(d => (d.deptno, d.dname, d.loc)).toList
+    }
+    var childView = {
+      import OrtMetadata._
+      View(
+        List(SaveTo("emp", Set(), Nil)), None, null, true, true,
+        List(
+          Property("empno", TresqlValue(":emp_id", true, true)),
+          Property("ename", TresqlValue(":ename", true, true)),
+          Property("job", TresqlValue(":job", true, true)),
+        ), null)
+    }
+    view = {
+      import OrtMetadata._
+      view.copy(properties = view.properties :+
+        Property("emps", ViewValue(childView, SaveOptions(true, true, false))))
+    }
+    obj = Map("dept_id" -> 4321, "dname" -> "Fish", "loc" -> "Roja", "emps" ->
+      List(Map("ename" -> "Girts", "job" -> "Fisherman")))
+    assertResult(List(("Fish", "Roja", List(("Girts", "Fisherman"))))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Fish']{dname, loc, |emp{ename, job}#(1) emps}"
+        .map(d => (d.dname, d.loc, d.emps.map(e => (e.ename, e.job)).toList)).toList
+    }
+    obj = Map("dept_id" -> 4321, "dname" -> "Fish", "loc" -> "Roja", "emps" ->
+      List(Map("emp_id" -> Query("emp[ename = 'Girts']{empno}").unique[Any], "ename" -> "Gatis", "job" -> "Fisher")))
+    assertResult(List(("Fish", "Roja", List(("Gatis", "Fisher"))))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Fish']{dname, loc, |emp{ename, job}#(1) emps}"
+        .map(d => (d.dname, d.loc, d.emps.map(e => (e.ename, e.job)).toList)).toList
+    }
+
+    ortForInsertForUpdateFlags
+    ortLookupByKey
+  }
+
+  private def ortKeyTests(implicit resources: Resources) = {
     println("------ UPDATE by key test ------")
 
-    obj = Map("dname" -> "METEO", "loc" -> "Florida", "emp[ename][+-=]" -> List(
+    var obj: Map[String, Any] = Map("dname" -> "METEO", "loc" -> "Florida", "emp[ename][+-=]" -> List(
       Map("ename" -> "Selina", "job" -> "Observer" , "mgr" -> "KING", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
       Map("ename" -> "Paul", "job" -> "Observer" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
       Map("ename" -> "Ziko", "job" -> "Apprent" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}"),
@@ -1183,10 +1301,10 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           "car_usage[empno, car_nr][+-=]" -> Nil),
         Map("ename" -> "Paul", "job" -> "Pilot" , "mgr" -> "Selina", "mgr->" -> "mgr=emp[ename = :mgr]{empno}",
           "car_usage[empno, car_nr][+-=]" ->
-          List(
-            Map("car" -> "VOLKSWAGEN", "car->" -> "car_nr=car[name = :car]{nr}", "date_from" -> "2021-11-10"),
-            Map("car" -> "FIAT", "car->" -> "car_nr=car[name = :car]{nr}", "date_from" -> "2021-11-11"),
-          ))
+            List(
+              Map("car" -> "VOLKSWAGEN", "car->" -> "car_nr=car[name = :car]{nr}", "date_from" -> "2021-11-10"),
+              Map("car" -> "FIAT", "car->" -> "car_nr=car[name = :car]{nr}", "date_from" -> "2021-11-11"),
+            ))
       ),
     )
     assertResult(List(("Nevada",
@@ -1392,63 +1510,9 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       println(s"\nResult check:")
       tresql"emp/dept[ename = 'Binny']{ename, dname}".map(e => e.ename -> e.dname).toList
     }
+  }
 
-    println("------ ORT on extra database --------")
-
-    obj = Map("name" -> "Dzidzis", "sex" -> "M", "birth_date" -> "1999-04-06", "email" -> "dzidzis@albatros.io",
-      "@contact_db:notes[note_date, note][+-=]" ->
-        List(
-          Map("note_date" -> new java.sql.Timestamp(System.currentTimeMillis), "note" -> "Mene, tekel, ufarsin")
-        )
-    )
-    assertResult(List(("M", "dzidzis@albatros.io", List("Mene, tekel, ufarsin")))) {
-      ORT.insert("@contact_db:contact[name]", obj)
-      println(s"\nResult check:")
-      tresql"|contact_db:contact[name = 'Dzidzis']{sex, email, |contact_db:notes{note}#(1) notes}"
-        .map(c => (c.sex, c.email, c.notes.map(_.note).toList)).toList
-    }
-
-    obj = Map("name" -> "Dzidzis", "sex" -> "M", "birth_date" -> "2000-04-06", "email" -> "dzidzis@albatros.io",
-      "@contact_db:notes[note][+-=]" ->
-        List(
-          Map("note_date" -> new java.sql.Timestamp(System.currentTimeMillis), "note" -> "Mene, tekel, ufarsin"),
-          Map("note_date" -> new java.sql.Timestamp(System.currentTimeMillis), "note" -> "Cicerons")
-        )
-    )
-    assertResult(List(("M", "2000-04-06", List("Cicerons", "Mene, tekel, ufarsin")))) {
-      ORT.update("@contact_db:contact[name]", obj)
-      println(s"\nResult check:")
-      tresql"|contact_db:contact[name = 'Dzidzis']{sex, birth_date, |contact_db:notes{note}#(1) notes}"
-        .map(c => (c.sex, c.birth_date.toString, c.notes.map(_.note).toList)).toList
-    }
-
-    obj = Map("name" -> "Dzidzis", "@contact_db:notes[note]" ->
-        List(
-          Map("note_date" -> new java.sql.Timestamp(System.currentTimeMillis), "note" -> "Cicerons")
-        )
-    )
-    assertResult(List(("M", "2000-04-06", List("Cicerons")))) {
-      ORT.update("@contact_db:contact[name]", obj)
-      println(s"\nResult check:")
-      tresql"|contact_db:public.contact c[c.name = 'Dzidzis']{c.sex, c.birth_date, |contact_db:public.notes n{n.note}#(1) notes}"
-        .map(c => (c.sex, c.birth_date.toString, c.notes.map(_.note).toList)).toList
-    }
-
-    assertResult(Nil) {
-      ORT.delete("@contact_db:notes", List("contact_id", "note"),
-        Map("note" -> "Cicerons", "contact_id" -> Query("|contact_db:contact[name = 'Dzidzis']{id}").unique[Long]),
-        null
-      )
-      println(s"\nResult check:")
-      tresql"|contact_db:notes[contact_id = (contact[name = 'Dzidzis']{id})]".toList
-    }
-
-    assertResult(Nil) {
-      ORT.delete("@contact_db:contact", Query("|contact_db:contact[name = 'Dzidzis']{id}").unique[Long])
-      println(s"\nResult check:")
-      tresql"|contact_db:contact[name = 'Dzidzis']".toList
-    }
-
+  private def ortForInsertForUpdateFlags(implicit resources: Resources) = {
     println("------ ORT forInsert, forUpdate flags --------")
 
     var view = {
@@ -1460,13 +1524,13 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           Property("loc", TresqlValue(":loc", false, true))
         ), null)
     }
-    obj = Map("dname" -> "Cafe", "loc" -> "Purvciems")
+    var obj: Map[String, Any] = Map("dname" -> "Cafe", "loc" -> "Purvciems")
     assertResult(List(("Cafe", null))) {
       ORT.save(view, obj)
       println(s"\nResult check:")
       tresql"dept[dname = 'Cafe']{dname, loc}".map(d => d.dname -> d.loc).toList
     }
-    obj = Map("deptno" -> tresql"dept[dname = 'Cafe']".unique[Long], "dname" -> "Cafez", "loc" -> "Purvciems")
+    obj = Map("deptno" -> tresql"dept[dname = 'Cafe']{deptno}".unique[Long], "dname" -> "Cafez", "loc" -> "Purvciems")
     assertResult(List(("Cafe", "Purvciems"))) {
       ORT.save(view, obj)
       println(s"\nResult check:")
@@ -1483,61 +1547,6 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       ORT.save(view, obj)
       println(s"\nResult check:")
       tresql"dept[dname = 'Pizza']{dname, loc}".map(d => d.dname -> d.loc).toList
-    }
-
-    println("-------- ORT table pk name differs from corresponding bind variable name --------")
-    view = {
-      import OrtMetadata._
-      View(
-        List(SaveTo("dept", Set(), Nil)), None, null, true, true,
-        List(
-          Property("deptno", TresqlValue(":dept_id", true, true)),
-          Property("dname", TresqlValue(":dname", true, true)),
-          Property("loc", TresqlValue(":loc", true, true))
-        ), null)
-    }
-    obj = Map("dept_id" -> 4321, "dname" -> "Fish", "loc" -> "Vecaki")
-    assertResult(List((4321, "Fish", "Vecaki"))) {
-      ORT.save(view, obj)
-      println(s"\nResult check:")
-      tresql"dept[dname = 'Fish']{deptno, dname, loc}".map(d => (d.deptno, d.dname, d.loc)).toList
-    }
-    obj = Map("dept_id" -> 4321, "dname" -> "Fish", "loc" -> "Gauja")
-    assertResult(List((4321, "Fish", "Gauja"))) {
-      ORT.save(view, obj)
-      println(s"\nResult check:")
-      tresql"dept[dname = 'Fish']{deptno, dname, loc}".map(d => (d.deptno, d.dname, d.loc)).toList
-    }
-    var childView = {
-      import OrtMetadata._
-      View(
-        List(SaveTo("emp", Set(), Nil)), None, null, true, true,
-        List(
-          Property("empno", TresqlValue(":emp_id", true, true)),
-          Property("ename", TresqlValue(":ename", true, true)),
-          Property("job", TresqlValue(":job", true, true)),
-        ), null)
-    }
-    view = {
-      import OrtMetadata._
-      view.copy(properties = view.properties :+
-        Property("emps", ViewValue(childView, SaveOptions(true, true, false))))
-    }
-    obj = Map("dept_id" -> 4321, "dname" -> "Fish", "loc" -> "Roja", "emps" ->
-      List(Map("ename" -> "Girts", "job" -> "Fisherman")))
-    assertResult(List(("Fish", "Roja", List(("Girts", "Fisherman"))))) {
-      ORT.save(view, obj)
-      println(s"\nResult check:")
-      tresql"dept[dname = 'Fish']{dname, loc, |emp{ename, job}#(1) emps}"
-        .map(d => (d.dname, d.loc, d.emps.map(e => (e.ename, e.job)).toList)).toList
-    }
-    obj = Map("dept_id" -> 4321, "dname" -> "Fish", "loc" -> "Roja", "emps" ->
-      List(Map("emp_id" -> Query("emp[ename = 'Girts']{empno}").unique[Any], "ename" -> "Gatis", "job" -> "Fisher")))
-    assertResult(List(("Fish", "Roja", List(("Gatis", "Fisher"))))) {
-      ORT.save(view, obj)
-      println(s"\nResult check:")
-      tresql"dept[dname = 'Fish']{dname, loc, |emp{ename, job}#(1) emps}"
-        .map(d => (d.dname, d.loc, d.emps.map(e => (e.ename, e.job)).toList)).toList
     }
 
     println("-------- ORT view forInsert, forUpdate test --------")
@@ -1564,7 +1573,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       println(s"\nResult check:")
       tresql"dept[dname = 'Space']{dname, loc}".map(d => (d.dname, d.loc)).toList
     }
-    childView = {
+    var childView = {
       import OrtMetadata._
       View(
         List(SaveTo("emp", Set(), Nil)), None, null, true, true,
@@ -1622,14 +1631,12 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     intercept[Exception] { // should not save because lookup value - dept cannot be inserted
       ORT.save(view, obj)
     }
-
-    ortLookupByKey
   }
 
   private def ortLookupByKey(implicit resources: Resources) = {
     println("-------- ORT LOOKUP edit by key test --------")
 
-    var obj = Map("ename" -> "Gogi", "dept" -> Map("dname" -> "Mount", "loc" -> "Georgia"))
+    var obj: Map[String, Any] = Map("ename" -> "Gogi", "dept" -> Map("dname" -> "Mount", "loc" -> "Georgia"))
     var view = {
       import OrtMetadata._
       val lookupView =
