@@ -1355,7 +1355,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       ORT.save(View(List(SaveTo("accounts.account", Set(),
         List("number"))), None, null, true, true,
-        List(Property("number", KeyValue(":number", ":new_number"))), null),
+        List(Property("number", KeyValue(":number", TresqlValue(":new_number", true, true)))), null),
         obj)
       println(s"\nResult check:")
       tresql"accounts.account[number = '000000']{number}".map(_.number).toList
@@ -1368,13 +1368,29 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         View(
           List(SaveTo("accounts.account", Set(), List("number"))), None, null, true, true,
           List(
-            Property("number", KeyValue(":number", ":new_number")),
+            Property("number", KeyValue(":number", TresqlValue(":new_number", true, true))),
             Property("balance", TresqlValue(":balance", true, true))
           ), null),
         obj
       )
       println(s"\nResult check:")
       tresql"accounts.account[number = '111111']{number, balance}".map(_.number).toList
+    }
+
+    obj = Map("number" -> "111111", "new_number" -> "222222", "balance" -> 200)
+    assertResult(List(("111111", 200))) {
+      import OrtMetadata._
+      ORT.save(
+        View(
+          List(SaveTo("accounts.account", Set(), List("number"))), None, null, true, true,
+          List(
+            Property("number", KeyValue(":number", TresqlValue(":new_number", true, false))),
+            Property("balance", TresqlValue(":balance", true, true))
+          ), null),
+        obj
+      )
+      println(s"\nResult check:")
+      tresql"accounts.account[number = '111111']{number, balance}".map(r => r.number -> r.balance).toList
     }
 
     obj = Map("ename" -> "Betty", "new_ename" -> "Binny", "dept" -> "Temp", "new_dept" -> "Radio")
@@ -1384,8 +1400,9 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         View(
           List(SaveTo("emp", Set(), List("ename", "deptno"))), None, null, true, true,
           List(
-            Property("ename", KeyValue(":ename", ":new_ename")),
-            Property("deptno", KeyValue("(dept[dname = :dept]{deptno})", "(dept[dname = :new_dept]{deptno})"))
+            Property("ename", KeyValue(":ename", TresqlValue(":new_ename", true, true))),
+            Property("deptno", KeyValue("(dept[dname = :dept]{deptno})",
+              TresqlValue("(dept[dname = :new_dept]{deptno})", true, true)))
           ), null),
         obj
       )
