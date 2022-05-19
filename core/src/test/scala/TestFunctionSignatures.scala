@@ -2,13 +2,6 @@ package org.tresql.test
 
 trait TestFunctionSignatures extends org.tresql.compiling.TresqlFunctionSignatures {
   def concat(string: String*): String
-  def macro_interpolator_test1(exp1: Any, exp2: Any): Any
-  def macro_interpolator_test2(exp1: Any, exp2: Any): Any
-  def macro_interpolator_test3(exp1: Any, exp2: Any): Any
-  def macro_interpolator_test4(exp1: Any, exp2: Any): Any
-  def macro_interpolator_str_test(exp1: String, exp2: String): String
-  def macro_interpolator_noargs_test(): String
-  def in_twice(expr: Any, in: Any): Boolean
   //test macros function
   def null_macros: Null
   def inc_val_5(int: java.lang.Integer): java.lang.Integer

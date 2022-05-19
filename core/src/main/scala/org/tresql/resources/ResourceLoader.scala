@@ -51,7 +51,11 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
         case Cast(Obj(Ident(List(pn)), null, null, null, false), type_) =>
           val (pt, isRepeated) = parseParType(type_)
           if (isRepeated) repeatedPars = true
-          createPar(pn, if (pt.isEmpty) Manifest.Any else typeMapper.xsd_scala_type_map(pt).asInstanceOf[Manifest[Any]])
+          createPar(
+            pn,
+            if (pt.isEmpty || typeMapper == null) Manifest.Any
+            else typeMapper.xsd_scala_type_map(pt).asInstanceOf[Manifest[Any]]
+          )
         case x => sys.error(s"Invalid function '$signature' paramater - '${x.tresql}'. " +
           s"Expected identifier or identifier with cast.")
       }
@@ -70,7 +74,10 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
               assert(idx != -1, s"Invalid function $name return type '$type_'. Parameter $pt does not exist.")
               ParameterReturnType(idx)
             }
-            else FixedReturnType(typeMapper.xsd_scala_type_map(pt).asInstanceOf[Manifest[Any]])
+            else FixedReturnType(
+              if (typeMapper!= null) typeMapper.xsd_scala_type_map(pt).asInstanceOf[Manifest[Any]]
+              else Manifest.Any
+            )
           createFun(name, pars, rt, repeatedPars)
         case _ => sys.error(s"function signature must be function, instead found - '$signature'")
       }
@@ -109,7 +116,7 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
       case x => ManifestFactory.singleType(x)
     }.zipWithIndex.map { case (m, i) =>
       Par[Nothing](s"_${i + 1}", null, -1, -1, null, m)
-    }.toList
+    }.toList.drop(1) // drop builder or parser argument
     val returnType = m.getGenericReturnType match {
       case par: ParameterizedType => sys.error(s"Parametrized return type not supported! Method: $m, parameter: $par")
       case c: Class[_] => FixedReturnType(primitiveClassAnyValMap.getOrElse(c, ManifestFactory.classType(c)))
@@ -139,6 +146,9 @@ case class TresqlMacros(parserMacros: Map[String, Seq[TresqlMacro[QueryParsers, 
     TresqlMacros(parserMacros = mergeInternal(parserMacros, tresqlMacros.parserMacros),
       builderMacros = mergeInternal(builderMacros, tresqlMacros.builderMacros))
   }
+}
+object TresqlMacros {
+  def empty = TresqlMacros(Map(), Map())
 }
 
 class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(typeMapper) {
@@ -243,7 +253,7 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
 
   def loadTresqlScalaMacros(obj: Any): TresqlMacros = {
     def macroMethods(mobj: Any): TresqlMacros = mobj match {
-      case null => TresqlMacros(Map(), Map())
+      case null => TresqlMacros.empty
       case Some(o) => macroMethods(o)
       case None => macroMethods(null)
       case x =>
@@ -257,7 +267,7 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
             classOf[Expr].isAssignableFrom(m.getReturnType)
         val macros = x.getClass.getMethods.collect {
           case m if isMacro(m) => m
-        }.foldLeft(TresqlMacros(Map(), Map())) { (res, m) =>
+        }.foldLeft(TresqlMacros.empty) { (res, m) =>
           def app[A, B](map: Map[String, Seq[TresqlMacro[A, B]]]) = {
             val sign = parseSignature(m)
             val macr = TresqlScalaMacro[A, B](sign, m, mobj)

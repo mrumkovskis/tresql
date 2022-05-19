@@ -28,32 +28,6 @@ class Macros extends org.tresql.Macros {
   def null_macros(b: QueryBuilder): Expr = null
   def dummy(b: QueryBuilder) = b.buildExpr("dummy")
   def dummy_table(b: QueryBuilder) = b.IdentExpr(List("dummy"))
-  def macro_interpolator_test1(implicit p: parsing.QueryParsers,
-                               e1: Exp,
-                               e2: Exp) = macro_"($e1 + $e2)"
-  def macro_interpolator_test2(implicit p: parsing.QueryParsers,
-                               e1: Exp,
-                               e2: Exp) =
-    macro_"(macro_interpolator_test1($e1, $e1) + macro_interpolator_test1($e2, $e2))"
-  def macro_interpolator_test3(implicit p: parsing.QueryParsers,
-                               e1: Exp,
-                               e2: Exp) =
-    macro_"(macro_interpolator_test2($e1 * $e1, $e2 * $e2))"
-  def macro_interpolator_test4(implicit p: parsing.QueryParsers,
-                               table: Exp,
-                               col: Exp) =
-    macro_"$table { $table.$col }#(1)"
-  def macro_interpolator_null_test(implicit p: parsing.QueryParsers,
-                                   from: Exp,
-                                   leftOp: Exp,
-                                   rightOp: Exp,
-                                   col: Exp) =
-    macro_"$from[$leftOp = $rightOp]{$col}#(1)"
-  def macro_interpolator_str_test(implicit p: parsing.QueryParsers,
-                               e1: Exp,
-                               e2: Exp) = macro_"($e1 || $e2)"
-  def macro_interpolator_noargs_test(implicit p: parsing.QueryParsers) =
-    macro_"'no_args'"
 }
 
 object Macros extends Macros

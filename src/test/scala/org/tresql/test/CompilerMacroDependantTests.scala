@@ -340,8 +340,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       .withMacros(List(1))).map(_.dummy).toList)
     intercept[Exception](tresql"dummy{dummy}@(1)"(resources
       .withMacros(1)).map(_.dummy).toList)
-    intercept[Exception](tresql"macro_interpolator_test4(dept, dname)"(resources
-      .withMacros(null).withCache(null)).map(_.dname).toList)
+    assertResult(true)(tresql"macro_interpolator_test4(dept, dname)"(resources
+      .withMacros(null).withCache(null)).map(_.dname).toList.nonEmpty)
     //macro string escape syntax
     assertResult("\u202F\u202F")(tresql"macro_interpolator_str_test('\u202F', '\u202F')")
     assertResult("no_args")(tresql"macro_interpolator_noargs_test()")

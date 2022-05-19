@@ -2,6 +2,8 @@ package org.tresql
 
 import sys._
 import CoreTypes.RowConverter
+import org.tresql.metadata.TypeMapper
+import org.tresql.resources.{MacrosLoader, TresqlMacro, TresqlMacros}
 import parsing.{Exp, QueryParsers}
 
 import java.sql.SQLException
@@ -181,9 +183,12 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
     db.map(get_res.extraResources(_).isMacroDefined(name)).getOrElse(get_res.isMacroDefined(name))
   override def isBuilderMacroDefined(name: String): Boolean =
     db.map(get_res.extraResources(_).isBuilderMacroDefined(name)).getOrElse(get_res.isBuilderMacroDefined(name))
-  override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
-    db.map(get_res.extraResources(_).invokeMacro(name, parser_or_builder, args))
-      .getOrElse(get_res.invokeMacro(name, parser_or_builder, args))
+  override def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp =
+    db.map(get_res.extraResources(_).invokeMacro(name, parser, args))
+      .getOrElse(get_res.invokeMacro(name, parser, args))
+  override def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr =
+    db.map(get_res.extraResources(_).invokeBuilderMacro(name, builder, args))
+      .getOrElse(get_res.invokeBuilderMacro(name, builder, args))
 
   protected def liftDialect(dialect: CoreTypes.Dialect) =
     if (dialect == null) null else dialect orElse defaultDialect
@@ -229,15 +234,17 @@ final case class ResourcesTemplate(override val conn: java.sql.Connection,
     res.fetchSize, res.maxResultSize, res.recursiveStackDepth, res.params, res.extraResources,
     res.logger, res.cache, res.bindVarLogFilter)
 
-  private val macroResources = new MacroResourcesImpl(macros)
+  private val macroResources = new MacroResourcesImpl(macros, metadata)
 
   override protected[tresql] def copyResources: Resources#Resources_ =
     super.copyResources.copy(macros = macroResources)
 
   override def isMacroDefined(name: String): Boolean = macroResources.isMacroDefined(name)
   override def isBuilderMacroDefined(name: String): Boolean = macroResources.isBuilderMacroDefined(name)
-  override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
-    macroResources.invokeMacro(name, parser_or_builder, args)
+  override def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp =
+    macroResources.invokeMacro(name, parser, args)
+  override def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr =
+    macroResources.invokeBuilderMacro(name, builder, args)
 }
 
 
@@ -274,9 +281,10 @@ trait ThreadLocalResources extends Resources {
   override def extraResources: Map[String, Resources] = threadResources.extraResources
   override def isMacroDefined(macroName: String) = threadResources.isMacroDefined(macroName)
   override def isBuilderMacroDefined(macroName: String) = threadResources.isBuilderMacroDefined(macroName)
-  override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T = {
-    threadResources.invokeMacro(name, parser_or_builder, args)
-  }
+  override def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp =
+    threadResources.invokeMacro(name, parser, args)
+  override def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr =
+    threadResources.invokeBuilderMacro(name, builder, args)
 
   /** Cache is global not thread local. To be overriden in subclasses. This implementation returns {{{super.cache}}} */
   override def cache: Cache = super.cache
@@ -323,8 +331,10 @@ trait Resources extends MacroResources with CacheResources with Logging {
                                           macros: MacroResources) extends Resources {
     override def isMacroDefined(name: String) = macros.isMacroDefined(name)
     override def isBuilderMacroDefined(name: String) = macros.isBuilderMacroDefined(name)
-    override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
-      macros.invokeMacro(name, parser_or_builder, args)
+    override def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp =
+      macros.invokeMacro(name, parser, args)
+    override def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr =
+      macros.invokeBuilderMacro(name, builder, args)
     override def toString = s"Resources_(conn = $conn, " +
       s"metadata = $metadata, dialect = $dialect, idExpr = $idExpr, " +
       s"queryTimeout = $queryTimeout, fetchSize = $fetchSize, " +
@@ -361,7 +371,7 @@ trait Resources extends MacroResources with CacheResources with Logging {
   def withParams(params: Map[String, Any]): Resources = copyResources.copy(params = params)
   def withMacros(macros: Any): Resources = copyResources.copy(macros = macros match {
     case mr: MacroResources => mr
-    case _ => new MacroResourcesImpl(macros)
+    case _ => new MacroResourcesImpl(macros, metadata)
   })
   def withExtraResources(extra: Map[String, Resources]) = copyResources.copy(extraResources = extra)
   def withUpdatedExtra(name: String)(updater: Resources => Resources): Resources =
@@ -379,57 +389,38 @@ trait MacroResources {
   def macroResourcesFile: String = null
   def isMacroDefined(name: String): Boolean = false
   def isBuilderMacroDefined(name: String): Boolean = false
-  def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =
+  def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp =
+    sys.error(s"Macro function not found: $name")
+  def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr =
     sys.error(s"Macro function not found: $name")
 }
 
-class MacroResourcesImpl(macros: Any) extends MacroResources {
-  private val (methods, invocationTarget) = macroMethods(macros)
-
-  private def macroMethods(obj: Any): (Map[(String, Boolean), java.lang.reflect.Method], Any) = obj match {
-    case null => (Map(), null)
-    case Some(o) => macroMethods(o)
-    case None => macroMethods(null)
-    case x => {
-      def isMacro(m: java.lang.reflect.Method) =
-        m.getParameterTypes.nonEmpty && (isParserMacro(m) || isBuilderMacro(m))
-      def isParserMacro(m: java.lang.reflect.Method) =
-        classOf[QueryParsers].isAssignableFrom(m.getParameterTypes()(0)) &&
-          classOf[Exp].isAssignableFrom(m.getReturnType)
-      def isBuilderMacro(m: java.lang.reflect.Method) =
-        classOf[QueryBuilder].isAssignableFrom(m.getParameterTypes()(0)) &&
-          classOf[Expr].isAssignableFrom(m.getReturnType)
-      val mm = x.getClass.getMethods.collect {
-        case m if isMacro(m) => (m.getName -> isParserMacro(m), m)
-      }.toMap
-      if (mm.isEmpty) sys.error(s"No macro methods found in object $obj. " +
-        s"If you do not want to use macros pass null as a parameter")
-      (mm, x)
-    }
+class MacroResourcesImpl(scalaMacros: Any, typeMapper: TypeMapper) extends MacroResources {
+  private val macros = {
+    val ml = new MacrosLoader(typeMapper)
+    val tm =
+      if (macroResourcesFile == null)
+        ml.loadTresqlMacros(ml.load())
+      else
+        ml.load(macroResourcesFile).map(ml.loadTresqlMacros).getOrElse(TresqlMacros.empty)
+    tm.merge(ml.loadTresqlScalaMacros(scalaMacros))
   }
 
-  override def isMacroDefined(name: String) = methods.contains((name, true))
-  override def isBuilderMacroDefined(name: String) = methods.contains((name, false))
-  override def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T = {
-    val m = (methods.get(name, true) orElse methods.get(name, false)).get
-    val p = m.getParameterTypes
-    try {
-      if (p.length > 1 && p(1).isAssignableFrom(classOf[Seq[_]])) {
-        //parameter is list of expressions
-        m.invoke(invocationTarget, parser_or_builder, args).asInstanceOf[T]
-      } else {
-        val _args = (parser_or_builder :: args).asInstanceOf[Seq[Object]] //must cast for older scala verions
-        m.invoke(invocationTarget, _args: _*).asInstanceOf[T]
-      }
-    } catch {
-      case e: Exception =>
-        def msg(e: Throwable): List[String] = {
-          if (e == null) Nil
-          else s"""${e.getClass}${if (e.getMessage != null) ": " + e.getMessage else ""}""" :: msg(e.getCause)
-        }
-        throw new RuntimeException(s"Error invoking macro function - $name (${msg(e).mkString(" ")})", e)
+  override def isMacroDefined(name: String): Boolean         = macros.parserMacros.contains(name)
+  override def isBuilderMacroDefined(name: String): Boolean  = macros.builderMacros.contains(name)
+
+  private def findMacro[A, B](name: String, map: Map[String, Seq[TresqlMacro[A, B]]], argsSize: Int) =
+    map(name) match {
+      case s if s.size == 1 => s.head
+      case s => s.find(_.signature.pars.size == argsSize)
+        .orElse(s.find(_.signature.hasRepeatedPar))
+        .getOrElse(sys.error(s"Cannot find macro '$name' with $argsSize argument(s)"))
     }
+  override def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp = {
+    findMacro[QueryParsers, Exp](name, macros.parserMacros, args.size).invoke(parser, args.toIndexedSeq)
   }
+  override def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr =
+    findMacro[QueryBuilder, Expr](name, macros.builderMacros, args.size).invoke(builder, args.toIndexedSeq)
 }
 
 trait CacheResources {
