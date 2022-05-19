@@ -100,15 +100,15 @@ trait JDBCMetadata extends Metadata {
             getInt("COLUMN_TYPE"),
             getInt("DATA_TYPE"),
             getString("TYPE_NAME"),
-            sql_scala_type_map(getInt("DATA_TYPE")))::pars
+            sql_scala_type_map(getInt("DATA_TYPE"))) :: pars
       }
       parsRs.close
       val returnPar = pars.filter(_.parType == DatabaseMetaData.procedureColumnReturn) match {
-        case par::Nil => (par.sqlType, par.typeName, par.scalaType)
+        case par :: Nil => (par.sqlType, par.typeName, par.scalaType)
         case _ => (-1, null, null)
       }
       procedureCache.put(name, Procedure(procedureName.toLowerCase, remarks, procedureType,
-          pars.reverse, returnPar._1, returnPar._2, returnPar._3))
+          pars.reverse, returnPar._1, returnPar._2, FixedReturnType(returnPar._3)))
     }
     rs.close
     Option(procedureCache.get(name))

@@ -439,7 +439,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     }
     lazy val builder: TransformerWithState[Ctx] = transformerWithState(ctx => {
       case f: Fun => procedure(s"${f.name}#${f.parameters.size}")(None).map { p => // FIXME db is not allways 'None'
-        val retType = if (p.returnTypeParIndex == -1) p.scalaReturnType else ManifestFactory.Nothing
+        val retType = p.scalaReturnType
         FunDef(p.name, f.copy(
           parameters = f.parameters map(tr(ctx, _)),
           aggregateOrder = f.aggregateOrder.map(tr(ctx, _).asInstanceOf[Ord]),
@@ -844,8 +844,11 @@ trait Compiler extends QueryParsers { thisCompiler =>
         else type_from_const(s.cols.head.typ)
       case f: FunDef[_] =>
         if (f.typ != null && f.typ != Manifest.Nothing) type_from_const(f.typ)
-        else if (f.procedure.returnTypeParIndex == -1) type_from_const(Manifest.Any)
-        else typer(ctx)(f.exp.parameters(f.procedure.returnTypeParIndex))
+        else f.procedure.returnType match {
+          case FixedReturnType(mf) => type_from_const(mf)
+          case ParameterReturnType(idx) =>
+            if (idx == -1) type_from_const(Manifest.Any) else typer(ctx)(f.exp.parameters(idx))
+        }
       case Cast(_, typ) => type_from_const(metadata.xsd_scala_type_map(typ))
       case PrimitiveDef(e, _) => typer(ctx)(e)
     })
@@ -894,8 +897,11 @@ trait Compiler extends QueryParsers { thisCompiler =>
           ColDef(n, nexp, typer(Ctx(ctx.scopes, ctx.db, Manifest.Any))(nexp).mf)
         //resolve return type only for root level function
         case fd @ FunDef(_, f, typ, p) if ctx.scopes.isEmpty && (typ == null || typ == Manifest.Nothing) =>
-          val t = if (p.returnTypeParIndex == -1) Manifest.Any else {
-            typer(Ctx(ctx.scopes, ctx.db, Manifest.Any))(f.parameters(p.returnTypeParIndex)).mf
+          val t = p.returnType match {
+            case ParameterReturnType(idx) =>
+              if (idx == -1) Manifest.Any
+              else typer(Ctx(ctx.scopes, ctx.db, Manifest.Any))(f.parameters(idx)).mf
+            case FixedReturnType(mf) => mf
           }
           fd.copy(typ = t)
         case PrimitiveDef(exp, _) =>

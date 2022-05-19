@@ -359,7 +359,10 @@ trait Resources extends MacroResources with CacheResources with Logging {
   def withLogger(logger: TresqlLogger): Resources = copyResources.copy(logger = logger)
   def withBindVarLogFilter(filter: BindVarLogFilter): Resources = copyResources.copy(bindVarLogFilter = filter)
   def withParams(params: Map[String, Any]): Resources = copyResources.copy(params = params)
-  def withMacros(macros: Any): Resources = copyResources.copy(macros = new MacroResourcesImpl(macros))
+  def withMacros(macros: Any): Resources = copyResources.copy(macros = macros match {
+    case mr: MacroResources => mr
+    case _ => new MacroResourcesImpl(macros)
+  })
   def withExtraResources(extra: Map[String, Resources]) = copyResources.copy(extraResources = extra)
   def withUpdatedExtra(name: String)(updater: Resources => Resources): Resources =
     copyResources.copy(extraResources = extraResources ++ Map(name -> updater(extraResources(name))))
@@ -373,6 +376,7 @@ trait Resources extends MacroResources with CacheResources with Logging {
 }
 
 trait MacroResources {
+  def macroResourcesFile: String = null
   def isMacroDefined(name: String): Boolean = false
   def isBuilderMacroDefined(name: String): Boolean = false
   def invokeMacro[T](name: String, parser_or_builder: AnyRef, args: List[T]): T =

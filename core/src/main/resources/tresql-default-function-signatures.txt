@@ -12,18 +12,18 @@
  * ------
  * any other type results as Any
  * Function parameter type can end with asterisk - '*' indicating multiple arguments
- * Function return type
+ * Function return type can reference some parameter type - fun(par)::'$par'
  ***/
 
 //aggregate functions
 count(col)::long
 max(col)::'$col'
-min(col)::'$1'
-sum(col)::'$1'
-avg(col)::'$1'
+min(col)::'$col'
+sum(col)::'$col'
+avg(col)::'$col'
 
 //basic db functions
-coalesce(pars::'*')::'$1'
+coalesce(pars::'*')::'$pars'
 upper(string::string)::string
 lower(string::string)::string
 insert (str1::string, offset::int, length::int, str2::string)::string
@@ -38,6 +38,6 @@ current_time()::timestamp
 now()::timestamp
 
 //basic dialect functions
-case(when::any, then, rest::'any*')::'$2'
+case(when::any, then, rest::'any*')::'$then'
 nextval(seq::string)::long
 cast(exp::any, typ::string)::any

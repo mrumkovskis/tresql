@@ -1,6 +1,6 @@
 package org.tresql.compiling
 
-import org.tresql.metadata.{Par, Procedure}
+import org.tresql.metadata.{FixedReturnType, Par, ParameterReturnType, Procedure}
 
 import scala.reflect.{Manifest, ManifestFactory}
 import java.lang.reflect._
@@ -48,8 +48,10 @@ trait CompilerFunctionMetadata extends org.tresql.Metadata {
     }.toList
     val returnType = m.getGenericReturnType match {
       case par: ParameterizedType => sys.error(s"Parametrized return type not supported! Method: $m, parameter: $par")
-      case c: Class[_] => primitiveClassAnyValMap.getOrElse(c, ManifestFactory.classType(c))
-      case x => ManifestFactory.singleType(x)
+      case c: Class[_] => FixedReturnType(primitiveClassAnyValMap.getOrElse(c, ManifestFactory.classType(c)))
+      case x =>
+        val idx  = pars.indexWhere(_.scalaType.toString == x.toString)
+        if (idx == -1) FixedReturnType(Manifest.Any) else ParameterReturnType(idx)
     }
     Procedure(m.getName, null, -1, pars, -1, null, returnType, repeatedPars)
   }

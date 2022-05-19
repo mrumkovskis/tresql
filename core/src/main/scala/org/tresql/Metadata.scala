@@ -108,22 +108,19 @@ package metadata {
   case class Key(cols: List[String])
   case class Ref(cols: List[String], refCols: List[String])
   case class Procedure[T](name: String, comments: String, procType: Int,
-    pars: List[Par[_]], returnSqlType: Int, returnTypeName: String, scalaReturnType: Manifest[T],
-    hasRepeatedPar: Boolean = false) {
-    /**Returns parameter index return type depends on during runtime or -1 if return type does not
-    depend on any parameter type. */
-    def returnTypeParIndex: Int = if (scalaReturnType == null) -1 else {
-      import java.lang.reflect._
-      val c = scalaReturnType.runtimeClass
-      if (classOf[TypeVariable[_ <: GenericDeclaration]].isAssignableFrom(c)) {
-        //return type is parameterized
-        pars.indexWhere(_.scalaType.toString == scalaReturnType.toString)
-      } else -1
+                          pars: List[Par[_]], returnSqlType: Int, returnTypeName: String, returnType: ReturnType,
+                          hasRepeatedPar: Boolean = false) {
+    def scalaReturnType: Manifest[T] = returnType match {
+      case r: FixedReturnType[T@unchecked] => r.mf
+      case ParameterReturnType(idx) => pars(idx).scalaType.asInstanceOf[Manifest[T]]
     }
   }
   case class Par[T](name: String, comments: String, parType: Int, sqlType: Int, typeName: String,
     scalaType: Manifest[T])
-  trait key_ { def cols: List[String] }
+  sealed trait ReturnType
+  case class ParameterReturnType(idx: Int) extends ReturnType
+  case class FixedReturnType[T](mf: Manifest[T]) extends ReturnType
+  sealed trait key_ { def cols: List[String] }
   case class uk(cols: List[String]) extends key_
   case class fk(cols: List[String]) extends key_
 }
