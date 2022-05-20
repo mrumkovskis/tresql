@@ -1,8 +1,6 @@
 package org.tresql
 
-import java.util.NoSuchElementException
 import sys._
-import scala.reflect.Manifest
 
 /** Implementation of meta data must be thread safe */
 trait Metadata extends metadata.TypeMapper {
