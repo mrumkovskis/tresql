@@ -12,7 +12,7 @@ import scala.util.Try
 /** Environment for expression building and execution */
 private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db: Option[String],
                            val reusableExpr: Boolean)
-  extends Resources with Metadata {
+  extends Resources with AbstractMetadata {
 
   def this(provider: EnvProvider, db: Option[String], reusableExpr: Boolean) =
     this(provider, null, db, reusableExpr)
@@ -386,7 +386,7 @@ trait Resources extends MacroResources with CacheResources with Logging {
 }
 
 trait MacroResources {
-  def macroResourcesFile: String = null
+  def macroResource: String = null
   def isMacroDefined(name: String): Boolean = false
   def isBuilderMacroDefined(name: String): Boolean = false
   def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp =
@@ -399,10 +399,10 @@ class MacroResourcesImpl(scalaMacros: Any, typeMapper: TypeMapper) extends Macro
   private val macros = {
     val ml = new MacrosLoader(typeMapper)
     val tm =
-      if (macroResourcesFile == null)
+      if (macroResource == null)
         ml.loadTresqlMacros(ml.load())
       else
-        ml.load(macroResourcesFile).map(ml.loadTresqlMacros).getOrElse(TresqlMacros.empty)
+        ml.load(macroResource).map(ml.loadTresqlMacros).getOrElse(TresqlMacros.empty)
     tm.merge(ml.loadTresqlScalaMacros(scalaMacros))
   }
 

@@ -1,9 +1,12 @@
 package org.tresql
 
+import org.tresql.metadata.Procedure
+import org.tresql.resources.{FunctionSignatures, FunctionSignaturesLoader, MacrosLoader}
+
 import sys._
 
 /** Implementation of meta data must be thread safe */
-trait Metadata extends metadata.TypeMapper {
+trait AbstractMetadata extends metadata.TypeMapper {
   import metadata._
   def join(table1: String, table2: String): (key_, key_) = {
     val t1 = table(table1); val t2 = table(table2)
@@ -58,11 +61,47 @@ trait Metadata extends metadata.TypeMapper {
 
   def table(name: String): Table
   def tableOption(name: String): Option[Table]
-  /*??? implementations so super can be called from extending trait in the case
-  two implementations of this trait are mixed together.
-  This pattern is used in {{{compiling.CompilerFunctions}}} */
   def procedure(name: String): Procedure[_] = ???
   def procedureOption(name: String): Option[Procedure[_]] = ???
+}
+
+trait Metadata extends AbstractMetadata {
+  override def procedure(name: String): Procedure[_] = procedureOption(name)
+    .getOrElse(sys.error(s"Function not found: $name"))
+  override def procedureOption(name: String): Option[Procedure[_]] = {
+    val idx = name.lastIndexOf("#")
+    val pname = name.substring(0, idx)
+    val pcount = name.substring(idx + 1, name.length).toInt
+    functionSignatures.signatures.get(pname)
+      .flatMap {
+        case List(p) => Option(p)
+        case p @ List(_*) =>
+          //return procedure where parameter count match
+          p.find(_.pars.size == pcount)
+            .orElse(p.find(_.pars.size - 1 == pcount))
+            .orElse(Option(p.maxBy(_.pars.size)))
+      }
+  }
+
+  /** Override this to load function signatures from other resource than tresql-function-signatures.txt file */
+  def functionSignaturesResource: String = null
+  /** Override this to load function signatures from other resource than tresql-macros.txt file */
+  def macroSignaturesResource: String = null
+  /** Override this to load function signatures from object with tresql macros implementations */
+  def macroClass: Class[_] = null
+
+  private val functionSignatures: FunctionSignatures = {
+    val sl = new FunctionSignaturesLoader(this)
+    val ml = new MacrosLoader(this)
+    def loadFromLoader(l: FunctionSignaturesLoader, res: String) = {
+      if (res == null) l.loadFunctionSignatures(l.load())
+      else l.load(res).map(sl.loadFunctionSignatures).getOrElse(FunctionSignatures.empty)
+    }
+    val fromSignResources   = loadFromLoader(sl, functionSignaturesResource)
+    val fromMacroResources  = loadFromLoader(ml, macroSignaturesResource)
+    val fromClass           = sl.loadFunctionSignaturesFromClass(macroClass)
+    fromClass.merge(fromMacroResources.merge(fromSignResources))
+  }
 }
 
 //TODO pk col storing together with ref col (for multi col key secure support)?

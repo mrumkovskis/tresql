@@ -10,6 +10,18 @@ import scala.reflect.ManifestFactory
 import scala.util.Try
 import scala.util.matching.Regex
 
+case class FunctionSignatures(signatures: Map[String, List[Procedure[_]]]) {
+  def merge(fs: FunctionSignatures): FunctionSignatures = {
+    FunctionSignatures(
+      ResourceMerger.mergeResources(signatures, fs.signatures)
+        .map { case (n, l) => (n, l.toList) }
+    )
+  }
+}
+object FunctionSignatures {
+  def empty = FunctionSignatures(Map())
+}
+
 class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
   protected val ResourceFile        = "/tresql-function-signatures.txt"
   protected val DefaultResourceFile = "/tresql-default-functions-signatures.txt"
@@ -126,6 +138,26 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
     }
     Procedure(m.getName, null, -1, pars, -1, null, returnType, repeatedPars)
   }
+
+  def loadFunctionSignatures(signatures: Seq[String]): FunctionSignatures = {
+    val fs = signatures
+      .collect { case s if isSignatureDef(s) => parseSignature(s) }
+      .toList
+      .groupBy(_.name)
+    FunctionSignatures(fs)
+  }
+
+  def loadFunctionSignaturesFromClass(clazz: Class[_]): FunctionSignatures = {
+    if (clazz == null) FunctionSignatures.empty
+    else {
+      val signatures =
+        clazz.getMethods
+          .map(parseSignature)
+          .toList
+          .groupBy(_.name)
+      FunctionSignatures(signatures)
+    }
+  }
 }
 
 trait TresqlMacro[A, B] {
@@ -136,15 +168,9 @@ trait TresqlMacro[A, B] {
 case class TresqlMacros(parserMacros: Map[String, Seq[TresqlMacro[QueryParsers, Exp]]],
                         builderMacros: Map[String, Seq[TresqlMacro[QueryBuilder, Expr]]]) {
   def merge(tresqlMacros: TresqlMacros): TresqlMacros = {
-    def mergeInternal[A, B](m1: Map[String, Seq[TresqlMacro[A, B]]],
-                            m2: Map[String, Seq[TresqlMacro[A, B]]]) =
-      m1.foldLeft(m2) { case (res, (n, ml1)) =>
-        res.get(n).map { ml2 =>
-          res + (n -> (ml1 ++: ml2))
-        }.getOrElse(res + (n -> ml1))
-      }
-    TresqlMacros(parserMacros = mergeInternal(parserMacros, tresqlMacros.parserMacros),
-      builderMacros = mergeInternal(builderMacros, tresqlMacros.builderMacros))
+    import ResourceMerger._
+    TresqlMacros(parserMacros = mergeResources(parserMacros, tresqlMacros.parserMacros),
+      builderMacros = mergeResources(builderMacros, tresqlMacros.builderMacros))
   }
 }
 object TresqlMacros {
@@ -233,10 +259,6 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
     }
   }
 
-  override def parseSignature(macroDef: String): Procedure[_] = {
-    super.parseSignature(macroDef.substring(0, macroDef.indexOf("=")))
-  }
-
   def loadTresqlMacros(macros: Seq[String]): TresqlMacros = {
     val parserMacros =
       macros.collect {
@@ -287,6 +309,14 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
     }
     macroMethods(obj)
   }
+
+  override def loadFunctionSignatures(macro_def: Seq[String]): FunctionSignatures = {
+    val fs = macro_def
+      .collect { case s if isMacroDef(s) => parseSignature(s.substring(0, s.indexOf("="))) }
+      .toList
+      .groupBy(_.name)
+    FunctionSignatures(fs)
+  }
 }
 
 trait ResourceLoader {
@@ -321,5 +351,15 @@ trait ResourceLoader {
 
   def load(): Seq[String] = {
     (load(ResourceFile) orElse load(DefaultResourceFile)).getOrElse(Nil)
+  }
+}
+
+private object ResourceMerger {
+  def mergeResources[A](m1: Map[String, Seq[A]], m2: Map[String, Seq[A]]): Map[String, Seq[A]] = {
+    m1.foldLeft(m2) { case (res, (n, ml1)) =>
+      res.get(n).map { ml2 =>
+        res + (n -> (ml1 ++: ml2))
+      }.getOrElse(res + (n -> ml1))
+    }
   }
 }
