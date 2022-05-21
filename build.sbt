@@ -64,12 +64,7 @@ lazy val tresql = (project in file("."))
   .disablePlugins(plugins.JUnitXmlReportPlugin)
   .dependsOn(core % "test->test;compile->compile", macros)
   .aggregate(core, macros)
-  .settings(scalacOptions +=
-    "-Xmacro-settings:metadataFactoryClass=org.tresql.compiling.CompilerJDBCMetadataFactory, " +
-    "driverClass=org.hsqldb.jdbc.JDBCDriver, url=jdbc:hsqldb:mem:., dbCreateScript=src/test/resources/db.sql, " +
-    "driverClass.contact_db=org.hsqldb.jdbc.JDBCDriver, url.contact_db=jdbc:hsqldb:mem:contact_db, " +
-    "dbCreateScript.contact_db=src/test/resources/db1.sql, " +
-    "macros=org.tresql.test.Macros") //, verbose")
+  //.settings(scalacOptions += "-Xmacro-settings:verbose")
   .settings(commonSettings: _*)
   .settings(packageMerges: _*)
   .settings(

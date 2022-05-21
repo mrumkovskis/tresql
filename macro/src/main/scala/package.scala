@@ -2,6 +2,8 @@ package org
 
 import org.tresql.compiling.CompilerException
 
+import java.util.Properties
+
 package object tresql extends CoreTypes {
 
   /**
@@ -83,8 +85,7 @@ package object tresql extends CoreTypes {
     def impl(c: Context)(params: c.Expr[Any]*)(resources: c.Expr[Resources]): c.Expr[Result[RowLike]] = {
       import c.universe._
       import CoreTypes.RowConverter
-      val macroSettings = settings(c.settings)
-      val verbose = macroSettings.contains("verbose")
+      val (macroSettings, verbose) = settings(c.settings)
       val logger = if (verbose) new Resources {
         override def logger = (msg, params, _) => {
           println(msg)
@@ -331,22 +332,25 @@ package object tresql extends CoreTypes {
            """
       c.Expr(tree)
     }
-    def settings(sett: List[String]) = sett.map { s => s.split("=") match {
-      case Array(key) => key.trim -> ""
-      case Array(key, value) => key.trim -> value.trim
-      case _ => sys.error(s"Setting must be in format <key>=<value> or <key>. Instead found: $s")
-    }}.toMap
-    def metadata(conf: Map[String, String], verbose: Boolean) = conf.get("metadataFactoryClass").map { factory =>
+    def settings(sett: List[String]): (Map[String, String], Boolean) = {
+      val p = new Properties()
+      p.load(getClass.getResourceAsStream("/tresql-scala-macro.properties"))
+      import scala.collection.JavaConverters._
+      val (settings, verbose) = (p.asScala.toMap, sett.exists(_.trim == "verbose"))
+      if (verbose) println(s"Scala compiler macro settings:\n$settings")
+      (settings, verbose)
+    }
+    val MetadataFactoryProp = "metadata_factory_class"
+    def metadata(conf: Map[String, String], verbose: Boolean) = conf.get(MetadataFactoryProp).map { factory =>
       compiling.MetadataCache.create(
-        conf,
+        conf.filterNot(_._1 == MetadataFactoryProp),
         Class.forName(factory).getDeclaredConstructor().newInstance()
           .asInstanceOf[compiling.CompilerMetadataFactory],
         verbose
       )
     }.getOrElse(
-      sys.error(s"Tresql interpolator not available. Scala macro compiler setting missing - 'metadataFactoryClass'. " +
-        s"Try to set -Xmacro-settings scala compiler option. " +
-        s"Example: -Xmacro-settings:metadataFactoryClass=org.tresql.compiling.CompilerJDBCMetadataFactory")
+      sys.error(s"Tresql interpolator not available. Scala macro compiler property missing - " +
+        s"'$MetadataFactoryProp'. See if resource /tresql-scala-macro.properties is available in classpath.")
     )
   }
 

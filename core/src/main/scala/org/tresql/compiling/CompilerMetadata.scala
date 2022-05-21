@@ -43,7 +43,7 @@ class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
 
   def create(conf: Map[String, String]): CompilerMetadata = create(conf, false)
   def create(conf: Map[String, String], verbose: Boolean): CompilerMetadata = {
-    val macrosClazz = conf.get("macros").map(Class.forName)
+    val macrosClazz = conf.get("macros_class").map(Class.forName)
     val jdbc_metadata = {
       def createMetadata(mdConf: Conf) = {
         import mdConf._
@@ -76,11 +76,11 @@ class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
       }
       def createConf(c: Map[String, String]) = {
         Conf(
-          c.getOrElse("driverClass", null),
-          c.getOrElse("url", null),
-          c.getOrElse("user", null),
-          c.getOrElse("password", null),
-          c.getOrElse("dbCreateScript", null),
+          c.getOrElse("jdbc_driver_class" , null),
+          c.getOrElse("jdbc_url"          , null),
+          c.getOrElse("jdbc_user"         , null),
+          c.getOrElse("jdbc_password"     , null),
+          c.getOrElse("db_create_script"  , null),
         )
       }
       def param(k: String) = {
