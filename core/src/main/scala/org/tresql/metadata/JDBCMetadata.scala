@@ -1,9 +1,6 @@
 package org.tresql.metadata
 
 import org.tresql.Metadata
-import org.tresql._
-import scala.collection.JavaConverters._
-import java.sql.{ Connection => C }
 import java.sql.ResultSet
 import java.sql.DatabaseMetaData
 import java.util.concurrent.ConcurrentHashMap
