@@ -111,7 +111,7 @@ trait JDBCMetadata extends Metadata {
           pars.reverse, returnPar._1, returnPar._2, FixedReturnType(returnPar._3)))
     }
     rs.close
-    Option(procedureCache.get(name))
+    super.procedureOption(name) orElse Option(procedureCache.get(name))
   }
 
   def cols(rs: ResultSet) = {

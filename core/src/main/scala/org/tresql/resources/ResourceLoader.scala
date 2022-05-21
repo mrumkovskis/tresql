@@ -104,7 +104,10 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
 
   protected def trySignatureDef(signatureDef: String): Try[Boolean] = {
     Try(qp.parseExp(signatureDef))
-      .map { case _: Fun => true case _ => false /* maybe comment */}
+      .map {
+        case _: Fun | Cast(_: Fun, _) => true
+        case _ => false /* maybe comment */
+      }
       .recover { case _ => parseErr(signatureDef) }
   }
 
@@ -127,7 +130,7 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
       case c: Class[_] => ManifestFactory.classType(c)
       case x => ManifestFactory.singleType(x)
     }.zipWithIndex.map { case (m, i) =>
-      Par[Nothing](s"_${i + 1}", null, -1, -1, null, m)
+      Par[Nothing](s"_$i", null, -1, -1, null, m)
     }.toList.drop(1) // drop builder or parser argument
     val returnType = m.getGenericReturnType match {
       case par: ParameterizedType => sys.error(s"Parametrized return type not supported! Method: $m, parameter: $par")
@@ -152,7 +155,7 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
     else {
       val signatures =
         clazz.getMethods
-          .map(parseSignature)
+          .collect { case m if m.getParameterCount > 0 => parseSignature(m) } // must have at least one par - parser or builder
           .toList
           .groupBy(_.name)
       FunctionSignatures(signatures)

@@ -39,11 +39,11 @@ class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
                   url: String,
                   user: String,
                   password: String,
-                  dbCreateScript: String,
-                  functionsClassName: String)
+                  dbCreateScript: String)
 
   def create(conf: Map[String, String]): CompilerMetadata = create(conf, false)
   def create(conf: Map[String, String], verbose: Boolean): CompilerMetadata = {
+    val macrosClazz = conf.get("macros").map(Class.forName)
     val jdbc_metadata = {
       def createMetadata(mdConf: Conf) = {
         import mdConf._
@@ -69,12 +69,9 @@ class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
             }
           if (verbose) println("Success")
         }
-        if (functionsClassName == null) JDBCMetadata(connection) else {
-          val f = Class.forName(functionsClassName)
-          new JDBCMetadata with CompilerFunctionMetadata {
-            override def conn = connection
-            override def compilerFunctionSignatures = f
-          }
+        new JDBCMetadata {
+          override def conn = connection
+          override def macroClass: Class[_] = macrosClazz.orNull
         }
       }
       def createConf(c: Map[String, String]) = {
@@ -84,7 +81,6 @@ class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
           c.getOrElse("user", null),
           c.getOrElse("password", null),
           c.getOrElse("dbCreateScript", null),
-          c.getOrElse("functionSignatures", null)
         )
       }
       def param(k: String) = {
@@ -108,7 +104,7 @@ class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
       /** Currently no extra metadata are supported */
       override def extraMetadata: Map[String, Metadata] = jdbc_metadata.filterNot(_._1 == "")
       override def macros: Any = {
-        conf.get("macros").map(cn => Class.forName(cn).getDeclaredConstructor().newInstance()).getOrElse(null)
+        macrosClazz.map(_.getDeclaredConstructor().newInstance()).orNull
       }
     }
   }

@@ -192,9 +192,9 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     println("\n-------------- TEST compiler ----------------\n")
     //set new metadata
     val testRes = tresqlResources.withMetadata(
-      new metadata.JDBCMetadata with compiling.CompilerFunctionMetadata {
+      new metadata.JDBCMetadata {
         override def conn: java.sql.Connection = tresqlResources.conn
-        override def compilerFunctionSignatures = classOf[org.tresql.test.TestFunctionSignatures]
+        override def macroClass: Class[_] = classOf[org.tresql.test.Macros]
       }
     )
     val compiler = new QueryCompiler(testRes.metadata, Map(), testRes)

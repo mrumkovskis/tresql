@@ -46,7 +46,7 @@ Scala compiler tresql macro settings for tresql project (see [build.sbt](/build.
 
 ```scala
   scalacOptions += 
-    "-Xmacro-settings:metadataFactoryClass=org.tresql.compiling.CompilerJDBCMetadata, driverClass=org.hsqldb.jdbc.JDBCDriver, url=jdbc:hsqldb:mem:., dbCreateScript=src/test/resources/db.sql, functionSignatures=org.tresql.test.TestFunctionSignatures"
+    "-Xmacro-settings:metadataFactoryClass=org.tresql.compiling.CompilerJDBCMetadata, driverClass=org.hsqldb.jdbc.JDBCDriver, url=jdbc:hsqldb:mem:., dbCreateScript=src/test/resources/db.sql"
 ```
 
 ORT - Object relational transformations

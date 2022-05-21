@@ -70,17 +70,20 @@ trait Metadata extends AbstractMetadata {
     .getOrElse(sys.error(s"Function not found: $name"))
   override def procedureOption(name: String): Option[Procedure[_]] = {
     val idx = name.lastIndexOf("#")
-    val pname = name.substring(0, idx)
-    val pcount = name.substring(idx + 1, name.length).toInt
-    functionSignatures.signatures.get(pname)
-      .flatMap {
-        case List(p) => Option(p)
-        case p @ List(_*) =>
-          //return procedure where parameter count match
-          p.find(_.pars.size == pcount)
-            .orElse(p.find(_.pars.size - 1 == pcount))
-            .orElse(Option(p.maxBy(_.pars.size)))
-      }
+    if (idx == -1) functionSignatures.signatures.get(name).flatMap(_.headOption)
+    else {
+      val pname = name.substring(0, idx)
+      val pcount = name.substring(idx + 1, name.length).toInt
+      functionSignatures.signatures.get(pname)
+        .flatMap {
+          case List(p) => Option(p)
+          case p @ List(_*) =>
+            //return procedure where parameter count match
+            p.find(_.pars.size == pcount)
+              .orElse(p.find(_.pars.size - 1 == pcount))
+              .orElse(Option(p.maxBy(_.pars.size)))
+        }
+    }
   }
 
   /** Override this to load function signatures from other resource than tresql-function-signatures.txt file */
