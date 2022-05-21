@@ -6,7 +6,7 @@ import org.tresql.resources.{FunctionSignatures, FunctionSignaturesLoader, Macro
 import sys._
 
 /** Implementation of meta data must be thread safe */
-trait AbstractMetadata extends metadata.TypeMapper {
+private [tresql] trait AbstractMetadata extends metadata.TypeMapper {
   import metadata._
   def join(table1: String, table2: String): (key_, key_) = {
     val t1 = table(table1); val t2 = table(table2)
