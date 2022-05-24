@@ -204,13 +204,15 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
     override def invoke(env: A, params: IndexedSeq[B]): B = {
       val p = method.getParameterTypes
       try {
-        if (p.length > 1 && p(1).isAssignableFrom(classOf[Seq[_]])) {
-          //parameter is list of expressions
-          method.invoke(invocationTarget, env.asInstanceOf[Object], params).asInstanceOf[B]
-        } else {
-          val _args = params.+:(env).asInstanceOf[Seq[Object]] //must cast for older scala verions
+          val _args =
+            (if (signature.hasRepeatedPar && params.nonEmpty && p.last.isAssignableFrom(classOf[Seq[_]])) {
+              val idx = signature.pars.size - 1
+              params.slice(0, idx)
+                .:+(params.slice(idx, params.length))
+            } else {
+              params
+            }).+:(env).asInstanceOf[Seq[Object]] //must cast for scala verion 2.12
           method.invoke(invocationTarget, _args: _*).asInstanceOf[B]
-        }
       } catch {
         case e: Exception =>
           def msg(e: Throwable): List[String] = {

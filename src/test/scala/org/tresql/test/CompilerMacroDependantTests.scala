@@ -345,6 +345,15 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     //macro string escape syntax
     assertResult("\u202F\u202F")(tresql"macro_interpolator_str_test('\u202F', '\u202F')")
     assertResult("no_args")(tresql"macro_interpolator_noargs_test()")
+    assertResult(("SALES", "CHICAGO")) {
+      tresql"""concat_exps('dept[dname = "SALES"]{', ',', '}', dname, loc)""".unique[String, String]
+    }
+    assertResult(("x a y", "x b y")) {
+      tresql"map_exps('x ' || ['a', 'b'] || ' y')"
+    }
+    assertResult(("x a y", "x b y")) {
+      tresql"concat_exps('{', ',', '}', map_exps('x ' || ['a', 'b'] || ' y'))".unique[String, String]
+    }
 
     //alias test
     assertResult(List(1))(tresql"{(pi()) / pi() pi}".map(_.pi).toList)
