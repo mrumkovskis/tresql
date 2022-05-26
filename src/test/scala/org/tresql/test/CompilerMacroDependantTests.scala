@@ -354,6 +354,26 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(("x a y", "x b y")) {
       tresql"concat_exps('{', ',', '}', map_exps('x ' || ['a', 'b'] || ' y'))".unique[String, String]
     }
+    assertResult( ("x ADAMS y", "x ACCOUNTING y")) {
+      tresql"concat_exps('{', ',', '}', map_exps('x ' || [(emp[ename != null]{ename}#(1)@(1)), (dept{dname}#(1)@(1))] || ' y'))"
+        .unique[String, String]
+    }
+    assertResult( ("x ADAMS y", "x ACCOUNTING y")) {
+      tresql"concat_exps('{', ',', '}', map_exps('x ' || [(emp[ename != null][ename != null]{ename}#(1)@(1)), (dept{dname}#(1)@(1))] || ' y'))"
+        .unique[String, String]
+    }
+    assertResult("x a y") {
+      Query("concat_exps_test('a')").unique[String] // scala compiler started to crash if treql interpolator is used
+    }
+    assertResult(("x a y", "x b y")) {
+      Query("concat_exps_test('a', 'b')").unique[String, String]
+    }
+    assertResult("x a y") {
+      Query("concat_exps_test1('{', ',', '}', 'a')").unique[String]
+    }
+    assertResult(("x a y", "x b y")) {
+      Query("concat_exps_test1('{', ',', '}', 'a', 'b')").unique[String, String]
+    }
 
     //alias test
     assertResult(List(1))(tresql"{(pi()) / pi() pi}".map(_.pi).toList)

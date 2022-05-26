@@ -188,10 +188,17 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
   private case class MacroBodyPart(prefix: String, parIdx: Int)
   private class TresqlResourcesMacro(val signature: Procedure[_], body: MacroBody)
     extends TresqlMacro[QueryParsers, Exp] {
+    private val sigParCount = signature.pars.size
     override def invoke(env: QueryParsers, params: IndexedSeq[Exp]): Exp = {
+      val parCount = params.size
+      def mayBeLiftToArr(idx: Int) = {
+        if (signature.hasRepeatedPar && idx == sigParCount - 1 && sigParCount < parCount)
+          params.slice(idx, parCount).map(_.tresql).mkString("[", ",", "]")
+        else params(idx).tresql
+      }
       val res =
         body.parts.foldLeft(new StringBuilder()) { (res, bp) =>
-          res.append(bp.prefix).append(params(bp.parIdx).tresql)
+          res.append(bp.prefix).append(mayBeLiftToArr(bp.parIdx))
         }
         .append(body.suffix)
         .toString()

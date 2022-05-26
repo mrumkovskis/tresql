@@ -10,3 +10,6 @@ macro_interpolator_null_test(from, leftOp, rightOp, col) =
   $from[$leftOp = $rightOp]{$col}#(1)
 macro_interpolator_str_test(e1::string, e2::string) = $e1 || $e2
 macro_interpolator_noargs_test() = 'no_args'
+concat_exps_test(exps::'*') = concat_exps('{', ',', '}', map_exps('x ' || $exps || ' y'))
+concat_exps_test1(prefix::string, sep::string, postfix::string, exps::'*') =
+  concat_exps($prefix, $sep, $postfix, map_exps('x ' || $exps || ' y'))
