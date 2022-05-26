@@ -2,6 +2,8 @@ package org.tresql
 
 import parsing.{Arr, Const, Exp, QueryParsers}
 
+import scala.util.Try
+
 package object macro_ {
   implicit class TresqlMacroInterpolator(val sc: StringContext) extends AnyVal {
     def macro_(args: Exp*)(implicit p: QueryParsers): Exp = {
@@ -119,7 +121,8 @@ class Macros {
       case Nil => exp
       case List(Arr(els)) => Arr(mapArr(els))
       case Arr(els) :: tail =>
-        assert(tail.forall(els == _.elements), s"All arrays to be mapped in expression ($exp) must be equal!")
+        require(tail.forall(els == _.elements),
+          s"map_exps macro error. All arrays to be mapped in expression ($exp) must be equal!")
         Arr(mapArr(els))
     }
   }
@@ -129,16 +132,20 @@ class Macros {
    *  Resulting string must be parseable tresql expression
    * */
   def concat_exps(p: QueryParsers, prefix: Exp, sep: Exp, postfix: Exp, exprs: Exp*): Exp = {
-    val (prefixStr, sepStr, postfixStr) = (prefix, sep, postfix) match {
+    val (prefixStr: String, sepStr: String, postfixStr: String) = (prefix, sep, postfix) match {
       case (Const(pf), Const(sp), Const(psf)) => (pf.toString, sp.toString, psf.toString)
-      case _ => sys.error(s"Prefix, separator, postfix parameters must be string constants, instead found: " +
-        s"prefix - $prefix, sep - $sep, postfix - $postfix")
+      case _ => new IllegalArgumentException(
+        s"Prefix, separator, postfix parameters must be string constants, instead found: " +
+          s"prefix - $prefix, sep - $sep, postfix - $postfix")
     }
     val exprs_to_concat = exprs match {
       case Seq(x: Arr) => x.elements
       case x => x
     }
-    p.parseExp(exprs_to_concat.map(_.tresql).mkString(prefixStr, sepStr, postfixStr))
+    val expStr = exprs_to_concat.map(_.tresql).mkString(prefixStr, sepStr, postfixStr)
+    Try(p.parseExp(expStr)).recover {
+      case e: Exception => throw new IllegalArgumentException("concat_exps macro produced invalid tresql", e)
+    }.get
   }
 
   /**
