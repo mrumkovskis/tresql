@@ -41,6 +41,25 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(Some(Map("dname" -> "SALES", "loc" -> "CHICAGO")))(
       Query("dept[dname = 'SALES'] {dname, loc}").uniqueOption.map(_.toMap))
     assertResult(Map("dname" -> "SALES", "loc" -> "CHICAGO"))(Query("dept[dname = 'SALES'] {dname, loc}").unique.toMap)
+    assertResult(Some(Map("loc" -> "DALLAS",
+      "emps" -> List(
+        Map("ename" -> "ADAMS"),
+        Map("ename" -> "FORD"),
+        Map("ename" -> "JONES"),
+        Map("ename" -> "MĀRTIŅŠ ŽVŪKŠĶIS"),
+        Map("ename" -> "SCOTT"),
+        Map("ename" -> "SMITH"))))
+    ) {
+      Query("dept[dname = 'RESEARCH'] { loc, |emp{ename}#(1) emps }").uniqueOption.map { r =>
+        0 until r.columnCount map { i =>
+          val n = r.column(i).name
+          n -> (r(n) match {
+            case r: Result[_] => r.toListOfMaps
+            case x => x
+          })
+        } toMap
+      }
+    }
     //result closing
     intercept[SQLException] {
       val res = Query("emp")

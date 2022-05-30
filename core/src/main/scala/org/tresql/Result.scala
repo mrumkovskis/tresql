@@ -1,8 +1,6 @@
 package org.tresql
 
 import java.sql.ResultSet
-import java.sql.ResultSetMetaData
-import sys._
 import CoreTypes.RowConverter
 
 trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T] with AutoCloseable {
@@ -42,28 +40,17 @@ trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T]
     */
   def closeWithDb: Unit = {}
 
-  def head: T = try hasNext match {
-    case true => next()
-    case false => throw new NoSuchElementException("No rows in result")
-  } finally close
-
-  def headOption: Option[T] = try Some(head) catch {
-    case e: NoSuchElementException => None
-  }
-
-  def unique: T = try hasNext match {
-    case true =>
-      val v = next()
-      if (hasNext) error("More than one row for unique result") else v
-    case false => error("No rows in result")
-  } finally close
-
-  def uniqueOption: Option[T] = try hasNext match {
-    case true =>
-      val v = next()
-      if (hasNext) error("More than one row for unique result") else Some(v)
-    case false => None
-  } finally close
+  def head: T = headOption.getOrElse(throw new NoSuchElementException("No rows in result"))
+  def headOption: Option[T] = try if (hasNext) Option(next()) else None finally close
+  def unique: T = uniqueOption.getOrElse(throw new NoSuchElementException("No rows in result"))
+  def uniqueOption: Option[T] =
+    try
+      if (hasNext) {
+        val v = next()
+        if (hasNext) throw new TooManyRowsException("More than one row for unique result")
+        else Option(v)
+      } else None
+    finally close
 
   /** needs to be overriden since super class implementation calls hasNext method */
   override def toString = getClass.toString + ":" + columns.mkString(",")
@@ -96,7 +83,6 @@ trait SelectResult[T <: RowLike] extends Result[T] {
     if (rsHasNext && nextCalled) {
       rsHasNext = rs.next; nextCalled = false
       if (rsHasNext) {
-        var i = 0
         exprCols foreach { c => children(c._2) = c._1.expr() }
       } else close
     }
@@ -278,13 +264,13 @@ class DynamicSelectResult private[tresql] (
   private[tresql] val bindVariables: List[Expr],
   override private[tresql] val maxSize: Int = 0,
   override private[tresql] val _columnCount: Int = -1
-) extends SelectResult[DynamicRow] with DynamicResult {
+) extends SelectResult[DynamicRow] with DynamicResult { this_res =>
   case class DynamicRowImpl(override val values: Seq[Any]) extends DynamicRow {
     override def columns = cols
     override def apply(name: String) = values(colMap(name))
     override def apply(idx: Int) = values(idx)
     override def column(idx: Int) = columns(idx)
-    override def columnCount: Int = columns.size
+    override def columnCount: Int = this_res.columnCount
     override def typed[T: Manifest](idx: Int) = this(idx).asInstanceOf[T]
     override def typed[T: Manifest](name: String) = typed[T](colMap(name))
   }
@@ -306,7 +292,7 @@ class DynamicSelectResult private[tresql] (
   override def uniqueOption: Option[DynamicRow] = try if (hasNext) {
     next()
     val v = DynamicRowImpl(values) // detach row from db cursor since hasNext may close it
-    if (hasNext) error("More than one row for unique result") else Some(v)
+    if (hasNext) throw new TooManyRowsException("More than one row for unique result") else Some(v)
   } else None
   finally close
 
@@ -568,7 +554,7 @@ trait RowLike extends Typed {
   def jbd(name: String) = jBigDecimal(name)
   def listOfRows(idx: Int): List[this.type] = this(idx).asInstanceOf[List[this.type]]
   def listOfRows(name: String) = this(name).asInstanceOf[List[this.type]]
-  def toMap: Map[String, Any] = (0 to (columnCount - 1)).map(i => column(i).name -> (this(i) match {
+  def toMap: Map[String, Any] = (0 until columnCount).map(i => column(i).name -> (this(i) match {
     case r: Result[_] => r.toListOfMaps
     case x => x
   })).toMap

@@ -1,8 +1,5 @@
 package org.tresql
 
-import sys._
-import scala.reflect.Manifest
-import scala.collection.generic.CanBuildFrom
 import scala.language.higherKinds
 
 trait Typed { this: RowLike =>
@@ -41,35 +38,32 @@ trait Typed { this: RowLike =>
 }
 
 trait TypedResult[+R <: RowLike] { this: Result[R] =>
-  def head[T](implicit converter: CoreTypes.Converter[T], m: Manifest[T]): T = try hasNext match {
-    case true =>
-      next()
-      this.asInstanceOf[RowLike].typed[T]
-    case false => throw new NoSuchElementException("No rows in result")
-  } finally close
+
+  def head[T](implicit converter: CoreTypes.Converter[T], m: Manifest[T]): T =
+    headOption[T].getOrElse(throw new NoSuchElementException("No rows in result"))
 
   def headOption[T](implicit converter: CoreTypes.Converter[T],
-      m: Manifest[T]): Option[T] = try Some(head[T]) catch {
-    case e: NoSuchElementException => None
-  }
+                    m: Manifest[T]): Option[T] =
+    try
+      if (hasNext) {
+        next()
+        Some(this.asInstanceOf[RowLike].typed[T])
+      } else None
+    finally close
 
   def unique[T](implicit converter: CoreTypes.Converter[T],
-    m: Manifest[T]): T = try hasNext match {
-    case true =>
-      next()
-      val v = this.asInstanceOf[RowLike].typed[T]
-      if (hasNext) error("More than one row for unique result") else v
-    case false => error("No rows in result")
-  } finally close
+                m: Manifest[T]): T =
+    uniqueOption[T].getOrElse(throw new NoSuchElementException("No rows in result"))
 
   def uniqueOption[T](implicit converter: CoreTypes.Converter[T],
-    m: Manifest[T]): Option[T] = try hasNext match {
-    case true =>
+                      m: Manifest[T]): Option[T] =
+    try if (hasNext) {
       next()
       val v = this.asInstanceOf[RowLike].typed[T]
-      if (hasNext) error("More than one row for unique result") else Some(v)
-    case false => None
-  } finally close
+      if (hasNext) throw new TooManyRowsException("More than one row for unique result")
+      else Some(v)
+    } else None
+  finally close
 
   def list[T](implicit converter: CoreTypes.Converter[T],
       m: Manifest[T]) = this.map(r => this.asInstanceOf[RowLike].typed[T]).toList
