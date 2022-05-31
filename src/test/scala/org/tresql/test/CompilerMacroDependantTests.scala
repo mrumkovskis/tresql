@@ -3,7 +3,8 @@ package org.tresql.test
 import org.tresql.OrtMetadata.SaveTo
 import org.tresql._
 
-import java.sql.{Date, SQLException}
+import java.sql.{Date, SQLException, Time}
+import java.time.LocalTime
 
 class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMacroDependantTestsApi  {
 
@@ -119,6 +120,14 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       val (id1, id2) = (r.typed[Int]("deptno"), r.typed("deptno")(scala.reflect.ManifestFactory.Int))
       r.close
       (id1, id2)
+    }
+    assertResult(("10:15:00", "10:15")) {
+      Query("+contact_db:contact {id = #contact, name = 'Alla', sex = 'F', birth_date = '1980-05-31', email = 'alla@zz.lv'}")
+      Query(
+        "+contact_db:visit {id = #visit, contact_id = :contact, visit_date = '2022-06-01', visit_time = '10:15:00'}"
+      )(implicitly[Resources].withParams(Map("contact" -> tresql"|contact_db:contact[name = 'Alla']{id}".head[Long])))
+      val st = "|contact_db:visit[contact_id = (contact[name = 'Alla']{id}) & visit_date = '2022-06-01']{visit_time}"
+      (Query(st).head[Time].toString, Query(st).head[LocalTime].toString)
     }
 
     implicit def convertRowLiketoPoha[T <: Poha](r: RowLike, m: Manifest[T]): T = m.toString match {

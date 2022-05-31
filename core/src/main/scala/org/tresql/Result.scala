@@ -189,6 +189,11 @@ trait SelectResult[T <: RowLike] extends Result[T] {
     else children(columnIndex).asInstanceOf[java.sql.Timestamp]
   }
   override def timestamp(columnLabel: String): java.sql.Timestamp = timestamp(colMap(columnLabel))
+  override def time(columnIndex: Int): java.sql.Time = {
+    if (cols(columnIndex).idx != -1) rs.getTime(cols(columnIndex).idx)
+    else children(columnIndex).asInstanceOf[java.sql.Time]
+  }
+  override def time(columnLabel: String): java.sql.Time = time(colMap(columnLabel))
   override def boolean(columnIndex: Int): Boolean = {
     if (cols(columnIndex).idx != -1) rs.getBoolean(cols(columnIndex).idx)
     else children(columnIndex).asInstanceOf[Boolean]
@@ -272,7 +277,8 @@ trait SelectResult[T <: RowLike] extends Result[T] {
         val v = rs.getBoolean(pos); if (rs.wasNull) null else v
       case VARCHAR | CHAR | CLOB | LONGVARCHAR | NCHAR | NCLOB | NVARCHAR => rs.getString(pos)
       case DATE => rs.getDate(pos)
-      case TIME | TIMESTAMP => rs.getTimestamp(pos)
+      case TIMESTAMP => rs.getTimestamp(pos)
+      case TIME => rs.getTime(pos)
       case DOUBLE | FLOAT | REAL => val v = rs.getDouble(pos); if (rs.wasNull) null else v
     }
   }
@@ -534,6 +540,8 @@ trait RowLike extends Typed with AutoCloseable {
   def timestamp(name: String) = typed[java.sql.Timestamp](name)
   def t(idx: Int) = timestamp(idx)
   def t(name: String) = timestamp(name)
+  def time(idx: Int) = typed[java.sql.Time](idx)
+  def time(name: String) = typed[java.sql.Time](name)
   def boolean(idx: Int) = typed[Boolean](idx)
   def boolean(name: String) = typed[Boolean](name)
   def bl(idx: Int) = boolean(idx)
