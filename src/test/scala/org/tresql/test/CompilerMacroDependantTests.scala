@@ -3,7 +3,8 @@ package org.tresql.test
 import org.tresql.OrtMetadata.SaveTo
 import org.tresql._
 
-import java.sql.{Date, SQLException}
+import java.sql.{Date, SQLException, Time}
+import java.time.LocalTime
 
 class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMacroDependantTestsApi  {
 
@@ -38,9 +39,19 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(20)(Query.unique[Int]("inc_val_5(inc_val_5(?))", 10))
     assertResult(15)(Query.unique[Long]("inc_val_5(inc_val_5(?))", 5))
     intercept[Exception](Query.head[Int]("emp[?]{empno}", 'z'))
-    assertResult(Some(Map("dname" -> "SALES", "loc" -> "CHICAGO")))(
-      Query("dept[dname = 'SALES'] {dname, loc}").uniqueOption.map(_.toMap))
-    assertResult(Map("dname" -> "SALES", "loc" -> "CHICAGO"))(Query("dept[dname = 'SALES'] {dname, loc}").unique.toMap)
+    assertResult(Some(Map("dname" -> "SALES", "loc" -> "CHICAGO"))) {
+      val r = Query("dept[dname = 'SALES'] {dname, loc}").uniqueOption
+      val m = r.map(_.toMap)
+      r.foreach(_.close)
+      m
+    }
+    assertResult(Map("dname" -> "SALES", "loc" -> "CHICAGO")) {
+      val r = Query("dept[dname = 'SALES'] {dname, loc}").unique
+      val m = r.toMap
+      // close result set explicitly since unique method does not close it.
+      r.close
+      m
+    }
     assertResult(Some(Map("loc" -> "DALLAS",
       "emps" -> List(
         Map("ename" -> "ADAMS"),
@@ -128,6 +139,24 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       val (id1, id2) = (r.typed[Int]("deptno"), r.typed("deptno")(scala.reflect.ManifestFactory.Int))
       r.close
       (id1, id2)
+    }
+    assertResult((List("10:15:00", "12:00:30"), List("10:15", "12:00:30"))) {
+      val contact_id =
+        Query("+contact_db:contact {id = #contact, name = 'Alla', sex = 'F', birth_date = '1980-05-31', email = 'alla@zz.lv'}")
+          .asInstanceOf[DMLResult].id.get
+      def q(tn: String) =
+        s"+contact_db:visit {id = #visit, contact_id = :contact, visit_date = '2022-06-01', visit_time = :$tn}"
+      Query(
+        q("time1") + ", " + q("time2")
+      )(implicitly[Resources].withParams(
+        Map(
+          "contact" -> contact_id,
+          "time1" -> Time.valueOf("10:15:00"),
+          "time2" -> LocalTime.of(12, 0, 30)
+        )
+      ))
+      val st = "|contact_db:visit[contact_id = (contact[name = 'Alla']{id}) & visit_date = '2022-06-01']{visit_time}#(1)"
+      (Query(st).list[Time].map(_.toString), Query(st).list[LocalTime].map(_.toString))
     }
 
     implicit def convertRowLiketoPoha[T <: Poha](r: RowLike, m: Manifest[T]): T = m.toString match {

@@ -3,32 +3,39 @@ package org.tresql
 import scala.language.higherKinds
 
 trait Typed { this: RowLike =>
+  def typed(columnIndex: Int, manifestName: String): Any = manifestName match {
+    case "Int"                        => int(columnIndex)
+    case "Long"                       => long(columnIndex)
+    case "Double"                     => double(columnIndex)
+    case "Boolean"                    => boolean(columnIndex)
+    case "scala.math.BigDecimal"      => bigdecimal(columnIndex)
+    case "java.lang.String"           => string(columnIndex)
+    case "java.util.Date"             => timestamp(columnIndex)
+    case "java.sql.Date"              => date(columnIndex)
+    case "java.sql.Timestamp"         => timestamp(columnIndex)
+    case "java.sql.Time"              => time(columnIndex)
+    case "java.time.LocalDate"        => Option(date(columnIndex)).map(_.toLocalDate).orNull
+    case "java.time.LocalDateTime"    => Option(timestamp(columnIndex)).map(_.toLocalDateTime).orNull
+    case "java.time.LocalTime"        => Option(time(columnIndex)).map(_.toLocalTime).orNull
+    case "java.lang.Integer"          => jInt(columnIndex)
+    case "java.lang.Long"             => jLong(columnIndex)
+    case "java.lang.Double"           => jDouble(columnIndex)
+    case "java.math.BigDecimal"       => jBigDecimal(columnIndex)
+    case "java.lang.Boolean"          => jBoolean(columnIndex)
+    case "Array[Byte]"                => bytes(columnIndex)
+    case "java.io.InputStream"        => stream(columnIndex)
+    case "java.io.Reader"             => reader(columnIndex)
+    case "java.sql.Blob"              => blob(columnIndex)
+    case "java.sql.Clob"              => clob(columnIndex)
+    case _                            => apply(columnIndex)
+  }
+
   def typed[T](columnIndex: Int)(implicit m: Manifest[T]): T = m.toString match {
-    case "Int" => int(columnIndex).asInstanceOf[T]
-    case "Long" => long(columnIndex).asInstanceOf[T]
-    case "Double" => double(columnIndex).asInstanceOf[T]
-    case "Boolean" => boolean(columnIndex).asInstanceOf[T]
-    case "scala.math.BigDecimal" => bigdecimal(columnIndex).asInstanceOf[T]
-    case "java.lang.String" => string(columnIndex).asInstanceOf[T]
-    case "java.util.Date" => timestamp(columnIndex).asInstanceOf[T]
-    case "java.sql.Date" => date(columnIndex).asInstanceOf[T]
-    case "java.sql.Timestamp" => timestamp(columnIndex).asInstanceOf[T]
-    case "java.time.LocalDate" => Option(date(columnIndex)).map(_.toLocalDate).orNull.asInstanceOf[T]
-    case "java.time.LocalDateTime" => Option(timestamp(columnIndex)).map(_.toLocalDateTime).orNull.asInstanceOf[T]
-    case "java.lang.Integer" => jInt(columnIndex).asInstanceOf[T]
-    case "java.lang.Long" => jLong(columnIndex).asInstanceOf[T]
-    case "java.lang.Double" => jDouble(columnIndex).asInstanceOf[T]
-    case "java.math.BigDecimal" => jBigDecimal(columnIndex).asInstanceOf[T]
-    case "java.lang.Boolean" => jBoolean(columnIndex).asInstanceOf[T]
-    case "Array[Byte]" => bytes(columnIndex).asInstanceOf[T]
-    case "java.io.InputStream" => stream(columnIndex).asInstanceOf[T]
-    case "java.io.Reader" => reader(columnIndex).asInstanceOf[T]
-    case "java.sql.Blob" => blob(columnIndex).asInstanceOf[T]
-    case "java.sql.Clob" => clob(columnIndex).asInstanceOf[T]
-    case x if x.startsWith("scala.Tuple") => typed((CoreTypes.convTuple[Product] _).asInstanceOf[CoreTypes.Converter[T]], m)
+    case x if x.startsWith("scala.Tuple") =>
+      typed((CoreTypes.convTuple[Product] _).asInstanceOf[CoreTypes.Converter[T]], m)
     case x if x.startsWith("scala.collection.immutable.List") && m.typeArguments.size == 1 =>
       result(columnIndex).map(_.typed(0)(m.typeArguments.head)).toList.asInstanceOf[T]
-    case x => apply(columnIndex).asInstanceOf[T]
+    case x => typed(columnIndex, x).asInstanceOf[T]
   }
 
   def typed[T:Manifest](name: String): T

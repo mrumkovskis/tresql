@@ -3,7 +3,7 @@ package org.tresql
 import java.sql.ResultSet
 import CoreTypes.RowConverter
 
-trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T] with AutoCloseable {
+trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T] {
 
   def columns: Seq[Column] = 0 until columnCount map column
   def values: Seq[Any] = (0 until columnCount).map(this(_))
@@ -32,25 +32,43 @@ trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T]
     }
   }
 
-  /** Close underlying database resources related to this result. Default implementation does nothing. */
-  def close: Unit = {}
-
   /** Close underlying database resources related to this result and also related database connection.
     * Default implementation does nothing.
     */
   def closeWithDb: Unit = {}
 
+  /**
+   * Returns first row from result or throws {{{NoSuchElementException}}}
+   * NOTE:  This method does not closes underlying result set.
+   *        {{{RowLike.close}}} must be called explicitly.
+   * */
   def head: T = headOption.getOrElse(throw new NoSuchElementException("No rows in result"))
-  def headOption: Option[T] = try if (hasNext) Option(next()) else None finally close
+  /**
+   * Returns first row from result as an Option
+   * NOTE:  This method does not closes underlying result set.
+   *        {{{RowLike.close}}} must be called explicitly.
+   * */
+  def headOption: Option[T] = if (hasNext) Option(next()) else None
+  /**
+   * Returns first row from result or throws {{{NoSuchElementException}}} if no row found
+   * or {{{TooManyRowsException}}} if more than one row found.
+   * NOTE:  This method does not closes underlying result set.
+   *        {{{RowLike.close}}} must be called explicitly.
+   * */
   def unique: T = uniqueOption.getOrElse(throw new NoSuchElementException("No rows in result"))
+  /**
+   * Returns first row from result as an Option or throws {{{TooManyRowsException}}} if more than one row found.
+   * NOTE:  This method does not closes underlying result set.
+   *        {{{RowLike.close}}} must be called explicitly.
+   * */
   def uniqueOption: Option[T] =
-    try
       if (hasNext) {
         val v = next()
-        if (hasNext) throw new TooManyRowsException("More than one row for unique result")
+        if (!isLast) throw new TooManyRowsException("More than one row for unique result")
         else Option(v)
       } else None
-    finally close
+
+  def isLast: Boolean
 
   /** needs to be overriden since super class implementation calls hasNext method */
   override def toString = getClass.toString + ":" + columns.mkString(",")
@@ -117,6 +135,7 @@ trait SelectResult[T <: RowLike] extends Result[T] {
   def columnCount = if (_columnCount == -1) cols.length else _columnCount
   override def column(idx: Int) = cols(idx)
   def jdbcResult = rs
+  override def isLast = jdbcResult.isLast
   override def close: Unit = {
     if (closed) return
     rs.close
@@ -167,6 +186,11 @@ trait SelectResult[T <: RowLike] extends Result[T] {
     else children(columnIndex).asInstanceOf[java.sql.Timestamp]
   }
   override def timestamp(columnLabel: String): java.sql.Timestamp = timestamp(colMap(columnLabel))
+  override def time(columnIndex: Int): java.sql.Time = {
+    if (cols(columnIndex).idx != -1) rs.getTime(cols(columnIndex).idx)
+    else children(columnIndex).asInstanceOf[java.sql.Time]
+  }
+  override def time(columnLabel: String): java.sql.Time = time(colMap(columnLabel))
   override def boolean(columnIndex: Int): Boolean = {
     if (cols(columnIndex).idx != -1) rs.getBoolean(cols(columnIndex).idx)
     else children(columnIndex).asInstanceOf[Boolean]
@@ -250,7 +274,8 @@ trait SelectResult[T <: RowLike] extends Result[T] {
         val v = rs.getBoolean(pos); if (rs.wasNull) null else v
       case VARCHAR | CHAR | CLOB | LONGVARCHAR | NCHAR | NCLOB | NVARCHAR => rs.getString(pos)
       case DATE => rs.getDate(pos)
-      case TIME | TIMESTAMP => rs.getTimestamp(pos)
+      case TIMESTAMP => rs.getTimestamp(pos)
+      case TIME => rs.getTime(pos)
       case DOUBLE | FLOAT | REAL => val v = rs.getDouble(pos); if (rs.wasNull) null else v
     }
   }
@@ -278,26 +303,6 @@ class DynamicSelectResult private[tresql] (
     case r: DynamicSelectResult => r.toList
     case x => x
   })).toList
-
-  override def headOption: Option[DynamicRow] = try {
-    if (hasNext) {
-      next()
-      Some(DynamicRowImpl(values))
-    } else None
-  } finally close
-
-  override def head: DynamicRow =
-    headOption.getOrElse(throw new NoSuchElementException("No rows in result"))
-
-  override def uniqueOption: Option[DynamicRow] = try if (hasNext) {
-    next()
-    val v = DynamicRowImpl(values) // detach row from db cursor since hasNext may close it
-    if (hasNext) throw new TooManyRowsException("More than one row for unique result") else Some(v)
-  } else None
-  finally close
-
-  override def unique: DynamicRow =
-    uniqueOption.getOrElse(throw new NoSuchElementException("No rows in result"))
 }
 
 object ArrayResult {
@@ -316,6 +321,7 @@ trait ArrayResult[T <: RowLike] extends Result[T] {
     Column(i, s"_${i + 1}", null)
   }
 
+  override def isLast: Boolean = true
   def next(): T = this.asInstanceOf[T]
 
   def apply(name: String): Any = values(cols.indexWhere(_.name == name))
@@ -355,6 +361,27 @@ trait CompiledResult[T <: RowLike] extends Result[T] {
 
   //better not call super class to list since it creates other subclasses of RowLike
   override def toList: List[T] = foldLeft(List[T]()) {(l, e) => e :: l}.reverse
+
+  /**
+   * Calls {{{super.head}} and closes this result. This is done because {{{CompiledResult}}} is not expected
+   * to return {{{RowLike}}} backed by jdbc cursor.
+   * */
+  override def head: T = try super.head finally close
+  /**
+   * Calls {{{super.headOption}}} and closes this result. This is done because {{{CompiledResult}}} is not expected
+   * to return {{{RowLike}}} backed by jdbc cursor.
+   * */
+  override def headOption: Option[T] = try super.headOption finally close
+  /**
+   * Calls {{{super.unique}} and closes this result. This is done because {{{CompiledResult}}} is not expected
+   * to return {{{RowLike}}} backed by jdbc cursor.
+   * */
+  override def unique: T = try super.unique finally close
+  /**
+   * Calls {{{super.uniqueOption}} and closes this result. This is done because {{{CompiledResult}}} is not expected
+   * to return {{{RowLike}}} backed by jdbc cursor.
+   * */
+  override def uniqueOption: Option[T] = try super.uniqueOption finally close
 }
 
 case class SingleValueResult[T](value: T)
@@ -479,7 +506,7 @@ case class Column(idx: Int, name: String, private[tresql] val expr: Expr)
 
 class TooManyRowsException(message: String) extends RuntimeException(message)
 
-trait RowLike extends Typed {
+trait RowLike extends Typed with AutoCloseable {
   def apply(idx: Int): Any
   def apply(name: String): Any
   def int(idx: Int) = typed[Int](idx)
@@ -510,6 +537,8 @@ trait RowLike extends Typed {
   def timestamp(name: String) = typed[java.sql.Timestamp](name)
   def t(idx: Int) = timestamp(idx)
   def t(name: String) = timestamp(name)
+  def time(idx: Int) = typed[java.sql.Time](idx)
+  def time(name: String) = typed[java.sql.Time](name)
   def boolean(idx: Int) = typed[Boolean](idx)
   def boolean(name: String) = typed[Boolean](name)
   def bl(idx: Int) = boolean(idx)
@@ -575,6 +604,8 @@ trait RowLike extends Typed {
   def column(idx: Int): Column
   def columns: Seq[Column]
   def values: Seq[Any]
+  /** Close underlying database resources related to this result. Default implementation does nothing. */
+  def close: Unit = {}
 }
 
 trait DynamicRow extends RowLike with Dynamic {
