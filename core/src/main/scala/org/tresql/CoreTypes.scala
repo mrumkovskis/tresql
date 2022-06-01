@@ -17,7 +17,7 @@ abstract class CoreTypes {
   implicit def convDate(r: RowLike, m: Manifest[java.util.Date]): java.util.Date = r.timestamp(0)
   implicit def convSqlDate(r: RowLike, m: Manifest[java.sql.Date]): java.sql.Date = r.date(0)
   implicit def convSqlTimestamp(r: RowLike, m: Manifest[java.sql.Timestamp]): java.sql.Timestamp = r.timestamp(0)
-  implicit def convSqlTimetamp(r: RowLike, m: Manifest[java.sql.Time]): java.sql.Time = r.time(0)
+  implicit def convSqlTime(r: RowLike, m: Manifest[java.sql.Time]): java.sql.Time = r.time(0)
   implicit def convLocalDate(r: RowLike, m: Manifest[java.time.LocalDate]) = Option(r.date(0)).map(_.toLocalDate).orNull
   implicit def convLocalDatetime(r: RowLike, m: Manifest[java.time.LocalDateTime]) = Option(r.timestamp(0)).map(_.toLocalDateTime).orNull
   implicit def convLocalTime(r: RowLike, m: Manifest[java.time.LocalTime]) = Option(r.time(0)).map(_.toLocalTime).orNull
