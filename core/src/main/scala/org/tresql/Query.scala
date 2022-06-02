@@ -37,6 +37,7 @@ trait Query extends QueryBuilder with TypedQuery {
     params: Map[String, Any] = null,
     reusableExpr: Boolean = true
   )(implicit resources: Resources): Expr = {
+    require(resources != null, "Resources cannot be null.")
     resources.log(expr, Nil, LogTopic.tresql)
     val pars =
       if (resources.params.isEmpty) params
