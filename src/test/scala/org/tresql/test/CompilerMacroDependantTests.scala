@@ -52,6 +52,15 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       r.close
       m
     }
+    assertResult(List(
+      ("KING", 5000, null, null),
+      ("MARTIN", 1250, java.math.BigInteger.valueOf(1400), 1400),
+      ("SCOTT", 4000, null, null))
+    ) {
+      Query("emp[sal > ? | comm > ?]{ename, sal, comm, comm}#(1)", java.math.BigInteger.valueOf(4000), BigInt(1000))
+        .list[String, BigInt, java.math.BigInteger, BigInt]
+    }
+
     //result closing
     intercept[SQLException] {
       val res = Query("emp")

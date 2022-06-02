@@ -251,6 +251,8 @@ trait Query extends QueryBuilder with TypedQuery {
         case s: String => st.setString(idx, s)
         case bn: java.math.BigDecimal => st.setBigDecimal(idx, bn)
         case bd: BigDecimal => st.setBigDecimal(idx, bd.bigDecimal)
+        case bi: java.math.BigInteger => st.setBigDecimal(idx, new java.math.BigDecimal(bi))
+        case bi: BigInt => st.setBigDecimal(idx, new java.math.BigDecimal(bi.bigInteger))
         case in: java.io.InputStream => st.setBinaryStream(idx, in)
         case bl: java.sql.Blob => st.setBlob(idx, bl)
         case rd: java.io.Reader => st.setCharacterStream(idx, rd)
