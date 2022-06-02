@@ -24,6 +24,8 @@ lazy val commonSettings = Seq(
   Compile / doc / sources := Seq.empty
 )
 
+ThisBuild / versionScheme := Some("early-semver")
+
 def coreDependencies(scalaVer: String) =
   Seq(
     "org.scala-lang" % "scala-reflect" % scalaVer,
