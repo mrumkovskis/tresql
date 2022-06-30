@@ -171,6 +171,12 @@ trait SelectResult[T <: RowLike] extends Result[T] {
     } else children(columnIndex).asInstanceOf[BigDecimal]
   }
   override def bigdecimal(columnLabel: String): BigDecimal = bigdecimal(colMap(columnLabel))
+  override def bigint(columnIndex: Int): BigInt = {
+    if (cols(columnIndex).idx != -1) {
+      val bd = rs.getBigDecimal(cols(columnIndex).idx); if (rs.wasNull) null else BigInt(bd.toBigInteger)
+    } else children(columnIndex).asInstanceOf[BigInt]
+  }
+  override def bigint(columnLabel: String): BigInt = bigint(colMap(columnLabel))
   override def string(columnIndex: Int): String = {
     if (cols(columnIndex).idx != -1) rs.getString(cols(columnIndex).idx)
     else children(columnIndex).asInstanceOf[String]
@@ -249,6 +255,12 @@ trait SelectResult[T <: RowLike] extends Result[T] {
     else children(columnIndex).asInstanceOf[java.math.BigDecimal]
   }
   override def jBigDecimal(columnLabel: String): java.math.BigDecimal = jBigDecimal(colMap(columnLabel))
+  override def jBigInteger(columnIndex: Int): java.math.BigInteger = {
+    if (cols(columnIndex).idx != -1) {
+      val bd = rs.getBigDecimal(cols(columnIndex).idx); if (rs.wasNull()) null else bd.toBigInteger
+    } else children(columnIndex).asInstanceOf[java.math.BigInteger]
+  }
+  override def jBigInteger(columnLabel: String): java.math.BigInteger = jBigInteger(colMap(columnLabel))
   override def jBoolean(columnIndex: Int): java.lang.Boolean = {
     if (cols(columnIndex).idx != -1) {
       val x = rs.getBoolean(cols(columnIndex).idx)
@@ -523,6 +535,8 @@ trait RowLike extends Typed with AutoCloseable {
   def dbl(name: String) = double(name)
   def bigdecimal(idx: Int) = typed[BigDecimal](idx)
   def bigdecimal(name: String) = typed[BigDecimal](name)
+  def bigint(idx: Int) = typed[BigInt](idx)
+  def bigint(name: String) = typed[BigInt](name)
   def bd(idx: Int) = bigdecimal(idx)
   def bd(name: String) = bigdecimal(name)
   def string(idx: Int) = typed[String](idx)
@@ -579,6 +593,8 @@ trait RowLike extends Typed with AutoCloseable {
   def jdbl(name: String) = jDouble(name)
   def jBigDecimal(idx: Int) = typed[java.math.BigDecimal](idx)
   def jBigDecimal(name: String) = typed[java.math.BigDecimal](name)
+  def jBigInteger(idx: Int) = typed[java.math.BigInteger](idx)
+  def jBigInteger(name: String) = typed[java.math.BigInteger](name)
   def jbd(idx: Int) = jBigDecimal(idx)
   def jbd(name: String) = jBigDecimal(name)
   def listOfRows(idx: Int): List[this.type] = this(idx).asInstanceOf[List[this.type]]

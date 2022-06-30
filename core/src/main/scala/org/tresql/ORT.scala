@@ -668,14 +668,19 @@ trait ORT extends Query {
               .map(IdRefIdVal(_, idRefId(headTable.table, tbl.name)))
         )
       (refsPk,
-        key.map(k => refsPk.collectFirst { case x if x.name == k && k != pk => RefKeyCol(x.name) -> x.value }
-          .getOrElse(KeyCol(k) ->
-            ctx.view.properties
+        key.map(k =>
+          refsPk.collectFirst { case x if x.name == k && k != pk =>
+            RefKeyCol(x.name) -> x.value
+          }
+          .getOrElse(
+            KeyCol(k) -> ctx.view.properties
               .collectFirst {
-                case OrtMetadata.Property(p, TresqlValue(v, _, _)) if p == k => v
-                case OrtMetadata.Property(p, KeyValue(whereTresql, _)) if p == k => whereTresql
+                case OrtMetadata.Property(`k`, TresqlValue(v, _, _)) => v
+                case OrtMetadata.Property(`k`, KeyValue(whereTresql, _)) => whereTresql
               }
-              .getOrElse(s":$k")))
+              .getOrElse(s":$k")
+          )
+        )
       )
     }
 
