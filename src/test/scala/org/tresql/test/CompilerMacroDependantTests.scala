@@ -1766,6 +1766,45 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       val lookupView =
         View(
+          List(SaveTo("dept", Set(), List("dname"))), None, null, true, true,
+          List(
+            Property("dname", TresqlValue(":dname", true, true)),
+            Property("loc", TresqlValue(":loc", true, true)),
+          ), null)
+      View(
+        List(SaveTo("car", Set(), List("name"))), None, null, true, true,
+        List(
+          Property("name", TresqlValue(":name", true, true)),
+          Property("deptnr", LookupViewValue("dept", lookupView))
+        ), null)
+    }
+    obj = Map("name" -> "ZAZ", "dept" -> null)
+    assertResult(List(("ZAZ", null))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"car[name = 'ZAZ']{name, (dept d[d.deptno = car.deptnr]{dname}) dept}"
+        .map(c => (c.name, c.dept)).toList
+    }
+    obj = Map("name" -> "ZAZ", "dept" -> Map("dname" -> "Malbec", "loc" -> "Argentina"))
+    assertResult(List(("ZAZ", "Malbec", "Argentina"))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"car[name = 'ZAZ']{name, (dept d[d.deptno = car.deptnr]{dname}) dept, (dept d[d.deptno = car.deptnr]{loc}) loc}"
+        .map(c => (c.name, c.dept, c.loc)).toList
+    }
+    //nullify deptnr for car
+    obj = Map("name" -> "ZAZ", "dept" -> null)
+    assertResult(List(("ZAZ", null, null))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"car[name = 'ZAZ']{name, (dept d[d.deptno = car.deptnr]{dname}) dept, (dept d[d.deptno = car.deptnr]{loc}) loc}"
+        .map(c => (c.name, c.dept, c.loc)).toList
+    }
+
+    view = {
+      import OrtMetadata._
+      val lookupView =
+        View(
           List(SaveTo("dept", Set(), Nil)), None, null, true, true,
           List(
             Property("deptno", TresqlValue(":deptno", true, true)),
