@@ -765,6 +765,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case m: Map[String @unchecked, _] => exec(n, ex, Some(m))
         case t: Iterable[Map[String, _] @unchecked] => t.map(m => exec(n, ex, Some(m)))
         case a: Array[Map[String, _] @unchecked] => (a map {m => exec(n, ex, Some(m)) }).toList
+        case null => Nil
         case x =>
           val bvt = Option(x).map(_.getClass.getName).orNull
           throw new ChildSaveException(n,
