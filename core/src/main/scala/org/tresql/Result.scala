@@ -483,7 +483,7 @@ trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
       case a => a
     }
     x
-}
+  }
   private def compatibilityChildren: List[Any] = children.map (_._2 match {
     case dml: DMLResult => dml.compatibilityObj
     case l: List[_] => l map {
