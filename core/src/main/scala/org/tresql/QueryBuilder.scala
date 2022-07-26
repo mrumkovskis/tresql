@@ -620,7 +620,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case Nil =>
           //execute any BaseVarExpr in filter to give chance to update currId for corresponding children IdRefExpr have values
           if (filter != null) filter foreach (transform (_, {case id: BaseVarExpr => id(); id}))
-          new UpdateResult(children = executeChildren)
+          new UpdateResult(children = executeChildUpdates)
         case _ => super.apply() match { case r: DMLResult => new UpdateResult(r) case r => r }
       }
     }
@@ -656,7 +656,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           //execute children only if this expression has affected some rows
           if (r > 0)
             if (childUpdates.isEmpty) new DeleteResult(Some(r))
-            else executeChildren match {
+            else executeChildUpdates match {
               case x if x.isEmpty => new DeleteResult(Some(r))
               case x => new DeleteResult(Some(r), x)
             }
@@ -754,10 +754,10 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     )
   }
 
-  private def executeChildren: Map[String, Any] = {
+  private def executeChildUpdates: Map[String, Any] = {
     def exec(name: String, e: Expr, pars: Option[Map[String, Any]]) =
       try pars.map(e(_)).getOrElse(e()) catch { case e: Exception =>
-        throw new ChildSaveException(name, e)
+        throw new ChildSaveException(name, s"Error saving children - '$name'", e)
       }
     childUpdates.map {
       case (ex, n) if !env.contains(n) => (n, exec(n, ex, None))
@@ -765,6 +765,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case m: Map[String @unchecked, _] => exec(n, ex, Some(m))
         case t: Iterable[Map[String, _] @unchecked] => t.map(m => exec(n, ex, Some(m)))
         case a: Array[Map[String, _] @unchecked] => (a map {m => exec(n, ex, Some(m)) }).toList
+        case null => Nil
         case x =>
           val bvt = Option(x).map(_.getClass.getName).orNull
           throw new ChildSaveException(n,

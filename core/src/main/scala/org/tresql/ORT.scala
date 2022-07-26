@@ -113,6 +113,7 @@ trait ORT extends Query {
                 s.map(_.getOrElse(key.head, null)).filter(_ != null)
               case m: Map[String @unchecked, _] =>
                 List(m.getOrElse(key.head, null))
+              case null => Nil
             }
           }))
         case _ =>
@@ -121,6 +122,7 @@ trait ORT extends Query {
               case s: Seq[Map[String, _] @unchecked] => s
               case m: Map[String @unchecked, _] =>
                 List(m.getOrElse(key.head, null))
+              case null => Nil
             }
           }))
       }

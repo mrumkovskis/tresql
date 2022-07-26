@@ -1698,6 +1698,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       tresql"dept[dname = 'Space']{dname, loc, |emp{ename} emps}"
         .map(d => (d.dname, d.loc, d.emps.map(_.ename).toList)).toList
     }
+
     childView = childView.copy(forUpdate = false)
     view = {
       import OrtMetadata._
@@ -1706,12 +1707,29 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     }
     obj = Map("deptno" -> tresql"dept[dname = 'Space']{deptno}".unique[Long], "dname" -> "Space", "loc" -> "Venus",
       "emps" -> List(Map("ename" -> "Zina")))
-    assertResult(List(("Space", "Venus" ,List("Boris")))) {
+    assertResult(List(("Space", "Venus", List("Boris")))) {
       ORT.save(view, obj)
       println(s"\nResult check:")
       tresql"dept[dname = 'Space']{dname, loc, |emp{ename} emps}"
         .map(d => (d.dname, d.loc, d.emps.map(_.ename).toList)).toList
     }
+
+    // null children - deletes all children
+    childView = childView.copy(forUpdate = true)
+    view = {
+      import OrtMetadata._
+      view.copy(properties = view.properties.dropRight(1) :+
+        Property("emps", ViewValue(childView, SaveOptions(true, true, true))))
+    }
+    obj = Map("deptno" -> tresql"dept[dname = 'Space']{deptno}".unique[Long], "dname" -> "Space", "loc" -> "Saturn",
+      "emps" -> null)
+    assertResult(List(("Space", "Saturn", Nil))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Space']{dname, loc, |emp{ename} emps}"
+        .map(d => (d.dname, d.loc, d.emps.map(_.ename).toList)).toList
+    }
+
     view = {
       import OrtMetadata._
       val lookupView =
@@ -1789,7 +1807,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         ), null)
     }
     obj = Map("ename" -> "Leo", "dept" -> Map("dname" -> "Space"))
-    assertResult(List(("Leo", "Venus"))) {
+    assertResult(List(("Leo", "Saturn"))) {
       ORT.save(view, obj)
       println(s"\nResult check:")
       tresql"emp[ename = 'Leo']{ename, (dept d[d.deptno = emp.deptno]{loc}) dept}"
@@ -1821,6 +1839,45 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       val lookupView =
         View(
+          List(SaveTo("dept", Set(), List("dname"))), None, null, true, true,
+          List(
+            Property("dname", TresqlValue(":dname", true, true)),
+            Property("loc", TresqlValue(":loc", true, true)),
+          ), null)
+      View(
+        List(SaveTo("car", Set(), List("name"))), None, null, true, true,
+        List(
+          Property("name", TresqlValue(":name", true, true)),
+          Property("deptnr", LookupViewValue("dept", lookupView))
+        ), null)
+    }
+    obj = Map("name" -> "ZAZ", "dept" -> null)
+    assertResult(List(("ZAZ", null))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"car[name = 'ZAZ']{name, (dept d[d.deptno = car.deptnr]{dname}) dept}"
+        .map(c => (c.name, c.dept)).toList
+    }
+    obj = Map("name" -> "ZAZ", "dept" -> Map("dname" -> "Malbec", "loc" -> "Argentina"))
+    assertResult(List(("ZAZ", "Malbec", "Argentina"))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"car[name = 'ZAZ']{name, (dept d[d.deptno = car.deptnr]{dname}) dept, (dept d[d.deptno = car.deptnr]{loc}) loc}"
+        .map(c => (c.name, c.dept, c.loc)).toList
+    }
+    //nullify deptnr for car
+    obj = Map("name" -> "ZAZ", "dept" -> null)
+    assertResult(List(("ZAZ", null, null))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"car[name = 'ZAZ']{name, (dept d[d.deptno = car.deptnr]{dname}) dept, (dept d[d.deptno = car.deptnr]{loc}) loc}"
+        .map(c => (c.name, c.dept, c.loc)).toList
+    }
+
+    view = {
+      import OrtMetadata._
+      val lookupView =
+        View(
           List(SaveTo("dept", Set(), Nil)), None, null, true, true,
           List(
             Property("deptno", TresqlValue(":deptno", true, true)),
@@ -1833,7 +1890,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         ), null)
     }
     obj = Map("ename" -> "Christina", "dept" -> Map("deptno" -> tresql"dept[dname = 'Space']{deptno}".unique[Long]))
-    assertResult(List(("Christina", "Venus"))) {
+    assertResult(List(("Christina", "Saturn"))) {
       ORT.save(view, obj)
       println(s"\nResult check:")
       tresql"emp[ename = 'Christina']{ename, (dept d[d.deptno = emp.deptno]{loc}) dept}"
@@ -1864,7 +1921,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         ), null)
     }
     obj = Map("ename" -> "Britney", "dept" -> Map("deptno" -> tresql"dept[dname = 'Space']{deptno}".unique[Long]))
-    assertResult(List(("Britney", "Venus"))) {
+    assertResult(List(("Britney", "Saturn"))) {
       ORT.save(view, obj)
       println(s"\nResult check:")
       tresql"emp[ename = 'Britney']{ename, (dept d[d.deptno = emp.deptno]{loc}) dept}"
