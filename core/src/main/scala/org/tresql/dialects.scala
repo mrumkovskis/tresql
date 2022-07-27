@@ -72,7 +72,7 @@ package object dialects {
       e match {
         case b.ConstExpr(_: Boolean) => true
         case b.BinExpr("-", _, _) => true
-        case _: QueryBuilder#FunAsTableExpr => true
+        case _: QueryBuilder#TableColDefsExpr => true
         case e: QueryBuilder#SelectExpr if e.limit != null || e.offset != null => true
         case e: QueryBuilder#SelectExpr if e.cols.cols.headOption.exists(_.col match {
           case f: QueryBuilder#FunExpr if f.name == "optimizer_hint" && f.params.size == 1 &&
@@ -87,7 +87,7 @@ package object dialects {
       e match {
         case b.ConstExpr(true) => "1 = 1"
         case b.ConstExpr(false) => "1 = 0"
-        case b.FunAsTableExpr(expr, _, _) => expr.sql
+        case b.TableColDefsExpr(_) => ""
         case b.FunExpr("optimizer_hint", List(b.ConstExpr(s: String)), false, None, None) => s
         case b.BinExpr("-", lop, rop) =>
           lop.sql + (if (e.exprType.getSimpleName == "SelectExpr") " minus " else " - ") + rop.sql

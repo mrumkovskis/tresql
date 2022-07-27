@@ -338,14 +338,18 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     override def toString = name + (params map (_.toString)).mkString("(", ",", ")")
   }
 
-  case class FunAsTableExpr(expr: Expr, colsDefs: Option[List[TableColDefExpr]], withOrdinality: Boolean)
+  case class FunAsTableExpr(expr: Expr, colsDefs: Option[TableColDefsExpr], withOrdinality: Boolean)
     extends PrimitiveExpr {
     override def defaultSQL: String = expr.sql
-    def colsSql: String = colsDefs.map(_.map(_.sql).mkString("(", ", ", ")")).getOrElse("")
+    def colsSql: String = colsDefs.map(_.sql).getOrElse("")
   }
 
   case class TableColDefExpr(name: String, typ: Option[String]) extends PrimitiveExpr {
     override def defaultSQL: String = name
+  }
+
+  case class TableColDefsExpr(cols: List[TableColDefExpr]) extends PrimitiveExpr {
+    override def defaultSQL: String = cols.map(_.sql).mkString("(", ", ", ")")
   }
 
   case class RecursiveExpr(exp: parsing.Query) extends BaseExpr {
@@ -1259,9 +1263,9 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
             val filter = f.map(buildInternal(_, FUN_CTX))
             maybeCallMacro(FunExpr(n, pars, d, order, filter))
         }
-        case FunAsTable(f, cds, ord) =>
-          FunAsTableExpr(buildInternal(f, parseCtx)
-            , cds.map(_.map(c => TableColDefExpr(c.name, c.typ))), ord)
+        case FunAsTable(f, ocds, ord) =>
+          FunAsTableExpr(buildInternal(f, parseCtx),
+            ocds.map(cds => TableColDefsExpr(cds.map(c => TableColDefExpr(c.name, c.typ)))), ord)
         case Ident(i) => IdentExpr(i)
         case IdentAll(i) => IdentAllExpr(i.ident)
         case a: Arr => parseCtx match {
