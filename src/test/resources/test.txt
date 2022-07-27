@@ -296,7 +296,9 @@ emp[ename = 'BLAKE'], |contact_db:contact[name = 'John'] --> [[[[7698, "BLAKE", 
 |contact_db:c(#) {contact} c{name, |contact_db:[n.contact_id = c.id]n(#){notes} n{note}#(id)}#(id) --> [["John", []], ["Peter", []], ["Zia", [["All good"]]]]
 =contact_db:contact[name = 'Zia'] { -contact_db:notes[contact_id = (contact[name = 'Zia']{id})] } [] --> [[[[[1]]]]]
 |contact_db:contact[name = 'Zia'] {|contact_db:[notes.contact_id = contact.id]notes{note} notes} --> [[[]]]
-
+// FIXME - support macro from extra resources
+//|contact_db:contact { format_tuple(name, sex) v } #(1) --> []
+|contact_db:contact { '(' || concat_ws(', ', name, sex) || ')' } #(1) --> [["(John, M)"], ["(Peter, M)"], ["(Zia, F)"]]
 
 //union
 dept[?]{deptno} ++ emp[?]{empno} ++ salgrade[?]{grade} --> 10;7839;1 --> [[10], [7839], [1]]

@@ -35,14 +35,21 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       .withLogger((msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg))
 
     val conn1 = DriverManager.getConnection("jdbc:hsqldb:mem:db1")
+    val md1 = new JDBCMetadata {
+      override def conn = conn1
+      override def macroSignaturesResource: String = "/tresql-macros-db1.txt"
+    }
+    val macro1 = new MacroResourcesImpl(Macros, md1) {
+      override def macroResource: String = "/tresql-macros-db1.txt" // TODO currently not supported in runtime since query parser and builder uses only one macro resources obj
+    }
     val res1 = new Resources {}
-      .withMetadata(JDBCMetadata(conn1))
+      .withMetadata(md1)
       .withConn(conn1)
       .withDialect(hsqlDialect orElse {
         case f: QueryBuilder#FunExpr if f.name == "current_time" && f.params.isEmpty => "current_time"
       })
       .withIdExpr(_ => "nextval('seq1')")
-      .withMacros(Macros)
+      .withMacros(macro1)
       .withLogger((msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg))
 
     tresqlResources = res.withExtraResources(Map("emp_db" -> res, "contact_db" -> res1))
@@ -131,6 +138,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     val child_metadata = new JDBCMetadata {
       override def conn: Connection = testRes.extraResources("contact_db").conn
       override def macroClass: Class[_] = classOf[org.tresql.test.Macros]
+      override def functionSignaturesResource: String = "/tresql-function-signatures-db1.txt"
     }
     println("\n-------------- TEST compiler ----------------\n")
     val compiler = new QueryCompiler(testRes.metadata,
@@ -246,6 +254,9 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     intercept[CompilerException](compiler.compile("emp[ename = 'BLAKE']{ ename, |contact_db:[id = emp.empno]contact{eml} email}"))
     intercept[CompilerException](compiler.compile("emp[ename = 'BLAKE']{ ename, |contact:[id = emp.empno]contact{eml} email}"))
     intercept[CompilerException](compiler.compile("+contact_db:contact{name}[:n] {namez}"))
+
+    //function only found in child metadata
+    intercept[CompilerException](compiler.compile("emp { concat_ws (', ', ename, job) }"))
   }
 
   test("compiler macro") {

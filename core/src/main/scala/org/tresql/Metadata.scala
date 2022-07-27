@@ -98,7 +98,7 @@ trait Metadata extends AbstractMetadata {
     val ml = new MacrosLoader(this)
     def loadFromLoader(l: FunctionSignaturesLoader, res: String) = {
       if (res == null) l.loadFunctionSignatures(l.load())
-      else l.load(res).map(sl.loadFunctionSignatures).getOrElse(FunctionSignatures.empty)
+      else l.load(res).map(l.loadFunctionSignatures).getOrElse(FunctionSignatures.empty)
     }
     val fromSignResources   = loadFromLoader(sl, functionSignaturesResource)
     val fromMacroResources  = loadFromLoader(ml, macroSignaturesResource)

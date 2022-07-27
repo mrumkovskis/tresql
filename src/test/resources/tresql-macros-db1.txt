@@ -1,0 +1,3 @@
+include /tresql-macros.txt
+
+format_tuple(e1, e2) = '(' || e1 || ', ' || e2 || ')'

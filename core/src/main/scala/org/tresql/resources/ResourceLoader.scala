@@ -97,7 +97,7 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
 
   protected def parseErr(signatureDef: String) =
     sys.error(s"Error in function signature definition '$signatureDef'. " +
-      s"Format - <funname>(<param_name>)[::type], ...)")
+      s"Format - <funname>(<param_name>[::type], ...)")
 
   def parseSignature(signatureDef: String): Procedure[_] =
     tryParseSignature(signatureDef).get

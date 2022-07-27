@@ -380,12 +380,15 @@ trait Compiler extends QueryParsers { thisCompiler =>
     object ColsCtx extends Ctx //column clause
     object BodyCtx extends Ctx //where, group by, having, order, limit clauses
 
+    case class BuildCtx(ctx: Ctx, db: Option[String])
+
     //helper function
-    def tr(ctx: Ctx, x: Exp): Exp = builder(ctx)(x)
-    def buildTables(tables: List[Obj]): List[TableDef] = {
+    def tr_with_c(bCtx: BuildCtx, ctx: Ctx, x: Exp): Exp = builder(bCtx.copy(ctx = ctx))(x)
+    def tr(bCtx: BuildCtx, x: Exp): Exp = builder(bCtx)(x)
+    def buildTables(ctx: BuildCtx, tables: List[Obj]): List[TableDef] = {
       val td1 = tables.zipWithIndex map { case (table, idx) =>
-        val newTable = builder(TablesCtx)(table.obj)
-        val join = tr(BodyCtx, table.join).asInstanceOf[Join]
+        val newTable = tr_with_c(ctx, TablesCtx, table.obj)
+        val join = tr_with_c(ctx, BodyCtx, table.join).asInstanceOf[Join]
         val name = Option(table.alias).getOrElse(table match {
           case Obj(Ident(name), _, _, _, _) => name mkString "."
           case _ => s"_${idx + 1}"
@@ -423,11 +426,11 @@ trait Compiler extends QueryParsers { thisCompiler =>
         case (_, right) => right
       }
     }
-    def buildCols(cols: Cols): List[ColDef[_]] = {
+    def buildCols(ctx: BuildCtx, cols: Cols): List[ColDef[_]] = {
       if (cols != null) (cols.cols map {
           //child dml statement in select
-          case c @ parsing.Col(_: DMLExp @unchecked, _) => builder(QueryCtx)(c)
-          case c => builder(ColsCtx)(c)
+          case c @ parsing.Col(_: DMLExp @unchecked, _) => tr_with_c(ctx, QueryCtx, c)
+          case c => tr_with_c(ctx, ColsCtx, c)
         }).asInstanceOf[List[ColDef[_]]] match {
           case l if l.exists(_.name == null) => //set names of columns
             l.zipWithIndex.map { case (c, i) =>
@@ -437,8 +440,8 @@ trait Compiler extends QueryParsers { thisCompiler =>
         }
       else List[ColDef[_]](ColDef[Nothing](null, All, ManifestFactory.Nothing))
     }
-    lazy val builder: TransformerWithState[Ctx] = transformerWithState(ctx => {
-      case f: Fun => procedure(s"${f.name}#${f.parameters.size}")(None).map { p => // FIXME db is not allways 'None'
+    lazy val builder: TransformerWithState[BuildCtx] = transformerWithState(ctx => {
+      case f: Fun => procedure(s"${f.name}#${f.parameters.size}")(ctx.db).map { p =>
         val retType = p.scalaReturnType
         FunDef(p.name, f.copy(
           parameters = f.parameters map(tr(ctx, _)),
@@ -462,22 +465,22 @@ trait Compiler extends QueryParsers { thisCompiler =>
           },
           ManifestFactory.Nothing
         )
-      case Obj(b: Braces, _, _, _, _) if ctx == QueryCtx =>
+      case Obj(b: Braces, _, _, _, _) if ctx.ctx == QueryCtx =>
         builder(ctx)(b) //unwrap braces top level expression
-      case o: Obj if ctx == QueryCtx | ctx == TablesCtx => //obj as query
+      case o: Obj if ctx.ctx == QueryCtx | ctx.ctx == TablesCtx => //obj as query
         builder(ctx)(Query(List(o), Filters(Nil), null, null, null, null, null))
-      case o: Obj if ctx == BodyCtx =>
+      case o: Obj if ctx.ctx == BodyCtx =>
         o.copy(obj = builder(ctx)(o.obj), join = builder(ctx)(o.join).asInstanceOf[Join])
       case PrimitiveExp(q) => PrimitiveDef[Nothing](builder(ctx)(q), Manifest.Nothing)
       case q: Query =>
-        val tables = buildTables(q.tables)
-        val cols = buildCols(q.cols)
+        val tables = buildTables(ctx, q.tables)
+        val cols = buildCols(ctx, q.cols)
         val (filter, grp, ord, limit, offset) =
-          (tr(BodyCtx, q.filter).asInstanceOf[Filters],
-           tr(BodyCtx, q.group).asInstanceOf[Grp],
-           tr(BodyCtx, q.order).asInstanceOf[Ord],
-           tr(BodyCtx, q.limit),
-           tr(BodyCtx, q.offset))
+          (tr_with_c(ctx, BodyCtx, q.filter).asInstanceOf[Filters],
+           tr_with_c(ctx, BodyCtx, q.group).asInstanceOf[Grp],
+           tr_with_c(ctx, BodyCtx, q.order).asInstanceOf[Ord],
+           tr_with_c(ctx, BodyCtx, q.limit),
+           tr_with_c(ctx, BodyCtx, q.offset))
         SelectDef(
           cols,
           tables,
@@ -502,19 +505,20 @@ trait Compiler extends QueryParsers { thisCompiler =>
           case (lop, rop) => b.copy(lop = lop, rop = rop)
         }
       case ChildQuery(q: Exp @unchecked, db) =>
+        val nctx = ctx.copy(db = db)
         val exp = q match {
           //recursive expression
-          case a: Arr => RecursiveDef(builder(BodyCtx)(a))
+          case a: Arr => RecursiveDef(tr_with_c(nctx, BodyCtx, a))
           //ordinary child
-          case _ => builder(QueryCtx)(q)
+          case _ => tr_with_c(nctx, QueryCtx, q)
         }
         ChildDef(exp, db)
-      case Braces(exp: Exp @unchecked) if ctx == TablesCtx => builder(ctx)(exp) //remove braces around table expression, so it can be accessed directly
-      case Braces(exp: Exp @unchecked) => builder(ctx)(exp) match {
+      case Braces(exp: Exp @unchecked) if ctx.ctx == TablesCtx => tr(ctx, exp) //remove braces around table expression, so it can be accessed directly
+      case Braces(exp: Exp @unchecked) => tr(ctx, exp) match {
         case sdb: SelectDefBase => BracesSelectDef(sdb)
         case e => Braces(e)
       }
-      case a: Arr if ctx == QueryCtx => ArrayDef(
+      case a: Arr if ctx.ctx == QueryCtx => ArrayDef(
         a.elements.zipWithIndex.map { case (el, idx) =>
           ColDef[Nothing](
             s"_${idx + 1}",
@@ -526,19 +530,21 @@ trait Compiler extends QueryParsers { thisCompiler =>
         }
       )
       case dml: DMLExp =>
+        val db = dml.db
+        val nctx = ctx.copy(db = db)
         val table = TableDef(if (dml.alias == null) dml.table.ident mkString "." else dml.alias,
           Obj(TableObj(dml.table), null, null, null))
         val cols =
           if (dml.cols != null) dml.cols.map {
-            case c @ parsing.Col(Obj(_: Ident, _, _, _, _), _) => builder(ColsCtx)(c) //insertable, updatable col
-            case c @ parsing.Col(BinOp("=", Obj(_: Ident, _, _, _, _), _), _) if dml.isInstanceOf[Update] => builder(ColsCtx)(c) //updatable col
-            case c => builder(QueryCtx)(c) //child expression
+            case c @ parsing.Col(Obj(_: Ident, _, _, _, _), _) => tr_with_c(nctx, ColsCtx, c) //insertable, updatable col
+            case c @ parsing.Col(BinOp("=", Obj(_: Ident, _, _, _, _), _), _) if dml.isInstanceOf[Update] =>
+              tr_with_c(nctx, ColsCtx, c) //updatable col
+            case c => tr_with_c(nctx, QueryCtx, c) //child expression
           }.asInstanceOf[List[ColDef[_]]]
           else Nil
-        val filter = if (dml.filter != null) tr(BodyCtx, dml.filter).asInstanceOf[Arr] else null
-        val vals = if (dml.vals != null) tr(BodyCtx, dml.vals) else null
-        val retCols = dml.returning map buildCols
-        val db = dml.db
+        val filter = if (dml.filter != null) tr_with_c(nctx, BodyCtx, dml.filter).asInstanceOf[Arr] else null
+        val vals = if (dml.vals != null) tr_with_c(nctx, BodyCtx, dml.vals) else null
+        val retCols = dml.returning.map(buildCols(nctx, _))
         val dmlDef = dml match {
           case _: Insert =>
             InsertDef(cols, List(table), Insert(table = null, alias = null, cols = Nil, vals = vals, None, db))
@@ -558,9 +564,9 @@ trait Compiler extends QueryParsers { thisCompiler =>
               dmlDef))
           .getOrElse(dmlDef)
       case ValuesFromSelect(sel) =>
-        ValuesFromSelectDef(tr(QueryCtx, sel).asInstanceOf[SelectDefBase])
+        ValuesFromSelectDef(tr_with_c(ctx, QueryCtx, sel).asInstanceOf[SelectDefBase])
       case WithTable(name, wtCols, recursive, table) =>
-        val exp = builder(QueryCtx)(table) match {
+        val exp = tr_with_c(ctx, QueryCtx, table) match {
           case s: SQLDefBase => s
           case x => error(s"Table in with clause must be query. Instead found: ${x.getClass.getName}(${x.tresql})")
         }
@@ -572,14 +578,14 @@ trait Compiler extends QueryParsers { thisCompiler =>
         WithTableDef(cols, tables, recursive, exp)
       case With(tables, query) =>
         val withTables = (tables map builder(ctx)).asInstanceOf[List[WithTableDef]]
-        builder(QueryCtx)(query) match {
+        tr_with_c(ctx, QueryCtx, query) match {
           case s: SelectDefBase => WithSelectDef(s, withTables)
           case i: DMLDefBase => WithDMLDef(i, withTables)
           case x => error(s"with clause must be select query. Instead found: ${x.getClass.getName}(${x.tresql})")
         }
       case null => null
     })
-    builder(QueryCtx)(exp)
+    tr(BuildCtx(QueryCtx, None), exp)
   }
 
   def resolveColAsterisks(exp: Exp) = {

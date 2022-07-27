@@ -1,0 +1,4 @@
+include /tresql-function-signatures.txt
+
+//hsqldb
+concat_ws(sep::string, exprs::'string*')::string
