@@ -471,7 +471,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         //no join (used for table alias join)
         case TableJoin(_, _, true, _) => ""
         //product join
-        case TableJoin(false, ArrExpr(Nil) | null, _, _) => joinPrefix(false) + s"$sql on true"
+        case TableJoin(false, ArrExpr(Nil) | null, _, _) =>
+          joinPrefix(false) + s"$sql on ${ConstExpr(true).sql}" //not all db support bool value
         case null => error(s"Cannot build sql query, join not specified between tables '$joinTable' and '$this'.")
         //other types of join
         case _ => joinPrefix(true) + sql + " on " + sqlJoinCondition(joinTable)
