@@ -39,8 +39,9 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       override def conn = conn1
       override def macroSignaturesResource: String = "/tresql-macros-db1.txt"
     }
-    val macro1 = new MacroResourcesImpl(Macros, md1) {
-      override def macroResource: String = "/tresql-macros-db1.txt" // TODO currently not supported in runtime since query parser and builder uses only one macro resources obj
+    val macro1 = new MacroResourcesImpl(Macros1, md1) {
+      // TODO currently not supported in runtime since query parser uses only one macro resources obj not dependant on db
+      override def macroResource: String = "/tresql-macros-db1.txt"
     }
     val res1 = new Resources {}
       .withMetadata(md1)
@@ -137,7 +138,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     )
     val child_metadata = new JDBCMetadata {
       override def conn: Connection = testRes.extraResources("contact_db").conn
-      override def macroClass: Class[_] = classOf[org.tresql.test.Macros]
+      override def macroClass: Class[_] = classOf[org.tresql.test.Macros1]
       override def functionSignaturesResource: String = "/tresql-function-signatures-db1.txt"
     }
     println("\n-------------- TEST compiler ----------------\n")
@@ -257,6 +258,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
 
     //function only found in child metadata
     intercept[CompilerException](compiler.compile("emp { concat_ws (', ', ename, job) }"))
+    intercept[CompilerException](compiler.compile("emp { format_tuple_b (ename, job) }"))
   }
 
   test("compiler macro") {

@@ -298,6 +298,7 @@ emp[ename = 'BLAKE'], |contact_db:contact[name = 'John'] --> [[[[7698, "BLAKE", 
 |contact_db:contact[name = 'Zia'] {|contact_db:[notes.contact_id = contact.id]notes{note} notes} --> [[[]]]
 // FIXME - support macro from extra resources
 //|contact_db:contact { format_tuple(name, sex) v } #(1) --> []
+|contact_db:contact { format_tuple_b(name, sex) v } #(1) --> [["(John, M)"], ["(Peter, M)"], ["(Zia, F)"]]
 |contact_db:contact { '(' || concat_ws(', ', name, sex) || ')' } #(1) --> [["(John, M)"], ["(Peter, M)"], ["(Zia, F)"]]
 
 //union

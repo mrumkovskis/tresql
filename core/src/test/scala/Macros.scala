@@ -30,4 +30,13 @@ class Macros extends org.tresql.Macros {
   def dummy_table(b: QueryBuilder) = b.IdentExpr(List("dummy"))
 }
 
+class Macros1 extends Macros {
+  // '(' || e1 || ', ' || e2 || ')'
+  def format_tuple_b(b: QueryBuilder, e1: Expr, e2: Expr) = {
+    def c(s: String) = b.ConstExpr(s)
+    List(c("("), e1, c(", "), e2, c(")")).reduceLeft(b.BinExpr("||", _, _))
+  }
+}
+
 object Macros extends Macros
+object Macros1 extends Macros1
