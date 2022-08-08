@@ -1285,11 +1285,11 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     var view = {
       import OrtMetadata._
       View(
-        List(SaveTo("dept", Set(), Nil)), None, null, true, true,
+        List(SaveTo("dept", Set(), Nil)), None, null, true, true, false,
         List(
-          Property("deptno", TresqlValue(":dept_id", true, true)),
-          Property("dname", TresqlValue(":dname", true, true)),
-          Property("loc", TresqlValue(":loc", true, true))
+          Property("deptno", TresqlValue(":dept_id", true, true, false)),
+          Property("dname", TresqlValue(":dname", true, true, false)),
+          Property("loc", TresqlValue(":loc", true, true, false))
         ), null)
     }
     obj = Map("dept_id" -> 4321, "dname" -> "Fish", "loc" -> "Vecaki")
@@ -1307,11 +1307,11 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     var childView = {
       import OrtMetadata._
       View(
-        List(SaveTo("emp", Set(), Nil)), None, null, true, true,
+        List(SaveTo("emp", Set(), Nil)), None, null, true, true, false,
         List(
-          Property("empno", TresqlValue(":emp_id", true, true)),
-          Property("ename", TresqlValue(":ename", true, true)),
-          Property("job", TresqlValue(":job", true, true)),
+          Property("empno", TresqlValue(":emp_id", true, true, false)),
+          Property("ename", TresqlValue(":ename", true, true, false)),
+          Property("job", TresqlValue(":job", true, true, false)),
         ), null)
     }
     view = {
@@ -1459,10 +1459,10 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       ORT.save(
         View(
-          List(SaveTo("accounts.account", Set(), List("number"))), None, null, true, true,
+          List(SaveTo("accounts.account", Set(), List("number"))), None, null, true, true, false,
           List(
-            Property("number", TresqlValue(":number",true, true)),
-            Property("balance", TresqlValue(":balance", true, true))
+            Property("number", TresqlValue(":number",true, true, false)),
+            Property("balance", TresqlValue(":balance", true, true, false))
           ),
           null
         ), obj)
@@ -1474,10 +1474,10 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(List(("000", 3000.00, null))) {
       import OrtMetadata._
       ORT.save(View(List(SaveTo("accounts.account", Set(),
-        List("number"))), None, null, true, true,
+        List("number"))), None, null, true, true, false,
         List(
-          Property("number", TresqlValue(":number", true, true)),
-          Property("balance", TresqlValue("accounts.account[number = :number]{ balance + :balance}", true, true))
+          Property("number", TresqlValue(":number", true, true, false)),
+          Property("balance", TresqlValue("accounts.account[number = :number]{ balance + :balance}", true, true, false))
         ), null),
         obj)
       println(s"\nResult check:")
@@ -1558,8 +1558,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(List("000000")) {
       import OrtMetadata._
       ORT.save(View(List(SaveTo("accounts.account", Set(),
-        List("number"))), None, null, true, true,
-        List(Property("number", KeyValue(":number", TresqlValue(":new_number", true, true)))), null),
+        List("number"))), None, null, true, true, false,
+        List(Property("number", KeyValue(":number", TresqlValue(":new_number", true, true, false)))), null),
         obj)
       println(s"\nResult check:")
       tresql"accounts.account[number = '000000']{number}".map(_.number).toList
@@ -1570,10 +1570,10 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       ORT.save(
         View(
-          List(SaveTo("accounts.account", Set(), List("number"))), None, null, true, true,
+          List(SaveTo("accounts.account", Set(), List("number"))), None, null, true, true, false,
           List(
-            Property("number", KeyValue(":number", TresqlValue(":new_number", true, true))),
-            Property("balance", TresqlValue(":balance", true, true))
+            Property("number", KeyValue(":number", TresqlValue(":new_number", true, true, false))),
+            Property("balance", TresqlValue(":balance", true, true, false))
           ), null),
         obj
       )
@@ -1586,10 +1586,10 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       ORT.save(
         View(
-          List(SaveTo("accounts.account", Set(), List("number"))), None, null, true, true,
+          List(SaveTo("accounts.account", Set(), List("number"))), None, null, true, true, false,
           List(
-            Property("number", KeyValue(":number", TresqlValue(":new_number", true, false))),
-            Property("balance", TresqlValue(":balance", true, true))
+            Property("number", KeyValue(":number", TresqlValue(":new_number", true, false, false))),
+            Property("balance", TresqlValue(":balance", true, true, false))
           ), null),
         obj
       )
@@ -1602,11 +1602,11 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       ORT.save(
         View(
-          List(SaveTo("emp", Set(), List("ename", "deptno"))), None, null, true, true,
+          List(SaveTo("emp", Set(), List("ename", "deptno"))), None, null, true, true, false,
           List(
-            Property("ename", KeyValue(":ename", TresqlValue(":new_ename", true, true))),
+            Property("ename", KeyValue(":ename", TresqlValue(":new_ename", true, true, false))),
             Property("deptno", KeyValue("(dept[dname = :dept]{deptno})",
-              TresqlValue("(dept[dname = :new_dept]{deptno})", true, true)))
+              TresqlValue("(dept[dname = :new_dept]{deptno})", true, true, false)))
           ), null),
         obj
       )
@@ -1621,10 +1621,10 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     var view = {
       import OrtMetadata._
       View(
-        List(SaveTo("dept", Set(), Nil)), None, null, true, true,
+        List(SaveTo("dept", Set(), Nil)), None, null, true, true, false,
         List(
-          Property("dname", TresqlValue(":dname", true, false)),
-          Property("loc", TresqlValue(":loc", false, true))
+          Property("dname", TresqlValue(":dname", true, false, false)),
+          Property("loc", TresqlValue(":loc", false, true, false))
         ), null)
     }
     var obj: Map[String, Any] = Map("dname" -> "Cafe", "loc" -> "Purvciems")
@@ -1656,11 +1656,11 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     view = {
       import OrtMetadata._
       View(
-        List(SaveTo("dept", Set(), Nil)), None, null, false, true,
+        List(SaveTo("dept", Set(), Nil)), None, null, false, true, false,
         List(
-          Property("deptno", TresqlValue(":deptno", true, true)),
-          Property("dname", TresqlValue(":dname", true, true)),
-          Property("loc", TresqlValue(":loc", true, true))
+          Property("deptno", TresqlValue(":deptno", true, true, false)),
+          Property("dname", TresqlValue(":dname", true, true, false)),
+          Property("loc", TresqlValue(":loc", true, true, false))
         ), null)
     }
     obj = Map("dname" -> "Space", "loc" -> "Mars")
@@ -1679,10 +1679,10 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     var childView = {
       import OrtMetadata._
       View(
-        List(SaveTo("emp", Set(), Nil)), None, null, true, true,
+        List(SaveTo("emp", Set(), Nil)), None, null, true, true, false,
         List(
-          Property("empno", TresqlValue(":empno", true, true)),
-          Property("ename", TresqlValue(":ename", true, true)),
+          Property("empno", TresqlValue(":empno", true, true, false)),
+          Property("ename", TresqlValue(":ename", true, true, false)),
         ), null)
     }
     view = {
@@ -1734,17 +1734,17 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       val lookupView =
         View(
-          List(SaveTo("dept", Set(), Nil)), None, null, false, true,
+          List(SaveTo("dept", Set(), Nil)), None, null, false, true, false,
           List(
-            Property("deptno", TresqlValue(":deptno", true, true)),
-            Property("dname", TresqlValue(":dname", true, true)),
-            Property("loc", TresqlValue(":loc", true, true))
+            Property("deptno", TresqlValue(":deptno", true, true, false)),
+            Property("dname", TresqlValue(":dname", true, true, false)),
+            Property("loc", TresqlValue(":loc", true, true, false))
           ), null)
       View(
-        List(SaveTo("emp", Set(), Nil)), None, null, true, true,
+        List(SaveTo("emp", Set(), Nil)), None, null, true, true, false,
         List(
-          Property("empno", TresqlValue(":empno", true, true)),
-          Property("ename", TresqlValue(":ename", true, true)),
+          Property("empno", TresqlValue(":empno", true, true, false)),
+          Property("ename", TresqlValue(":ename", true, true, false)),
           Property("deptno", LookupViewValue("dept", lookupView))
         ), null)
     }
@@ -1762,15 +1762,15 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       val lookupView =
         View(
-          List(SaveTo("dept", Set(), List("dname"))), None, null, true, true,
+          List(SaveTo("dept", Set(), List("dname"))), None, null, true, true, false,
           List(
-            Property("dname", TresqlValue(":dname", true, true)),
-            Property("loc", TresqlValue(":loc", true, true))
+            Property("dname", TresqlValue(":dname", true, true, false)),
+            Property("loc", TresqlValue(":loc", true, true, false))
           ), null)
       View(
-        List(SaveTo("emp", Set(), List("ename"))), None, null, true, true,
+        List(SaveTo("emp", Set(), List("ename"))), None, null, true, true, false,
         List(
-          Property("ename", TresqlValue(":ename", true, true)),
+          Property("ename", TresqlValue(":ename", true, true, false)),
           Property("deptno", LookupViewValue("dept", lookupView))
         ), null)
     }
@@ -1795,14 +1795,14 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       val lookupView =
         View(
-          List(SaveTo("dept", Set(), List("dname"))), None, null, true, true,
+          List(SaveTo("dept", Set(), List("dname"))), None, null, true, true, false,
           List(
-            Property("dname", TresqlValue(":dname", true, true)),
+            Property("dname", TresqlValue(":dname", true, true, false)),
           ), null)
       View(
-        List(SaveTo("emp", Set(), List("ename"))), None, null, true, true,
+        List(SaveTo("emp", Set(), List("ename"))), None, null, true, true, false,
         List(
-          Property("ename", TresqlValue(":ename", true, true)),
+          Property("ename", TresqlValue(":ename", true, true, false)),
           Property("deptno", LookupViewValue("dept", lookupView))
         ), null)
     }
@@ -1839,15 +1839,15 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       val lookupView =
         View(
-          List(SaveTo("dept", Set(), List("dname"))), None, null, true, true,
+          List(SaveTo("dept", Set(), List("dname"))), None, null, true, true, false,
           List(
-            Property("dname", TresqlValue(":dname", true, true)),
-            Property("loc", TresqlValue(":loc", true, true)),
+            Property("dname", TresqlValue(":dname", true, true, false)),
+            Property("loc", TresqlValue(":loc", true, true, false)),
           ), null)
       View(
-        List(SaveTo("car", Set(), List("name"))), None, null, true, true,
+        List(SaveTo("car", Set(), List("name"))), None, null, true, true, false,
         List(
-          Property("name", TresqlValue(":name", true, true)),
+          Property("name", TresqlValue(":name", true, true, false)),
           Property("deptnr", LookupViewValue("dept", lookupView))
         ), null)
     }
@@ -1878,14 +1878,14 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       val lookupView =
         View(
-          List(SaveTo("dept", Set(), Nil)), None, null, true, true,
+          List(SaveTo("dept", Set(), Nil)), None, null, true, true, false,
           List(
-            Property("deptno", TresqlValue(":deptno", true, true)),
+            Property("deptno", TresqlValue(":deptno", true, true, false)),
           ), null)
       View(
-        List(SaveTo("emp", Set(), List("ename"))), None, null, true, true,
+        List(SaveTo("emp", Set(), List("ename"))), None, null, true, true, false,
         List(
-          Property("ename", TresqlValue(":ename", true, true)),
+          Property("ename", TresqlValue(":ename", true, true, false)),
           Property("deptno", LookupViewValue("dept", lookupView))
         ), null)
     }
@@ -1909,14 +1909,14 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       import OrtMetadata._
       val lookupView =
         View(
-          List(SaveTo("dept", Set(), List("deptno"))), None, null, true, true,
+          List(SaveTo("dept", Set(), List("deptno"))), None, null, true, true, false,
           List(
-            Property("deptno", TresqlValue(":deptno", true, true)),
+            Property("deptno", TresqlValue(":deptno", true, true, false)),
           ), null)
       View(
-        List(SaveTo("emp", Set(), List("ename"))), None, null, true, true,
+        List(SaveTo("emp", Set(), List("ename"))), None, null, true, true, false,
         List(
-          Property("ename", TresqlValue(":ename", true, true)),
+          Property("ename", TresqlValue(":ename", true, true, false)),
           Property("deptno", LookupViewValue("dept", lookupView))
         ), null)
     }
