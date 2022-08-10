@@ -539,6 +539,8 @@ trait Compiler extends QueryParsers { thisCompiler =>
             case c @ parsing.Col(Obj(_: Ident, _, _, _, _), _) => tr_with_c(nctx, ColsCtx, c) //insertable, updatable col
             case c @ parsing.Col(BinOp("=", Obj(_: Ident, _, _, _, _), _), _) if dml.isInstanceOf[Update] =>
               tr_with_c(nctx, ColsCtx, c) //updatable col
+            case c @parsing.Col(Fun("if_defined", List(_, Obj(_: Ident, _, _, _, _)), _, _, _), _) =>
+              tr_with_c(nctx, ColsCtx, c) //optional column
             case c => tr_with_c(nctx, QueryCtx, c) //child expression
           }.asInstanceOf[List[ColDef[_]]]
           else Nil

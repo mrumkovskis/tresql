@@ -843,36 +843,39 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           }
         }
         .getOrElse(insertCols)
+    /* must be lazy val since evaluation changes builder state and must be called in proper place constructing InsertExpr */
+    lazy val colExprs = cols match {
+      //get column clause from metadata
+      case Nil => insertCols
+      case List(Col(All, _)) => vals match {
+        case q: parsing.Query => resolveAsterisk(q) //adjust insertable columns to select columns
+        case e =>
+          def extractQuery(e: Exp): List[IdentExpr] = e match {
+            case BinOp(_, lop, _) => extractQuery(lop)
+            case q: parsing.Query => resolveAsterisk(q)
+            case Braces(b) => extractQuery(b)
+            case With(_, e) => extractQuery(e)
+            case _ => insertCols
+          }
+          extractQuery(e)
+      }
+      case c => c map (buildInternal(_, COL_CTX)) filter {
+        case ColExpr(IdentExpr(_), _, _, _) => true
+        case e: ColExpr => registerChildUpdate(e.col, e.name); false
+        case null => false // optional binding
+        case _ => sys.error("Unexpected InsertExpr type")
+      }
+    }
     new InsertExpr(IdentExpr(table.ident), alias,
-      cols match {
-        //get column clause from metadata
-        case Nil => insertCols
-        case List(Col(All, _)) => vals match {
-          case q: parsing.Query => resolveAsterisk(q)//adjust insertable columns to select columns
-          case e =>
-            def extractQuery(e: Exp): List[IdentExpr] = e match {
-              case BinOp(_, lop, _) => extractQuery(lop)
-              case q: parsing.Query => resolveAsterisk(q)
-              case Braces(b) => extractQuery(b)
-              case With(_, e) => extractQuery(e)
-              case _ => insertCols
-            }
-            extractQuery(e)
-        }
-        case c => c map (buildInternal(_, COL_CTX)) filter {
-          case x @ ColExpr(IdentExpr(_), _, _, _) => true
-          case e: ColExpr => registerChildUpdate(e.col, e.name); false
-          case _ => sys.error("Unexpected InsertExpr type")
-        }
-      }, vals match {
+      colExprs, vals match {
         case Values(arr) => ValuesExpr(arr map {
           buildInternal(_, VALUES_CTX) match {
-            case ArrExpr(l) => ArrExpr(patchVals(table, cols, l))
-            case null => ArrExpr(patchVals(table, cols, Nil))
+            case ArrExpr(l) => ArrExpr(patchVals(table, colExprs, l))
+            case null => ArrExpr(patchVals(table, colExprs, Nil))
             case e => e
           }
         } match {
-          case Nil => patchVals(table, cols, Nil)
+          case Nil => patchVals(table, colExprs, Nil)
           case l => l
         })
         case q => buildInternal(q, VALUES_CTX)
@@ -882,21 +885,25 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   }
   private def buildUpdate(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp,
                           returning: Option[Cols], ctx: Ctx) = {
+    /* must be lazy val since evaluation changes builder state and must be called in proper place constructing UpdateExpr */
+    lazy val colExprs = cols match {
+      //get column clause from metadata
+      case Nil => this.table(table).cols.map(c => IdentExpr(List(c.name)))
+      case c => c map (buildInternal(_, COL_CTX)) filter {
+        case ColExpr(IdentExpr(_), _, _, _) => true
+        case ColExpr(BinExpr("=", _, _), _, _, _) => true //update from select
+        case e: ColExpr => registerChildUpdate(e.col, e.name); false
+        case null => false // optional binding
+        case _ => sys.error("Unexpected UpdateExpr type")
+      }
+    }
     new UpdateExpr(IdentExpr(table.ident), alias, if (filter != null)
-      filter.elements map { buildInternal(_, WHERE_CTX) } else null, cols match {
-        //get column clause from metadata
-        case Nil => this.table(table).cols.map(c => IdentExpr(List(c.name)))
-        case c => c map (buildInternal(_, COL_CTX)) filter {
-          case ColExpr(IdentExpr(_), _, _, _) => true
-          case ColExpr(BinExpr("=", _, _), _, _, _) => true //update from select
-          case e: ColExpr => registerChildUpdate(e.col, e.name); false
-          case _ => sys.error("Unexpected UpdateExpr type")
-        }
-      }, buildInternal(vals, VALUES_CTX) match {
-        case v: ArrExpr => ValuesExpr(patchVals(table, cols, v.elements))
+      filter.elements map { buildInternal(_, WHERE_CTX) } else null, colExprs,
+      buildInternal(vals, VALUES_CTX) match {
+        case v: ArrExpr => ValuesExpr(patchVals(table, colExprs, v.elements))
         case q: SelectExpr => q
         case f: ValuesFromSelectExpr => f
-        case null => ValuesExpr(patchVals(table, cols, Nil))
+        case null => ValuesExpr(patchVals(table, colExprs, Nil))
         case x => error("Knipis: " + x)
       },
       returning.map(buildCols(_, ctx))
@@ -914,7 +921,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
 
   private def table(t: Ident) = env.table(t.ident.mkString("."))
 
-  private def patchVals(table: Ident, cols: List[Col], vals: List[Expr]) = {
+  private def patchVals(table: Ident, cols: List[_], vals: List[Expr]) = {
     val diff = (if (cols.isEmpty) this.table(table).cols else cols).size - vals.size
     val allExprIdx = vals.indexWhere(_.isInstanceOf[AllExpr])
     def v(i: Int) = buildInternal(Variable("?", null, false), VALUES_CTX)
@@ -945,8 +952,9 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           hasIdentAll = true
           c
         case c: ColExpr => c
+        case null => null
         case x => sys.error(s"ColExpr expected instead found: $x")
-      })
+      }).filter(_ != null)
       val colsWithLinksToChildren =
         colExprs ++
         //for top level queries add hidden columns used in filters of descendant queries
@@ -1282,7 +1290,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case Res(r, c) => ResExpr(r, c)
         case Col(c, a) =>
           separateQueryFlag = false
-          val ce = ColExpr(buildInternal(c, parseCtx), a)
+          val e = buildInternal(c, parseCtx)
+          val ce = if (e == null) null else ColExpr(e, a) // ColExpr constructor uses separateQueryFlag value
           separateQueryFlag = false
           ce
         case Grp(cols, having) => Group(cols map { buildInternal(_, GROUP_CTX) },

@@ -649,6 +649,21 @@ dummy{ ((dummy{sum(dummy)})::int - (dummy{dummy}@(1))::int) x} --> [[0]]
 +dummy{*} d(#) { dummy[dummy = 10] } d{dummy} --> [[0]]
 +dummy{*} d(#) { dummy[dummy = 10] } d{dummy} ++ dummy[dummy = 10]{dummy} --> [[0]]
 
+//optional cols in select
+dept[dname = 'ACCOUNTING'] { if_defined(:x?, dname), loc } --> [["NEW YORK"]]
+
+// optional cols in insert, update
++dept {deptno, dname, if_defined(:loc?, loc)} [55, 'D1', :loc?] --> [[1]]
+dept [deptno = 55] {loc} --> [[null]]
++dept {deptno, if_defined(:dname?, dname), loc } [56, :dname?, 'L1'] --> [[1]]
+dept [deptno = 56] {dname} --> [[null]]
+=dept [deptno = 56] {dname = 'D2', loc = :loc?} --> [[1]]
+dept [deptno = 56] {dname, loc} --> [["D2", "L1"]]
++dept {deptno, dname, if_defined(:loc?, loc)} null {57, 'D3', :loc?} --> [[1]]
+dept [deptno = 57] {dname, loc} --> [["D3", null]]
+-dept [deptno in (55, 56, 57)] --> [[3]]
+
+
 // another schema test
 accounts.account --> []
 accounts.transaction --> []
