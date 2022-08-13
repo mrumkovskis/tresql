@@ -116,7 +116,7 @@ package object dialects {
           val b = e.builder
           e match {
             case s @ b.SelectExpr(_, _,
-              c @ b.ColsExpr(b.ColExpr(b.FunExpr(_, List(b.ConstExpr(h)), _, _, _), _, _, _) :: t, _, _, _),
+              c @ b.ColsExpr(b.ColExpr(b.FunExpr(_, List(b.ConstExpr(h)), _, _, _), _, _, _) :: t, _, _, _, _),
               _, _, _, _, _, _, _) =>
                    "select " + String.valueOf(h) + (s.copy(cols = c.copy(cols = t)).sql substring 6)
           }

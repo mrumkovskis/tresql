@@ -661,7 +661,11 @@ dept [deptno = 56] {dname} --> [[null]]
 dept [deptno = 56] {dname, loc} --> [["D2", "L1"]]
 +dept {deptno, dname, if_defined(:loc?, loc)} null {57, 'D3', :loc?} --> [[1]]
 dept [deptno = 57] {dname, loc} --> [["D3", null]]
--dept [deptno in (55, 56, 57)] --> [[3]]
++dept {deptno, dname, loc} [58, 'D4', :loc?] --> [[1]]
+dept [deptno = 58] {loc} --> [[null]]
++dept {deptno, dname, loc} {59, 'D5', :loc?} --> [[1]]
+dept [deptno = 59] {loc} --> [[null]]
+-dept [deptno in (55, 56, 57, 58, 59)] --> [[5]]
 
 
 // another schema test

@@ -499,8 +499,9 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       "\nno-join flag: " + noJoin + ")\n"
   }
   case class ColsExpr(cols: List[ColExpr],
-      hasAll: Boolean, hasIdentAll: Boolean, hasHidden: Boolean) extends PrimitiveExpr {
-    override def defaultSQL = cols.withFilter(!_.separateQuery).map(_.sql).mkString(", ")
+      hasAll: Boolean, hasIdentAll: Boolean, hasHidden: Boolean,
+      macroEliminatedIdxs: Set[Int] = Set()) extends PrimitiveExpr {
+    override def defaultSQL =  cols.withFilter(!_.separateQuery).map(_.sql).mkString(", ")
     override def toString = cols.map(_.toString).mkString("Columns(", ", ", ")")
   }
   case class ColExpr(col: Expr, alias: String, sepQuery: Option[Boolean] = None, hidden: Boolean = false)
@@ -828,37 +829,40 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: Exp,
                           returning: Option[Cols], ctx: Ctx) = {
     lazy val insertCols = this.table(table).cols.map(c => IdentExpr(List(c.name)))
-    def resolveAsterisk(q: parsing.Query) =
-      Option(q.cols)
-        .map {
-          _.cols.zipWithIndex.map { case (col, idx) =>
-            Option(col.alias).map(n => IdentExpr(List(n.toLowerCase))).getOrElse {
-              col.col match {
-                case Obj(Ident(n), _, _, _, _) =>
-                  IdentExpr(List(n.last.toLowerCase))
-                case _ =>
-                  sys.error(s"Bad column - '${col.tresql}' at index $idx. Please specify alias.")
-              }
+    val transformer: ExpTransformer = new QueryParser()
+    def extractor[A](f: PartialFunction[Exp, A]) = {
+      lazy val traverserExtractor: transformer.Traverser[A] = transformer.traverser(x => {
+        case Values(List(valArr)) if f.isDefinedAt(valArr) => f(valArr)
+        case BinOp(_, lop, _) => traverserExtractor(x)(lop)
+        case q: parsing.Query if q.cols != null && f.isDefinedAt(q.cols) => f(q.cols)
+        case Braces(b) => traverserExtractor(x)(b)
+        case With(_, e) => traverserExtractor(x)(e)
+      })
+      traverserExtractor
+    }
+    val allColsExtractor: PartialFunction[Exp, List[IdentExpr]] = {
+      case Cols(_, cols) =>
+        cols.zipWithIndex.map { case (col, idx) =>
+          Option(col.alias).map(n => IdentExpr(List(n.toLowerCase))).getOrElse {
+            col.col match {
+              case Obj(Ident(n), _, _, _, _) =>
+                IdentExpr(List(n.last.toLowerCase))
+              case _ =>
+                sys.error(s"Bad column - '${col.tresql}' at index $idx. Please specify alias.")
             }
           }
         }
-        .getOrElse(insertCols)
+
+    }
+    val valCountExtractor: PartialFunction[Exp, Int] = {
+      case Arr(els) => els.size
+      case Cols(_, cols) => cols.size
+    }
     /* must be lazy val since evaluation changes builder state and must be called in proper place constructing InsertExpr */
     lazy val colExprs = cols match {
       //get column clause from metadata
       case Nil => insertCols
-      case List(Col(All, _)) => vals match {
-        case q: parsing.Query => resolveAsterisk(q) //adjust insertable columns to select columns
-        case e =>
-          def extractQuery(e: Exp): List[IdentExpr] = e match {
-            case BinOp(_, lop, _) => extractQuery(lop)
-            case q: parsing.Query => resolveAsterisk(q)
-            case Braces(b) => extractQuery(b)
-            case With(_, e) => extractQuery(e)
-            case _ => insertCols
-          }
-          extractQuery(e)
-      }
+      case List(Col(All, _)) => extractor(allColsExtractor)(insertCols)(vals)
       case c => c map (buildInternal(_, COL_CTX)) filter {
         case ColExpr(IdentExpr(_), _, _, _) => true
         case e: ColExpr => registerChildUpdate(e.col, e.name); false
@@ -866,9 +870,17 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case _ => sys.error("Unexpected InsertExpr type")
       }
     }
-    new InsertExpr(IdentExpr(table.ident), alias,
-      colExprs, vals match {
-        case Values(arr) => ValuesExpr(arr map {
+    val hasEqualColValCount = colExprs.size == extractor(valCountExtractor)(-1)(vals)
+    def buildValues(v: Exp): (Expr, Set[Int]) = v match {
+      case Values(List(a)) if hasEqualColValCount =>
+        val e = a.elements.map(buildInternal(_, VALUES_CTX))
+        val idxs = e.zipWithIndex.foldLeft(Set[Int]()) { case (s, (c, i)) =>
+          if (c == null) s + i else s
+        }
+        if (idxs.isEmpty) ValuesExpr(List(ArrExpr(patchVals(table, colExprs, e)))) -> idxs
+        else ValuesExpr(List(ArrExpr(e.filter(_ != null)))) -> idxs
+      case Values(arr) =>
+        ValuesExpr(arr map {
           buildInternal(_, VALUES_CTX) match {
             case ArrExpr(l) => ArrExpr(patchVals(table, colExprs, l))
             case null => ArrExpr(patchVals(table, colExprs, Nil))
@@ -877,9 +889,24 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         } match {
           case Nil => patchVals(table, colExprs, Nil)
           case l => l
-        })
-        case q => buildInternal(q, VALUES_CTX)
-      },
+        }) -> Set()
+      case q =>
+        val e = buildInternal(q, VALUES_CTX)
+        if (hasEqualColValCount) { // extract macro eliminated column indexes
+          def extract_indexes(e: Expr): Set[Int] = e match {
+            case s: SelectExpr => s.cols.macroEliminatedIdxs
+            case BinExpr(_, lop, _) => extract_indexes(lop)
+            case w: WithExpr => extract_indexes(w.query)
+            case _ => Set()
+          }
+          e -> extract_indexes(e)
+        } else e -> Set()
+    }
+    val (valExprs, idxs) = buildValues(vals)
+    val filteredColExprs =
+      if (idxs.isEmpty) colExprs
+      else colExprs.zipWithIndex.collect { case (e, i) if !idxs.contains(i) => e }
+    new InsertExpr(IdentExpr(table.ident), alias, filteredColExprs, valExprs,
       returning.map(buildCols(_, ctx))
     )
   }
@@ -934,7 +961,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   }
 
   private def buildArray(a: Arr, ctx: Ctx = ARR_CTX) = a.elements
-    .map { buildInternal(_, ctx) } filter (_ != null) match {
+    .map { buildInternal(_, ctx) } filter (_ != null) match { // filter out elements eliminated by macro
       case al if al.nonEmpty => ArrExpr(al) case _ => null
     }
 
@@ -943,18 +970,23 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     if (cols == null)
       ColsExpr(List(ColExpr(AllExpr(), null, Some(false))), hasAll = true, hasIdentAll = false, hasHidden = false)
     else {
-      var (hasAll, hasIdentAll, hasHidden) = (false, false, false)
-      val colExprs = cols.cols.map(buildInternal(_, COL_CTX) match {
-        case c @ ColExpr(_: AllExpr, _, _, _) =>
-          hasAll = true
-          c
-        case c @ ColExpr(_: IdentAllExpr, _, _, _) =>
-          hasIdentAll = true
-          c
-        case c: ColExpr => c
-        case null => null
-        case x => sys.error(s"ColExpr expected instead found: $x")
-      }).filter(_ != null)
+      // idxs collects macro eliminated col's indexes so that later it can be matched with insert cols to be eliminated
+      var (hasAll, hasIdentAll, hasHidden, idxs) = (false, false, false, Set[Int]())
+      val colExprs = cols.cols.zipWithIndex.map { case (c, i) =>
+        buildInternal(c, COL_CTX) match {
+          case c @ ColExpr(_: AllExpr, _, _, _) =>
+            hasAll = true
+            c
+          case c @ ColExpr(_: IdentAllExpr, _, _, _) =>
+            hasIdentAll = true
+            c
+          case c: ColExpr => c
+          case null =>
+            idxs += i
+            null
+          case x => sys.error(s"ColExpr expected instead found: $x")
+        }
+      }.filter(_ != null)
       val colsWithLinksToChildren =
         colExprs ++
         //for top level queries add hidden columns used in filters of descendant queries
@@ -962,7 +994,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           hasHidden |= joinsWithChildrenColExprs.nonEmpty
           joinsWithChildrenColExprs
         } else Nil)
-      ColsExpr(colsWithLinksToChildren, hasAll, hasIdentAll, hasHidden)
+      ColsExpr(colsWithLinksToChildren, hasAll, hasIdentAll, hasHidden, idxs)
     }
 
   private[tresql] def buildInternal(parsedExpr: Exp, parseCtx: Ctx = QUERY_CTX): Expr = {
