@@ -540,7 +540,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       } else res(idx)
     }
     override def defaultSQL = expr.sql
-    override def toString() = expr + ":" + resType
+    override def toString() = String.valueOf(expr) + ":" + resType
   }
   case class IdentExpr(name: List[String]) extends PrimitiveExpr {
     def defaultSQL = name.mkString(".")
@@ -912,8 +912,9 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   }
   private def buildUpdate(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp,
                           returning: Option[Cols], ctx: Ctx) = {
-    /* must be lazy val since evaluation changes builder state and must be called in proper place constructing UpdateExpr */
-    lazy val colExprs = cols match {
+    //exprs must be built in order of tresql clauses according to sequence of parameters to preserve builder state
+    val filterExpr = if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null
+    val colExprs = cols match {
       //get column clause from metadata
       case Nil => this.table(table).cols.map(c => IdentExpr(List(c.name)))
       case c => c map (buildInternal(_, COL_CTX)) filter {
@@ -924,15 +925,29 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case _ => sys.error("Unexpected UpdateExpr type")
       }
     }
-    new UpdateExpr(IdentExpr(table.ident), alias, if (filter != null)
-      filter.elements map { buildInternal(_, WHERE_CTX) } else null, colExprs,
-      buildInternal(vals, VALUES_CTX) match {
-        case v: ArrExpr => ValuesExpr(patchVals(table, colExprs, v.elements))
-        case q: SelectExpr => q
-        case f: ValuesFromSelectExpr => f
-        case null => ValuesExpr(patchVals(table, colExprs, Nil))
-        case x => error("Knipis: " + x)
-      },
+    val hasEqualColValCount = colExprs.size == (vals match { case a: Arr => a.elements.size case _ => -1})
+    def buildValues(v: Exp): (Expr, Set[Int]) = v match {
+      case Arr(els) if hasEqualColValCount =>
+        val e = els.map(buildInternal(_, VALUES_CTX))
+        val idxs = e.zipWithIndex.foldLeft(Set[Int]()) { case (s, (c, i)) =>
+          if (c == null) s + i else s
+        }
+        if (idxs.isEmpty) ValuesExpr(e) -> idxs
+        else ValuesExpr(e.filter(_ != null)) -> idxs
+      case _ =>
+        (buildInternal(vals, VALUES_CTX) match {
+          case v: ArrExpr => ValuesExpr(patchVals(table, colExprs, v.elements))
+          case q: SelectExpr => q
+          case f: ValuesFromSelectExpr => f
+          case null => ValuesExpr(patchVals(table, colExprs, Nil))
+          case x => error("Knipis: " + x)
+        }) -> Set()
+    }
+    val (valExprs, idxs) = buildValues(vals)
+    val filteredColsExprs =
+      if (idxs.isEmpty) colExprs
+      else colExprs.zipWithIndex.collect { case (e, i) if !idxs.contains(i) => e }
+    new UpdateExpr(IdentExpr(table.ident), alias, filterExpr, filteredColsExprs, valExprs,
       returning.map(buildCols(_, ctx))
     )
   }
