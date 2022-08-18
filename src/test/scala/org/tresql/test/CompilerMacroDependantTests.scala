@@ -1934,6 +1934,80 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       tresql"emp[ename = 'Britney']{ename, (dept d[d.deptno = emp.deptno]{loc}) dept}"
         .map(e => (e.ename, e.dept)).toList
     }
+
+    //optional lookup view
+    view = {
+      import OrtMetadata._
+      val lookupDept =
+        View(
+          List(SaveTo("dept", Set(), List("deptno"))), None, null, true, true, true,
+          List(
+            Property("deptno", TresqlValue(":deptno", true, true, false)),
+            Property("dname", TresqlValue(":dname", true, true, false)),
+            Property("loc", TresqlValue(":loc?", true, true, true)),
+          ), null)
+      val lookupTyres =
+        View(
+          List(SaveTo("tyres", Set(), Nil)), None, null, true, true, true,
+          List(
+            Property("nr", TresqlValue(":nr", true, true, false)),
+            Property("carnr", TresqlValue(":carnr", true, true, false)),
+            Property("brand", TresqlValue(":brand", true, true, false)),
+            Property("season", TresqlValue(":season", true, true, false)),
+          ), null)
+      View(
+        List(SaveTo("car", Set(), List("name"))), None, null, true, true, false,
+        List(
+          Property("name", TresqlValue(":name", true, true, false)),
+          Property("deptnr", LookupViewValue("dept", lookupDept)),
+          Property("tyres_nr", LookupViewValue("tyres", lookupTyres)),
+        ), null)
+    }
+
+    obj = Map(
+      "name" -> "BMW",
+      "tyres" ->
+        Map(
+          "nr" -> null,
+          "carnr" -> Query("car[name = 'BMW']{nr}").unique[Long],
+          "brand" -> "Barum", "season" -> "W"
+        )
+    )
+    assertResult(List(("BMW", "RESEARCH", List(("Barum", "W"))))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"car[name = 'BMW'] {name, (dept[deptno = deptnr]{dname}) dept, |[car.tyres_nr = nr]tyres {brand, season} tyres}"
+        .map(c => (c.name, c.dept, c.tyres.map(t => t.brand -> t.season).toList)).toList
+    }
+
+    obj = Map(
+      "name" -> "BMW",
+      "tyres" ->
+        Map(
+          "nr" -> Query("car[name = 'BMW']{tyres_nr}").unique[Long],
+          "carnr" -> Query("car[name = 'BMW']{nr}").unique[Long], "brand" -> "Barum", "season" -> "S"
+        )
+    )
+    assertResult(List(("BMW", "RESEARCH", List(("Barum", "S"))))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"car[name = 'BMW'] {name, (dept[deptno = deptnr]{dname}) dept, |[car.tyres_nr = nr]tyres {brand, season} tyres}"
+        .map(c => (c.name, c.dept, c.tyres.map(t => t.brand -> t.season).toList)).toList
+    }
+    obj = Map(
+      "name" -> "BMW",
+      "dept" ->
+        Map(
+          "deptno" -> Query("car[name = 'BMW']{deptnr}").unique[Long],
+          "dname" -> Query("dept[deptno = (car[name = 'BMW']{deptnr})]{dname}").unique[String]
+        )
+    )
+    assertResult(List(("BMW", "DALLAS", List(("Barum", "S"))))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"car[name = 'BMW'] {name, (dept[deptno = deptnr]{loc}) dept_loc, |[car.tyres_nr = nr]tyres {brand, season} tyres}"
+        .map(c => (c.name, c.dept_loc, c.tyres.map(t => t.brand -> t.season).toList)).toList
+    }
   }
 
   override def compilerMacro(implicit resources: Resources) = {

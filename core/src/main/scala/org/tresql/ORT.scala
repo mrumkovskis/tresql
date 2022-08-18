@@ -601,11 +601,15 @@ trait ORT extends Query {
             val insert = save_tresql(null, lookupView, Nil, SaveOptions(true, false, true), insert_tresql)
             val lookupUpsert = s"|_upsert($update, $insert)"
             val lookupIdSel = idSelExpr(lookupView, lookupTable)
-
-            List(
-              s":$refColName = |_lookup_upsert('$propName', ${
-                if (idPropName == null) "null" else s"'$idPropName'"}, $lookupUpsert, $lookupIdSel)",
-              ColVal(refColName, s":$refColName", true, true, false))
+            val (lookupTresql, refColTresql) = {
+              val tr = s":$refColName = |_lookup_upsert('$propName', ${
+                if (idPropName == null) "null" else s"'$idPropName'"}, $lookupUpsert, $lookupIdSel)"
+              if (lookupView.optional)
+                (s"if_defined(:$propName?, $tr)", s"if_defined(:$propName?, :$refColName)")
+              else
+                (tr, s":$refColName")
+            }
+            List(lookupTresql, ColVal(refColName, refColTresql, true, true, false))
           }).getOrElse(Nil)
       }.partition(_.isInstanceOf[String]) match {
         case (lookups: List[String@unchecked], colsVals: List[ColVal@unchecked]) =>
