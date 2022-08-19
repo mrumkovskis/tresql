@@ -1336,7 +1336,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         .map(d => (d.dname, d.loc, d.emps.map(e => (e.ename, e.job)).toList)).toList
     }
 
-    ortForInsertForUpdateFlags
+    ortForInsertForUpdateOptionalFlags
     ortLookupByKey
   }
 
@@ -1615,7 +1615,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     }
   }
 
-  private def ortForInsertForUpdateFlags(implicit resources: Resources) = {
+  private def ortForInsertForUpdateOptionalFlags(implicit resources: Resources) = {
     println("------ ORT forInsert, forUpdate flags --------")
 
     var view = {
@@ -1752,6 +1752,38 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     intercept[Exception] { // should not save because lookup value - dept cannot be inserted
       ORT.save(view, obj)
     }
+
+    // optional view flag
+    view = {
+      import OrtMetadata._
+      val lookupTyres =
+        View(
+          List(SaveTo("tyres", Set(), Nil)), None, null, true, true, true,
+          List(
+            Property("nr", TresqlValue(":nr", true, true, false)),
+            Property("carnr", TresqlValue(":carnr", true, true, false)),
+            Property("brand", TresqlValue(":brand", true, true, false)),
+            Property("season", TresqlValue(":season", true, true, false)),
+          ), null)
+      val cars =
+        View(
+          List(SaveTo("car", Set(), List("name"))), None, null, true, true, true,
+          List(
+            Property("name", TresqlValue(":name", true, true, false)),
+            Property("is_active", TresqlValue(":is_active?", true, true, true)),
+            Property("tyres_nr", LookupViewValue("tyres", lookupTyres)),
+          ), null)
+      View(
+        List(SaveTo("dept", Set(), List("deptno"))), None, null, true, true, false,
+        List(
+          Property("deptno", TresqlValue(":deptno", true, true, false)),
+          Property("dname", TresqlValue(":dname", true, true, false)),
+          Property("loc", TresqlValue(":loc?", true, true, true)),
+          Property("cars", ViewValue(cars, SaveOptions(true, true, true)))
+        ), null)
+    }
+
+
   }
 
   private def ortLookupByKey(implicit resources: Resources) = {
@@ -1944,7 +1976,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           List(
             Property("deptno", TresqlValue(":deptno", true, true, false)),
             Property("dname", TresqlValue(":dname", true, true, false)),
-            Property("loc", TresqlValue(":loc?", true, true, true)),
+            // if_defined check must me done on :dept.loc? since it is evaluated on build time using top level environment
+            Property("loc", TresqlValue("if_defined(:dept.loc?, :loc)", true, true, true)),
           ), null)
       val lookupTyres =
         View(
@@ -2003,6 +2036,22 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         )
     )
     assertResult(List(("BMW", "DALLAS", List(("Barum", "S"))))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"car[name = 'BMW'] {name, (dept[deptno = deptnr]{loc}) dept_loc, |[car.tyres_nr = nr]tyres {brand, season} tyres}"
+        .map(c => (c.name, c.dept_loc, c.tyres.map(t => t.brand -> t.season).toList)).toList
+    }
+
+    obj = Map(
+      "name" -> "BMW",
+      "dept" ->
+        Map(
+          "deptno" -> Query("car[name = 'BMW']{deptnr}").unique[Long],
+          "dname" -> Query("dept[deptno = (car[name = 'BMW']{deptnr})]{dname}").unique[String],
+          "loc" -> "El paso",
+        )
+    )
+    assertResult(List(("BMW", "El paso", List(("Barum", "S"))))) {
       ORT.save(view, obj)
       println(s"\nResult check:")
       tresql"car[name = 'BMW'] {name, (dept[deptno = deptnr]{loc}) dept_loc, |[car.tyres_nr = nr]tyres {brand, season} tyres}"
