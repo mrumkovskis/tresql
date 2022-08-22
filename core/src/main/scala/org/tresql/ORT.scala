@@ -391,9 +391,12 @@ trait ORT extends Query {
   }
 
   private def insert_tresql(ctx: SaveContext)(implicit resources: Resources): String = {
-    if (ctx.view.forInsert)
-      save_tresql_internal(ctx, table_insert_tresql, save_tresql(_, _, _, _, insert_tresql))
-    else null
+    if (ctx.view.forInsert) {
+      val tresql = save_tresql_internal(ctx, table_insert_tresql, save_tresql(_, _, _, _, insert_tresql))
+      if (ctx.name != null && ctx.view.optional)
+        s"if_defined(:${ctx.name}?, $tresql)"
+      else tresql
+    } else null
   }
 
   private def update_tresql(ctx: SaveContext)(implicit resources: Resources): String = {
@@ -512,21 +515,26 @@ trait ORT extends Query {
     }
     def updOrIns = s"|_upsert($upd, $ins)"
 
+    def mayBe(tresql: String) =
+      if (ctx.name != null && ctx.view.optional)
+        s"if_defined(:${ctx.name}?, $tresql)"
+      else tresql
+
     import ctx.saveOptions._
     val pk = table.key.cols
-    if (parent == null) if (saveTo.key.isEmpty && pk.isEmpty) null else upd
-    else if (pk.size == 1 && refToParent == pk.head) upd else
+    if (parent == null) if (saveTo.key.isEmpty && pk.isEmpty) null else mayBe(upd)
+    else if (pk.size == 1 && refToParent == pk.head) mayBe(upd) else
       if (saveTo.key.isEmpty && pk.isEmpty) {
-        (Option(doDelete).filter(_ == true).map(_ => delAllChildren) ++
+        (Option(doDelete).filter(_ == true).map(_ => mayBe(delAllChildren)) ++
           Option(doInsert).filter(_ == true)
-            .flatMap(_ => Option(ins))).mkString(", ")
+            .flatMap(_ => Option(mayBe(ins)))).mkString(", ")
       } else {
         (Option(doDelete).filter(_ == true).map(_ =>
-          if(!doUpdate) delAllChildren else delMissingChildren) ++
+          mayBe(if(!doUpdate) delAllChildren else delMissingChildren)) ++
           ((doInsert, doUpdate) match {
-            case (true, true) => Option(updOrIns)
-            case (true, false) => Option(ins)
-            case (false, true) => Option(upd)
+            case (true, true) => Option(mayBe(updOrIns))
+            case (true, false) => Option(mayBe(ins))
+            case (false, true) => Option(mayBe(upd))
             case (false, false) => None
           })).mkString(", ")
       }
@@ -536,7 +544,7 @@ trait ORT extends Query {
     ctx: SaveContext,
     table_save_tresql: SaveData => String,
     children_save_tresql: (
-      String, //table property
+      String, //children property name
       View,
       List[ParentRef], //parent chain
       SaveOptions

@@ -1756,34 +1756,48 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     // optional view flag
     view = {
       import OrtMetadata._
-      val lookupTyres =
-        View(
-          List(SaveTo("tyres", Set(), Nil)), None, null, true, true, true,
-          List(
-            Property("nr", TresqlValue(":nr", true, true, false)),
-            Property("carnr", TresqlValue(":carnr", true, true, false)),
-            Property("brand", TresqlValue(":brand", true, true, false)),
-            Property("season", TresqlValue(":season", true, true, false)),
-          ), null)
       val cars =
         View(
           List(SaveTo("car", Set(), List("name"))), None, null, true, true, true,
           List(
             Property("name", TresqlValue(":name", true, true, false)),
-            Property("is_active", TresqlValue(":is_active?", true, true, true)),
-            Property("tyres_nr", LookupViewValue("tyres", lookupTyres)),
+            Property("is_active", TresqlValue(":is_active", true, true, false)),
           ), null)
       View(
-        List(SaveTo("dept", Set(), List("deptno"))), None, null, true, true, false,
+        List(SaveTo("dept", Set(), List("dname"))), None, null, true, true, false,
         List(
-          Property("deptno", TresqlValue(":deptno", true, true, false)),
           Property("dname", TresqlValue(":dname", true, true, false)),
           Property("loc", TresqlValue(":loc?", true, true, true)),
           Property("cars", ViewValue(cars, SaveOptions(true, true, true)))
         ), null)
     }
-
-
+    obj = Map("dname" -> "Floating", "loc" -> "Sea", /*"cars" -> List(
+      Map("name" -> "Boat", "is_active" -> true),
+      Map("name" -> "Ferry", "is_active" -> true),
+    )*/)
+    assertResult(List(("Sea", List()))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Floating']{loc, |car{name, is_active} cars}"
+        .map(d => (d.loc, d.cars.map(c => c.name -> c.is_active).toList)).toList
+    }
+    obj = Map("dname" -> "Floating", "cars" -> List(
+      Map("name" -> "Ship", "is_active" -> true),
+      Map("name" -> "Ferry", "is_active" -> false),
+    ))
+    assertResult( List(("Sea", List(("Ship", true), ("Ferry", false))))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Floating']{loc, |car{name, is_active} cars}"
+        .map(d => (d.loc, d.cars.map(c => c.name -> c.is_active).toList)).toList
+    }
+    obj = Map("dname" -> "Floating", "loc" -> "Lake")
+    assertResult(List(("Lake", List(("Ship", true), ("Ferry", false))))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Floating']{loc, |car{name, is_active} cars}"
+        .map(d => (d.loc, d.cars.map(c => c.name -> c.is_active).toList)).toList
+    }
   }
 
   private def ortLookupByKey(implicit resources: Resources) = {
