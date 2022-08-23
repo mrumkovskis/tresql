@@ -103,7 +103,7 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
   }
 
   private[tresql] def update(vars: Map[String, Any]): Unit = {
-    this.vars = if (vars == null) None else Some(scala.collection.mutable.Map(vars.toList: _*))
+    this.vars = if (vars == null) None else Some(scala.collection.mutable.Map.empty ++ vars)
   }
 
   private [tresql] def updateExprs(exprs: Map[Expr, Int]) = _exprs = Option(exprs)
