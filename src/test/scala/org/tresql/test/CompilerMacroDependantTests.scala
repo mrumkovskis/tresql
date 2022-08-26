@@ -1761,7 +1761,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           List(SaveTo("car", Set(), List("name"))), None, null, true, true, true,
           List(
             Property("name", TresqlValue(":name", true, true, false)),
-            Property("is_active", TresqlValue(":is_active", true, true, false)),
+            Property("is_active", TresqlValue(":is_active?", true, true, true)),
+            Property("tyres_nr", TresqlValue(":tyres_nr?", true, true, true)),
           ), null)
       View(
         List(SaveTo("dept", Set(), List("dname"))), None, null, true, true, false,
@@ -1782,16 +1783,26 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         .map(d => (d.loc, d.cars.map(c => c.name -> c.is_active).toList)).toList
     }
     obj = Map("dname" -> "Floating", "cars" -> List(
-      Map("name" -> "Ship", "is_active" -> true),
+      Map("name" -> "Ship"),
       Map("name" -> "Ferry", "is_active" -> false),
     ))
-    assertResult( List(("Sea", List(("Ship", true), ("Ferry", false))))) {
+    assertResult( List(("Sea", List(("Ship", null), ("Ferry", false))))) {
       ORT.save(view, obj)
       println(s"\nResult check:")
       tresql"dept[dname = 'Floating']{loc, |car{name, is_active} cars}"
         .map(d => (d.loc, d.cars.map(c => c.name -> c.is_active).toList)).toList
     }
     obj = Map("dname" -> "Floating", "loc" -> "Lake")
+    assertResult(List(("Lake", List(("Ship", null), ("Ferry", false))))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Floating']{loc, |car{name, is_active} cars}"
+        .map(d => (d.loc, d.cars.map(c => c.name -> c.is_active).toList)).toList
+    }
+    obj = Map("dname" -> "Floating", "cars" -> List(
+      Map("name" -> "Ship", "is_active" -> true),
+      Map("name" -> "Ferry", "tyres_nr" -> null),
+    ))
     assertResult(List(("Lake", List(("Ship", true), ("Ferry", false))))) {
       ORT.save(view, obj)
       println(s"\nResult check:")
@@ -1990,8 +2001,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
           List(
             Property("deptno", TresqlValue(":deptno", true, true, false)),
             Property("dname", TresqlValue(":dname", true, true, false)),
-            // if_defined check must me done on :dept.loc? since it is evaluated on build time using top level environment
-            Property("loc", TresqlValue("if_defined(:dept.loc?, :loc)", true, true, true)),
+            Property("loc", TresqlValue(":loc?", true, true, true)),
           ), null)
       val lookupTyres =
         View(

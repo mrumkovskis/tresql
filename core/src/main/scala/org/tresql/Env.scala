@@ -183,12 +183,17 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
     db.map(get_res.extraResources(_).isMacroDefined(name)).getOrElse(get_res.isMacroDefined(name))
   override def isBuilderMacroDefined(name: String): Boolean =
     db.map(get_res.extraResources(_).isBuilderMacroDefined(name)).getOrElse(get_res.isBuilderMacroDefined(name))
+  override def isBuilderDeferredMacroDefined(name: String): Boolean =
+    db.map(get_res.extraResources(_).isBuilderDeferredMacroDefined(name)).getOrElse(get_res.isBuilderDeferredMacroDefined(name))
   override def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp =
     db.map(get_res.extraResources(_).invokeMacro(name, parser, args))
       .getOrElse(get_res.invokeMacro(name, parser, args))
   override def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr =
     db.map(get_res.extraResources(_).invokeBuilderMacro(name, builder, args))
       .getOrElse(get_res.invokeBuilderMacro(name, builder, args))
+  override def invokeBuilderDeferredMacro(name: String, builder: QueryBuilder, args: List[Exp]): Expr =
+    db.map(get_res.extraResources(_).invokeBuilderDeferredMacro(name, builder, args))
+      .getOrElse(get_res.invokeBuilderDeferredMacro(name, builder, args))
 
   protected def liftDialect(dialect: CoreTypes.Dialect) =
     if (dialect == null) null else dialect orElse defaultDialect
@@ -241,10 +246,13 @@ final case class ResourcesTemplate(override val conn: java.sql.Connection,
 
   override def isMacroDefined(name: String): Boolean = macroResources.isMacroDefined(name)
   override def isBuilderMacroDefined(name: String): Boolean = macroResources.isBuilderMacroDefined(name)
+  override def isBuilderDeferredMacroDefined(name: String): Boolean = macroResources.isBuilderDeferredMacroDefined(name)
   override def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp =
     macroResources.invokeMacro(name, parser, args)
   override def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr =
     macroResources.invokeBuilderMacro(name, builder, args)
+  override def invokeBuilderDeferredMacro(name: String, builder: QueryBuilder, args: List[Exp]): Expr =
+    macroResources.invokeBuilderDeferredMacro(name, builder, args)
 }
 
 
@@ -331,10 +339,13 @@ trait Resources extends MacroResources with CacheResources with Logging {
                                           macros: MacroResources) extends Resources {
     override def isMacroDefined(name: String) = macros.isMacroDefined(name)
     override def isBuilderMacroDefined(name: String) = macros.isBuilderMacroDefined(name)
+    override def isBuilderDeferredMacroDefined(name: String): Boolean = macros.isBuilderDeferredMacroDefined(name)
     override def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp =
       macros.invokeMacro(name, parser, args)
     override def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr =
       macros.invokeBuilderMacro(name, builder, args)
+    override def invokeBuilderDeferredMacro(name: String, builder: QueryBuilder, args: List[Exp]): Expr =
+      macros.invokeBuilderDeferredMacro(name, builder, args)
     override def toString = s"Resources_(conn = $conn, " +
       s"metadata = $metadata, dialect = $dialect, idExpr = $idExpr, " +
       s"queryTimeout = $queryTimeout, fetchSize = $fetchSize, " +
@@ -355,6 +366,15 @@ trait Resources extends MacroResources with CacheResources with Logging {
   def recursiveStackDepth: Int = 50
   def params: Map[String, Any] = Map()
   def extraResources: Map[String, Resources] = Map()
+  override def isMacroDefined(name: String): Boolean = false
+  override def isBuilderMacroDefined(name: String): Boolean = false
+  override def isBuilderDeferredMacroDefined(name: String): Boolean = false
+  override def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp =
+    sys.error(s"macro $name not defined")
+  override def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr =
+    sys.error(s"macro $name not defined")
+  override def invokeBuilderDeferredMacro(name: String, builder: QueryBuilder, args: List[Exp]): Expr =
+    sys.error(s"macro $name not defined")
 
   //resource construction convenience methods
   def withConn(conn: java.sql.Connection): Resources = copyResources.copy(conn = conn)
@@ -387,12 +407,12 @@ trait Resources extends MacroResources with CacheResources with Logging {
 
 trait MacroResources {
   def macroResource: String = null
-  def isMacroDefined(name: String): Boolean = false
-  def isBuilderMacroDefined(name: String): Boolean = false
-  def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp =
-    sys.error(s"Macro function not found: $name")
-  def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr =
-    sys.error(s"Macro function not found: $name")
+  def isMacroDefined(name: String): Boolean
+  def isBuilderMacroDefined(name: String): Boolean
+  def isBuilderDeferredMacroDefined(name: String): Boolean
+  def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp
+  def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr
+  def invokeBuilderDeferredMacro(name: String, builder: QueryBuilder, args: List[Exp]): Expr
 }
 
 class MacroResourcesImpl(scalaMacros: Any, typeMapper: TypeMapper) extends MacroResources {
@@ -408,6 +428,7 @@ class MacroResourcesImpl(scalaMacros: Any, typeMapper: TypeMapper) extends Macro
 
   override def isMacroDefined(name: String): Boolean         = macros.parserMacros.contains(name)
   override def isBuilderMacroDefined(name: String): Boolean  = macros.builderMacros.contains(name)
+  override def isBuilderDeferredMacroDefined(name: String): Boolean = macros.builderDeferredMacros.contains(name)
 
   private def findMacro[A, B](name: String, map: Map[String, Seq[TresqlMacro[A, B]]], argsSize: Int) =
     map(name) match {
@@ -421,6 +442,8 @@ class MacroResourcesImpl(scalaMacros: Any, typeMapper: TypeMapper) extends Macro
   }
   override def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr =
     findMacro[QueryBuilder, Expr](name, macros.builderMacros, args.size).invoke(builder, args.toIndexedSeq)
+  override def invokeBuilderDeferredMacro(name: String, builder: QueryBuilder, args: List[Exp]): Expr =
+    findMacro[QueryBuilder, Expr](name, macros.builderDeferredMacros, args.size).invoke(builder, args.toIndexedSeq)
 }
 
 trait CacheResources {

@@ -1,6 +1,7 @@
 package org.tresql
 
-import org.tresql.OrtMetadata.{Filters, KeyValue, LookupViewValue, SaveOptions, SaveTo, TresqlValue, View, ViewValue}
+import org.tresql.OrtMetadata.{Filters, KeyValue, LookupViewValue, Property, SaveOptions, SaveTo, TresqlValue, View, ViewValue}
+import org.tresql.parsing.Exp
 
 import scala.util.matching.Regex
 import sys._
@@ -189,6 +190,23 @@ trait ORT extends Query {
     override def defaultSQL: String = s"UpdateByKeyExpr($table, $setIdExpr, $updateExpr)"
   }
 
+  case class DeferredBuildExpr(exp: Exp) extends BaseExpr {
+    override def apply(params: Map[String, Any]): Any = {
+      val b =
+        newInstance(
+          new Env(ORT.this, env.db, false),
+          queryDepth + 1, bindIdx, childrenCount
+        )
+      if (params != null) b.env.update(params)
+      val expr = b.buildExpr(exp)
+      if (expr != null) expr() else null // build fun may return null expression due to optional binding
+    }
+
+    override def apply(): Any = apply(null: Map[String, Any])
+
+    override def defaultSQL: String = s"DeferredBuildExpr($exp)"
+  }
+
   def insert(name: String, obj: Map[String, Any], filter: String = null)
     (implicit resources: Resources): InsertResult = {
     val name_with_filter = if (filter == null) name else s"$name|$filter, null, null"
@@ -371,6 +389,13 @@ trait ORT extends Query {
     (if (db == null) "" else db + ":") + table
   }
 
+  private def hasOptionalFields(view: View) =
+    view.properties.exists {
+      case Property(_, t: TresqlValue) => t.optional
+      case Property(_, l: LookupViewValue) => l.view.optional
+      case _ => false
+    }
+
   private def table_insert_tresql(saveData: SaveData) = {
     import saveData._
     val refsAndPk = refsPkVals.collect {case x if !x.isInstanceOf[IdRefVal] => (x.name, x.value)}
@@ -393,8 +418,8 @@ trait ORT extends Query {
   private def insert_tresql(ctx: SaveContext)(implicit resources: Resources): String = {
     if (ctx.view.forInsert) {
       val tresql = save_tresql_internal(ctx, table_insert_tresql, save_tresql(_, _, _, _, insert_tresql))
-      if (ctx.name != null && ctx.view.optional)
-        s"if_defined(:${ctx.name}?, $tresql)"
+      if (ctx.name != null && (ctx.view.optional || hasOptionalFields(ctx.view)))
+        s"_deferred_build(if_defined(:${ctx.name}?, $tresql))"
       else tresql
     } else null
   }
@@ -516,8 +541,8 @@ trait ORT extends Query {
     def updOrIns = s"|_upsert($upd, $ins)"
 
     def mayBe(tresql: String) =
-      if (ctx.name != null && ctx.view.optional)
-        s"if_defined(:${ctx.name}?, $tresql)"
+      if (ctx.name != null && (view.optional || hasOptionalFields(view)))
+        s"_deferred_build(if_defined(:${ctx.name}?, $tresql))"
       else tresql
 
     import ctx.saveOptions._
@@ -607,13 +632,17 @@ trait ORT extends Query {
             val idPropName = idProp(lookupView, lookupTable)
             val update = save_tresql(null, lookupView, Nil, SaveOptions(true, false, true), update_tresql)
             val insert = save_tresql(null, lookupView, Nil, SaveOptions(true, false, true), insert_tresql)
-            val lookupUpsert = s"|_upsert($update, $insert)"
+            val lookupUpsert = {
+              val tr = s"|_upsert($update, $insert)"
+              if (hasOptionalFields(lookupView)) s"_deferred_build($tr)"
+              else tr
+            }
             val lookupIdSel = idSelExpr(lookupView, lookupTable)
             val (lookupTresql, refColTresql) = {
               val tr = s":$refColName = |_lookup_upsert('$propName', ${
                 if (idPropName == null) "null" else s"'$idPropName'"}, $lookupUpsert, $lookupIdSel)"
               if (lookupView.optional)
-                (s"if_defined(:$propName?, $tr)", s"if_defined(:$propName?, :$refColName)")
+                (s"_deferred_build(if_defined(:$propName?, $tr))", s"if_defined(:$propName?, :$refColName)")
               else
                 (tr, s":$refColName")
             }

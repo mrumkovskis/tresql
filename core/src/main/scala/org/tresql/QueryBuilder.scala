@@ -1193,6 +1193,10 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         }
       )
     }
+    def maybeCallDeferredBuildMacro(fun: Fun) =
+      if (env isBuilderDeferredMacroDefined fun.name)
+        Some(env.invokeBuilderDeferredMacro(fun.name, QueryBuilder.this, fun.parameters))
+      else None
 
     def buildWithNew(db: Option[String], buildFunc: QueryBuilder => Expr) = {
       val b = newInstance(
@@ -1313,10 +1317,13 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case fun @ Fun(n, pl: List[_], d, o, f) => parseCtx match  {
           case ARR_CTX => buildWithNew(None, _.buildInternal(fun, FUN_CTX))
           case _ =>
-            val pars = pl map { buildInternal(_, FUN_CTX) }
-            val order = o.map(buildInternal(_, FUN_CTX))
-            val filter = f.map(buildInternal(_, FUN_CTX))
-            maybeCallMacro(FunExpr(n, pars, d, order, filter))
+            maybeCallDeferredBuildMacro(fun)
+              .getOrElse {
+                val pars = pl map { buildInternal(_, FUN_CTX) }
+                val order = o.map(buildInternal(_, FUN_CTX))
+                val filter = f.map(buildInternal(_, FUN_CTX))
+                maybeCallMacro(FunExpr(n, pars, d, order, filter))
+              }
         }
         case FunAsTable(f, ocds, ord) =>
           FunAsTableExpr(buildInternal(f, parseCtx),

@@ -164,20 +164,22 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
 }
 
 trait TresqlMacro[A, B] {
-  def invoke(env: A, params: IndexedSeq[B]): B
+  def invoke(env: A, params: IndexedSeq[_]): B
   def signature: Procedure[_]
 }
 
 case class TresqlMacros(parserMacros: Map[String, Seq[TresqlMacro[QueryParsers, Exp]]],
-                        builderMacros: Map[String, Seq[TresqlMacro[QueryBuilder, Expr]]]) {
+                        builderMacros: Map[String, Seq[TresqlMacro[QueryBuilder, Expr]]],
+                        builderDeferredMacros: Map[String, Seq[TresqlMacro[QueryBuilder, Expr]]]) {
   def merge(tresqlMacros: TresqlMacros): TresqlMacros = {
     import ResourceMerger._
     TresqlMacros(parserMacros = mergeResources(parserMacros, tresqlMacros.parserMacros),
-      builderMacros = mergeResources(builderMacros, tresqlMacros.builderMacros))
+      builderMacros = mergeResources(builderMacros, tresqlMacros.builderMacros),
+      builderDeferredMacros = mergeResources(builderDeferredMacros, tresqlMacros.builderDeferredMacros))
   }
 }
 object TresqlMacros {
-  def empty = TresqlMacros(Map(), Map())
+  def empty = TresqlMacros(Map(), Map(), Map())
 }
 
 class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(typeMapper) {
@@ -189,12 +191,12 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
   private class TresqlResourcesMacro(val signature: Procedure[_], body: MacroBody)
     extends TresqlMacro[QueryParsers, Exp] {
     private val sigParCount = signature.pars.size
-    override def invoke(env: QueryParsers, params: IndexedSeq[Exp]): Exp = {
+    override def invoke(env: QueryParsers, params: IndexedSeq[_]): Exp = {
       val parCount = params.size
       def mayBeLiftToArr(idx: Int) = {
         if (signature.hasRepeatedPar && idx == sigParCount - 1 && sigParCount < parCount)
-          params.slice(idx, parCount).map(_.tresql).mkString("[", ",", "]")
-        else params(idx).tresql
+          params.slice(idx, parCount).map(_.asInstanceOf[Exp].tresql).mkString("[", ",", "]")
+        else params(idx).asInstanceOf[Exp].tresql
       }
       val res =
         body.parts.foldLeft(new StringBuilder()) { (res, bp) =>
@@ -208,7 +210,7 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
   }
   private case class TresqlScalaMacro[A, B](signature: Procedure[_], method: Method, invocationTarget: Any)
     extends TresqlMacro[A, B] {
-    override def invoke(env: A, params: IndexedSeq[B]): B = {
+    override def invoke(env: A, params: IndexedSeq[_]): B = {
       val p = method.getParameterTypes
       try {
           val _args =
@@ -282,7 +284,7 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
             res + (n -> (ml :+ m))
           }.getOrElse(res + (n -> Seq(m)))
       }
-    TresqlMacros(parserMacros = parserMacros, builderMacros = Map())
+    TresqlMacros(parserMacros = parserMacros, builderMacros = Map(), builderDeferredMacros = Map())
   }
 
   def loadTresqlScalaMacros(obj: Any): TresqlMacros = {
@@ -299,6 +301,8 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
         def isBuilderMacro(m: java.lang.reflect.Method) =
           classOf[QueryBuilder].isAssignableFrom(m.getParameterTypes()(0)) &&
             classOf[Expr].isAssignableFrom(m.getReturnType)
+        def hasAllExpPars(m: java.lang.reflect.Method) =
+          m.getParameterTypes.size > 1 && m.getParameterTypes.tail.forall(p => classOf[Exp].isAssignableFrom(p))
         val macros = x.getClass.getMethods.collect {
           case m if isMacro(m) => m
         }.foldLeft(TresqlMacros.empty) { (res, m) =>
@@ -311,7 +315,9 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
                 map + (n -> (ml :+ macr))
               }.getOrElse(map + (n -> Seq(macr)))
           }
-          if (isBuilderMacro(m)) res.copy(builderMacros = app(res.builderMacros))
+          if (isBuilderMacro(m))
+            if (hasAllExpPars(m)) res.copy(builderDeferredMacros = app(res.builderDeferredMacros))
+            else res.copy(builderMacros = app(res.builderMacros))
           else res.copy(parserMacros = app(res.parserMacros))
         }
         if (macros.builderMacros.isEmpty && macros.parserMacros.isEmpty)

@@ -195,4 +195,8 @@ class Macros {
   def _update_by_key(b: ORT, table: QueryBuilder#IdentExpr, setIdExpr: Expr, updateExpr: Expr) = {
     b.UpdateByKeyExpr(table.name.mkString("."), setIdExpr, updateExpr)
   }
+
+  def _deferred_build(b: ORT, exp: Exp) = {
+    b.DeferredBuildExpr(exp)
+  }
 }
