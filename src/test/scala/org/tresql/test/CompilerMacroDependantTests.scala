@@ -250,14 +250,15 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(List(10, 20, 30))(Query.list[Int]("dept[deptno in ?]{deptno}#(1)", List(30, 20, 10)))
     assertResult(List(10, 20, 30))(Query.list[Int]("dept[deptno in ?]{deptno}#(1)", scala.Array(30, 20, 10)))
     //hierarchical inserts, updates test
-    assertResult(((1, List(List(1, 1))), 50)) {
+    assertResult(new InsertResult(Some(1), children = List(("emps", List(new InsertResult(Some(1)), new InsertResult(Some(1))))), id = Some(50))) {
       Query("""dept{deptno, dname, loc, +emp {empno, ename, deptno}[:empno, :ename, :#dept] emps} +
         [#dept:dept_id, :dname, :loc]""",
       Map("dept_id" -> 50, "dname" -> "LAW", "loc" -> "DALLAS",
         "emps" -> List(Map("empno" -> 1111, "ename" -> "SMITH"),
           Map("empno" -> 2222, "ename" -> "LEWIS"))))
     }
-    assertResult((1,List(2, List(1, 1))))(Query(
+    assertResult(new UpdateResult(Some(1), children = List((null, new DeleteResult(Some(2))),
+      ("emps", List(new InsertResult(Some(1)), new InsertResult(Some(1)))))))(Query(
       """dept[deptno = #dept:dept_id]{ dname, loc,
                -emp[deptno = :#dept],
                +emp {empno, ename, deptno} [:empno, :ename, :#dept] emps} =
@@ -266,7 +267,9 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         "emps" -> List(Map("empno" -> 1111, "ename" -> "BROWN"),
           Map("empno" -> 2222, "ename" -> "CHRIS")))))
     assertResult(List(2, 1))(Query("emp - [deptno = 50], dept - [50]"))
-    assertResult(((1,List(List((1,10002), (1,10003)))),10001))(Query(
+    assertResult(new InsertResult(Some(1), children =
+      List(("emps", List(new InsertResult(Some(1), id = Some(10002)),
+        new InsertResult(Some(1), id = Some(10003))))), id = Some(10001)))(Query(
       """dept{deptno, dname, loc, +emp {empno, ename, deptno} [#emp, :ename, :#dept] emps} +
         [#dept, :dname, :loc]""",
       Map("dname" -> "LAW", "loc" -> "DALLAS", "emps" -> scala.Array(
@@ -466,7 +469,11 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         Map("empno" -> null, "ename" -> "LEWIS", "deptno" -> null,
             "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")),
             "work:empno"->List(Map("wdate"->java.sql.Date.valueOf("2012-7-9"), "empno"->null, "hours"->8, "empno_mgr"->null)))))
-    assertResult(((1,List(List(((1,List(List(1, 1))),10005), ((1,List(List(1))),10006)))),10004))(
+    assertResult(new InsertResult(Some(1), children = List(("emp",
+      List(new InsertResult(count = Some(1), children = List(("work:empno",
+        List(new InsertResult(count = Some(1)), new InsertResult(count = Some(1))))), id = Some(10005)),
+        new InsertResult(count = Some(1), children =
+          List(("work:empno", List(new InsertResult(count = Some(1))))), id = Some(10006))))), id = Some(10004)))(
         ORT.insert("dept", obj))
     intercept[Exception](ORT.insert("no_table", obj))
 
@@ -476,11 +483,15 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         "emp" -> List(Map("empno" -> null, "ename" -> "BROWN", "deptno" -> null),
           Map("empno" -> null, "ename" -> "CHRIS", "deptno" -> null)),
         "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))
-    assertResult(((1,List(List((1,10007), (1,10008)))),50))(ORT.insert("dept", obj))
+    assertResult(new InsertResult(count = Some(1), children =
+      List(("emp", List(new InsertResult(count = Some(1), id = Some(10007)),
+        new InsertResult(count = Some(1), id = Some(10008))))), id = Some(50)))(ORT.insert("dept", obj))
 
     obj = Map("dname" -> "FOOTBALL", "loc" -> "MIAMI",
         "emp" -> List(Map("ename" -> "BROWN"), Map("ename" -> "CHRIS")))
-    assertResult(((1,List(List((1,10010), (1,10011)))),10009))(ORT.insert("dept", obj))
+    assertResult( new InsertResult(count = Some(1), children =
+      List(("emp", List(new InsertResult(count = Some(1), id = Some(10010)),
+        new InsertResult(count = Some(1), id = Some(10011))))), id = Some(10009)))(ORT.insert("dept", obj))
 
     obj = Map("ename" -> "KIKI", "deptno" -> 50, "car"-> List(Map("name"-> "GAZ")))
     assertResult((1,10012))(ORT.insert("emp", obj))
@@ -493,15 +504,21 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     //child foreign key is also its primary key
     obj = Map("deptno" -> 60, "dname" -> "POLAR", "loc" -> "ALASKA",
               "dept_addr" -> List(Map("addr" -> "Halibut")))
-    assertResult(((1,List(List((1,60)))),60))(ORT.insert("dept", obj))
+    assertResult(new InsertResult(count = Some(1), children =
+      List(("dept_addr", List(new InsertResult(count = Some(1), id = Some(60))))), id = Some(60)))(
+      ORT.insert("dept", obj))
     //child foreign key is also its primary key
     obj = Map("dname" -> "BEACH", "loc" -> "HAWAII",
               "dept_addr" -> List(Map("deptnr" -> 1, "addr" -> "Honolulu", "zip_code" -> "1010")))
-    assertResult(((1,List(List((1,10013)))),10013))(ORT.insert("dept", obj))
+    assertResult(new InsertResult(count = Some(1), children =
+      List(("dept_addr",
+        List(new InsertResult(count = Some(1), id = Some(10013))))), id = Some(10013)))(ORT.insert("dept", obj))
 
     obj = Map("deptno" -> null, "dname" -> "DRUGS",
               "car" -> List(Map("nr" -> "UUU", "name" -> "BEATLE")))
-    assertResult(((1,List(List((1,"UUU")))),10014))(ORT.insert("dept", obj))
+    assertResult(new InsertResult(count = Some(1), children =
+      List(("car", List(new InsertResult(count = Some(1), id = Some("UUU"))))),
+      id = Some(10014)))(ORT.insert("dept", obj))
 
     //multiple column primary key
     obj = Map("empno"->7788, "car_nr" -> "1111")
@@ -533,21 +550,24 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
             Map("wdate"->java.sql.Date.valueOf("2012-7-9"), "empno"->7788, "hours"->8, "empno_mgr"->7839),
             Map("wdate"->java.sql.Date.valueOf("2012-7-10"), "empno"->7788, "hours"->8, "empno_mgr"->7839)),
         "car" -> List(Map("nr" -> "EEE", "name" -> "BEATLE"), Map("nr" -> "III", "name" -> "FIAT")))
-    assertResult((1,
-        List(0,
-            List(((1,
-                List(
-                    List(1, 1))),10015),
-                    ((1,List(List())),10016)),
-                    0,
-                    List((1,"EEE"), (1,"III")))))(ORT.update("dept", obj))
+    assertResult(new UpdateResult(count = Some(1),
+      children = List((null, new DeleteResult(count = Some(0))),
+        ("emp", List(new InsertResult(count = Some(1), children =
+          List(("work:empno", List(new InsertResult(count = Some(1)),
+            new InsertResult(count = Some(1))))), id = Some(10015)),
+          new InsertResult(count = Some(1), children = List(("work:empno",List())), id = Some(10016)))),
+        (null, new DeleteResult(count = Some(0))), ("car", List(new InsertResult(count = Some(1), id = Some("EEE")),
+          new InsertResult(count = Some(1), id = Some("III")))))))(ORT.update("dept", obj))
 
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno"->List(
           Map("wdate"->java.sql.Date.valueOf("2012-7-9"), "empno"->7788, "hours"->8, "empno_mgr"->7839),
           Map("wdate"->java.sql.Date.valueOf("2012-7-10"), "empno"->7788, "hours"->8, "empno_mgr"->7839)),
         "calculated_children"->List(Map("x"->5)), "deptno"->40)
-    assertResult((1,List(2, List(1, 1))))(ORT.update("emp", obj))
+    assertResult(new UpdateResult(count = Some(1), children =
+      List((null, new DeleteResult(count = Some(2))),
+        ("work:empno", List(new InsertResult(count = Some(1)),
+          new InsertResult(count = Some(1)))))))(ORT.update("emp", obj))
 
     //no child record is updated since no relation is found with car
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
@@ -565,7 +585,8 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     //child foreign key is also its primary key (one to one relation)
     obj = Map("deptno" -> 60, "dname" -> "POLAR BEAR", "loc" -> "ALASKA",
               "dept_addr" -> List(Map("addr" -> "Halibut", "zip_code" -> "1010")))
-    assertResult((1,List(List(1))))(ORT.update("dept", obj))
+    assertResult(new UpdateResult(count = Some(1), children =
+      List(("dept_addr", List(new UpdateResult(count = Some(1)))))))(ORT.update("dept", obj))
 
     //value clause test
     obj = Map("nr" -> "4444", "deptnr" -> 10)
@@ -576,11 +597,15 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     //update only children (no first level table column updates)
     obj = Map("nr" -> "4444", "tyres" -> List(Map("brand" -> "GOOD YEAR", "season" -> "S"),
         Map("brand" -> "PIRELLI", "season" -> "W")))
-    assertResult(List(0, List((1,10017), (1,10018))))(ORT.update("car", obj))
+    assertResult(new UpdateResult(None, children =
+      List((null, new DeleteResult(count = Some(0))),
+        ("tyres", List(new InsertResult(count = Some(1), id = Some(10017)),
+          new InsertResult(count = Some(1), id = Some(10018)))))))(ORT.update("car", obj))
 
     //delete children
     obj = Map("nr" -> "4444", "name" -> "LAMBORGHINI", "tyres" -> List())
-    assertResult((1,List(2, List())))(ORT.update("car", obj))
+    assertResult(new UpdateResult(count = Some(1), children =
+      List((null, new DeleteResult(count = Some(2))), ("tyres", List()))))(ORT.update("car", obj))
 
     //update three level, for the first second level object it's third level is empty
     obj = Map("deptno" -> 10013, "emp" -> List(
@@ -590,15 +615,23 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
             "work:empno" -> List(
             Map("wdate" -> java.sql.Date.valueOf("2014-08-27"), "hours" -> 8),
             Map("wdate" -> java.sql.Date.valueOf("2014-08-28"), "hours" -> 8)))))
-    assertResult(List(0, List(((1,List(List())),10019), ((1,List(List(1, 1))),10020))))(ORT.update("dept", obj))
+    assertResult(new UpdateResult(None, children =
+      List((null, new DeleteResult(count = Some(0))),
+        ("emp", List(new InsertResult(count = Some(1), children =
+          List(("work:empno",List())), id = Some(10019)),
+          new InsertResult(count = Some(1), children = List(("work:empno", List(new InsertResult(count = Some(1)),
+            new InsertResult(count = Some(1))))), id = Some(10020)))))))(ORT.update("dept", obj))
     //delete third level children
     obj = Map("deptno" -> 10013, "emp" -> List(
         Map("ename" -> "ELKHADY",
             "work:empno" -> List()),
         Map("ename" -> "GUNTER",
             "work:empno" -> List())))
-    assertResult(List(2, List(((1,List(List())),10021),
-      ((1,List(List())),10022))))(ORT.update("dept", obj))
+    assertResult(new UpdateResult(None, children = List((null, new DeleteResult(count = Some(2))),
+      ("emp", List(new InsertResult(count = Some(1), children =
+        List(("work:empno", List())), id = Some(10021)),
+        new InsertResult(count = Some(1), children =
+          List(("work:empno", List())), id = Some(10022)))))))(ORT.update("dept", obj))
 
 
     println("\n--- DELETE ---\n")
@@ -618,14 +651,20 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         Map("empno" -> 7698, "ename" -> "BLAKE", "job" -> "SALESMAN", "mgr" -> 7839,
             "mgr_name" -> null, "deptno" -> 30)),
       "calculated_children" -> List(Map("x" -> 5)), "deptno" -> 30)
-      assertResult((1,List(3, List(1, 1, (1,10023), 1))))(ORT.update("dept", obj))
+      assertResult(new UpdateResult(count = Some(1), children =
+        List((null, new DeleteResult(count = Some(3))), ("emp[+-=]", List(new UpdateResult(count = Some(1)),
+          new UpdateResult(count = Some(1)), new InsertResult(count = Some(1), id = Some(10023)),
+          new UpdateResult(count = Some(1)))))))(ORT.update("dept", obj))
 
     obj = Map("empno" -> 7788, "ename"->"SCOTT", "mgr"-> 7839,
       "work:empno[+-=]" -> List(
         Map("wdate"->java.sql.Date.valueOf("2012-7-12"), "empno"->7788, "hours"->10, "empno_mgr"->7839),
         Map("wdate"->java.sql.Date.valueOf("2012-7-13"), "empno"->7788, "hours"->3, "empno_mgr"->7839)),
       "calculated_children"->List(Map("x"->5)), "deptno"->20)
-    assertResult((1,List(2, List(1, 1))))(ORT.update("emp", obj))
+    assertResult( new UpdateResult(count = Some(1), children =
+      List((null, new DeleteResult(count = Some(2))),
+        ("work:empno[+-=]", List(new InsertResult(count = Some(1)),
+          new InsertResult(count = Some(1)))))))(ORT.update("emp", obj))
 
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
         "emp[+-=]"->List(
@@ -638,21 +677,32 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
               Map("wdate"->java.sql.Date.valueOf("2012-7-14"), "empno"->null, "hours"->5, "empno_mgr"->7839),
               Map("wdate"->java.sql.Date.valueOf("2012-7-15"), "empno"->null, "hours"->2, "empno_mgr"->7839)))),
         "calculated_children"->List(Map("x"->5)), "deptno"->40)
-    assertResult((1,List(2, List(((1,List(List(1, 1))),10024), ((1,List(List(1, 1))),10025)))))(
+    assertResult(new UpdateResult(count = Some(1), children =
+      List((null, new DeleteResult(count = Some(2))),
+        ("emp[+-=]", List(new InsertResult(count = Some(1), children =
+          List(("work:empno[+-=]", List(new InsertResult(count = Some(1)),
+            new InsertResult(count = Some(1))))), id = Some(10024)),
+          new InsertResult(count = Some(1), children =
+            List(("work:empno[+-=]", List(new InsertResult(count = Some(1)),
+              new InsertResult(count = Some(1))))), id = Some(10025)))))))(
         ORT.update("dept", obj))
 
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "work:empno[+-=]"->List(),
         "calculated_children"->List(Map("x"->5)), "deptno"->20)
-    assertResult((1,List(2, List())))(ORT.update("emp", obj))
+    assertResult(new UpdateResult(count = Some(1), children =
+      List((null,new DeleteResult(count = Some(2))), ("work:empno[+-=]", List()))))(ORT.update("emp", obj))
 
     println("\n---- Multiple table INSERT, UPDATE ------\n")
 
     obj = Map("dname" -> "SPORTS", "addr" -> "Brisbane", "zip_code" -> "4000")
-    assertResult(((1,List((1,10026))),10026))(ORT.insertMultiple(obj, "dept", "dept_addr")())
+    assertResult(new InsertResult(count = Some(1), children =
+      List((null, new InsertResult(count = Some(1), id = Some(10026)))),
+      id = Some(10026)))(ORT.insertMultiple(obj, "dept", "dept_addr")())
 
     obj = Map("deptno" -> 10026, "loc" -> "Brisbane", "addr" -> "Roma st. 150")
-    assertResult((1,List(1)))(ORT.updateMultiple(obj, "dept", "dept_addr")())
+    assertResult(new UpdateResult(count = Some(1), children =
+      List((null, new UpdateResult(count = Some(1))))))(ORT.updateMultiple(obj, "dept", "dept_addr")())
 
     assertResult(List(Map(
         "dname" -> "SPORTS", "loc" -> "Brisbane",
@@ -662,7 +712,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
 
     //update only first table in one to one relationship
     obj = Map("deptno" -> 60, "dname" -> "POLAR BEAR", "loc" -> "ALASKA")
-    assertResult(new UpdateResult(Some(1),Map("_1" -> new UpdateResult(Some(1)))))(
+    assertResult(new UpdateResult(Some(1),List((null, new UpdateResult(Some(1))))))(
       ORT.updateMultiple(obj, "dept", "dept_addr")())
 
     println("\n-------- EXTENDED CASES --------\n")
@@ -672,13 +722,20 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         "dept_addr" -> List(Map("addr" -> "Chengdu", "zip_code" -> "2000",
             "dept_sub_addr" -> List(Map("addr" -> "Jinli str. 10", "zip_code" -> "CN-1234"),
                 Map("addr" -> "Jinjiang District", "zip_code" -> "CN-1234")))))
-    assertResult(((1,List(List(((1,List(List(1, 1))),10027)))),10027)) {ORT.insert("dept", obj)}
+    assertResult(new InsertResult(count = Some(1), children =
+      List(("dept_addr", List(new InsertResult(count = Some(1), children =
+        List(("dept_sub_addr", List(new InsertResult(count = Some(1)),
+          new InsertResult(count = Some(1))))), id = Some(10027))))), id = Some(10027))) {ORT.insert("dept", obj)}
 
     obj = Map("deptno" -> 10027, "dname" -> "PANDA BREEDING",
       "dept_addr" -> List(Map("addr" -> "Chengdu", "zip_code" -> "CN-1234",
         "dept_sub_addr" -> List(Map("addr" -> "Jinli str. 10", "zip_code" -> "CN-1234"),
           Map("addr" -> "Jinjiang District", "zip_code" -> "CN-1234")))))
-    assertResult((1,List(List((1,List(2, List(1, 1))))))) {ORT.update("dept", obj)}
+    assertResult(new UpdateResult(count = Some(1), children =
+      List(("dept_addr", List(new UpdateResult(count = Some(1), children =
+        List((null, new DeleteResult(count = Some(2))),
+          ("dept_sub_addr", List(new InsertResult(count = Some(1)),
+            new InsertResult(count = Some(1))))))))))) {ORT.update("dept", obj)}
 
     println("\n-------- LOOKUP object editing --------\n")
     //edit lookup object
@@ -713,13 +770,22 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     //one to one relationship with lookup for extended table
     obj = Map("dname" -> "MARKETING", "addr" -> "Valkas str. 1",
         "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Riga"))
-    assertResult(((1,List(List(10033, (1,10032)))),10032)) { ORT.insertMultiple(obj, "dept", "dept_addr")() }
+    assertResult(new InsertResult(count = Some(1), children =
+      List((null, List(10033,
+        new InsertResult(count = Some(1), id = Some(10032))))),
+      id = Some(10032))) { ORT.insertMultiple(obj, "dept", "dept_addr")() }
     obj = Map("deptno" -> 10032, "dname" -> "MARKET", "addr" -> "Valkas str. 1a",
       "zip_code" -> "LV-1010", "addr_nr" -> Map("nr" -> 10033, "addr" -> "Riga, LV"))
-    assertResult((1,List(List(10033, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
+    assertResult(new UpdateResult(count = Some(1), children =
+      List((null, List(10033, new UpdateResult(count = Some(1))))))) {
+      ORT.updateMultiple(obj, "dept", "dept_addr")()
+    }
     obj = Map("deptno" -> 10032, "dname" -> "MARKETING", "addr" -> "Liela str.",
       "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Saldus"))
-    assertResult((1,List(List(10034, 1)))) { ORT.updateMultiple(obj, "dept", "dept_addr")() }
+    assertResult(new UpdateResult(count = Some(1), children =
+      List((null, List(10034, new UpdateResult(count = Some(1))))))) {
+      ORT.updateMultiple(obj, "dept", "dept_addr")()
+    }
     //insert of lookup object where it's pk is present but null
     obj = Map("nr" -> 10029, "brand" -> "DUNLOP", "carnr" -> Map("nr" -> null, "name" -> "AUDI"))
     assertResult( List(("DUNLOP", "S", "AUDI"))) {
@@ -732,38 +798,66 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     println("\n----------------- Multiple table INSERT UPDATE extended cases ----------------------\n")
 
     obj = Map("dname" -> "AD", "ename" -> "Lee", "wdate" -> java.sql.Date.valueOf("2000-01-01"), "hours" -> 3)
-    assertResult(((1,List((1,10036), (1,10036))),10036)) { ORT.insertMultiple(obj, "dept", "emp", "work:empno")() }
+    assertResult( new InsertResult(count = Some(1), children =
+      List((null,new InsertResult(count = Some(1), id = Some(10036))),
+        (null,new InsertResult(count = Some(1), id = Some(10036)))),
+      id = Some(10036))) { ORT.insertMultiple(obj, "dept", "emp", "work:empno")() }
 
     obj = Map("deptno" -> 10036, "wdate" -> java.sql.Date.valueOf("2015-10-01"), "hours" -> 4)
-    assertResult(new UpdateResult(None, Map("_1" -> new UpdateResult(Some(1)), "_2" -> new UpdateResult(Some(1))))) {
+    assertResult(new UpdateResult(None, List((null, new UpdateResult(Some(1))), (null, new UpdateResult(Some(1)))))) {
       ORT.updateMultiple(obj, "dept", "emp", "work:empno")()
     }
 
     obj = Map("deptno" -> 10036, "work:empno" -> List(Map("wdate" -> java.sql.Date.valueOf("2015-10-10"), "hours" -> 5)))
-    assertResult(List(List(1, List(1)))) { ORT.updateMultiple(obj, "dept", "emp")() }
+    assertResult(new UpdateResult(None, children =
+      List((null,new UpdateResult(None, children = List(
+        (null,new DeleteResult(count = Some(1))),
+        ("work:empno", List(new InsertResult(count = Some(1)))))))))) { ORT.updateMultiple(obj, "dept", "emp")() }
 
     obj = Map("deptno" -> 10036, "dname" -> "ADVERTISING", "ename" -> "Andy")
-    assertResult((1, List(1))) { ORT.updateMultiple(obj, "dept", "emp")() }
+    assertResult(new UpdateResult(count = Some(1), children = List((null,new UpdateResult(count = Some(1)))))) {
+      ORT.updateMultiple(obj, "dept", "emp")()
+    }
 
     obj = Map("dname" -> "DIG", "emp" -> List(Map("ename" -> "O'Jay",
         "work:empno" -> List(Map("wdate" -> java.sql.Date.valueOf("2010-05-01"), "hours" -> 7)))), "addr" -> "Tvaika 1")
-    assertResult(((1,List(List(((1,List(List(1))),10038)), (1,10037))),10037)) {
-      ORT.insertMultiple(obj, "dept", "dept_addr")() }
+    assertResult( new InsertResult(count = Some(1), children =
+      List(
+        ("emp", List(new InsertResult(count = Some(1), children =
+          List(("work:empno", List(new InsertResult(count = Some(1))))), id = Some(10038)))),
+        (null, new InsertResult(count = Some(1), id = Some(10037)))), id = Some(10037))) {
+      ORT.insertMultiple(obj, "dept", "dept_addr")()
+    }
 
     obj = Map("dname" -> "GARAGE", "name" -> "Nissan", "brand" -> "Dunlop", "season" -> "S")
-    assertResult(((1,List((1,10039), (1,10039))),10039)) { ORT.insertMultiple(obj, "dept", "car", "tyres")() }
+    assertResult(new InsertResult(count = Some(1), children = List(
+      (null,new InsertResult(count = Some(1), id = Some(10039))),
+      (null,new InsertResult(count = Some(1), id = Some(10039)))),
+      id = Some(10039))) {
+      ORT.insertMultiple(obj, "dept", "car", "tyres")()
+    }
 
     obj = Map("deptno" -> 10039, "dname" -> "STOCK", "name" -> "Nissan", "brand" -> "PIRELLI", "season" -> "W")
     //obj = Map("dname" -> "STOCK", "name" -> "Nissan", "brand" -> "PIRELLI", "season" -> "W")
-    assertResult((1, List(1, 1))) { ORT.updateMultiple(obj, "dept", "car", "tyres")() }
+    assertResult(new UpdateResult(count = Some(1), children = List(
+      (null,new UpdateResult(count = Some(1))),
+      (null,new UpdateResult(count = Some(1)))))) { ORT.updateMultiple(obj, "dept", "car", "tyres")() }
 
     obj = Map("deptno" -> 10039, "dname" -> "STOCK", "name" -> "Nissan Patrol",
         "tyres" -> List(Map("brand" -> "CONTINENTAL", "season" -> "W")))
-    assertResult((1,List((1,List(1, List((1,10040))))))) { ORT.updateMultiple(obj, "dept", "car")() }
+    assertResult(new UpdateResult(count = Some(1), children = List(
+      (null,new UpdateResult(count = Some(1), children = List(
+        (null,new DeleteResult(count = Some(1))),
+        ("tyres", List(new InsertResult(count = Some(1), id = Some(10040)))))))))) {
+      ORT.updateMultiple(obj, "dept", "car")()
+    }
 
     obj = Map("dname" -> "NEW STOCK", "name" -> "Audi Q7",
         "tyres" -> List(Map("brand" -> "NOKIAN", "season" -> "S")))
-    assertResult(((1,List(((1,List(List((1,10042)))),10041))),10041)) { ORT.insertMultiple (obj, "dept", "car")() }
+    assertResult(new InsertResult(count = Some(1), children = List(
+      (null,new InsertResult(count = Some(1), children = List(
+        ("tyres", List(new InsertResult(count = Some(1), id = Some(10042))))),
+        id = Some(10041)))), id = Some(10041))) { ORT.insertMultiple (obj, "dept", "car")() }
 
     println("\n-------- LOOKUP extended cases - chaining, children --------\n")
 
@@ -788,17 +882,26 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     obj = Map("dname" -> "MILITARY", "loc" -> "Alabama", "emp" -> List(
       Map("ename" -> "Selina", "mgr" -> null),
       Map("ename" -> "Vano", "mgr" -> Map("ename" -> "Carlo", "deptno" -> Map("dname" -> "Head")))))
-    assertResult(((1,List(List(List(null, (1,10047)), List(10049, (1,10050))))),10046)) { ORT.insert("dept", obj) }
+    assertResult(new InsertResult(count = Some(1), children = List(
+      ("emp", List(List(null, new InsertResult(count = Some(1), id = Some(10047))),
+        List(10049, new InsertResult(count = Some(1), id = Some(10050)))))), id = Some(10046))) {
+      ORT.insert("dept", obj)
+    }
 
     obj = Map("deptno" -> 10046, "dname" -> "METEO", "loc" -> "Texas", "emp" -> List(
       Map("ename" -> "Selina", "mgr" -> null),
       Map("ename" -> "Vano", "mgr" -> Map("ename" -> "Pedro", "deptno" -> Map("deptno" -> 10048, "dname" -> "Head")))))
-    assertResult((1,List(2, List(List(null, (1,10051)), List(10052, (1,10053)))))) { ORT.update("dept", obj) }
+    assertResult(new UpdateResult(count = Some(1), children = List(
+      (null,new DeleteResult(count = Some(2))),
+      ("emp", List(List(null, new InsertResult(count = Some(1), id = Some(10051))),
+        List(10052, new InsertResult(count = Some(1), id = Some(10053)))))))) { ORT.update("dept", obj) }
 
     obj = Map("name" -> "Dodge", "car_usage" -> List(
       Map("empno" -> Map("empno" -> null, "ename" -> "Nicky", "job" -> "MGR", "deptno" -> 10)),
       Map("empno" -> Map("empno" -> 10052, "ename" -> "Lara", "job" -> "MGR", "deptno" -> 10))))
-    assertResult(((1,List(List(List(10055, 1), List(10052, 1)))),10054)) { ORT.insert("car", obj) }
+    assertResult(new InsertResult(count = Some(1), children = List(
+      ("car_usage", List(List(10055, new InsertResult(count = Some(1))),
+        List(10052, new InsertResult(count = Some(1)))))), id = Some(10054))) { ORT.insert("car", obj) }
 
     println("\n-------- INSERT, UPDATE, DELETE with additional filter --------\n")
     //insert, update with additional filter
@@ -841,10 +944,22 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
              "tyres_usage[+=]" -> List(
                Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-09-25"),
                Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-10-01")))))))
-    assertResult(((1,List(
-        List(((1,List(List(((1,List(List(1, 1))),10058), ((1,List(List(1, 1))),10059)))),10057),
-             ((1,List(List(((1,List(List(1, 1))),10061), ((1,List(List(1, 1))),10062)))),10060))
-        )),10056))(ORT.insert("dept", obj))
+    assertResult(new InsertResult(count = Some(1), children = List(
+      ("car[+=]", List(new InsertResult(count = Some(1), children = List(
+        ("tyres[+=]", List(new InsertResult(count = Some(1), children = List(
+          ("tyres_usage[+=]", List(new InsertResult(count = Some(1)),
+            new InsertResult(count = Some(1))))), id = Some(10058)),
+          new InsertResult(count = Some(1), children = List(
+            ("tyres_usage[+=]", List(new InsertResult(count = Some(1)),
+              new InsertResult(count = Some(1))))), id = Some(10059))))), id = Some(10057)),
+        new InsertResult(count = Some(1), children = List(
+          ("tyres[+=]", List(new InsertResult(count = Some(1), children = List(
+            ("tyres_usage[+=]", List(new InsertResult(count = Some(1)),
+              new InsertResult(count = Some(1))))), id = Some(10061)),
+            new InsertResult(count = Some(1), children = List(
+              ("tyres_usage[+=]", List(new InsertResult(count = Some(1)),
+                new InsertResult(count = Some(1))))), id = Some(10062))))), id = Some(10060))))),
+      id = Some(10056)))(ORT.insert("dept", obj))
 
     obj = Map("deptno" -> 10056, "dname" -> "TRUCK DEPT",
       "car[+=]" -> List(
@@ -867,8 +982,19 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
              "tyres_usage[+=]" -> List(
                Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-09-25"),
                Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-10-01")))))))
-      assertResult((1,List(List((1,List(List((1,List(List(1))), ((1,List(List(1, 1))),10063)))),
-          (1,List(List((1,List(List(1, 1))), (1,List(List(1, 1))))))))))(ORT.update("dept", obj))
+      assertResult(new UpdateResult(count = Some(1), children = List(
+        ("car[+=]", List(new UpdateResult(count = Some(1), children = List(
+          ("tyres[+=]", List(new UpdateResult(count = Some(1), children = List(
+            ("tyres_usage[+=]", List(new InsertResult(count = Some(1)))))),
+            new InsertResult(count = Some(1), children = List(
+              ("tyres_usage[+=]", List(new InsertResult(count = Some(1)),
+                new InsertResult(count = Some(1))))), id = Some(10063)))))),
+          new UpdateResult(count = Some(1), children = List(
+            ("tyres[+=]", List(new UpdateResult(count = Some(1), children = List(
+              ("tyres_usage[+=]", List(new InsertResult(count = Some(1)),
+                new InsertResult(count = Some(1)))))), new UpdateResult(count = Some(1), children = List(
+              ("tyres_usage[+=]", List(new InsertResult(count = Some(1)),
+                new InsertResult(count = Some(1)))))))))))))))(ORT.update("dept", obj))
 
     obj = Map("deptno" -> 10056, "car[+-=]" -> List(
       Map("nr" -> 10060, "tyres[+-=]" -> List(
@@ -880,17 +1006,16 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         Map("brand" -> "YOKOHAMA", "season" -> "S")
       ))
     ))
-    assertResult(new UpdateResult(None, scala.collection.immutable.ListMap(
-      "_1" -> new DeleteResult(Some(0)), "car[+-=]" -> List(
-        new UpdateResult(None, scala.collection.immutable.ListMap(
-          "_1" -> new DeleteResult(Some(2)), "tyres[+-=]" -> List(
-            new InsertResult(Some(1), Map(), Some(10064))))),
-        new UpdateResult(None, scala.collection.immutable.ListMap(
-          "_1" -> new DeleteResult(Some(1)), "tyres[+-=]" -> List(
-            new UpdateResult(Some(1)),
-            new UpdateResult(Some(1)),
-            new InsertResult(Some(1), Map(), Some(10065)))))
-        ))))(ORT.update("dept", obj))
+    assertResult(new UpdateResult(None, children = List((null, new DeleteResult(count = Some(0))), (
+      "car[+-=]", List(new UpdateResult(None, children = List(
+      (null, new DeleteResult(count = Some(2))),
+      ("tyres[+-=]", List(new InsertResult(count = Some(1), id = Some(10064)))))),
+      new UpdateResult(None, children = List(
+        (null, new DeleteResult(count = Some(1))),
+        ("tyres[+-=]", List(new UpdateResult(count = Some(1)),
+          new UpdateResult(count = Some(1)),
+          new InsertResult(count = Some(1), id = Some(10065))))))))))
+    )(ORT.update("dept", obj))
 
     obj = Map("deptno" -> 10056, "car[+-=]" -> List(
       Map("nr" -> 10060, "tyres[+-=]" -> List(
@@ -902,17 +1027,17 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         Map("nr" -> 10065, "brand" -> "YOKOHAMA", "season" -> "W")
       ))
     ))
-    assertResult(new UpdateResult(None, scala.collection.immutable.ListMap(
-      "_1" -> new DeleteResult(Some(0)), "car[+-=]" -> List(
-        new UpdateResult(None, scala.collection.immutable.ListMap(
-          "_1" -> new DeleteResult(Some(0)), "tyres[+-=]" -> List(
-            new UpdateResult(Some(1))))),
-        new UpdateResult(None, scala.collection.immutable.ListMap(
-          "_1" -> new DeleteResult(Some(0)), "tyres[+-=]" -> List(
-            new UpdateResult(Some(1)),
-            new UpdateResult(Some(1)),
-            new UpdateResult(Some(1)))))
-      ))))(ORT.update("dept", obj))
+    assertResult(new UpdateResult(None, children = List(
+      (null, new DeleteResult(count = Some(0))),
+      ("car[+-=]", List(new UpdateResult(None, children = List(
+        (null, new DeleteResult(count = Some(0))),
+        ("tyres[+-=]", List(new UpdateResult(count = Some(1)))))),
+        new UpdateResult(None, children = List(
+          (null, new DeleteResult(count = Some(0))),
+          ("tyres[+-=]", List(new UpdateResult(count = Some(1)),
+            new UpdateResult(count = Some(1)),
+            new UpdateResult(count = Some(1))))))))))
+    )(ORT.update("dept", obj))
 
     obj = Map("deptno" -> 10056, "car[+-=]" -> List(
       Map("nr" -> 10057, "tyres[+-=]" -> List(
@@ -925,42 +1050,57 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         Map("brand" -> "BRIDGESTONE", "season" -> "W")
       ))
     ))
-    assertResult(new UpdateResult(None, Map("_1" -> new DeleteResult(Some(0)), "car[+-=]" -> List(
-      new UpdateResult(None, Map("_1" -> new DeleteResult(Some(0)), "tyres[+-=]" -> List(
+    assertResult(new UpdateResult(None, List((null, new DeleteResult(Some(0))), "car[+-=]" -> List(
+      new UpdateResult(None, List((null, new DeleteResult(Some(0))), "tyres[+-=]" -> List(
         new UpdateResult(Some(1)), new UpdateResult(Some(1)), new UpdateResult(Some(1))))),
-      new UpdateResult(None, Map("_1" -> new DeleteResult(Some(1)), "tyres[+-=]" -> List(
-        new InsertResult(Some(1), Map(), Some(10066)),
-        new InsertResult(Some(1), Map(), Some(10067)))))))))(
+      new UpdateResult(None, List((null, new DeleteResult(Some(1))), "tyres[+-=]" -> List(
+        new InsertResult(Some(1), Nil, Some(10066)),
+        new InsertResult(Some(1), Nil, Some(10067)))))))))(
     ORT.update("dept", obj))
 
     println("\n-------- SAVE - extended cases - multiple children --------\n")
 
     obj = Map("dname" -> "Service", "emp#work:empno" ->
       Map("ename" -> "Sophia", "wdate" -> java.sql.Date.valueOf("2015-10-30"), "hours" -> 2))
-    assertResult(((1,List(((1,List((1,10069))),10069))),10068))(ORT.insert("dept", obj))
+    assertResult(new InsertResult(count = Some(1), children = List(
+      ("emp#work:empno", new InsertResult(count = Some(1), children = List(
+        (null, new InsertResult(count = Some(1), id = Some(10069)))),
+        id = Some(10069)))), id = Some(10068)))(ORT.insert("dept", obj))
 
     obj = Map("deptno" -> 10068, "dname" -> "Services", "emp#work:empno[+-=]" ->
       Map("empno" -> 10069, "wdate" -> java.sql.Date.valueOf("2015-10-30"), "hours" -> 8))
-    assertResult((1,List(0, List(1))))(ORT.update("dept", obj))
+    assertResult(new UpdateResult(count = Some(1), children = List(
+      (null, new DeleteResult(count = Some(0))),
+      ("emp#work:empno[+-=]", new UpdateResult(None, children = List(
+        (null, new UpdateResult(count = Some(1)))))))))(ORT.update("dept", obj))
 
     obj = Map("deptno" -> 10068, "emp#work:empno[=]" ->
       Map("empno" -> 10069, "empno_mgr" -> Map("ename" -> "Jean", "deptno" -> 10068)))
-    assertResult(List(List(List(10070, 1))))(ORT.update("dept", obj))
+    assertResult(new UpdateResult(None, children = List(
+      ("emp#work:empno[=]", new UpdateResult(None, children = List(
+        (null, List(10070, new UpdateResult(count = Some(1))))))))))(ORT.update("dept", obj))
 
     obj = Map("nr" -> 10057, "is_active" -> true, "emp#car_usage" ->
       Map("ename" -> "Peter", "date_from" -> "2015-11-02",
         "deptno" -> Map("dname" -> "Supervision")))
-    assertResult((1,List(0, List(10071, ((1,List((1,10072))),10072)))))(ORT.update("car", obj))
+    assertResult(new UpdateResult(count = Some(1), children = List(
+      (null,new DeleteResult(count = Some(0))),
+      ("emp#car_usage", List(10071, new InsertResult(count = Some(1), children = List(
+        (null,new InsertResult(count = Some(1), id = Some(10072)))), id = Some(10072)))))))(ORT.update("car", obj))
 
     println("\n--- LOOKUP extended case - separate lookup expression from previous insert expr values ---\n")
     obj = Map("dname" -> "Design", "name" -> "Tesla", "date_from" -> "2015-11-20",
       "empno" -> Map("ename" -> "Inna", "deptno" -> 10068))
-    assertResult(((1,List((1,10073), List(10074, (1,10073)))),10073))(
+    assertResult(new InsertResult(count = Some(1), children = List(
+      (null,new InsertResult(count = Some(1), id = Some(10073))),
+      (null, List(10074, new InsertResult(count = Some(1), id = Some(10073))))), id = Some(10073)))(
       ORT.insertMultiple(obj, "dept", "car", "car_usage")())
 
     println("\n--- Delete all children with save options specified ---\n")
     obj = Map("nr" -> 10035, "tyres[+-=]" -> Nil)
-    assertResult(List(1, List()))(ORT.update("car", obj))
+    assertResult(new UpdateResult(None, children = List(
+      (null, new DeleteResult(count = Some(1))),
+      ("tyres[+-=]",List()))))(ORT.update("car", obj))
 
     println("\n--- Name resolving ---\n")
     obj = Map("wdate" -> java.sql.Date.valueOf("2017-03-10"), "hours" -> 8, "emp" -> "SCOTT", "emp_mgr" -> "KING",
@@ -968,7 +1108,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       "emp->" -> "empno=emp[ename = _] {empno}",
       "emp_mgr" -> "KING",
       "emp_mgr->" -> "empno_mgr=emp[ename = :emp_mgr] {empno}")
-    assertResult(new InsertResult(Some(1), Map(), None))(ORT.insert("work", obj))
+    assertResult(new InsertResult(Some(1), Nil, None))(ORT.insert("work", obj))
 
     obj = Map("deptno" -> 10, "emp[=]" ->
       List(
@@ -976,7 +1116,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         Map("empno" -> 7839, "ename" -> "KING", "mgr" -> null, "mgr->" -> "mgr=emp[ename = _]{empno}")
       )
     )
-    assertResult(new UpdateResult(None, Map("emp[=]" -> List(new UpdateResult(Some(1)), new UpdateResult(Some(1))))))(
+    assertResult(new UpdateResult(None, List("emp[=]" -> List(new UpdateResult(Some(1)), new UpdateResult(Some(1))))))(
       ORT.update("dept", obj))
 
     obj = Map("empno" -> 7369, "sal" -> 850, "dept-name" -> "SALES",
@@ -985,7 +1125,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
 
     obj = Map("deptno" -> 10037, "loc" -> "Latvia", "zip_code" -> "LV-1005", "addr" -> "Tvaika iela 48",
       "address-city" -> "Riga, LV", "address-city->" -> "addr_nr=address[addr = _]{nr}")
-    assertResult(new UpdateResult(Some(1), Map("_1" -> new UpdateResult(Some(1)))))(
+    assertResult(new UpdateResult(Some(1), List((null, new UpdateResult(Some(1))))))(
       ORT.updateMultiple(obj, "dept", "dept_addr")())
 
     println("\n-------- SAVE with additional filter for children --------\n")
@@ -996,18 +1136,18 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       )
     )
     assertResult(new InsertResult(Some(1),
-      Map("_1" -> new InsertResult(
+      List((null, new InsertResult(
         Some(1),
-        Map("dept_sub_addr" -> List(new InsertResult(Some(1)), new InsertResult(Some(1)))),
+        List("dept_sub_addr" -> List(new InsertResult(Some(1)), new InsertResult(Some(1)))),
         Some(10075))
-      ), Some(10075)))(ORT.insertMultiple(obj, "dept", "dept_addr")())
+      )), Some(10075)))(ORT.insertMultiple(obj, "dept", "dept_addr")())
 
     obj = Map("dname" -> "Temp", "addr" -> "Field", "zip_code" -> "none", "dept_sub_addr" ->
       List(Map("addr" -> "Hill", "zip_code" -> "----"),
            Map("addr" -> "Pot", "zip_code" -> "----")
       ), "filter_condition" -> false
     )
-    assertResult(new InsertResult(Some(0), Map(), Some(10076)))(
+    assertResult(new InsertResult(Some(0), Nil, Some(10076)))(
       ORT.insertMultiple(obj, "dept", "dept_addr")(":filter_condition = true"))
 
     obj = Map("dname" -> "Temp1", "addr" -> "Field1", "zip_code" -> "none",
@@ -1017,11 +1157,12 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       ), "filter_condition" -> false
     )
     assertResult(new InsertResult(Some(1),
-      Map("_1" -> new InsertResult(
+      List((null, new InsertResult(
         Some(1),
-        Map("dept_sub_addr" -> List(new InsertResult(Some(0)), new InsertResult(Some(0)))),
+        List("dept_sub_addr|:filter_condition = true,:filter_condition = true,:filter_condition = true" ->
+          List(new InsertResult(Some(0)), new InsertResult(Some(0)))),
         Some(10077))
-      ), Some(10077)))(ORT.insertMultiple(obj, "dept", "dept_addr")())
+      )), Some(10077)))(ORT.insertMultiple(obj, "dept", "dept_addr")())
 
     obj = Map("deptno" -> 10077, "dname" -> "Temp2", "addr" -> "Field2", "zip_code" -> "----",
       "dept_sub_addr[+-=]|:filter_condition = true,:filter_condition = true,:filter_condition = true" ->
@@ -1035,17 +1176,17 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     assertResult(
       new UpdateResult(
         Some(1),
-        Map(
-          "_1" -> new DeleteResult(Some(0)),
+        List(
+          (null, new DeleteResult(Some(0))),
           "emp[+-=]|:filter_condition = true,:filter_condition = true,:filter_condition = true" ->
-            List(new InsertResult(Some(0), Map(), Some(10079)), new InsertResult(Some(0), id = Some(7369))),
-          "_3" -> new UpdateResult(
+            List(new InsertResult(Some(0), Nil, Some(10079)), new InsertResult(Some(0), id = Some(7369))),
+          (null, new UpdateResult(
             Some(1),
-            Map(
-              "_1" -> new DeleteResult(Some(0)),
+            List(
+              (null, new DeleteResult(Some(0))),
               "dept_sub_addr[+-=]|:filter_condition = true,:filter_condition = true,:filter_condition = true" ->
                 List(new InsertResult(Some(0)), new InsertResult(Some(0)))
-            ))
+            )))
         )
       )
     )(ORT.updateMultiple(obj, "dept", "dept_addr")())
@@ -1059,16 +1200,16 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     )
     assertResult(new UpdateResult(
       None,
-      Map("_1" ->
+      List((null,
         new UpdateResult(
           Some(1),
-          Map(
-            "_1" -> new DeleteResult(Some(0)),
+          List((
+            null, new DeleteResult(Some(0))),
             "dept_sub_addr[+-=]|:filter_condition = true, :filter_condition = true, :filter_condition = true" ->
               List(new InsertResult(Some(0)), new InsertResult(Some(0)))
           )
         )
-      )
+      ))
     ))(ORT.updateMultiple(obj, "dept", "dept_addr")())
 
     //should delete dept_sub_addr children
@@ -1080,16 +1221,16 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     )
     assertResult(new UpdateResult(
       None,
-      Map("_1" ->
+      List((null,
         new UpdateResult(
           Some(1),
-          Map(
-            "_1" -> new DeleteResult(Some(2)),
+          List(
+            (null, new DeleteResult(Some(2))),
             "dept_sub_addr[+-=]|:filter_condition = true, null, :filter_condition = true" ->
               List(new InsertResult(Some(0)), new InsertResult(Some(0)))
           )
         )
-      )
+      ))
     ))(ORT.updateMultiple(obj, "dept", "dept_addr")())
 
     println("----- SAVE with resolver for self column -----")
@@ -1101,7 +1242,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       ORT.updateMultiple(obj, "dept")())
 
     obj = Map("dname" -> "attorney", "dname->" -> "dname=upper(_)")
-    assertResult(new InsertResult(Some(1), Map(), Some(10080)))(ORT.insert("dept", obj))
+    assertResult(new InsertResult(Some(1), Nil, Some(10080)))(ORT.insert("dept", obj))
 
     obj = Map("deptno" -> 10080, "dname" -> "devop", "dname->" -> "dname=upper(_)")
     assertResult(new UpdateResult(Some(1)))(ORT.update("dept", obj))
@@ -1114,17 +1255,17 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       "emp:mgr" -> List(Map("ename" -> "Agnes", "deptno" -> 10004)))
     assertResult(new InsertResult(
       Some(1),
-      Map("_1" -> new InsertResult(
+      List((null, new InsertResult(
         Some(1),
-        Map("emp:mgr" -> List(
+        List("emp:mgr" -> List(
           new InsertResult(Some(1), id = Some(10082)))),
         id = Some(10081)
-      )),
+      ))),
       id = Some(10081)
     )) (ORT.insertMultiple(obj, "dept", "emp")())
 
 
-    println("----- SAVE record together with subrecord like manager togther with emp -----")
+    println("----- SAVE record together with subrecord like manager together with emp -----")
 
     obj = Map("ename" -> "Nico", "dname" -> "Services", "dname->" -> "deptno=dept[dname = _]{deptno}",
       "emp[+-=]" -> List(
@@ -1132,7 +1273,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       )
     )
     assertResult(new InsertResult(
-      Some(1), Map("emp[+-=]" -> List(
+      Some(1), List("emp[+-=]" -> List(
         new InsertResult(Some(1), id = Some(10084))
       )), id = Some(10083)
     ))(ORT.insert("emp", obj))
@@ -1144,7 +1285,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     )
     assertResult(new UpdateResult(
       Some(1),
-      Map("_1" -> new DeleteResult(Some(0)),
+      List((null, new DeleteResult(Some(0))),
         "emp[+-=]" -> List(new UpdateResult(Some(1)))
       )
     ))(ORT.update("emp", obj))
@@ -1160,7 +1301,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     )
     assertResult(new UpdateResult(
       Some(1),
-      Map("_1" -> new DeleteResult(Some(0)), "emp[+-=]" -> List(new UpdateResult(Some(1)), new InsertResult(Some(1), id = Some(10085))))
+      List((null, new DeleteResult(Some(0))), "emp[+-=]" -> List(new UpdateResult(Some(1)), new InsertResult(Some(1), id = Some(10085))))
     ))(ORT.update("emp", obj))
 
     obj = Map("ename" -> "Vytas", "empno" -> tresql"emp[ename = 'Vytas']{empno}".unique[Int],
@@ -1171,7 +1312,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
     )
     assertResult(new UpdateResult(
       Some(1),
-      Map("_1" -> new DeleteResult(Some(0)),
+      List((null, new DeleteResult(Some(0))),
         "emp[+-=]" -> List(new UpdateResult(Some(1)), new UpdateResult(Some(1)))
       )
     ))(ORT.update("emp", obj))
@@ -1187,7 +1328,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
 
     obj = Map("deptno" -> 10077, "loc" -> "Asia", "addr" -> "Singapore")
     assertResult(new UpdateResult(
-      Some(1), Map("_1" -> new InsertResult(Some(1), id = Some(10077)))
+      Some(1), List((null, new InsertResult(Some(1), id = Some(10077))))
     ))(ORT.updateMultiple(obj, "dept", "dept_addr")())
 
     assertResult(List((10077, "Temp2", "Singapore", null)))(
@@ -1195,7 +1336,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         .map(r => (r.deptno, r.dname, r.addr, r.zip_code)).toList)
 
     obj = Map("deptno" -> 10077, "loc" -> "Asia", "zip_code" -> "560252")
-    assertResult(new UpdateResult(Some(1), Map("_1" -> new UpdateResult(Some(1)))))(
+    assertResult(new UpdateResult(Some(1), List((null, new UpdateResult(Some(1))))))(
       ORT.updateMultiple(obj, "dept", "dept_addr")())
 
     assertResult(List((10077, "Temp2", "Singapore", "560252")))(
@@ -1206,7 +1347,7 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       "emp[+-=]" -> List(Map("empno" -> 987654, "ename" -> "Betty")))
 
     assertResult(new UpdateResult(
-      None, Map("_1" -> new DeleteResult(Some(0)), "emp[+-=]" -> List(new InsertResult(Some(1), id = Some(987654)))))
+      None, List((null, new DeleteResult(Some(0))), "emp[+-=]" -> List(new InsertResult(Some(1), id = Some(987654)))))
     )(ORT.update("dept", obj))
 
     assertResult("Betty")(tresql"emp[ename = 'Betty']{ename}".unique[String])

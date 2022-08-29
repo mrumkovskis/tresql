@@ -748,7 +748,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
 
   private def registerChildUpdate(child: Expr, name: String) = {
     _childUpdatesBuildTime += {
-      (child, if (name == null) s"_${_childUpdatesBuildTime.size + 1}" else name)
+      (child, name)
     }
   }
 
@@ -760,7 +760,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     )
   }
 
-  private def executeChildUpdates: Map[String, Any] = {
+  private def executeChildUpdates: List[(String, Any)] = {
     def exec(name: String, e: Expr, pars: Option[Map[String, Any]]) =
       try pars.map(e(_)).getOrElse(e()) catch { case e: Exception =>
         throw new ChildSaveException(name, s"Error saving children - '$name'", e)
@@ -778,7 +778,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
             s"Unexpected type for child query '$n' environment: '$bvt'. Expected map or sequence."
           )
       })
-    }.foldLeft(scala.collection.immutable.ListMap[String, Any]()) {_ + _} //use list map to preserve children order
+    }
   }
 
   //default or fk shortcut join with child.

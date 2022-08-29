@@ -439,7 +439,7 @@ class CompiledArrayResult[T <: RowLike] private[tresql](
 trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
   with DynamicResult {
   def count: Option[Int]
-  def children: Map[String, Any]
+  def children: List[(String, Any)]
   def id: Option[Any] = None
 
   override def next() = this
@@ -481,36 +481,36 @@ trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
     }
     x
   }
-  private def compatibilityChildren: List[Any] = children.map (_._2 match {
+  private def compatibilityChildren: List[Any] = children.map (t => t._1 -> (t._2 match {
     case dml: DMLResult => dml.compatibilityObj
     case l: List[_] => l map {
       case dml: DMLResult => dml.compatibilityObj
       case x => x
     }
     case x => x
-  }).toList
+  }))
 
   override def toString = s"""new ${getClass.getSimpleName}($countToString$childrenToString$idToString)"""
-  private def countToString = count.map(c => s"Row count = Some($c)").getOrElse("None")
+  private def countToString = count.map(c => s"count = Some($c)").getOrElse("None")
   private def childrenToString = if (children.isEmpty) "" else s", children = $children"
   private def idToString = id.map(id => s", id = Some($id)").getOrElse("")
 }
 
 class DeleteResult(
   override val count: Option[Int],
-  override val children: Map[String, Any] = Map()
+  override val children: List[(String, Any)] = Nil
 ) extends DMLResult
 
 class UpdateResult(
   override val count: Option[Int] = None,
-  override val children: Map[String, Any] = Map()
+  override val children: List[(String, Any)] = Nil
 ) extends DMLResult {
   private[tresql] def this(r: DMLResult) = this(r.count, r.children)
 }
 
 class InsertResult(
   override val count: Option[Int],
-  override val children: Map[String, Any] = Map(),
+  override val children: List[(String, Any)] = Nil,
   override val id: Option[Any] = None
 ) extends DMLResult
 
