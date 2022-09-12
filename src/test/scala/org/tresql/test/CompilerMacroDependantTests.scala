@@ -1477,6 +1477,50 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
         .map(d => (d.dname, d.loc, d.emps.map(e => (e.ename, e.job)).toList)).toList
     }
 
+    println(s"-------- ORT save to multiple tables with repeating column name --------")
+    view = {
+      import OrtMetadata._
+      View(
+        List(
+          SaveTo("dept", Set(), List("dname")),
+          SaveTo("dept_addr", Set("deptnr"), Nil),
+          SaveTo("dept_sub_addr", Set("deptno"), Nil)
+        ),
+        None, null, true, true, false,
+        List(
+          Property("dname", TresqlValue(":dname", true, true, false)),
+          Property("loc", TresqlValue(":loc?", true, true, true)),
+          Property("dept_addr.addr", TresqlValue(":addr", true, true, false)),
+          Property("dept_sub_addr.addr", TresqlValue(":sub_addr", true, true, false)),
+          Property("zip_code", TresqlValue(":zip_code", true, true, false)),
+        ), null)
+    }
+    obj = Map(
+      "dname" -> "Garden",
+      "addr" -> "Vatican",
+      "sub_addr" -> "Museum",
+      "zip_code" -> "VA-1",
+    )
+    assertResult(List(("Garden", List(("Vatican", List("Museum")))))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept [dname = 'Garden'] { dname, |dept_addr{addr, |dept_sub_addr{addr} dsa} da}"
+        .map(d => (d.dname, d.da.map(da => (da.addr, da.dsa.map(_.addr).toList)).toList)).toList
+    }
+    obj = Map(
+      "dname" -> "Garden",
+      "loc" -> "Vatican",
+      "addr" -> "Villa Marta",
+      "sub_addr" -> "1",
+      "zip_code" -> "VA-10",
+    )
+    assertResult(List(("Garden", "Vatican", List(("Villa Marta", "VA-10", List("1")))))) {
+      ORT.save(view, obj)
+      println(s"\nResult check:")
+      tresql"dept [dname = 'Garden'] { dname, loc, |dept_addr{addr, zip_code, |dept_sub_addr{addr} dsa} da }"
+        .map(d => (d.dname, d.loc, d.da.map(da => (da.addr, da.zip_code, da.dsa.map(_.addr).toList)).toList)).toList
+    }
+
     ortForInsertForUpdateOptionalFlags
     ortLookupByKey
   }

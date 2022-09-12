@@ -589,7 +589,14 @@ trait ORT extends Query {
         case OrtMetadata.Property(col, KeyValue(_, TresqlValue(valueTresql, forInsert, forUpdate, optional))) =>
           List(ColVal(table.colOption(col).map(_.name).orNull, valueTresql, forInsert, forUpdate, optional))
         case OrtMetadata.Property(col, TresqlValue(tresql, forInsert, forUpdate, optional)) =>
-          List(ColVal(table.colOption(col).map(_.name).orNull, tresql, forInsert, forUpdate, optional))
+          val (t, c) = col.split("\\.") match {
+            case Array(a, b) => (a, b)
+            case Array(a) => (table.name, a)
+            case a => (a.dropRight(1).mkString("."), a.last)
+          }
+          if (t == table.name)
+            List(ColVal(table.colOption(c).map(_.name).orNull, tresql, forInsert, forUpdate, optional))
+          else Nil
         case OrtMetadata.Property(prop, ViewValue(v, so)) =>
           if (children_save_tresql != null) {
             val chtresql = children_save_tresql(prop, v, ParentRef(table.name, ctx.refToParent) :: ctx.parents, so)
