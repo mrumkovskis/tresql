@@ -332,9 +332,13 @@ package object tresql extends CoreTypes {
            """
       c.Expr(tree)
     }
+    val macroPropertiesResourceName = "/tresql-scala-macro.properties"
     def settings(sett: List[String]): (Map[String, String], Boolean) = {
       val p = new Properties()
-      p.load(getClass.getResourceAsStream("/tresql-scala-macro.properties"))
+      val macroPropertiesStream = getClass.getResourceAsStream(macroPropertiesResourceName)
+      if (macroPropertiesStream == null)
+        sys.error(s"Resource not found: $macroPropertiesResourceName")
+      p.load(macroPropertiesStream)
       import scala.collection.JavaConverters._
       val (settings, verbose) = (p.asScala.toMap, sett.exists(_.trim == "verbose"))
       if (verbose) println(s"Scala compiler macro settings:\n$settings")
@@ -350,7 +354,7 @@ package object tresql extends CoreTypes {
       )
     }.getOrElse(
       sys.error(s"Tresql interpolator not available. Scala macro compiler property missing - " +
-        s"'$MetadataFactoryProp'. See if resource /tresql-scala-macro.properties is available in classpath.")
+        s"'$MetadataFactoryProp'. See if resource $macroPropertiesResourceName is available in classpath.")
     )
   }
 
