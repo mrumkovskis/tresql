@@ -24,7 +24,7 @@ object FunctionSignatures {
 
 class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
   protected val ResourceFile        = "/tresql-function-signatures.txt"
-  protected val DefaultResourceFile = "/tresql-default-functions-signatures.txt"
+  protected val DefaultResourceFile = "/tresql-default-function-signatures.txt"
 
   private val ParTypeDefRegex = """(\w*)(\*?)""".r
   private val RetTypeDefRegex = """(\$?)(\w+)""".r
