@@ -31,3 +31,4 @@ lift_proto*
 .ensime
 .ensime_cache/
 
+tmp/
