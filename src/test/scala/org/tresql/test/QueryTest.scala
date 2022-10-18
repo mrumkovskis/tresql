@@ -133,12 +133,12 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     val testRes = tresqlResources.withMetadata(
       new metadata.JDBCMetadata {
         override def conn: Connection = tresqlResources.conn
-        override def macroClass: Class[_] = classOf[org.tresql.test.Macros]
+        override def macrosClass: Class[_] = classOf[org.tresql.test.Macros]
       }
     )
     val child_metadata = new JDBCMetadata {
       override def conn: Connection = testRes.extraResources("contact_db").conn
-      override def macroClass: Class[_] = classOf[org.tresql.test.Macros1]
+      override def macrosClass: Class[_] = classOf[org.tresql.test.Macros1]
       override def functionSignaturesResource: String = "/tresql-function-signatures-db1.txt"
     }
     println("\n-------------- TEST compiler ----------------\n")

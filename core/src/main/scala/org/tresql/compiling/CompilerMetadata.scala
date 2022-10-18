@@ -71,7 +71,7 @@ class CompilerJDBCMetadataFactory extends CompilerMetadataFactory {
         }
         new JDBCMetadata {
           override def conn = connection
-          override def macroClass: Class[_] = macrosClazz.orNull
+          override def macrosClass: Class[_] = macrosClazz.orNull
         }
       }
       def createConf(c: Map[String, String]) = {

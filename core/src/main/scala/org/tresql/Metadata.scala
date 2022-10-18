@@ -91,7 +91,7 @@ trait Metadata extends AbstractMetadata {
   /** Override this to load function signatures from other resource than tresql-macros.txt file */
   def macroSignaturesResource: String = null
   /** Override this to load function signatures from object with tresql macros implementations */
-  def macroClass: Class[_] = null
+  def macrosClass: Class[_] = null
 
   private val functionSignatures: FunctionSignatures = {
     val sl = new FunctionSignaturesLoader(this)
@@ -102,7 +102,7 @@ trait Metadata extends AbstractMetadata {
     }
     val fromSignResources   = loadFromLoader(sl, functionSignaturesResource)
     val fromMacroResources  = loadFromLoader(ml, macroSignaturesResource)
-    val fromClass           = sl.loadFunctionSignaturesFromClass(macroClass)
+    val fromClass           = sl.loadFunctionSignaturesFromClass(macrosClass)
     fromClass.merge(fromMacroResources.merge(fromSignResources))
   }
 }
