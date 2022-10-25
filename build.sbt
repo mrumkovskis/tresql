@@ -1,4 +1,4 @@
-val scalaV = "2.13.8"
+val scalaV = "2.13.10"
 
 lazy val commonSettings = Seq(
   organization := "org.tresql",
@@ -75,8 +75,8 @@ lazy val tresql = (project in file("."))
     name := "tresql",
     libraryDependencies ++= coreDependencies(scalaVersion.value) ++
       Seq("org.scalatest" %% "scalatest" % "3.0.8" % "test,it",
-        "org.hsqldb" % "hsqldb" % "2.3.1" % "test",
-        "org.postgresql" % "postgresql" % "42.1.4" % "it,test"),
+        ("org.hsqldb" % "hsqldb" % "2.7.1" % "test").classifier("jdk8"),
+        "org.postgresql" % "postgresql" % "42.5.0" % "it,test"),
     Test / console / initialCommands := "import org.tresql._; import org.scalatest._; import org.tresql.test.ConsoleResources._",
     IntegrationTest / console / initialCommands := "import org.tresql._; import org.scalatest._; import org.tresql.test.ITConsoleResources._",
     Test / publishArtifact := false,
