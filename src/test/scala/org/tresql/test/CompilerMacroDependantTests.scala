@@ -1968,19 +1968,19 @@ class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMa
       assertResult((10, "ACCOUNTING"))(tresql"""dept[deptno in (emps(enr, mgr, dnr) {
           emp[ename ~~ 'kin%']{empno, mgr, deptno} + emps[enr = emp.mgr]emp {empno, emp.mgr, deptno}
         } emps{dnr})]{deptno, dname}#(1)""".map(h => (h.deptno, h.dname)).toList.head)
-      assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} + t[t.empno = e.mgr]emp e{e.empno}}
+      assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} + t[t.empno = e.mgr]emp e{e.empno}}
         t{empno}#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
         t[t.empno = e.mgr]emp e{e.empno}} t#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
         t[t.empno = e.mgr]emp e{e.empno}} t {*}#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
         t[t.empno = e.mgr]emp e{e.empno}} t {t.*}#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
         t[t.empno = e.mgr]emp e{e.empno}} t a#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
         t[t.empno = e.mgr]emp e{e.empno}} t a{*}#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(*) {emp[ename ~~ 'kin%']{empno} +
+      assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
         t[t.empno = e.mgr]emp e{e.empno}} t a{a.*}#(1)""".map(_.empno).toList.head)
 
       //type resolving when column contains select with from clause select
