@@ -1,6 +1,7 @@
 package org.tresql
 
-import parsing.{Arr, Const, Exp, QueryParsers}
+import ast.{Arr, Const, Exp}
+import parsing.QueryParsers
 
 import scala.util.Try
 

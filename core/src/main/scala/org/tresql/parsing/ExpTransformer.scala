@@ -1,5 +1,6 @@
 package org.tresql.parsing
 
+import org.tresql.ast._
 trait ExpTransformer { this: QueryParsers =>
 
   type Transformer = PartialFunction[Exp, Exp]

@@ -2,7 +2,8 @@ package org.tresql.resources
 
 import org.tresql.{Expr, QueryBuilder}
 import org.tresql.metadata.{FixedReturnType, Par, ParameterReturnType, Procedure, ReturnType, TypeMapper}
-import org.tresql.parsing.{Cast, Exp, Fun, Ident, Obj, QueryParsers}
+import org.tresql.ast.{Cast, Exp, Fun, Ident, Obj}
+import org.tresql.parsing.QueryParsers
 
 import java.lang.reflect.{Method, ParameterizedType}
 import scala.io.BufferedSource

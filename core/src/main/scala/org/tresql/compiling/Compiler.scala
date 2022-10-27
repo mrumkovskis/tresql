@@ -2,14 +2,10 @@ package org.tresql
 package compiling
 
 import org.tresql.parsing._
+import org.tresql.ast._
+import org.tresql.ast.CompilerAst._
 import org.tresql.metadata._
 import scala.reflect.ManifestFactory
-
-class CompilerException(message: String,
-                        val pos: scala.util.parsing.input.Position = scala.util.parsing.input.NoPosition,
-                        cause: Exception = null)
-  extends Exception(message, cause)
-
 
 trait Compiler extends QueryParsers { thisCompiler =>
 
@@ -22,6 +18,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     def tableNames: List[String]
     def table(table: String): Option[Table]
     def column(col: String): Option[org.tresql.metadata.Col[_]] = None
+    def isEqual(exp: SQLDefBase): Boolean
   }
 
   trait TableMetadata {
@@ -45,68 +42,26 @@ trait Compiler extends QueryParsers { thisCompiler =>
     }
   }
 
-  trait TypedExp[T] extends Exp {
-    def exp: Exp
-    def typ: Manifest[T]
-    def tresql: String = exp.tresql
-  }
+  object ExpToScope {
+    class SQLDefScope(exp: SQLDefBase) extends Scope {
+      protected def table_from_selectdef(name: String, sd: SelectDefBase) =
+        Table(name, sd.cols map col_from_coldef, null, Map())
 
-  case class TableDef(name: String, exp: Obj) extends Exp { def tresql: String = exp.tresql }
-  /** helper class for namer to distinguish table references from column references */
-  case class TableObj(obj: Exp) extends Exp {
-    def tresql: String = obj.tresql
-  }
-  /** helper class for namer to distinguish table with NoJoin, i.e. must be defined in tables clause earlier */
-  case class TableAlias(obj: Exp) extends Exp {
-    def tresql: String = obj.tresql
-  }
-  case class ColDef[T](name: String, col: Exp, typ: Manifest[T]) extends TypedExp[T] {
-    def exp: ColDef[T] = this
-    override def tresql: String = parsing.Col(col, name).tresql
-  }
-  case class ChildDef(exp: Exp, db: Option[String]) extends TypedExp[ChildDef] {
-    val typ: Manifest[ChildDef] = ManifestFactory.classType(this.getClass)
-  }
-  case class FunDef[T](name: String, exp: Fun, typ: Manifest[T], procedure: Procedure[_])
-    extends TypedExp[T] {
-    if((procedure.hasRepeatedPar && exp.parameters.size < procedure.pars.size - 1) ||
-      (!procedure.hasRepeatedPar && exp.parameters.size != procedure.pars.size))
-      error(
-        s"Function '$name' has wrong number of parameters: ${exp.parameters.size} instead of ${procedure.pars.size}")
-  }
-  case class FunAsTableDef[T](exp: FunDef[T], cols: Option[List[TableColDef]], withOrdinality: Boolean) extends Exp {
-    def tresql: String = FunAsTable(exp.exp, cols, withOrdinality).tresql
-  }
-  case class RecursiveDef(exp: Exp) extends TypedExp[RecursiveDef] {
-    val typ: Manifest[RecursiveDef] = ManifestFactory.classType(this.getClass)
-  }
+      protected def col_from_coldef(cd: ColDef[_]) =
+        org.tresql.metadata.Col(name = cd.name, nullable = true, -1, scalaType = cd.typ)
 
-  /** Marker for primitive expression (non query) */
-  case class PrimitiveExp(exp: Exp) extends Exp {
-    def tresql: String = exp.tresql
-  }
-  /** Marker for compiler macro, to unwrap compiled result */
-  case class PrimitiveDef[T](exp: Exp, typ: Manifest[T]) extends TypedExp[T]
+      def tableNames: List[String] = exp.tables.collect {
+        //collect table names in this sql (i.e. exclude tresql no join aliases)
+        case TableDef(t, Obj(_: TableObj, _, _, _, _)) => t.toLowerCase
+      }
 
-  //is superclass of sql query and array
-  trait RowDefBase extends TypedExp[RowDefBase] {
-    def cols: List[ColDef[_]]
-    val typ: Manifest[RowDefBase] = ManifestFactory.classType(this.getClass)
-  }
+      def table(table: String): Option[Table] = {
+        def name_matches(name: String) =
+          name == table || name.substring(name.lastIndexOf('.') + 1) == table
 
-  //superclass of select and dml statements (insert, update, delete)
-  trait SQLDefBase extends RowDefBase with Scope {
-    def tables: List[TableDef]
+        def table_alias(name: String) = Table(name, Nil, null, Map())
 
-    def tableNames: List[String] = tables.collect {
-      //collect table names in this sql (i.e. exclude tresql no join aliases)
-      case TableDef(t, Obj(_: TableObj, _, _, _, _)) => t.toLowerCase
-    }
-    def table(table: String): Option[Table] = {
-      def name_matches(name: String) =
-        name == table || name.substring(name.lastIndexOf('.') + 1) == table
-
-      tables.filter(t => name_matches(t.name.toLowerCase)).flatMap {
+        exp.tables.filter(t => name_matches(t.name.toLowerCase)).flatMap {
           case TableDef(_, Obj(TableObj(Ident(name)), _, _, _, _)) =>
             List(table_alias(name mkString "."))
           case TableDef(n, Obj(TableObj(s: SelectDefBase), _, _, _, _)) =>
@@ -126,194 +81,34 @@ trait Compiler extends QueryParsers { thisCompiler =>
           case x => error(
             s"Unrecognized table clause: '${x.tresql}' [$x]. Try using Query(...)")
         } match {
-        case Nil => None
-        case l @ List(_) => l.headOption
-        case x => x.filter(_.name == table) match {
           case Nil => None
-          case t @ List(_) => t.headOption
-          case x => error(s"Ambiguous table name. Tables found - $x")
+          case l@List(_) => l.headOption
+          case x => x.filter(_.name == table) match {
+            case Nil => None
+            case t@List(_) => t.headOption
+            case x => error(s"Ambiguous table name. Tables found - $x")
+          }
         }
       }
+      override def isEqual(e: SQLDefBase): Boolean = e == exp
     }
-    protected def table_from_selectdef(name: String, sd: SelectDefBase) =
-      Table(name, sd.cols map col_from_coldef, null, Map())
-    protected def table_alias(name: String) = Table(name, Nil, null, Map())
-    protected def col_from_coldef(cd: ColDef[_]) =
-      org.tresql.metadata.Col(name = cd.name, nullable = true, -1, scalaType = cd.typ)
 
-    override def tresql = exp match {
-      case q: Query =>
-        /* FIXME distinct keyword is lost in Cols */
-        q.copy(tables = this.tables.map(_.exp),
-          cols = Cols(distinct = false, this.cols.map(c => parsing.Col(c.exp, c.name)))).tresql
-      case x => x.tresql
+    class SelectDefScope(exp: SelectDefBase) extends SQLDefScope(exp) {
+      override def column(col: String) = exp.cols.find(_.name == col) map col_from_coldef
     }
-  }
 
-  //is superclass of insert, update, delete
-  trait DMLDefBase extends SQLDefBase {
-    def db: Option[String]
-  }
-
-  //is superclass of select, union, intersect etc.
-  trait SelectDefBase extends SQLDefBase {
-    override def column(col: String) = cols.find(_.name == col) map col_from_coldef
-  }
-
-  case class SelectDef(
-    cols: List[ColDef[_]],
-    tables: List[TableDef],
-    exp: Query
-  ) extends SelectDefBase {
-    //check for duplicating tables
-    tables.filter { //filter out aliases
-      case TableDef(_, Obj(_: TableAlias, _, _, _, _)) => false
-      case _ => true
-    }.groupBy(_.name).filter(_._2.size > 1) match {
-      case d => if(d.nonEmpty) error(
-        s"Duplicate table name(s): ${d.keys.mkString(", ")}")
-    }
-  }
-
-  //union, intersect, except ...
-  case class BinSelectDef(
-    leftOperand: SelectDefBase,
-    rightOperand: SelectDefBase,
-    exp: BinOp) extends SelectDefBase {
-    private val op =
-      if (rightOperand.isInstanceOf[FunSelectDef]) leftOperand
-      else if (leftOperand.isInstanceOf[FunSelectDef]) rightOperand
-      else leftOperand
-    if (!(leftOperand.cols.exists {
-        case ColDef(_, All | _: IdentAll, _) => true
-        case _ => false
-      } || rightOperand.cols.exists {
-        case ColDef(_, All | _: IdentAll, _) => true
-        case _ => false
-      } || leftOperand.isInstanceOf[FunSelectDef]
-        || rightOperand.isInstanceOf[FunSelectDef]
-    ) && leftOperand.cols.size != rightOperand.cols.size)
-      error(
-        s"Column count do not match ${leftOperand.cols.size} != ${rightOperand.cols.size}")
-    def cols = op.cols
-    def tables = op.tables
-  }
-
-  //delegates all calls to inner expression
-  case class BracesSelectDef(exp: SelectDefBase) extends SelectDefBase {
-    override def cols = exp.cols
-    override def tables = exp.tables
-    override def tableNames = exp.tableNames
-    override def table(table: String) = exp.table(table)
-    override def column(col: String) = exp.column(col)
-  }
-
-  // table definition in with [recursive] statement
-  case class WithTableDef(
-    cols: List[ColDef[_]],
-    tables: List[TableDef],
-    recursive: Boolean,
-    exp: SQLDefBase
-  ) extends SelectDefBase {
-    if (recursive) {
-      exp match {
-        case _: BinSelectDef =>
-        case q => error(s"Recursive table definition must be union, instead found: ${q.tresql}")
+    class WithTableDefScope(exp: WithTableDef) extends SQLDefScope(exp) {
+      override def table(table: String): Option[Table] = exp.tables.find(_.name == table).map {
+        _ => table_from_selectdef(table, exp)
       }
     }
-    override def table(table: String) = tables.find(_.name == table).map {
-      _ => table_from_selectdef(table, this)
+
+    implicit def expToScope(exp: SQLDefBase): Scope = exp match {
+      case e: WithTableDef => new WithTableDefScope(e)
+      case e: SelectDefBase => new SelectDefScope(e)
+      case e => new SQLDefScope(e)
     }
-  }
-
-  case class ValuesFromSelectDef(exp: SelectDefBase) extends SelectDefBase {
-    override def cols = exp.cols
-    override def tables = exp.tables
-    override def tableNames = exp.tableNames
-    override def table(table: String) = exp.table(table)
-    override def column(col: String) = exp.column(col)
-  }
-
-  /** select definition returned from macro or db function, is used in {{{BinSelectDef}}} */
-  case class FunSelectDef(
-    cols: List[ColDef[_]],
-    tables: List[TableDef],
-    exp: FunDef[_]
-  ) extends SelectDefBase
-
-  // dml expressions
-  case class InsertDef(
-    cols: List[ColDef[_]],
-    tables: List[TableDef],
-    exp: Insert
-  ) extends DMLDefBase {
-    override def db: Option[String] = exp.db
-    override def tresql = // FIXME alias lost
-      exp.copy(table = Ident(List(tables.head.name)),
-        cols = this.cols.map(c => parsing.Col(c.exp, c.name))).tresql
-  }
-
-  case class UpdateDef(
-    cols: List[ColDef[_]],
-    tables: List[TableDef],
-    exp: Update
-  ) extends DMLDefBase {
-    override def db: Option[String] = exp.db
-    override def tresql = // FIXME alias lost
-      exp.copy(table = Ident(List(tables.head.name)),
-        cols = this.cols.map(c => parsing.Col(c.exp, c.name))).tresql
-  }
-
-  case class DeleteDef(
-    tables: List[TableDef],
-    exp: Delete
-  ) extends DMLDefBase {
-    def cols = Nil
-    override def db: Option[String] = exp.db
-    override def tresql = // FIXME alias lost
-      exp.copy(table = Ident(List(tables.head.name))).tresql
-  }
-
-  case class ReturningDMLDef(
-    cols: List[ColDef[_]],
-    tables: List[TableDef],
-    exp: DMLDefBase
-  ) extends SelectDefBase
-
-  // with [recursive] expressions
-  trait WithQuery extends SQLDefBase {
-    def exp: SQLDefBase
-    def withTables: List[WithTableDef]
-  }
-  trait WithSelectBase extends SelectDefBase with WithQuery {
-    def exp: SelectDefBase
-  }
-  trait WithDMLQuery extends DMLDefBase with WithQuery {
-    def exp: DMLDefBase
-    override def db: Option[String] = None
-  }
-
-  case class WithSelectDef(
-    exp: SelectDefBase,
-    withTables: List[WithTableDef]
-  ) extends WithSelectBase {
-    def cols = exp.cols
-    def tables = exp.tables
-    override def table(table: String) = exp.table(table)
-  }
-
-  case class WithDMLDef(
-    exp: DMLDefBase,
-    withTables: List[WithTableDef]
-  ) extends WithDMLQuery {
-    def cols = exp.cols
-    def tables = exp.tables
-  }
-
-  //array
-  case class ArrayDef(cols: List[ColDef[_]]) extends RowDefBase {
-    def exp = this
-    override def tresql = cols.map(c => QueryParsers.any2tresql(c.col)).mkString("[", ", ", "]")
+    implicit def expListToScopeList(l: List[SQLDefBase]): List[Scope] = l map expToScope
   }
 
   //metadata
@@ -429,7 +224,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     def buildCols(ctx: BuildCtx, cols: Cols): List[ColDef[_]] = {
       if (cols != null) (cols.cols map {
           //child dml statement in select
-          case c @ parsing.Col(_: DMLExp @unchecked, _) => tr_with_c(ctx, QueryCtx, c)
+          case c @ ast.Col(_: DMLExp @unchecked, _) => tr_with_c(ctx, QueryCtx, c)
           case c => tr_with_c(ctx, ColsCtx, c)
         }).asInstanceOf[List[ColDef[_]]] match {
           case l if l.exists(_.name == null) => //set names of columns
@@ -450,7 +245,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         ), retType, p)
       }.getOrElse(error(s"Unknown function: ${f.name}"))
       case ftd: FunAsTable => FunAsTableDef(tr(ctx, ftd.fun).asInstanceOf[FunDef[_]], ftd.cols, ftd.withOrdinality)
-      case c: parsing.Col =>
+      case c: ast.Col =>
         val alias = if (c.alias != null) c.alias else c.col match {
           case Obj(Ident(name), _, _, _, _) => name.last //use last part of qualified ident as name
           case Cast(Obj(Ident(name), _, _, _, _), _) => name.last //use last part of qualified ident as name
@@ -536,10 +331,10 @@ trait Compiler extends QueryParsers { thisCompiler =>
           Obj(TableObj(dml.table), null, null, null))
         val cols =
           if (dml.cols != null) dml.cols.map {
-            case c @ parsing.Col(Obj(_: Ident, _, _, _, _), _) => tr_with_c(nctx, ColsCtx, c) //insertable, updatable col
-            case c @ parsing.Col(BinOp("=", Obj(_: Ident, _, _, _, _), _), _) if dml.isInstanceOf[Update] =>
+            case c @ ast.Col(Obj(_: Ident, _, _, _, _), _) => tr_with_c(nctx, ColsCtx, c) //insertable, updatable col
+            case c @ ast.Col(BinOp("=", Obj(_: Ident, _, _, _, _), _), _) if dml.isInstanceOf[Update] =>
               tr_with_c(nctx, ColsCtx, c) //updatable col
-            case c @parsing.Col(Fun("if_defined", List(_, Obj(_: Ident, _, _, _, _)), _, _, _), _) =>
+            case c @ast.Col(Fun("if_defined", List(_, Obj(_: Ident, _, _, _, _)), _, _, _), _) =>
               tr_with_c(nctx, ColsCtx, c) //optional column
             case c => tr_with_c(nctx, QueryCtx, c) //child expression
           }.asInstanceOf[List[ColDef[_]]]
@@ -590,8 +385,11 @@ trait Compiler extends QueryParsers { thisCompiler =>
     tr(BuildCtx(QueryCtx, None), exp)
   }
 
+  // implicit conversion from SQLDefBase to Scope
+  import ExpToScope.{expToScope, expListToScopeList}
+
   def resolveColAsterisks(exp: Exp) = {
-    def createCol(col: String): parsing.Col =
+    def createCol(col: String): ast.Col =
       phrase(column)(new scala.util.parsing.input.CharSequenceReader(col)).get
 
     case class Ctx(scopes: List[Scope], db: Option[String])
@@ -599,7 +397,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     lazy val resolver: TransformerWithState[Ctx] = transformerWithState { ctx =>
       def resolveWithQuery[T <: SQLDefBase](withQuery: WithQuery): (T, List[WithTableDef]) = {
         val wtables: List[WithTableDef] = withQuery.withTables.foldLeft(List[WithTableDef]()) { (tables, table) =>
-          val nctx = ctx.copy(scopes = tables ++ ctx.scopes)
+          val nctx = ctx.copy(scopes = ExpToScope.expListToScopeList(tables) ++ ctx.scopes)
           (resolver(if (table.recursive) ctx.copy(scopes = table :: ctx.scopes) else nctx)(table) match {
             case wtd @ WithTableDef(Nil, _, _, _) =>
               wtd.copy(cols = wtd.exp.cols.map(col =>
@@ -617,7 +415,8 @@ trait Compiler extends QueryParsers { thisCompiler =>
             case x => sys.error(s"Compiler error, expected WithTableDef, encountered: $x")
           }) :: tables
         }
-        val exp = resolver(ctx.copy(scopes = wtables ++ ctx.scopes))(withQuery.exp).asInstanceOf[T]
+        val exp = resolver(ctx.copy(scopes =
+          ExpToScope.expListToScopeList(wtables) ++ ctx.scopes))(withQuery.exp).asInstanceOf[T]
         (exp, wtables.reverse)
       }
       def resolveCols(ctx: Ctx, sql: SQLDefBase) = {
@@ -864,9 +663,11 @@ trait Compiler extends QueryParsers { thisCompiler =>
     lazy val type_resolver: TransformerWithState[ResolverCtx] = transformerWithState { ctx =>
       def resolveWithQuery[T <: SQLDefBase](withQuery: WithQuery): (T, List[WithTableDef]) = {
         val wtables = withQuery.withTables.foldLeft(List[WithTableDef]()) { (tables, table) =>
-          type_resolver(ctx.copy(scopes = tables ++ ctx.scopes))(table).asInstanceOf[WithTableDef] :: tables
+          type_resolver(ctx.copy(scopes =
+            ExpToScope.expListToScopeList(tables) ++ ctx.scopes))(table).asInstanceOf[WithTableDef] :: tables
         }
-        (type_resolver(ctx.copy(scopes = wtables ++ ctx.scopes))(withQuery.exp).asInstanceOf[T], wtables.reverse)
+        (type_resolver(ctx.copy(scopes =
+          ExpToScope.expListToScopeList(wtables) ++ ctx.scopes))(withQuery.exp).asInstanceOf[T], wtables.reverse)
       }
       {
         case s: SelectDef =>
@@ -887,7 +688,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         case wdmld: WithDMLDef =>
           val (exp, wtables) = resolveWithQuery[DMLDefBase](wdmld)
           wdmld.copy(exp = exp, withTables = wtables)
-        case dml: DMLDefBase if ctx.scopes.isEmpty || ctx.scopes.head != dml =>
+        case dml: DMLDefBase if ctx.scopes.isEmpty || !ctx.scopes.head.isEqual(dml) =>
           type_resolver(ctx.copy(scopes = dml :: ctx.scopes, db = dml.db))(dml)
         case rdml: ReturningDMLDef =>
           //resolve column types for potential from clause select definitions

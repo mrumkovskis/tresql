@@ -183,7 +183,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     testTresqls("/pgtest.txt", (tresql, _, _, nr) => {
       println(s"$nr. Testing tresql method of:\n$tresql")
       parser.parseExp(tresql) match {
-        case e: parsing.Exp @unchecked => assert(e === parser.parseExp(e.tresql))
+        case e: ast.Exp @unchecked => assert(e === parser.parseExp(e.tresql))
       }
     })
   }
@@ -200,7 +200,7 @@ class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
     val compiler = new QueryCompiler(testRes.metadata, Map(), testRes)
     //set console compiler so it can be used from scala console
     ITConsoleResources.compiler = compiler
-    import compiling.CompilerException
+    import ast.CompilerException
     testTresqls("/pgtest.txt", (tresql, _, _, nr) => {
       println(s"$nr. Compiling tresql:\n$tresql")
       try compiler.compile(tresql)

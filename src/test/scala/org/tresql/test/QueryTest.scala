@@ -124,7 +124,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
     testTresqls("/test.txt", (tresql, _, _, nr) => {
       println(s"$nr. Testing tresql method of:\n$tresql")
       parser.parseExp(tresql) match {
-        case e: parsing.Exp @unchecked => assert(e === parser.parseExp(e.tresql))
+        case e: ast.Exp @unchecked => assert(e === parser.parseExp(e.tresql))
       }
     })
   }
@@ -146,7 +146,7 @@ class QueryTest extends FunSuite with BeforeAndAfterAll {
       Map("contact_db" -> child_metadata, "emp_db" -> testRes.metadata), testRes)
     //set console compiler so it can be used from scala console
     ConsoleResources.compiler = compiler
-    import compiling.CompilerException
+    import ast.CompilerException
     testTresqls("/test.txt", (tresql, _, _, nr) => {
       println(s"$nr. Compiling tresql:\n$tresql")
       try compile(tresql)

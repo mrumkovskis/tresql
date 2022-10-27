@@ -1,7 +1,7 @@
 package org.tresql.test
 
 import org.tresql._
-import org.tresql.parsing.Exp
+import org.tresql.ast.Exp
 
 class Macros extends org.tresql.Macros {
   import macro_._

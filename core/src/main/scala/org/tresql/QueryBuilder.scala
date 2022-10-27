@@ -2,9 +2,9 @@ package org.tresql
 
 import sys._
 import scala.util.Try
-import parsing.Exp
 import metadata.key_
 import parsing._
+import ast._
 
 import scala.annotation.tailrec
 
@@ -68,7 +68,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   private[tresql] var childrenCount = 0
 
   //set by buildInternal method when building Query for potential use in RecursiveExpr
-  private[tresql] var recursiveQueryExp: parsing.Query = _
+  private[tresql] var recursiveQueryExp: ast.Query = _
 
   //used for non flat updates, i.e. hierarhical object.
   private val _childUpdatesBuildTime = scala.collection.mutable.ListBuffer[(Expr, String)]()
@@ -352,7 +352,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     override def defaultSQL: String = cols.map(_.sql).mkString("(", ", ", ")")
   }
 
-  case class RecursiveExpr(exp: parsing.Query) extends BaseExpr {
+  case class RecursiveExpr(exp: ast.Query) extends BaseExpr {
     //take this from childrenCount, since it RecursiveExpr is not built with new builder
     private val initChildIdx = QueryBuilder.this.childrenCount
     private val rowConverter = env.rowConverter(QueryBuilder.this.queryDepth, initChildIdx)
@@ -834,7 +834,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       lazy val traverserExtractor: transformer.Traverser[A] = transformer.traverser(x => {
         case Values(List(valArr)) if f.isDefinedAt(valArr) => f(valArr)
         case BinOp(_, lop, _) => traverserExtractor(x)(lop)
-        case q: parsing.Query if q.cols != null && f.isDefinedAt(q.cols) => f(q.cols)
+        case q: ast.Query if q.cols != null && f.isDefinedAt(q.cols) => f(q.cols)
         case Braces(b) => traverserExtractor(x)(b)
         case With(_, e) => traverserExtractor(x)(e)
       })
@@ -1013,7 +1013,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     }
 
   private[tresql] def buildInternal(parsedExpr: Exp, parseCtx: Ctx = QUERY_CTX): Expr = {
-    def buildSelect(q: parsing.Query, ctx: Ctx) = {
+    def buildSelect(q: ast.Query, ctx: Ctx) = {
       val tablesAndAliases = buildTables(q.tables)
       if (ctx == QUERY_CTX && this.tableDefs == Nil) this.tableDefs = defs(tablesAndAliases._1)
       val filter = if (q.filter == null) null else buildFilter(tablesAndAliases._1.last, q.filter.filters)
@@ -1078,7 +1078,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       if ((ctx == WHERE_CTX || isWhere(ctxStack)) && q.filter.filters != Nil && sel.filter == null) null else sel
     }
     def buildSelectFromObj(o: Obj, ctx: Ctx) =
-      buildSelect(parsing.Query(List(o), Filters(Nil), null, null, null, null, null), ctx)
+      buildSelect(ast.Query(List(o), Filters(Nil), null, null, null, null, null), ctx)
     //build tables, set nullable flag for tables right to default join or foreign key shortcut join,
     //which is used for implicit left outer join, create aliases map
     def buildTables(tables: List[Obj]) = {
@@ -1262,7 +1262,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           case QUERY_CTX | FROM_CTX | WITH_CTX | WITH_TABLE_CTX => buildSelectFromObj(t, parseCtx)
           case _ => buildIdentOrBracesExpr(t)
         }
-        case q: parsing.Query => parseCtx match {
+        case q: ast.Query => parseCtx match {
           case ARR_CTX => buildWithNew(None, _.buildInternal(q, QUERY_CTX)) //may have other elements in array
           case _ =>
             if (recursiveQueryExp == null) recursiveQueryExp = q //set for potential use in RecursiveExpr

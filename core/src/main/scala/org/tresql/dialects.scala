@@ -47,7 +47,7 @@ package object dialects {
           b.ConstExpr(to: String)), false, None, None) if from.length == to.length => true
         case b.FunExpr("nextval", List(b.ConstExpr(_)), false, None, None) => true
         case b.BinExpr("`~`", _, _) => true
-        case b.SelectExpr(List(b.Table(b.ConstExpr(parsing.Null), _, _, _, _, _)), _, _, _, _, _, _, _, _, _) => true
+        case b.SelectExpr(List(b.Table(b.ConstExpr(ast.Null), _, _, _, _, _)), _, _, _, _, _, _, _, _, _) => true
         case _ => false
       }
     }
@@ -60,7 +60,7 @@ package object dialects {
           (from zip to).foldLeft(col.sql)((s, a) => "replace(" + s + ", '" + a._1 + "', '" + a._2 + "')")
         case b.FunExpr("nextval", List(b.ConstExpr(seq)), false, None, None) => "next value for " + seq
         case b.BinExpr("`~`", lop, rop) => s"regexp_matches(${lop.sql}, ${rop.sql})"
-        case s @ b.SelectExpr(List(b.Table(b.ConstExpr(parsing.Null), _, _, _, _, _)), _, _, _, _, _, _, _, _, _) =>
+        case s @ b.SelectExpr(List(b.Table(b.ConstExpr(ast.Null), _, _, _, _, _)), _, _, _, _, _, _, _, _, _) =>
           s.copy(tables = List(s.tables.head.copy(table = b.IdentExpr(List("(values(0))"))))).sql
       }
     }

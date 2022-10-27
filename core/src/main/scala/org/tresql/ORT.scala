@@ -1,7 +1,7 @@
 package org.tresql
 
 import org.tresql.OrtMetadata.{Filters, KeyValue, LookupViewValue, Property, SaveOptions, SaveTo, TresqlValue, View, ViewValue}
-import org.tresql.parsing.Exp
+import org.tresql.ast.Exp
 
 import scala.util.matching.Regex
 import sys._
@@ -947,7 +947,7 @@ object OrtMetadata {
       val (i, u, d) = Option(options).map (_ =>
         (options contains "+", options contains "=", options contains "-")
       ).getOrElse {(true, false, true)}
-      import parsing.{Arr, Null}
+      import ast.{Arr, Null}
       val filters =
         Option(filterStr).flatMap(new QueryParser(resources, resources.cache).parseExp(_) match {
           case Arr(List(insert, delete, update)) => Some(Filters(
@@ -962,7 +962,7 @@ object OrtMetadata {
       (View(saveTo(tables, tresqlMetadata(db)), filters, alias, true, true, false, Nil, db), SaveOptions(i, u, d))
     }
     def resolver_tresql(property: String, resolverExp: String) = {
-      import parsing._
+      import ast._
       val OrtMetadata.Patterns.resolverProp(prop) = property
       val OrtMetadata.Patterns.resolverExp(col, exp) = resolverExp
       val parser = new QueryParser(resources, resources.cache)

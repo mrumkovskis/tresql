@@ -1,6 +1,7 @@
 package org
 
-import org.tresql.compiling.CompilerException
+import org.tresql.ast._
+import org.tresql.ast.CompilerAst._
 
 import java.util.Properties
 
@@ -123,7 +124,7 @@ package object tresql extends CoreTypes {
                       colType: Tree, //filled by ColDef, may be used in result converter
                       resultConverter: Option[(String, c.Tree)] //function in form (functionName -> CompiledResult[_] -> T)
                     )
-      def resultClassTree(exp: parsing.Exp): Ctx = {
+      def resultClassTree(exp: Exp): Ctx = {
         def uniqueName(prefix: String, names: Set[String]) = if (names(prefix)) {
           prefix + Stream.from(1).filterNot(i => names(prefix + i)).head
         } else prefix
@@ -133,12 +134,12 @@ package object tresql extends CoreTypes {
           colType
         }
         lazy val generator: compiler.Traverser[Ctx] = compiler.traverser(ctx => {
-          case f: compiler.FunDef[_] => ctx //for sql_concat function
+          case f: FunDef[_] => ctx //for sql_concat function
             .copy(convRegister =
               q"((${ctx.depth}, ${ctx.childIdx}), identity[RowLike] _)" :: ctx.convRegister)
           //inserts updates deletes
-          case dml: compiler.DMLDefBase => ctx.copy(className = "DMLResult")
-          case pd: compiler.PrimitiveDef[_] =>
+          case dml: DMLDefBase => ctx.copy(className = "DMLResult")
+          case pd: PrimitiveDef[_] =>
             val name = c.freshName("tresqlResultConv")
             val funName = TermName(name)
             val typeName = typeNameFromManifest(pd.typ)
@@ -152,10 +153,10 @@ package object tresql extends CoreTypes {
               q"((${ctx.depth}, ${ctx.childIdx}), identity[RowLike] _)" :: ctx.convRegister,
               resultConverter = Some(name, conv))
           //queries are compiled to CompiledResult[_ <: RowLike], arrays are compiled to tuples.
-          case sd: compiler.RowDefBase =>
+          case sd: RowDefBase =>
             val className = c.freshName("Tresql")
             val resultConv = Option(sd).collect {
-              case _: compiler.ArrayDef => (c.freshName("tresqlResultConv"), null)
+              case _: ArrayDef => (c.freshName("tresqlResultConv"), null)
             }
             case class ColsCtx(
                                 colTrees: List[List[c.Tree]],
@@ -249,7 +250,7 @@ package object tresql extends CoreTypes {
               null,
               maybeResConv(colsCtx.colTypes.reverse, colsCtx.resultConvs.reverse)
             )
-          case compiler.ColDef(colName, compiler.ChildDef(sd: compiler.RowDefBase, _), _) =>
+          case ColDef(colName, ChildDef(sd: RowDefBase, _), _) =>
             val selDefCtx = generator(Ctx(ctx.className, Nil, ctx.depth + 1,
               ctx.colIdx, ctx.childIdx, ctx.convRegister,
               Set(), null, ctx.resultConverter))(sd)
@@ -269,10 +270,10 @@ package object tresql extends CoreTypes {
               colNames = ctx.colNames + name,
               colType = tq"${TypeName(selDefCtx.className)}"
             )
-          case compiler.ColDef(_, pd: compiler.PrimitiveDef[_], _) =>
+          case ColDef(_, pd: PrimitiveDef[_], _) =>
             val nctx = generator(ctx)(pd)
             nctx.copy(tree = List(q"", q"", q"identity[RowLike] _"))
-          case compiler.ColDef(colName, _, typ) =>
+          case ColDef(colName, _, typ) =>
             val name = uniqueName(colName, ctx.colNames)
             val fieldTerm = q"${TermName(name)}"
             val colType = typeNameFromManifest(typ)
@@ -283,7 +284,7 @@ package object tresql extends CoreTypes {
               fieldTerm
             )
             ctx.copy(tree = l, colNames = ctx.colNames + name, colType = q"$colType")
-          case compiler.ChildDef(ch, _) =>
+          case ChildDef(ch, _) =>
             generator(ctx.copy(depth = ctx.depth + 1))(ch)
         })
         generator(Ctx(null, Nil, 0, 0, 0, Nil, Set(), null, None))(exp)

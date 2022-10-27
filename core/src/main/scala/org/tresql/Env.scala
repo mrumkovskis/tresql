@@ -4,7 +4,8 @@ import sys._
 import CoreTypes.RowConverter
 import org.tresql.metadata.TypeMapper
 import org.tresql.resources.{MacrosLoader, TresqlMacro, TresqlMacros}
-import parsing.{Exp, QueryParsers}
+import parsing.QueryParsers
+import ast.Exp
 
 import java.sql.SQLException
 import scala.util.Try
