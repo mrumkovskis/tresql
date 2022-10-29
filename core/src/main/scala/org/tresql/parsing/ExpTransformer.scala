@@ -51,8 +51,6 @@ trait ExpTransformer { this: QueryParsers =>
       case ValuesFromSelect(s) => ValuesFromSelect(tt(s))
       case Braces(expr) => Braces(tt(expr))
       case null => null
-      //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
-      case x: Exp => sys.error("Unknown expression: " + x)
     }
     transform_traverse
   }
@@ -121,8 +119,6 @@ trait ExpTransformer { this: QueryParsers =>
       case ValuesFromSelect(s) => ValuesFromSelect(tt(state)(s))
       case Braces(expr) => Braces(tt(state)(expr))
       case null => null
-      //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
-      case x: Exp => sys.error("Unknown expression: " + x)
     }
     transform_traverse
   }
@@ -165,8 +161,6 @@ trait ExpTransformer { this: QueryParsers =>
       case Values(v) => trl(state, v)
       case ValuesFromSelect(s) => tr(state, s)
       case Braces(expr) => tr(state, expr)
-      //for debugging purposes throw an exception since all expressions must be matched above for complete traversal
-      case x: Exp => sys.error("Unknown expression: " + x)
     }
     fun_traverse
   }
