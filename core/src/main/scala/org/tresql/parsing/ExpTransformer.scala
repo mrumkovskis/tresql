@@ -36,7 +36,8 @@ trait ExpTransformer { this: QueryParsers =>
       case Col(c, a) => Col(tt(c), a)
       case Cols(d, cols) => Cols(d, cols map tt)
       case Grp(cols, hv) => Grp(cols map tt, tt(hv))
-      case Ord(cols) => Ord(cols map (c=> (c._1, tt(c._2), c._3)))
+      case OrdCol(nf, e, nl) => OrdCol(nf, tt(e), nl)
+      case Ord(cols) => Ord(cols map tt)
       case Query(objs, filters, cols, gr, ord, off, lim) =>
         Query(objs map tt, tt(filters), tt(cols), tt(gr), tt(ord), tt(off), tt(lim))
       case WithTable(n, c, r, q) => WithTable(n, c, r, tt(q))
@@ -86,7 +87,8 @@ trait ExpTransformer { this: QueryParsers =>
       case Col(c, a) => Col(tt(state)(c), a)
       case Cols(d, cols) => Cols(d, cols map tt(state))
       case Grp(cols, hv) => Grp(cols map tt(state), tt(state)(hv))
-      case Ord(cols) => Ord(cols map (c=> (c._1, tt(state)(c._2), c._3)))
+      case OrdCol(nf, e, nl) => OrdCol(nf, tt(state)(e), nl)
+      case Ord(cols) => Ord(cols map tt(state))
       case Query(objs, filters, cols, gr, ord, off, lim) =>
         Query(
           objs map tt(state),
@@ -149,7 +151,8 @@ trait ExpTransformer { this: QueryParsers =>
       case Col(c, _) => tr(state, c)
       case Cols(_, cols) => trl(state, cols)
       case Grp(cols, hv) => tr(trl(state, cols), hv)
-      case Ord(cols) => trl(state, cols.map(_._2))
+      case OrdCol(nf, e, nl) => tr(state, e)
+      case Ord(cols) => trl(state, cols)
       case Query(objs, filters, cols, gr, ord, off, lim) =>
         tr(tr(tr(tr(tr(tr(trl(state, objs), filters), cols), gr), ord), off), lim)
       case WithTable(_, _, _, q) => tr(state, q)

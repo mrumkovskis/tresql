@@ -192,14 +192,14 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     override def toString = s":#$seqName = ${getId(seqName).getOrElse("?")}"
   }
 
-  case class ResExpr(nr: Int, col: Any) extends BaseVarExpr {
+  case class ResExpr(nr: Int, col: Exp) extends BaseVarExpr {
     override def apply() = env(nr) match {
       case null => error(s"Ancestor result with number $nr not found for column '$col'")
       case r => col match {
         case c: Ident => r(c.ident.mkString("."))
-        case c: String => r(c)
-        case c: Int if c > 0 => r(c - 1)
-        case c: Int => error("column index in result expression must be greater than 0. Is: " + c)
+        case Const(c: String) => r(c)
+        case Const(c: Int) if c > 0 => r(c - 1)
+        case c => error("column index in result expression must be greater than 0. Is: " + c)
       }
     }
     def name = s"$nr($col)"
@@ -807,7 +807,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     ancestorTableCol: String): Option[ResExpr] = {
     if (!this.tableDefs.exists(_.alias == ancestorTableAlias))
       joinWithAncestor(ancestorTableAlias, ancestorTableCol, 1)
-        .map(ResExpr(_, ancestorTableAlias + "_" + ancestorTableCol + "_"))
+        .map(ResExpr(_, Ident(List(ancestorTableAlias + "_" + ancestorTableCol + "_"))))
     else None
   }
 
@@ -1034,7 +1034,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         if (ctx != QUERY_CTX || !hasParentQuery) None else {
           def parentChildJoinExpr(table: Table, refCol: Option[String] = None) = {
             def exp(childCol: String, parentCol: String) = BinExpr("=",
-              IdentExpr(List(table.aliasOrName, childCol)), ResExpr(1, parentCol))
+              IdentExpr(List(table.aliasOrName, childCol)), ResExpr(1, Ident(List(parentCol))))
             def exps(cols: List[(String, String)]): Expr = cols match {
               case c :: Nil => exp(c._1, c._2)
               case c :: l => BinExpr("&", exp(c._1, c._2), exps(l))
@@ -1350,8 +1350,12 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           ce
         case Grp(cols, having) => Group(cols map { buildInternal(_, GROUP_CTX) },
           buildInternal(having, HAVING_CTX))
-        case Ord(cols) => Order(cols map (c=> (buildInternal(c._1, parseCtx),
-            buildInternal(c._2, parseCtx), buildInternal(c._3, parseCtx))))
+        case Ord(cols) => Order(cols map { c =>
+          ( buildInternal(c.nullsFirst, parseCtx),
+            buildInternal(c.exp, parseCtx),
+            buildInternal(c.nullsLast, parseCtx)
+          )
+        })
         case All => AllExpr()
         case ValuesFromSelect(sel) => ValuesFromSelectExpr(buildInternal(sel, FROM_CTX).asInstanceOf[SelectExpr])
         case Braces(expr) =>

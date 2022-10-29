@@ -63,7 +63,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   def qualifiedIdentAll: MemParser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
   def variable: MemParser[Variable] = ((":" ~> (
       rep1sep(ident | stringLiteral | wholeNumber, ".") ~ opt("?"))) | "?") ^^ {
-    case "?" => Variable("?", null, opt = false)
+    case "?" => Variable("?", Nil, opt = false)
     case ((i: String) :: (m: List[String @unchecked])) ~ o =>
       Variable(i, m, o != None)
   } named "variable"
@@ -77,7 +77,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     qualifiedIdent) <~ ")" ^^ {
       case r ~ c => Res(r.toInt,
         c match {
-          case s: String => try { s.toInt } catch { case _: NumberFormatException => s }
+          case s: String => try { Const(s.toInt) } catch { case _: NumberFormatException => Const(s) }
           case i: Ident => i
         })
     } named "result"
@@ -245,9 +245,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   } named "columns"
   def group: MemParser[Grp] = ("(" ~> rep1sep(expr, ",") <~ ")") ~
     opt(("^" ~ "(") ~> expr <~ ")") ^^ { case g ~ h => Grp(g, if (h.isEmpty) null else h.get) }  named "group"
-  def orderMember: MemParser[(Exp, Exp, Exp)] = opt(NULL) ~ expr ~ opt(NULL) ^^ {
+  def orderMember: MemParser[OrdCol] = opt(NULL) ~ expr ~ opt(NULL) ^^ {
     case Some(nf) ~ e ~ Some(nl) => sys.error("Cannot be nulls first and nulls last at the same time")
-    case nf ~ e ~ nl => (if (nf.isEmpty) null else nf.get, e, if (nl.isEmpty) null else nl.get)
+    case nf ~ e ~ nl => OrdCol(if (nf.isEmpty) null else nf.get, e, if (nl.isEmpty) null else nl.get)
   } named "order-member"
   def order: MemParser[Ord] = ("#" ~ "(") ~> rep1sep(orderMember, ",") <~ ")" ^^ Ord named "order"
   def offsetLimit: MemParser[(Exp, Exp)] = ("@" ~ "(") ~> (wholeNumber | variable) ~ opt(",") ~

@@ -40,7 +40,7 @@ case class Sql(sql: String) extends Exp {
 case class Ident(ident: List[String]) extends Exp {
   def tresql = ident.mkString(".")
 }
-case class Variable(variable: String, members: List[String], opt: Boolean) extends Exp {
+case class Variable(variable: String, members: List[String] = Nil, opt: Boolean) extends Exp {
   def tresql = if (variable == "?") "?" else {
     def var_str(v: String) =
       (if (QueryParsers.simple_ident_regex.pattern.matcher(v).matches) v
@@ -57,8 +57,8 @@ case class Id(name: String) extends Exp {
 case class IdRef(name: String) extends Exp {
   def tresql = ":#" + name
 }
-case class Res(rNr: Int, col: Any) extends Exp {
-  def tresql = ":" + rNr + "(" + any2tresql(col) + ")"
+case class Res(rNr: Int, col: Exp) extends Exp {
+  def tresql = ":" + rNr + "(" + col.tresql + ")"
 }
 case class Cast(exp: Exp, typ: String) extends Exp {
   def tresql = exp.tresql + "::" +
@@ -100,7 +100,7 @@ case class TerOp(lop: Exp, op1: String, mop: Exp, op2: String, rop: Exp) extends
   def tresql = s"${any2tresql(lop)} $op1 ${any2tresql(mop)} $op2 ${any2tresql(rop)}"
 }
 
-case class Join(default: Boolean, expr: Exp, noJoin: Boolean) extends Exp {
+case class Join(default: Boolean, expr: Exp = null, noJoin: Boolean) extends Exp {
   def tresql = this match {
     case Join(_, _, true) => ";"
     case Join(false, a: Arr, false) => a.tresql
@@ -111,7 +111,7 @@ case class Join(default: Boolean, expr: Exp, noJoin: Boolean) extends Exp {
   }
 }
 
-case class Obj(obj: Exp, alias: String, join: Join, outerJoin: String, nullable: Boolean = false)
+case class Obj(obj: Exp, alias: String = null, join: Join = null, outerJoin: String = null, nullable: Boolean = false)
   extends Exp {
   def tresql = {
     (if (join != null) join.tresql else "") + (if (outerJoin == "r") "?" else "") +
@@ -127,23 +127,25 @@ case class Obj(obj: Exp, alias: String, join: Join, outerJoin: String, nullable:
       })
   }
 }
-case class Col(col: Exp, alias: String) extends Exp {
+case class Col(col: Exp, alias: String = null) extends Exp {
   def tresql = any2tresql(col) + (if (alias != null) " " + alias else "")
 }
 case class Cols(distinct: Boolean, cols: List[Col]) extends Exp {
   def tresql = (if (distinct) "#" else "") + cols.map(_.tresql).mkString("{", ",", "}")
 }
-case class Grp(cols: List[Exp], having: Exp) extends Exp {
+case class Grp(cols: List[Exp], having: Exp = null) extends Exp {
   def tresql = "(" + cols.map(any2tresql).mkString(",") + ")" +
     (if (having != null) "^(" + any2tresql(having) + ")" else "")
 }
-//cols expression is tuple in the form - ([<nulls first>], <order col list>, [<nulls last>])
-case class Ord(cols: List[(Exp, Exp, Exp)]) extends Exp {
-  def tresql = "#(" + cols.map(c => (if (c._1 == Null) "null " else "") +
-    any2tresql(c._2) + (if (c._3 == Null) " null" else "")).mkString(",") + ")"
+case class OrdCol(nullsFirst: Exp = null, exp: Exp, nullsLast: Exp = null) extends Exp {
+  def tresql =
+    (if (nullsFirst == Null) "null " else "") + any2tresql(exp) + (if (nullsLast == Null) " null" else "")
 }
-case class Query(tables: List[Obj], filter: Filters, cols: Cols,
-                 group: Grp, order: Ord, offset: Exp, limit: Exp) extends Exp {
+case class Ord(cols: List[OrdCol]) extends Exp {
+  def tresql = "#(" + cols.map(_.tresql).mkString(",") + ")"
+}
+case class Query(tables: List[Obj], filter: Filters, cols: Cols = null,
+                 group: Grp = null, order: Ord = null, offset: Exp = null, limit: Exp = null) extends Exp {
   def tresql = tables.map(any2tresql).mkString +
     filter.tresql +
     (if (cols != null) cols.tresql else "") +
@@ -165,7 +167,7 @@ case class With(tables: List[WithTable], query: Exp) extends Exp {
 case class Values(values: List[Arr]) extends Exp {
   def tresql = values map (_.tresql) mkString ", "
 }
-case class Insert(table: Ident, alias: String, cols: List[Col], vals: Exp, returning: Option[Cols],
+case class Insert(table: Ident, alias: String = null, cols: List[Col], vals: Exp = null, returning: Option[Cols],
                   db: Option[String])
   extends DMLExp {
   override def filter = null
@@ -175,7 +177,7 @@ case class Insert(table: Ident, alias: String, cols: List[Col], vals: Exp, retur
     (if (vals != null) any2tresql(vals) else "") +
     returning.map(_.tresql).getOrElse("")
 }
-case class Update(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp,
+case class Update(table: Ident, alias: String = null, filter: Arr = null, cols: List[Col], vals: Exp = null,
                   returning: Option[Cols], db: Option[String])
   extends DMLExp {
   def tresql = {
@@ -195,7 +197,7 @@ case class ValuesFromSelect(select: Query) extends Exp {
     if (select.tables.size > 1) select.copy(tables = select.tables.tail).tresql
     else ""
 }
-case class Delete(table: Ident, alias: String, filter: Arr, using: Exp, returning: Option[Cols],
+case class Delete(table: Ident, alias: String = null, filter: Arr, using: Exp = null, returning: Option[Cols],
                   db: Option[String])
   extends DMLExp {
   override def cols = null
