@@ -57,7 +57,13 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   def ALL: MemParser[All.type] = "*" ^^^ All named "all"
 
 
-  def const: MemParser[Const] = (TRUE | FALSE | decimalNr | stringLiteral) ^^ Const named "const"
+  def const: MemParser[Const] = (TRUE | FALSE | decimalNr | stringLiteral) ^^ {
+    case b: Boolean => Const(BooleanVal(b))
+    case bd: BigDecimal => Const(BdVal(bd))
+    case s: String => Const(StringVal(s))
+    case i: Int => Const(IntVal(i))
+    case x => sys.error(s"Unexpected const value: '$x'. Expected `String` or `Boolean` or `BigDecimal` or `Int`")
+  } named "const"
   def sql: MemParser[Sql] = "`" ~> ("[^`]+"r) <~ "`" ^^ Sql named "sql"
   def qualifiedIdent: MemParser[Ident] = rep1sep(ident, ".") ^^ Ident named "qualified-ident"
   def qualifiedIdentAll: MemParser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
@@ -77,7 +83,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     qualifiedIdent) <~ ")" ^^ {
       case r ~ c => Res(r.toInt,
         c match {
-          case s: String => try { Const(s.toInt) } catch { case _: NumberFormatException => Const(s) }
+          case s: String =>
+            try { Const(IntVal(s.toInt)) } catch { case _: NumberFormatException => Const(StringVal(s)) }
           case i: Ident => i
         })
     } named "result"
@@ -253,7 +260,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   def offsetLimit: MemParser[(Exp, Exp)] = ("@" ~ "(") ~> (wholeNumber | variable) ~ opt(",") ~
     opt(wholeNumber | variable) <~ ")" ^^ { pr =>
       {
-        def c(x: Any) = x match { case v: Variable => v case s: String => Const(BigDecimal(s)) }
+        def c(x: Any) =
+          x match { case v: Variable => v case s: String => Const(BdVal(BigDecimal(s))) }
         pr match {
           case o ~ comma ~ Some(l) => (c(o), c(l))
           case o ~ Some(comma) ~ None => (c(o), null)

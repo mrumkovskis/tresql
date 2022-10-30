@@ -31,8 +31,19 @@ sealed trait DMLExp extends Exp {
   def db: Option[String]
 }
 
-case class Const(value: Any) extends Exp {
-  def tresql = any2tresql(value)
+sealed trait ConstVal {
+  def value: Any
+  def tresql: String = value.toString
+}
+case class IntVal(value: Int) extends ConstVal
+case class StringVal(value: String) extends ConstVal {
+  override def tresql: String = if (value.contains("'")) "\"" + value + "\"" else "'" + value + "'"
+}
+case class BdVal(value: BigDecimal) extends ConstVal
+case class BooleanVal(value: Boolean) extends ConstVal
+
+case class Const(value: ConstVal) extends Exp {
+  def tresql = value.tresql
 }
 case class Sql(sql: String) extends Exp {
   def tresql = s"`$sql`"

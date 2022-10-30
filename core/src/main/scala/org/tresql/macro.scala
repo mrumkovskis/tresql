@@ -134,7 +134,7 @@ class Macros {
    * */
   def concat_exps(p: QueryParsers, prefix: Exp, sep: Exp, postfix: Exp, exprs: Exp*): Exp = {
     val (prefixStr: String, sepStr: String, postfixStr: String) = (prefix, sep, postfix) match {
-      case (Const(pf), Const(sp), Const(psf)) => (pf.toString, sp.toString, psf.toString)
+      case (Const(pf), Const(sp), Const(psf)) => (pf.value.toString, sp.value.toString, psf.value.toString)
       case _ => new IllegalArgumentException(
         s"Prefix, separator, postfix parameters must be string constants, instead found: " +
           s"prefix - $prefix, sep - $sep, postfix - $postfix")
