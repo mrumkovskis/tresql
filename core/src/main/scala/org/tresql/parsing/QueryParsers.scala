@@ -58,10 +58,10 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
 
 
   def const: MemParser[Const] = (TRUE | FALSE | decimalNr | stringLiteral) ^^ {
-    case b: Boolean => Const(BooleanVal(b))
-    case bd: BigDecimal => Const(BdVal(bd))
-    case s: String => Const(StringVal(s))
-    case i: Int => Const(IntVal(i))
+    case b: Boolean => BooleanConst(b)
+    case bd: BigDecimal => BigDecimalConst(bd)
+    case s: String => StringConst(s)
+    case i: Int => IntConst(i)
     case x => sys.error(s"Unexpected const value: '$x'. Expected `String` or `Boolean` or `BigDecimal` or `Int`")
   } named "const"
   def sql: MemParser[Sql] = "`" ~> ("[^`]+"r) <~ "`" ^^ Sql named "sql"
@@ -84,7 +84,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       case r ~ c => Res(r.toInt,
         c match {
           case s: String =>
-            try { Const(IntVal(s.toInt)) } catch { case _: NumberFormatException => Const(StringVal(s)) }
+            try { IntConst(s.toInt) } catch { case _: NumberFormatException => StringConst(s) }
           case i: Ident => i
         })
     } named "result"
@@ -261,7 +261,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     opt(wholeNumber | variable) <~ ")" ^^ { pr =>
       {
         def c(x: Any) =
-          x match { case v: Variable => v case s: String => Const(BdVal(BigDecimal(s))) }
+          x match { case v: Variable => v case s: String => BigDecimalConst(BigDecimal(s)) }
         pr match {
           case o ~ comma ~ Some(l) => (c(o), c(l))
           case o ~ Some(comma) ~ None => (c(o), null)

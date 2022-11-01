@@ -197,8 +197,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       case null => error(s"Ancestor result with number $nr not found for column '$col'")
       case r => col match {
         case c: Ident => r(c.ident.mkString("."))
-        case Const(StringVal(c)) => r(c)
-        case Const(IntVal(c)) if c > 0 => r(c - 1)
+        case StringConst(c) => r(c)
+        case IntConst(c) if c > 0 => r(c - 1)
         case c => error("column index in result expression must be greater than 0. Is: " + c)
       }
     }
@@ -1212,10 +1212,10 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     ctxStack ::= parseCtx
     try {
       parsedExpr match {
-        case Const(x) => ConstExpr(x.value)
+        case c: Const => ConstExpr(c.value)
         case Sql(sqlStr) =>
           //fallback to sql macro
-          buildInternal(Fun("sql", List(Const(StringVal(sqlStr))), false, None, None) , parseCtx)
+          buildInternal(Fun("sql", List(StringConst(sqlStr)), false, None, None) , parseCtx)
         case Null => ConstExpr(Null)
         case NullUpdate => ConstExpr(NullUpdate)
         //insert

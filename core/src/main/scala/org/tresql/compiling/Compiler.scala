@@ -620,7 +620,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
       case x => ManifestFactory.classType(x.getClass)
     })
     lazy val typer: Traverser[Ctx] = traverser(ctx => {
-      case Const(const) => type_from_const(const.value)
+      case c: Const => type_from_const(c.value)
       case _: Null => type_from_const(null)
       case Ident(ident) =>
         Ctx(ctx.scopes, ctx.db, column(ctx.scopes)(ident mkString ".")(EnvMetadata, ctx.db).map(_.scalaType).get)
