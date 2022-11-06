@@ -29,7 +29,7 @@ ThisBuild / versionScheme := Some("early-semver")
 def coreDependencies(scalaVer: String) =
   Seq(
     "org.scala-lang" % "scala-reflect" % scalaVer,
-    "org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2"
+    "org.scala-lang.modules" %% "scala-parser-combinators" % "2.1.1"
   )
 
 lazy val core = (project in file("core"))
