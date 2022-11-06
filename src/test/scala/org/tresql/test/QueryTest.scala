@@ -1,6 +1,7 @@
 package org.tresql.test
 
-import org.scalatest.{BeforeAndAfterAll, FunSuite}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.funsuite.AnyFunSuite
 import java.sql.{Connection, DriverManager}
 
 import org.tresql._
@@ -11,7 +12,7 @@ import scala.util.parsing.json._
 import sys._
 
 /** To run from console {{{org.scalatest.run(new test.QueryTest)}}} */
-class QueryTest extends FunSuite with BeforeAndAfterAll {
+class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
 
   val compilerMacroDependantTests = new CompilerMacroDependantTests()
 

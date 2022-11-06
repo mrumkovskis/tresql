@@ -4,7 +4,9 @@ import org.tresql._
 
 import java.sql.{Date, SQLException}
 
-class PGCompilerMacroDependantTests extends org.scalatest.FunSuite with PGCompilerMacroDependantTestsApi  {
+import org.scalatest.funsuite.AnyFunSuite
+
+class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDependantTestsApi  {
 
   //typed objects tests
   trait Poha

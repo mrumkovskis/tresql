@@ -81,7 +81,7 @@ lazy val tresql = (project in file("."))
 
     name := "tresql",
     libraryDependencies ++= coreDependencies(scalaVersion.value) ++
-      Seq("org.scalatest" %% "scalatest" % "3.0.8" % "test,it",
+      Seq("org.scalatest" %% "scalatest" % "3.2.14" % "test,it",
         ("org.hsqldb" % "hsqldb" % "2.7.1" % "test").classifier("jdk8"),
         "org.postgresql" % "postgresql" % "42.5.0" % "it,test"),
     Test / console / initialCommands := "import org.tresql._; import org.scalatest._; import org.tresql.test.ConsoleResources._",
