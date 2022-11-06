@@ -32,6 +32,14 @@ def coreDependencies(scalaVer: String) =
     "org.scala-lang.modules" %% "scala-parser-combinators" % "2.1.1"
   )
 
+javacOptions ++= Seq("-source", "1.8", "-target", "1.8", "-Xlint")
+initialize := {
+  val _ = initialize.value
+  val javaVersion = sys.props("java.specification.version")
+  if (javaVersion != "1.8")
+    sys.error("Java 1.8 is required for this project. Found " + javaVersion + " instead")
+}
+
 lazy val core = (project in file("core"))
   .disablePlugins(plugins.JUnitXmlReportPlugin)
   .settings(
