@@ -5,7 +5,7 @@ lazy val commonSettings = Seq(
   scalaVersion := scalaV,
   crossScalaVersions := Seq(
       scalaV,
-      "2.12.15",
+      "2.12.17",
     ),
   //coverageEnabled := true,
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",
@@ -29,8 +29,16 @@ ThisBuild / versionScheme := Some("early-semver")
 def coreDependencies(scalaVer: String) =
   Seq(
     "org.scala-lang" % "scala-reflect" % scalaVer,
-    "org.scala-lang.modules" %% "scala-parser-combinators" % "1.1.2"
+    "org.scala-lang.modules" %% "scala-parser-combinators" % "2.1.1"
   )
+
+javacOptions ++= Seq("-source", "1.8", "-target", "1.8", "-Xlint")
+initialize := {
+  val _ = initialize.value
+  val javaVersion = sys.props("java.specification.version")
+  if (javaVersion != "1.8")
+    sys.error("Java 1.8 is required for this project. Found " + javaVersion + " instead")
+}
 
 lazy val core = (project in file("core"))
   .disablePlugins(plugins.JUnitXmlReportPlugin)
@@ -74,7 +82,7 @@ lazy val tresql = (project in file("."))
 
     name := "tresql",
     libraryDependencies ++= coreDependencies(scalaVersion.value) ++
-      Seq("org.scalatest" %% "scalatest" % "3.0.8" % "test,it",
+      Seq("org.scalatest" %% "scalatest" % "3.2.14" % "test,it",
         ("org.hsqldb" % "hsqldb" % "2.7.1" % "test").classifier("jdk8"),
         "org.postgresql" % "postgresql" % "42.5.0" % "it,test"),
     Test / console / initialCommands := "import org.tresql._; import org.scalatest._; import org.tresql.test.ConsoleResources._",

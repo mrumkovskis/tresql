@@ -1,12 +1,13 @@
 package org.tresql.test
 
+import org.scalatest.funsuite.AnyFunSuite
 import org.tresql.OrtMetadata.SaveTo
 import org.tresql._
 
 import java.sql.{Date, SQLException, Time}
 import java.time.LocalTime
 
-class CompilerMacroDependantTests extends org.scalatest.FunSuite with CompilerMacroDependantTestsApi  {
+class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependantTestsApi  {
 
   //typed objects tests
   trait Poha

@@ -2,7 +2,8 @@ package org.tresql.test
 
 import java.io.ByteArrayOutputStream
 
-import org.scalatest.{BeforeAndAfterAllConfigMap, ConfigMap, FunSuite}
+import org.scalatest.{BeforeAndAfterAllConfigMap, ConfigMap}
+import org.scalatest.funsuite.AnyFunSuite
 import java.sql.DriverManager
 
 import org.tresql._
@@ -20,7 +21,7 @@ import sys._
   * 2. latest postgres version and do not remove postgres container after test run with specific postgres host port
   *    and wait time after docker started until jdbc connection attempt is made -
   *   {{{it:testOnly * -- -oD -Ddocker=postgres -Dremove=false -Dport=54321 -Dwait_after_startup_millis=4000}}} */
-class PGQueryTest extends FunSuite with BeforeAndAfterAllConfigMap {
+class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
   val executePGCompilerMacroDependantTests =
     !scala.util.Properties.versionNumberString.startsWith("2.10") &&
     !scala.util.Properties.versionNumberString.startsWith("2.11")
