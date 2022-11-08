@@ -326,7 +326,7 @@ trait ArrayResult[T <: RowLike] extends Result[T] {
   private var _hasNext = true
   def hasNext = if (_hasNext) {
     _hasNext = false
-    true
+    values.nonEmpty
   } else false
 
   private lazy val cols = values.indices map { i =>

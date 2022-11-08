@@ -977,7 +977,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
 
   private def buildArray(a: Arr, ctx: Ctx = ARR_CTX) = a.elements
     .map { buildInternal(_, ctx) } filter (_ != null) match { // filter out elements eliminated by macro
-      case al if al.nonEmpty => ArrExpr(al) case _ => null
+      case al if al.nonEmpty || ctx == ARR_CTX => ArrExpr(al) case _ => null
     }
 
   /* method is used for both select expression and dml returning column build */

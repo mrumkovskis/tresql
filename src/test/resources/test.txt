@@ -652,6 +652,9 @@ dummy{ ((dummy{sum(dummy)})::int - (dummy{dummy}@(1))::int) x} --> [[0]]
 //optional cols in select
 dept[dname = 'ACCOUNTING'] { if_defined(:x?, dname), loc } --> [["NEW YORK"]]
 
+//empty array
+[] --> []
+
 // optional cols in insert, update
 +dept {deptno, dname, if_defined(:loc?, loc)} [55, 'D1', :loc?] --> [[1]]
 dept [deptno = 55] {loc} --> [[null]]
