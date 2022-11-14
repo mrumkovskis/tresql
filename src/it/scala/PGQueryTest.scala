@@ -8,10 +8,8 @@ import java.sql.DriverManager
 
 import org.tresql._
 import org.tresql.metadata.JDBCMetadata
-import org.tresql.result.Jsonizer._
 
 import scala.util.control.NonFatal
-import scala.util.parsing.json._
 import sys._
 
 /** To run from console {{{new org.tresql.test.PGQueryTest().execute(configMap = ConfigMap("docker" -> "postgres", "remove" -> "false"))}}},
@@ -161,11 +159,15 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
       } else pl.zipWithIndex.map(t => (t._2 + 1).toString -> t._1).toMap
     }
     println("\n---------------- Test TreSQL statements ----------------------\n")
+    import io.bullet.borer.Json
+    import io.bullet.borer.Dom._
+    import TresqlResultBorerElementTranscoder._
+
     testTresqls("/pgtest.txt", (st, params, patternRes, nr) => {
-      println(s"Executing pgtest #$nr:")
-      val testRes = jsonize(if (params == null) Query(st) else Query(st, parsePars(params)), Arrays)
-      println("Result: " + testRes)
-      assert(JSON.parseFull(testRes).get === JSON.parseFull(patternRes).get)
+      val pattern = elementToAny(Json.decode(patternRes.getBytes("UTF8")).to[Element].value)
+      assertResult(pattern, st) {
+        elementToAny(resultToElement(if (params == null) Query(st) else Query(st, parsePars(params))))
+      }
     })
   }
 
@@ -252,6 +254,27 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
 
   if (executePGCompilerMacroDependantTests) test("postgres compiler macro") {
     PGcompilerMacroDependantTests.compilerMacro(tresqlResources)
+  }
+
+  test("ast serialization") {
+    import io.bullet.borer._
+    import io.bullet.borer.derivation.MapBasedCodecs._
+    import io.bullet.borer.Codec
+    import org.tresql.ast._
+    import CompilerAst._
+    implicit val exc: Codec[CompilerExp] = Codec(Encoder { (w, _) => w.writeNull() }, Decoder { r => r.readNull() })
+    implicit val tableColDefCodec: Codec[TableColDef] = deriveCodec[TableColDef]
+    implicit lazy val expCodec: Codec[Exp] = deriveAllCodecs[Exp]
+    val p = new QueryParser()
+    testTresqls("/pgtest.txt", (st, _, _, nr) => {
+      val e = p.parseExp(st)
+      val ev = try Cbor.encode(e).toByteArray catch {
+        case e: Exception => throw new RuntimeException(s"Error encoding statement nr. $nr:\n$st", e)
+      }
+      assertResult(e, st) {
+        Cbor.decode(ev).to[Exp].value
+      }
+    })
   }
 
   test("cache") {

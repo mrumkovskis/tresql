@@ -6,9 +6,6 @@ import java.sql.{Connection, DriverManager}
 
 import org.tresql._
 import org.tresql.metadata.JDBCMetadata
-import org.tresql.result.Jsonizer._
-
-import scala.util.parsing.json._
 import sys._
 
 /** To run from console {{{org.scalatest.run(new test.QueryTest)}}} */
@@ -102,11 +99,15 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     }
     println("\n---------------- Test TreSQL statements ----------------------\n")
     implicit val testResources = tresqlResources
+    import io.bullet.borer.Json
+    import io.bullet.borer.Dom._
+    import TresqlResultBorerElementTranscoder._
     testTresqls("/test.txt", (st, params, patternRes, nr) => {
       println(s"Executing test #$nr:")
-      val testRes = jsonize(if (params == null) Query(st) else Query(st, parsePars(params)), Arrays)
-      println("Result: " + testRes)
-      assert(JSON.parseFull(testRes).get === JSON.parseFull(patternRes).get)
+      val pattern = elementToAny(Json.decode(patternRes.getBytes("UTF8")).to[Element].value)
+      assertResult(pattern, st) {
+        elementToAny(resultToElement(if (params == null) Query(st) else Query(st, parsePars(params))))
+      }
     })
   }
 
@@ -292,6 +293,25 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     )
   }
 
+  test("ast serialization") {
+    import io.bullet.borer._
+    import io.bullet.borer.derivation.MapBasedCodecs._
+    import io.bullet.borer.Codec
+    import org.tresql.ast._
+    import CompilerAst._
+    implicit val exc: Codec[CompilerExp] = Codec(Encoder { (w, _) => w.writeNull() }, Decoder { r => r.readNull() })
+    implicit val tableColDefCodec: Codec[TableColDef] = deriveCodec[TableColDef]
+    implicit lazy val expCodec: Codec[Exp] = deriveAllCodecs[Exp]
+    val p = new QueryParser()
+    testTresqls("/test.txt", (st, _, _, nr) => {
+      val e = p.parseExp(st)
+      val ev = try Cbor.encode(e).toByteArray catch {
+        case e: Exception => throw new RuntimeException(s"Error encoding statement nr. $nr:\n$st", e)
+      }
+      assertResult(e, st){ Cbor.decode(ev).to[Exp].value }
+    })
+  }
+
   test("cache") {
     Option(tresqlResources.cache) foreach(c => println(s"\nCache size: ${c.size}\n"))
   }
@@ -322,6 +342,46 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
           testFunction(st, params, patternRes, nr)
         case _ =>
       }
+  }
+}
+
+object TresqlResultBorerElementTranscoder {
+  import io.bullet.borer.Dom._
+  def resultToElement(r: Result[_]): Element = anyToElement(r.toListOfVectors)
+  def anyToElement(v: Any): Element = v match {
+    //for DML Result
+    case r: Result[_] => ArrayElem.Unsized((0 until r.columnCount map r.apply map anyToElement).toVector)
+    case l: List[_] => ArrayElem.Unsized((l map anyToElement).toVector)
+    case l: Vector[_] => ArrayElem.Unsized(l map anyToElement)
+    case m: Map[_, _] => MapElem.Unsized(m.map { case (k, v) => k.toString -> anyToElement(v)})
+    case p: Product => ArrayElem.Unsized((0 until p.productArity map p.productElement map anyToElement).toVector)
+    case b: Boolean => BooleanElem(b)
+    case n: Byte => IntElem(n)
+    case n: Short => IntElem(n)
+    case n: Int => IntElem(n)
+    case n: Long => LongElem(n)
+    case n: Float => FloatElem(n)
+    case n: Double => DoubleElem(n)
+    case n: scala.math.BigInt => NumberStringElem(n.toString)
+    case n: scala.math.BigDecimal => NumberStringElem(n.toString)
+    case n: java.lang.Number => NumberStringElem(n.toString)
+    case b: java.lang.Boolean => BooleanElem(b)
+    case t: java.sql.Timestamp => StringElem(t.toString.substring(0, 19))
+    case d: java.sql.Date => StringElem(d.toString)
+    case null => NullElem
+    case x => StringElem(x.toString)
+  }
+  def elementToAny(e: Element): Any = e match {
+    case ArrayElem.Unsized(value) => value map elementToAny
+    case BooleanElem(value) => value
+    case IntElem(value) => value
+    case LongElem(value) => value
+    case FloatElem(value) => value
+    case DoubleElem(value) => value
+    case NumberStringElem(value) => BigDecimal(value)
+    case StringElem(value) => value
+    case NullElem => null
+    case x => x
   }
 }
 

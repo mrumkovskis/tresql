@@ -605,13 +605,16 @@ trait RowLike extends Typed with AutoCloseable {
   })).toMap
   /** name {{{toVector}}} is defined in {{{trait TranversableOnce}}} */
   def rowToVector: Vector[Any] = {
+    def anyToVal(v: Any): Any = v match {
+      case r: Result[_] => r.toListOfVectors
+      case i: Iterable[_] => (i map anyToVal).toVector
+      case p: Product => (p.productIterator map anyToVal).toVector
+      case x => x
+    }
     val b = new scala.collection.mutable.ListBuffer[Any]
     var i = 0
     while (i < columnCount) {
-      b += (this(i) match {
-        case r: Result[_] => r.toListOfVectors
-        case x => x
-      })
+      b += anyToVal(this(i))
       i += 1
     }
     Vector(b.toSeq: _*)
