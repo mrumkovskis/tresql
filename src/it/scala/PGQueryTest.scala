@@ -164,9 +164,9 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
     import TresqlResultBorerElementTranscoder._
 
     testTresqls("/pgtest.txt", (st, params, patternRes, nr) => {
-      val pattern = elementToAny(Json.decode(patternRes.getBytes("UTF8")).to[Element].value)
+      val pattern = jsonDomToAny(Json.decode(patternRes.getBytes("UTF8")).to[Element].value)
       assertResult(pattern, st) {
-        elementToAny(resultToElement(if (params == null) Query(st) else Query(st, parsePars(params))))
+        jsonDomToAny(resultToJsonDom(if (params == null) Query(st) else Query(st, parsePars(params))))
       }
     })
   }

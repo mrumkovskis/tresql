@@ -104,9 +104,9 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     import TresqlResultBorerElementTranscoder._
     testTresqls("/test.txt", (st, params, patternRes, nr) => {
       println(s"Executing test #$nr:")
-      val pattern = elementToAny(Json.decode(patternRes.getBytes("UTF8")).to[Element].value)
+      val pattern = jsonDomToAny(Json.decode(patternRes.getBytes("UTF8")).to[Element].value)
       assertResult(pattern, st) {
-        elementToAny(resultToElement(if (params == null) Query(st) else Query(st, parsePars(params))))
+        jsonDomToAny(resultToJsonDom(if (params == null) Query(st) else Query(st, parsePars(params))))
       }
     })
   }
@@ -333,7 +333,7 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     new scala.io.BufferedSource(getClass.getResourceAsStream(resource))("UTF-8")
       .getLines().foreach {
         case l if l.trim.startsWith("//") =>
-        case l if l.trim.length > 0 =>
+        case l if l.trim.nonEmpty =>
           val (st, params, patternRes) = l.split("-->") match {
             case scala.Array(s, r) => (s, null, r)
             case scala.Array(s, p, r) => (s, p, r)
@@ -347,32 +347,29 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
 
 object TresqlResultBorerElementTranscoder {
   import io.bullet.borer.Dom._
-  def resultToElement(r: Result[_]): Element = anyToElement(r.toListOfVectors)
-  def anyToElement(v: Any): Element = v match {
-    //for DML Result
-    case r: Result[_] => ArrayElem.Unsized((0 until r.columnCount map r.apply map anyToElement).toVector)
-    case l: List[_] => ArrayElem.Unsized((l map anyToElement).toVector)
-    case l: Vector[_] => ArrayElem.Unsized(l map anyToElement)
-    case m: Map[_, _] => MapElem.Unsized(m.map { case (k, v) => k.toString -> anyToElement(v)})
-    case p: Product => ArrayElem.Unsized((0 until p.productArity map p.productElement map anyToElement).toVector)
-    case b: Boolean => BooleanElem(b)
-    case n: Byte => IntElem(n)
-    case n: Short => IntElem(n)
-    case n: Int => IntElem(n)
-    case n: Long => LongElem(n)
-    case n: Float => FloatElem(n)
-    case n: Double => DoubleElem(n)
-    case n: scala.math.BigInt => NumberStringElem(n.toString)
-    case n: scala.math.BigDecimal => NumberStringElem(n.toString)
-    case n: java.lang.Number => NumberStringElem(n.toString)
-    case b: java.lang.Boolean => BooleanElem(b)
-    case t: java.sql.Timestamp => StringElem(t.toString.substring(0, 19))
-    case d: java.sql.Date => StringElem(d.toString)
-    case null => NullElem
-    case x => StringElem(x.toString)
+  def resultToJsonDom(r: Result[_]): Element = {
+    def anyToElement(v: Any): Element = v match {
+      case i: Iterable[_] => ArrayElem.Unsized((i map anyToElement).toVector)
+      case b: Boolean => BooleanElem(b)
+      case n: Byte => IntElem(n)
+      case n: Short => IntElem(n)
+      case n: Int => IntElem(n)
+      case n: Long => LongElem(n)
+      case n: Float => FloatElem(n)
+      case n: Double => DoubleElem(n)
+      case n: scala.math.BigInt => NumberStringElem(n.toString)
+      case n: scala.math.BigDecimal => NumberStringElem(n.toString)
+      case n: java.lang.Number => NumberStringElem(n.toString)
+      case b: java.lang.Boolean => BooleanElem(b)
+      case t: java.sql.Timestamp => StringElem(t.toString.substring(0, 19))
+      case d: java.sql.Date => StringElem(d.toString)
+      case null => NullElem
+      case x => StringElem(x.toString)
+    }
+    anyToElement(r.toListOfVectors)
   }
-  def elementToAny(e: Element): Any = e match {
-    case ArrayElem.Unsized(value) => value map elementToAny
+  def jsonDomToAny(e: Element): Any = e match {
+    case ArrayElem.Unsized(value) => value map jsonDomToAny
     case BooleanElem(value) => value
     case IntElem(value) => value
     case LongElem(value) => value
