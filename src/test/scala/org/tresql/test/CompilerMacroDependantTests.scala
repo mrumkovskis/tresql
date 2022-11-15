@@ -964,7 +964,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       ORT.insertMultiple(obj, "dept", "dept_addr")(":filter_condition = true"))
 
     obj = Map("dname" -> "Temp1", "addr" -> "Field1", "zip_code" -> "none",
-      "dept_sub_addr|:filter_condition = true,:filter_condition = true,:filter_condition = true" ->
+      "dept_sub_addr dsa|dsa.addr = null,:filter_condition = true,dsa.addr = null" ->
       List(Map("addr" -> "Hill", "zip_code" -> "----"),
            Map("addr" -> "Pot", "zip_code" -> "----")
       ), "filter_condition" -> false
@@ -981,7 +981,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       List(Map("addr" -> "Hill", "zip_code" -> "----"),
            Map("addr" -> "Pot", "zip_code" -> "----")
       ),
-      "emp[+-=]|:filter_condition = true,:filter_condition = true,:filter_condition = true" ->
+      "emp[+-=] e|e.ename = null,e.ename = null,e.ename = null" ->
       List(Map("ename" -> "X"), Map("empno" -> 7369, "ename" -> "Y")),
       "filter_condition" -> false
     )
@@ -990,13 +990,13 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         Some(1),
         Map(
           "_1" -> new DeleteResult(Some(0)),
-          "emp[+-=]|:filter_condition = true,:filter_condition = true,:filter_condition = true" ->
+          "emp[+-=]" ->
             List(new InsertResult(Some(0), Map(), Some(10079)), new InsertResult(Some(0), id = Some(7369))),
           "_3" -> new UpdateResult(
             Some(1),
             Map(
               "_1" -> new DeleteResult(Some(0)),
-              "dept_sub_addr[+-=]|:filter_condition = true,:filter_condition = true,:filter_condition = true" ->
+              "dept_sub_addr[+-=]" ->
                 List(new InsertResult(Some(0)), new InsertResult(Some(0)))
             ))
         )
@@ -1005,10 +1005,10 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
 
     //should not delete dept_sub_addr children
     obj = Map("deptno" -> 10075, "addr" -> "Field alone",
-      "dept_sub_addr[+-=]|:filter_condition = true, :filter_condition = true, :filter_condition = true" ->
+      "dept_sub_addr[+-=] dsa|dsa.addr = null,dsa.addr = null,dsa.addr = null" ->
       List(Map("addr" -> "Hill", "zip_code" -> "----"),
            Map("addr" -> "Pot", "zip_code" -> "----")
-      ), "filter_condition" -> false
+      )
     )
     assertResult(new UpdateResult(
       None,
@@ -1017,7 +1017,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
           Some(1),
           Map(
             "_1" -> new DeleteResult(Some(0)),
-            "dept_sub_addr[+-=]|:filter_condition = true, :filter_condition = true, :filter_condition = true" ->
+            "dept_sub_addr[+-=]" ->
               List(new InsertResult(Some(0)), new InsertResult(Some(0)))
           )
         )
@@ -1026,10 +1026,10 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
 
     //should delete dept_sub_addr children
     obj = Map("deptno" -> 10075, "addr" -> "Field alone",
-      "dept_sub_addr[+-=]|:filter_condition = true, null, :filter_condition = true" ->
+      "dept_sub_addr[+-=] dsa|dsa.addr = null, null, dsa.addr = null" ->
       List(Map("addr" -> "Hill", "zip_code" -> "----"),
            Map("addr" -> "Pot", "zip_code" -> "----")
-      ), "filter_condition" -> false
+      )
     )
     assertResult(new UpdateResult(
       None,
@@ -1038,7 +1038,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
           Some(1),
           Map(
             "_1" -> new DeleteResult(Some(2)),
-            "dept_sub_addr[+-=]|:filter_condition = true, null, :filter_condition = true" ->
+            "dept_sub_addr[+-=]" ->
               List(new InsertResult(Some(0)), new InsertResult(Some(0)))
           )
         )
