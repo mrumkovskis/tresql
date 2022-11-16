@@ -234,7 +234,7 @@ trait ORT extends Query {
         pk <- table.key.cols.headOption
         if table.key.cols.size == 1
       } yield {
-        s"-${tableWithDb(db, table.name)}${Option(alias).map(" " + _).getOrElse("")}[$pk = ?${Option(filter)
+        s"-${tableWithDb(db, table.name, alias)}[$pk = ?${Option(filter)
           .map(f => s" & ($f)").getOrElse("")}]"
       }) getOrElse {
         error(s"Table $name not found or table primary key not found or table primary key consists of more than one column")
@@ -304,7 +304,7 @@ trait ORT extends Query {
 
   def deleteTresql(name: String, key: Seq[String], filter: String)(implicit resources: Resources): String = {
     val OrtMetadata.Patterns.prop(db, tableName, _, alias, _) = name
-    s"-${tableWithDb(db, tableName)}${if (alias == null) "" else " " + alias}[${
+    s"-${tableWithDb(db, tableName, alias)}[${
       key.map(c => c + " = :" + c).mkString(" & ")}${if (filter == null) "" else s" & ($filter)"}]"
   }
 
@@ -385,8 +385,8 @@ trait ORT extends Query {
     ).orNull
   }
 
-  private def tableWithDb(db: String, table: String) = {
-    (if (db == null) "" else db + ":") + table
+  private def tableWithDb(db: String, table: String, alias: String) = {
+    (if (db == null) "" else db + ":") + table + (if (alias == null) "" else " " + alias)
   }
 
   private def hasOptionalFields(view: View) =
@@ -402,7 +402,7 @@ trait ORT extends Query {
     colsVals.filter(_.forInsert).map(cv => cv.col -> cv.value) ++ refsAndPk match {
       case cols_vals =>
         val (cols, vals) = cols_vals.unzip
-        cols.mkString(s"+${tableWithDb(db, table)} {", ", ", "}") +
+        cols.mkString(s"+${tableWithDb(db, table, null)} {", ", ", "}") +
           (for {
             filters <- saveData.filters
             filter <- filters.insert
@@ -435,7 +435,7 @@ trait ORT extends Query {
     val tableName = table.name
 
     def delAllChildren =
-      s"-${tableWithDb(view.db, tableName)}[$refToParent = :#$parent${filterString(ctx.view.filters, _.delete)}]"
+      s"-${tableWithDb(view.db, tableName, view.alias)}[$refToParent = :#$parent${filterString(ctx.view.filters, _.delete)}]"
     def delMissingChildren = {
       def del_children_tresql(data: SaveData) = {
         def refsAndKey(rk: Set[IdOrRefVal]) = {
@@ -462,7 +462,7 @@ trait ORT extends Query {
           if (refCols.isEmpty || keyCols.isEmpty) null
           else
             s"""_delete_missing_children('$name', $key_arr, $key_val_expr_arr, -${tableWithDb(data.db,
-              data.table)}[$refColsFilter & _not_delete_keys($key_arr, $key_val_expr_arr)$filter])"""
+              data.table, data.alias)}[$refColsFilter & _not_delete_keys($key_arr, $key_val_expr_arr)$filter])"""
       }
       save_tresql_internal(ctx.copy(view = ctx.view.copy(saveTo = List(saveTo))),
         del_children_tresql, null)
@@ -481,7 +481,6 @@ trait ORT extends Query {
         val refsAndPk = refsPkVals.collect {case x if !x.isInstanceOf[IdVal] => (x.name, x.value)}
         val (upd_tresql, hasChildren) = Option(filteredColsVals.unzip match {
           case (cols: List[String], vals: List[String]) if cols.nonEmpty =>
-            val tn = table + (if (alias == null) "" else " " + alias)
             val filter = filterString(data.filters, _.update)
             val filteredVals = vals.filter(_ != null) // filter out child queries vals
             val hasChildren = cols.size > filteredVals.size
@@ -489,7 +488,7 @@ trait ORT extends Query {
             val updateFilter =
               updFilter(if (keyVals.nonEmpty && !hasChildren) keyVals.map(kp => (kp._1.name, kp._2)) else refsAndPk)
                 .mkString("[", " & ", s"$filter]")
-            (cols.mkString(s"=${tableWithDb(db, tn)} $updateFilter {", ", ", "}") +
+            (cols.mkString(s"=${tableWithDb(db, table, alias)} $updateFilter {", ", ", "}") +
               filteredVals.mkString("[", ", ", "]"), hasChildren)
           case _ => // no updatable columns, update primary key with self to return create empty update in the case this is used in upsert expression
             val pkVals =
@@ -498,10 +497,9 @@ trait ORT extends Query {
             val u =
               if (pkVals.isEmpty) null
               else {
-                val tn = table + (if (alias == null) "" else " " + alias)
                 val pkStr = data.pk.mkString(", ")
                 val filter = filterString(data.filters, _.update)
-                s"=${tableWithDb(db, tn)} [${
+                s"=${tableWithDb(db, table, alias)} [${
                   pkVals.map {case (c, v) => s"$c = $v"} mkString(" & ")}$filter] {$pkStr} [$pkStr]"
               }
             (u, false)
@@ -516,7 +514,7 @@ trait ORT extends Query {
         if (data.pk.size == 1 && keyVals.nonEmpty && hasChildren) { // if has key and children calculate and set pk for children use
           val pr_col = data.pk.head
           s"|${if (db != null) db + ":" else ""}_update_by_key($table, :$pr_col = _id_by_key(|${
-            tableWithDb(db, table)}[${keyVals.map(kv => s"${kv._1.name} = ${kv._2}")
+            tableWithDb(db, table, null)}[${keyVals.map(kv => s"${kv._1.name} = ${kv._2}")
             .mkString(" & ")}]{$pr_col}), $upd_tresql)"
         } else upd_tresql
       }
