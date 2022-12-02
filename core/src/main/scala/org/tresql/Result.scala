@@ -3,6 +3,8 @@ package org.tresql
 import java.sql.ResultSet
 import CoreTypes.RowConverter
 
+import scala.collection.immutable.ListMap
+
 trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T] {
 
   def columns: Seq[Column] = 0 until columnCount map column
@@ -599,10 +601,15 @@ trait RowLike extends Typed with AutoCloseable {
   def jbd(name: String) = jBigDecimal(name)
   def listOfRows(idx: Int): List[this.type] = this(idx).asInstanceOf[List[this.type]]
   def listOfRows(name: String) = this(name).asInstanceOf[List[this.type]]
+  /** Converts row to map preserving column sequence.
+   *  null value column names make as _idx, where idx is number over null value columns */
   def toMap: Map[String, Any] = (0 until columnCount).map(i => column(i).name -> (this(i) match {
     case r: Result[_] => r.toListOfMaps
     case x => x
-  })).toMap
+  })).foldLeft(ListMap[String, Any]() -> 1) { case ((r, i), c@(n, v)) =>
+    // use ListMap to preserve column sequence
+    if (n == null) (r + (s"_$i" -> v), i + 1) else (r + c, i)
+  }._1
   /** name {{{toVector}}} is defined in {{{trait TranversableOnce}}} */
   def rowToVector: Vector[Any] = {
     def anyToVal(v: Any): Any = v match {

@@ -455,6 +455,19 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     assertResult("n")(Query("if_defined_or_else(:a.x, 'y', 'n')", Map("a" -> null)).head(0))
     assertResult("n")(Query("if_defined_or_else(:a.x, 'y', 'n')", Map("a" -> 1)).head(0))
     assertResult("y")(Query("if_defined_or_else(:a.x, 'y', 'n')", Map("a" -> Map("x" -> 2))).head(0))
+
+    //test column sequence
+    val rowColOrderTest = (0 to 10 map (_ + 'a'.toInt) map (_.toChar.toString)).reverse.zipWithIndex
+    assertResult(List(rowColOrderTest)) {
+      val q = rowColOrderTest.map { case (c, v) => s"$v $c" }.mkString("{ ", ", ", " }")
+      Query(q).toListOfMaps.map(_.toSeq)
+    }
+
+    //test null column names
+    assertResult(List(Map("a" -> 1, "_1" -> 2, "b" -> 3, "_2" -> 4, "_3" -> List(
+      Map("_1" -> 1, "a" -> 2, "_2" -> 3, "b" -> 4))))) {
+      Query("{ 1 a, 2, 3 b, 4, |null{ 1, 2 a, 3, 4 b } }").toListOfMaps
+    }
   }
 
   override def ort(implicit resources: Resources) = {
