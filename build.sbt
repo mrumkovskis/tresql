@@ -84,8 +84,8 @@ lazy val tresql = (project in file("."))
     libraryDependencies ++= coreDependencies(scalaVersion.value) ++
       Seq("org.scalatest" %% "scalatest" % "3.2.14" % "test,it",
         ("org.hsqldb" % "hsqldb" % "2.7.1" % "test").classifier("jdk8"),
-        "io.bullet" %% "borer-core" % "1.7.2",
-        "io.bullet" %% "borer-derivation" % "1.7.2",
+        "io.bullet" %% "borer-core" % "1.7.2" % "test,it",
+        "io.bullet" %% "borer-derivation" % "1.7.2" % "test,it",
         "org.postgresql" % "postgresql" % "42.5.0" % "it,test"),
     Test / console / initialCommands := "import org.tresql._; import org.scalatest._; import org.tresql.test.ConsoleResources._",
     IntegrationTest / console / initialCommands := "import org.tresql._; import org.scalatest._; import org.tresql.test.ITConsoleResources._",
