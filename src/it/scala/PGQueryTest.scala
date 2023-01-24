@@ -1,13 +1,12 @@
 package org.tresql.test
 
 import java.io.ByteArrayOutputStream
-
 import org.scalatest.{BeforeAndAfterAllConfigMap, ConfigMap}
 import org.scalatest.funsuite.AnyFunSuite
-import java.sql.DriverManager
 
+import java.sql.{Connection, DriverManager}
 import org.tresql._
-import org.tresql.metadata.JDBCMetadata
+import org.tresql.metadata.{JDBCMetadata, TypeMapper}
 
 import scala.util.control.NonFatal
 import sys._
@@ -33,12 +32,34 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
 
   var tresqlResources: Resources = null
 
+  trait PGTypeMapper extends TypeMapper {
+    override def to_sql_type(vendor: String, typeName: String): String = {
+      if (vendor == "postgresql") {
+        Map(
+          "string" -> "text",
+          "short" -> "smallint",
+          "int" -> "integer",
+          "long" -> "bigint",
+          "integer" -> "numeric",
+          "float" -> "float",
+          "double" -> "double precision",
+          "decimal" -> "numeric",
+          "boolean" -> "bool",
+          "date" -> "date",
+          "time" -> "time",
+          "dateTime" -> "timestamp",
+          "bytes" -> "bytea",
+        ).getOrElse(typeName, typeName)
+      } else super.to_sql_type(vendor, typeName)
+    }
+  }
+
   override def beforeAll(configMap: ConfigMap) = {
     //initialize environment
     Class.forName("org.postgresql.Driver")
     val jdbcPort = configMap.getOptional[String]("port").map(":" + _).getOrElse("")
     val (dbUri, dbUser, dbPwd) = (s"jdbc:postgresql://localhost$jdbcPort/tresql", "tresql", "tresql")
-    val conn = if (configMap.get("docker").isDefined) {
+    val connection = if (configMap.get("docker").isDefined) {
       val postgresDockerImage = configMap("docker")
       val hostPort = configMap.getOrElse("port", "5432")
       val DockerCmd =
@@ -83,9 +104,12 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
         throw sys.error(s"Unable to connect to database: ${e.toString}.\n" +
           "For postgres docker container try command: it:testOnly * -- -oD -Ddocker=postgres -Dport=<port> -Dwait_after_startup_millis=<time to wait for postgres for startup>")
     }
+    val md = new JDBCMetadata with PGTypeMapper {
+      override def conn: Connection = connection
+    }
     tresqlResources = new Resources {}
-      .withConn(conn)
-      .withMetadata(JDBCMetadata(conn))
+      .withConn(connection)
+      .withMetadata(md)
       .withDialect(dialects.PostgresqlDialect orElse dialects.VariableNameDialect)
       .withIdExpr(_ => "nextval('seq')")
       .withMacros(Macros)
@@ -93,7 +117,7 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
       .withLogger((msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg))
     //create test db script
     new scala.io.BufferedSource(getClass.getResourceAsStream("/pgdb.sql")).mkString.split("//").foreach {
-      sql => val st = conn.createStatement; tresqlResources.log("Creating database:\n" + sql); st.execute(sql); st.close
+      sql => val st = connection.createStatement; tresqlResources.log("Creating database:\n" + sql); st.execute(sql); st.close
     }
     //set resources for console
     ITConsoleResources.resources = tresqlResources
@@ -195,7 +219,7 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
     println("\n-------------- TEST compiler ----------------\n")
     //set new metadata
     val testRes = tresqlResources.withMetadata(
-      new metadata.JDBCMetadata {
+      new JDBCMetadata with PGTypeMapper {
         override def conn: java.sql.Connection = tresqlResources.conn
         override def macrosClass: Class[_] = classOf[org.tresql.test.Macros]
       }

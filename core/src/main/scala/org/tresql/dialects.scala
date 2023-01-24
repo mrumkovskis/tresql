@@ -32,10 +32,11 @@ package object dialects {
     case idrefid: ORT#IdRefIdExpr => idrefid.defaultSQL + s"/*:#${idrefid.idRefSeq}#${idrefid.idSeq}*/"
   }
 
-  val CommonDialect: CoreTypes.Dialect = {
+  def commonDialect(vendor: String): CoreTypes.Dialect = {
     case f: QueryBuilder#FunExpr
       if f.name == "cast" && f.params.size == 2 && f.params(1).isInstanceOf[QueryBuilder#ConstExpr] =>
-      s"cast(${f.params(0).sql} as ${f.params(1).asInstanceOf[QueryBuilder#ConstExpr].value})"
+      s"cast(${f.params(0).sql} as ${f.builder.env.metadata.to_sql_type(vendor,
+        String.valueOf(f.params(1).asInstanceOf[QueryBuilder#ConstExpr].value))})"
   }
 
   object HSQLRawDialect extends CoreTypes.Dialect {
@@ -125,32 +126,14 @@ package object dialects {
   }
 
   val PostgresqlRawDialect: CoreTypes.Dialect = {
-    // TODO support conversions for types with sizes
-    val mojozPgTypeMap = Map(
-      "string"    -> "text",
-      "short"     -> "smallint",
-      "int"       -> "integer",
-      "long"      -> "bigint",
-      "integer"   -> "numeric",
-      "float"     -> "float",
-      "double"    -> "double precision",
-      "decimal"   -> "numeric",
-      "boolean"   -> "bool",
-      "date"      -> "date",
-      "time"      -> "time",
-      "dateTime"  -> "timestamp",
-      "bytes"     -> "bytea",
-    )
-    ({
-      case c: QueryBuilder#ColExpr if c.alias != null => Option(c.col).map(_.sql).getOrElse("null") + " as " + c.alias
-      case c: QueryBuilder#CastExpr => c.exp.sql + "::" + mojozPgTypeMap.getOrElse(c.typ, c.typ)
-    }): CoreTypes.Dialect
+    case c: QueryBuilder#ColExpr if c.alias != null => Option(c.col).map(_.sql).getOrElse("null") + " as " + c.alias
+    case c: QueryBuilder#CastExpr => c.exp.sql + "::" + c.builder.env.metadata.to_sql_type("postgresql", c.typ)
   }
 
-  def HSQLDialect = HSQLRawDialect orElse CommonDialect orElse ANSISQLDialect
-
-  def OracleDialect = OracleRawDialect orElse CommonDialect orElse ANSISQLDialect
-
-  def PostgresqlDialect = PostgresqlRawDialect orElse CommonDialect orElse ANSISQLDialect
-
+  def HSQLDialect: CoreTypes.Dialect =
+    HSQLRawDialect orElse commonDialect("hsqldb") orElse ANSISQLDialect
+  def OracleDialect: CoreTypes.Dialect =
+    OracleRawDialect orElse commonDialect("oracle") orElse ANSISQLDialect
+  def PostgresqlDialect: CoreTypes.Dialect =
+    PostgresqlRawDialect orElse commonDialect("postgresql") orElse ANSISQLDialect
 }

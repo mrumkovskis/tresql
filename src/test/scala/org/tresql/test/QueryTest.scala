@@ -22,10 +22,32 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
   override def beforeAll() = {
     //initialize environment
     Class.forName("org.hsqldb.jdbc.JDBCDriver")
-    val conn = DriverManager.getConnection("jdbc:hsqldb:mem:db")
+    val connection = DriverManager.getConnection("jdbc:hsqldb:mem:db")
+    val md = new JDBCMetadata {
+      override def conn: Connection = connection
+      override def to_sql_type(vendor: String, typeName: String): String = {
+        if (vendor == "postgresql") {
+          Map(
+            "string"    -> "text",
+            "short"     -> "smallint",
+            "int"       -> "integer",
+            "long"      -> "bigint",
+            "integer"   -> "numeric",
+            "float"     -> "float",
+            "double"    -> "double precision",
+            "decimal"   -> "numeric",
+            "boolean"   -> "bool",
+            "date"      -> "date",
+            "time"      -> "time",
+            "dateTime"  -> "timestamp",
+            "bytes"     -> "bytea",
+          ).getOrElse(typeName, typeName)
+        } else super.to_sql_type(vendor, typeName)
+      }
+    }
     val res = new Resources {}
-      .withMetadata(JDBCMetadata(conn))
-      .withConn(conn)
+      .withMetadata(md)
+      .withConn(connection)
       .withDialect(hsqlDialect)
       .withIdExpr(_ => "nextval('seq')")
       .withMacros(Macros)
@@ -53,7 +75,7 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
 
     tresqlResources = res.withExtraResources(Map("emp_db" -> res, "contact_db" -> res1))
 
-    List(("/db.sql", conn), ("/db1.sql", conn1)) foreach { case (db, c) =>
+    List(("/db.sql", connection), ("/db1.sql", conn1)) foreach { case (db, c) =>
       //create test db script
       tresqlResources.log(s"Creating database from file ($db)")
       new scala.io.BufferedSource(getClass.getResourceAsStream(db)).mkString.split("//").foreach {
