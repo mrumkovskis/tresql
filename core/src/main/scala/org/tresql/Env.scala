@@ -290,10 +290,13 @@ trait ThreadLocalResources extends Resources {
   override def extraResources: Map[String, Resources] = threadResources.extraResources
   override def isMacroDefined(macroName: String) = threadResources.isMacroDefined(macroName)
   override def isBuilderMacroDefined(macroName: String) = threadResources.isBuilderMacroDefined(macroName)
+  override def isBuilderDeferredMacroDefined(macroName: String) = threadResources.isBuilderDeferredMacroDefined(macroName)
   override def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp =
     threadResources.invokeMacro(name, parser, args)
   override def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr =
     threadResources.invokeBuilderMacro(name, builder, args)
+  override def invokeBuilderDeferredMacro(name: String, builder: QueryBuilder, args: List[Exp]): Expr =
+    threadResources.invokeBuilderDeferredMacro(name, builder, args)
 
   /** Cache is global not thread local. To be overriden in subclasses. This implementation returns {{{super.cache}}} */
   override def cache: Cache = super.cache
@@ -367,15 +370,12 @@ trait Resources extends MacroResources with CacheResources with Logging {
   def recursiveStackDepth: Int = 50
   def params: Map[String, Any] = Map()
   def extraResources: Map[String, Resources] = Map()
-  override def isMacroDefined(name: String): Boolean = false
-  override def isBuilderMacroDefined(name: String): Boolean = false
-  override def isBuilderDeferredMacroDefined(name: String): Boolean = false
-  override def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp =
-    sys.error(s"macro $name not defined")
-  override def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr =
-    sys.error(s"macro $name not defined")
-  override def invokeBuilderDeferredMacro(name: String, builder: QueryBuilder, args: List[Exp]): Expr =
-    sys.error(s"macro $name not defined")
+  override def isMacroDefined(name: String): Boolean = ???
+  override def isBuilderMacroDefined(name: String): Boolean = ???
+  override def isBuilderDeferredMacroDefined(name: String): Boolean = ???
+  override def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp = ???
+  override def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr = ???
+  override def invokeBuilderDeferredMacro(name: String, builder: QueryBuilder, args: List[Exp]): Expr = ???
 
   //resource construction convenience methods
   def withConn(conn: java.sql.Connection): Resources = copyResources.copy(conn = conn)
