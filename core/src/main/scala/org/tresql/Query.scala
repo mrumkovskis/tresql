@@ -204,8 +204,8 @@ trait Query extends QueryBuilder with TypedQuery {
     val conn = env.conn
     if (conn == null) throw new NullPointerException(
       """Connection not found in environment.""")
-    val bindValues = registeredBindVariables.map(_())
     log(sql, registeredBindVariables)
+    val bindValues = registeredBindVariables.map(_())
     val st = if (env.reusableExpr)
       if (env.statement == null) {
         val s = if (call) conn.prepareCall(sql) else {
