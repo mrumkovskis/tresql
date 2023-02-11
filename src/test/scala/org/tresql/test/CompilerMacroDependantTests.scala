@@ -2230,7 +2230,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         )
     )
     assertResult(List(("BMW", "RESEARCH", List(("Barum", "W"))))) {
-      ORT.save(view, obj)
+      ORT.update(view, obj)
       println(s"\nResult check:")
       tresql"car[name = 'BMW'] {name, (dept[deptno = deptnr]{dname}) dept, |[car.tyres_nr = nr]tyres {brand, season} tyres}"
         .map(c => (c.name, c.dept, c.tyres.map(t => t.brand -> t.season).toList)).toList
@@ -2279,6 +2279,33 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       println(s"\nResult check:")
       tresql"car[name = 'BMW'] {name, (dept[deptno = deptnr]{loc}) dept_loc, |[car.tyres_nr = nr]tyres {brand, season} tyres}"
         .map(c => (c.name, c.dept_loc, c.tyres.map(t => t.brand -> t.season).toList)).toList
+    }
+
+    view = {
+      import OrtMetadata._
+      val lookupDept =
+        View(
+          List(SaveTo("dept", Set(), List("dname"))), None, null, true, true, true,
+          List(
+            Property("dname", TresqlValue(":dname", true, true, false)),
+          ), null)
+      View(
+        List(SaveTo("emp", Set(), List())), None, null, true, true, false,
+        List(
+          Property("empno", TresqlValue(":empno", true, true, false)),
+          Property("ename", TresqlValue(":ename?", true, true, true)),
+          Property("job", TresqlValue(":job?", true, true, true)),
+          Property("deptno", LookupViewValue("dept", lookupDept)),
+        ), null)
+    }
+
+    obj = Map("empno" -> Query("emp[ename = 'Leo']{empno}").unique[Long], "ename" -> "Leopold",
+      "dept" -> Map("dname" -> "Pharmacy"))
+
+    assertResult(List("Pharmacy")) {
+      ORT.update(view, obj)
+      println("\nResult check:")
+      tresql"emp[ename = 'Leopold']/dept{dname}".map(_.dname).toList
     }
   }
 
