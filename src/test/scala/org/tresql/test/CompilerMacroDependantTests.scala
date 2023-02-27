@@ -1442,9 +1442,9 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       View(
         List(SaveTo("dept", Set(), Nil)), None, null,
         List(
-          Property("deptno", TresqlValue(":dept_id", true, true), false),
-          Property("dname", TresqlValue(":dname", true, true), false),
-          Property("loc", TresqlValue(":loc", true, true), false)
+          Property("deptno", TresqlValue(":dept_id"), false, true, true),
+          Property("dname", TresqlValue(":dname"), false, true, true),
+          Property("loc", TresqlValue(":loc"), false, true, true)
         ), null)
     }
     obj = Map("dept_id" -> 4321, "dname" -> "Fish", "loc" -> "Vecaki")
@@ -1464,15 +1464,15 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       View(
         List(SaveTo("emp", Set(), Nil)), None, null,
         List(
-          Property("empno", TresqlValue(":emp_id", true, true), false),
-          Property("ename", TresqlValue(":ename", true, true), false),
-          Property("job", TresqlValue(":job", true, true), false),
+          Property("empno", TresqlValue(":emp_id"), false, true, true),
+          Property("ename", TresqlValue(":ename"), false, true, true),
+          Property("job", TresqlValue(":job"), false, true, true),
         ), null)
     }
     view = {
       import OrtMetadata._
       view.copy(properties = view.properties :+
-        Property("emps", ViewValue(childView, SaveOptions(true, true, false)), false))
+        Property("emps", ViewValue(childView, SaveOptions(true, true, false)), false, true, true))
     }
     obj = Map("dept_id" -> 4321, "dname" -> "Fish", "loc" -> "Roja", "emps" ->
       List(Map("ename" -> "Girts", "job" -> "Fisherman")))
@@ -1502,11 +1502,11 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         ),
         None, null,
         List(
-          Property("dname", TresqlValue(":dname", true, true), false),
-          Property("loc", TresqlValue(":loc?", true, true), true),
-          Property("dept_addr.addr", TresqlValue(":addr", true, true), false),
-          Property("dept_sub_addr.addr", TresqlValue(":sub_addr", true, true), false),
-          Property("zip_code", TresqlValue(":zip_code", true, true), false),
+          Property("dname", TresqlValue(":dname"), false, true, true),
+          Property("loc", TresqlValue(":loc?"), true, true, true),
+          Property("dept_addr.addr", TresqlValue(":addr"), false, true, true),
+          Property("dept_sub_addr.addr", TresqlValue(":sub_addr"), false, true, true),
+          Property("zip_code", TresqlValue(":zip_code"), false, true, true),
         ), null)
     }
     obj = Map(
@@ -1660,8 +1660,8 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         View(
           List(SaveTo("accounts.account", Set(), List("number"))), None, null,
           List(
-            Property("number", TresqlValue(":number",true, true), false),
-            Property("balance", TresqlValue(":balance", true, true), false)
+            Property("number", TresqlValue(":number"), false, true, true),
+            Property("balance", TresqlValue(":balance"), false, true, true)
           ),
           null
         ), obj)
@@ -1675,8 +1675,8 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       ORT.save(View(List(SaveTo("accounts.account", Set(),
         List("number"))), None, null,
         List(
-          Property("number", TresqlValue(":number", true, true), false),
-          Property("balance", TresqlValue("accounts.account[number = :number]{ balance + :balance}", true, true), false)
+          Property("number", TresqlValue(":number"), false, true, true),
+          Property("balance", TresqlValue("accounts.account[number = :number]{ balance + :balance}"), false, true, true)
         ), null),
         obj)
       println(s"\nResult check:")
@@ -1758,7 +1758,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       import OrtMetadata._
       ORT.save(View(List(SaveTo("accounts.account", Set(),
         List("number"))), None, null,
-        List(Property("number", KeyValue(":number", TresqlValue(":new_number", true, true)), false)), null),
+        List(Property("number", KeyValue(":number", TresqlValue(":new_number")), false, true, true)), null),
         obj)
       println(s"\nResult check:")
       tresql"accounts.account[number = '000000']{number}".map(_.number).toList
@@ -1771,8 +1771,8 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         View(
           List(SaveTo("accounts.account", Set(), List("number"))), None, null,
           List(
-            Property("number", KeyValue(":number", TresqlValue(":new_number", true, true)), false),
-            Property("balance", TresqlValue(":balance", true, true), false)
+            Property("number", KeyValue(":number", TresqlValue(":new_number")), false, true, true),
+            Property("balance", TresqlValue(":balance"), false, true, true)
           ), null),
         obj
       )
@@ -1787,8 +1787,8 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         View(
           List(SaveTo("accounts.account", Set(), List("number"))), None, null,
           List(
-            Property("number", KeyValue(":number", TresqlValue(":new_number", true, false)), false),
-            Property("balance", TresqlValue(":balance", true, true), false)
+            Property("number", KeyValue(":number", TresqlValue(":new_number")), false, true, false),
+            Property("balance", TresqlValue(":balance"), false, true, true)
           ), null),
         obj
       )
@@ -1803,9 +1803,9 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         View(
           List(SaveTo("emp", Set(), List("ename", "deptno"))), None, null,
           List(
-            Property("ename", KeyValue(":ename", TresqlValue(":new_ename", true, true)), false),
+            Property("ename", KeyValue(":ename", TresqlValue(":new_ename")), false, true, true),
             Property("deptno", KeyValue("(dept[dname = :dept]{deptno})",
-              TresqlValue("(dept[dname = :new_dept]{deptno})", true, true)), false)
+              TresqlValue("(dept[dname = :new_dept]{deptno})")), false, true, true)
           ), null),
         obj
       )
@@ -1822,8 +1822,8 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       View(
         List(SaveTo("dept", Set(), Nil)), None, null,
         List(
-          Property("dname", TresqlValue(":dname", true, false), false),
-          Property("loc", TresqlValue(":loc", false, true), false)
+          Property("dname", TresqlValue(":dname"), false, true, false),
+          Property("loc", TresqlValue(":loc"), false, false, true)
         ), null)
     }
     var obj: Map[String, Any] = Map("dname" -> "Cafe", "loc" -> "Purvciems")
@@ -1857,9 +1857,9 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       View(
         List(SaveTo("dept", Set(), Nil)), None, null,
         List(
-          Property("deptno", TresqlValue(":deptno", true, true), false),
-          Property("dname", TresqlValue(":dname", true, true), false),
-          Property("loc", TresqlValue(":loc", true, true), false)
+          Property("deptno", TresqlValue(":deptno"), false, true, true),
+          Property("dname", TresqlValue(":dname"), false, true, true),
+          Property("loc", TresqlValue(":loc"), false, true, true)
         ), null)
     }
     obj = Map("dname" -> "Space", "loc" -> "Mars")
@@ -1873,14 +1873,14 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       View(
         List(SaveTo("emp", Set(), Nil)), None, null,
         List(
-          Property("empno", TresqlValue(":empno", true, true), false),
-          Property("ename", TresqlValue(":ename", true, true), false),
+          Property("empno", TresqlValue(":empno"), false, true, true),
+          Property("ename", TresqlValue(":ename"), false, true, true),
         ), null)
     }
     view = {
       import OrtMetadata._
       view.copy(properties = view.properties :+
-        Property("emps", ViewValue(childView, SaveOptions(true, true, true)), false))
+        Property("emps", ViewValue(childView, SaveOptions(true, true, true)), false, true, true))
     }
     obj = Map("deptno" -> tresql"dept[dname = 'Space']{deptno}".unique[Long], "dname" -> "Space", "loc" -> "Venus",
       "emps" -> List(Map("ename" -> "Boris")))
@@ -1894,7 +1894,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     view = {
       import OrtMetadata._
       view.copy(properties = view.properties.dropRight(1) :+
-        Property("emps", ViewValue(childView, SaveOptions(false, false, false)), false))
+        Property("emps", ViewValue(childView, SaveOptions(true, true, true)), false, true, false))
     }
     obj = Map("deptno" -> tresql"dept[dname = 'Space']{deptno}".unique[Long], "dname" -> "Space", "loc" -> "Venus",
       "emps" -> List(Map("ename" -> "Zina")))
@@ -1909,7 +1909,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     view = {
       import OrtMetadata._
       view.copy(properties = view.properties.dropRight(1) :+
-        Property("emps", ViewValue(childView, SaveOptions(true, true, true)), false))
+        Property("emps", ViewValue(childView, SaveOptions(true, true, true)), false, true, true))
     }
     obj = Map("deptno" -> tresql"dept[dname = 'Space']{deptno}".unique[Long], "dname" -> "Space", "loc" -> "Saturn",
       "emps" -> null)
@@ -1926,16 +1926,16 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         View(
           List(SaveTo("dept", Set(), Nil)), None, null,
           List(
-            Property("deptno", TresqlValue(":deptno", true, true), false),
-            Property("dname", TresqlValue(":dname", true, true), false),
-            Property("loc", TresqlValue(":loc", true, true), false)
+            Property("deptno", TresqlValue(":deptno"), false, true, true),
+            Property("dname", TresqlValue(":dname"), false, true, true),
+            Property("loc", TresqlValue(":loc"), false, true, true)
           ), null)
       View(
         List(SaveTo("emp", Set(), Nil)), None, null,
         List(
-          Property("empno", TresqlValue(":empno", true, true), false),
-          Property("ename", TresqlValue(":ename", true, true), false),
-          Property("deptno", LookupViewValue("dept", lookupView, false, true), false)
+          Property("empno", TresqlValue(":empno"), false, true, true),
+          Property("ename", TresqlValue(":ename"), false, true, true),
+          Property("deptno", LookupViewValue("dept", lookupView), false, false, true)
         ), null)
     }
     obj = Map("ename" -> "Gogi", "dept" -> Map("dname" -> "Mount", "loc" -> "Georgia"))
@@ -1950,16 +1950,16 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         View(
           List(SaveTo("car", Set(), List("name"))), None, null,
           List(
-            Property("name", TresqlValue(":name", true, true), false),
-            Property("is_active", TresqlValue(":is_active?", true, true), true),
-            Property("tyres_nr", TresqlValue(":tyres_nr?", true, true), true),
+            Property("name", TresqlValue(":name"), false, true, true),
+            Property("is_active", TresqlValue(":is_active?"), true, true, true),
+            Property("tyres_nr", TresqlValue(":tyres_nr?"), true, true, true),
           ), null)
       View(
         List(SaveTo("dept", Set(), List("dname"))), None, null,
         List(
-          Property("dname", TresqlValue(":dname", true, true), false),
-          Property("loc", TresqlValue(":loc?", true, true), true),
-          Property("cars", ViewValue(cars, SaveOptions(true, true, true)), true)
+          Property("dname", TresqlValue(":dname"), false, true, true),
+          Property("loc", TresqlValue(":loc?"), true, true, true),
+          Property("cars", ViewValue(cars, SaveOptions(true, true, true)), true, true, true)
         ), null)
     }
     obj = Map("dname" -> "Floating", "loc" -> "Sea", /*"cars" -> List(
@@ -2011,14 +2011,14 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         View(
           List(SaveTo("dept", Set(), List("dname"))), None, null,
           List(
-            Property("dname", TresqlValue(":dname", true, true), false),
-            Property("loc", TresqlValue(":loc", true, true), false)
+            Property("dname", TresqlValue(":dname"), false, true, true),
+            Property("loc", TresqlValue(":loc"), false, true, true)
           ), null)
       View(
         List(SaveTo("emp", Set(), List("ename"))), None, null,
         List(
-          Property("ename", TresqlValue(":ename", true, true), false),
-          Property("deptno", LookupViewValue("dept", lookupView, true, true), false)
+          Property("ename", TresqlValue(":ename"), false, true, true),
+          Property("deptno", LookupViewValue("dept", lookupView), false, true, true)
         ), null)
     }
     assertResult(List(("Gogi", "Mount"))) {
@@ -2044,13 +2044,13 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         View(
           List(SaveTo("dept", Set(), List("dname"))), None, null,
           List(
-            Property("dname", TresqlValue(":dname", true, true), false),
+            Property("dname", TresqlValue(":dname"), false, true, true),
           ), null)
       View(
         List(SaveTo("emp", Set(), List("ename"))), None, null,
         List(
-          Property("ename", TresqlValue(":ename", true, true), false),
-          Property("deptno", LookupViewValue("dept", lookupView, true, true), false)
+          Property("ename", TresqlValue(":ename"), false, true, true),
+          Property("deptno", LookupViewValue("dept", lookupView), false, true, true)
         ), null)
     }
     obj = Map("ename" -> "Leo", "dept" -> Map("dname" -> "Space"))
@@ -2088,14 +2088,14 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         View(
           List(SaveTo("dept", Set(), List("dname"))), None, null,
           List(
-            Property("dname", TresqlValue(":dname", true, true), false),
-            Property("loc", TresqlValue(":loc", true, true), false),
+            Property("dname", TresqlValue(":dname"), false, true, true),
+            Property("loc", TresqlValue(":loc"), false, true, true),
           ), null)
       View(
         List(SaveTo("car", Set(), List("name"))), None, null,
         List(
-          Property("name", TresqlValue(":name", true, true), false),
-          Property("deptnr", LookupViewValue("dept", lookupView, true, true), false)
+          Property("name", TresqlValue(":name"), false, true, true),
+          Property("deptnr", LookupViewValue("dept", lookupView), false, true, true)
         ), null)
     }
     obj = Map("name" -> "ZAZ", "dept" -> null)
@@ -2127,13 +2127,13 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         View(
           List(SaveTo("dept", Set(), Nil)), None, null,
           List(
-            Property("deptno", TresqlValue(":deptno", true, true), false),
+            Property("deptno", TresqlValue(":deptno"), false, true, true),
           ), null)
       View(
         List(SaveTo("emp", Set(), List("ename"))), None, null,
         List(
-          Property("ename", TresqlValue(":ename", true, true), false),
-          Property("deptno", LookupViewValue("dept", lookupView, true, true), false)
+          Property("ename", TresqlValue(":ename"), false, true, true),
+          Property("deptno", LookupViewValue("dept", lookupView), false, true, true)
         ), null)
     }
     obj = Map("ename" -> "Christina", "dept" -> Map("deptno" -> tresql"dept[dname = 'Space']{deptno}".unique[Long]))
@@ -2158,13 +2158,13 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         View(
           List(SaveTo("dept", Set(), List("deptno"))), None, null,
           List(
-            Property("deptno", TresqlValue(":deptno", true, true), false),
+            Property("deptno", TresqlValue(":deptno"), false, true, true),
           ), null)
       View(
         List(SaveTo("emp", Set(), List("ename"))), None, null,
         List(
-          Property("ename", TresqlValue(":ename", true, true), false),
-          Property("deptno", LookupViewValue("dept", lookupView, true, true), false)
+          Property("ename", TresqlValue(":ename"), false, true, true),
+          Property("deptno", LookupViewValue("dept", lookupView), false, true, true)
         ), null)
     }
     obj = Map("ename" -> "Britney", "dept" -> Map("deptno" -> tresql"dept[dname = 'Space']{deptno}".unique[Long]))
@@ -2189,25 +2189,25 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         View(
           List(SaveTo("dept", Set(), List("deptno"))), None, null,
           List(
-            Property("deptno", TresqlValue(":deptno", true, true), false),
-            Property("dname", TresqlValue(":dname", true, true), false),
-            Property("loc", TresqlValue(":loc?", true, true), true),
+            Property("deptno", TresqlValue(":deptno"), false, true, true),
+            Property("dname", TresqlValue(":dname"), false, true, true),
+            Property("loc", TresqlValue(":loc?"), true, true, true),
           ), null)
       val lookupTyres =
         View(
           List(SaveTo("tyres", Set(), Nil)), None, null,
           List(
-            Property("nr", TresqlValue(":nr", true, true), false),
-            Property("carnr", TresqlValue(":carnr", true, true), false),
-            Property("brand", TresqlValue(":brand", true, true), false),
-            Property("season", TresqlValue(":season", true, true), false),
+            Property("nr", TresqlValue(":nr"), false, true, true),
+            Property("carnr", TresqlValue(":carnr"), false, true, true),
+            Property("brand", TresqlValue(":brand"), false, true, true),
+            Property("season", TresqlValue(":season"), false, true, true),
           ), null)
       View(
         List(SaveTo("car", Set(), List("name"))), None, null,
         List(
-          Property("name", TresqlValue(":name", true, true), false),
-          Property("deptnr", LookupViewValue("dept", lookupDept, true, true), true),
-          Property("tyres_nr", LookupViewValue("tyres", lookupTyres, true, true), true),
+          Property("name", TresqlValue(":name"), false, true, true),
+          Property("deptnr", LookupViewValue("dept", lookupDept), true, true, true),
+          Property("tyres_nr", LookupViewValue("tyres", lookupTyres), true, true, true),
         ), null)
     }
 
@@ -2278,15 +2278,15 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         View(
           List(SaveTo("dept", Set(), List("dname"))), None, null,
           List(
-            Property("dname", TresqlValue(":dname", true, true), false)
+            Property("dname", TresqlValue(":dname"), false, true, true)
           ), null)
       View(
         List(SaveTo("emp", Set(), List())), None, null,
         List(
-          Property("empno", TresqlValue(":empno", true, true), false),
-          Property("ename", TresqlValue(":ename?", true, true), true),
-          Property("job", TresqlValue(":job?", true, true), true),
-          Property("deptno", LookupViewValue("dept", lookupDept, true, true), true),
+          Property("empno", TresqlValue(":empno"), false, true, true),
+          Property("ename", TresqlValue(":ename?"), true, true, true),
+          Property("job", TresqlValue(":job?"), true, true, true),
+          Property("deptno", LookupViewValue("dept", lookupDept), true, true, true),
         ), null)
     }
 
