@@ -39,23 +39,11 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
 
   def decimalNr: MemParser[BigDecimal] = decimalNumber ^^ (BigDecimal(_)) named "decimal-nr"
 
-  /** Copied from RegexParsers to support comment handling as whitespace */
-  override protected def handleWhiteSpace(source: java.lang.CharSequence, offset: Int): Int =
-    if (skipWhitespace)
-      whiteSpace findPrefixMatchOf new SubSequence(source, offset) match {
-        case Some(matched) => offset + matched.end
-        case None => offset
-      }
-    else
-      offset
-  //
-
   //literals
   def TRUE: MemParser[Boolean] = ("\\btrue\\b"r) ^^^ true named "true"
   def FALSE: MemParser[Boolean] = ("\\bfalse\\b"r) ^^^ false named "false"
   def NULL: MemParser[Null.type] = ("\\bnull\\b"r) ^^^ Null named "null"
   def ALL: MemParser[All.type] = "*" ^^^ All named "all"
-
 
   def const: MemParser[Const] = (TRUE | FALSE | decimalNr | stringLiteral) ^^ {
     case b: Boolean => BooleanConst(b)
