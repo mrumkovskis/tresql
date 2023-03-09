@@ -349,7 +349,10 @@ trait ResourceLoader {
       if (loaded(r)) None
       else {
         val in = getClass.getResourceAsStream(r)
-        if (in == null) None
+        if (in == null) {
+          if (loaded.isEmpty) None
+          else sys.error(s"Resource not found: $r (referenced from ${loaded mkString " or "})")
+        }
         else {
           val res =
             new BufferedSource(in).mkString.split(SeparatorPattern).toIndexedSeq
