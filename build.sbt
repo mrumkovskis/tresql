@@ -81,12 +81,19 @@ lazy val tresql = (project in file("."))
     Compile / doc / sources := (core / Compile / sources).value ++ (macros / Compile / sources).value,
 
     name := "tresql",
-    libraryDependencies ++= coreDependencies(scalaVersion.value) ++
+    libraryDependencies ++= coreDependencies(scalaVersion.value) ++ {
+      val borerV    = scalaVersion.value match {
+        case v if v startsWith "2.12" => "1.7.2"
+        case v if v startsWith "2.13" => "1.8.0"
+        case v if v startsWith "3"    => "1.10.2"
+      }
       Seq("org.scalatest" %% "scalatest" % "3.2.15" % "test,it",
         ("org.hsqldb" % "hsqldb" % "2.7.1" % "test").classifier("jdk8"),
-        "io.bullet" %% "borer-core" % "1.7.2" % "test,it",
-        "io.bullet" %% "borer-derivation" % "1.7.2" % "test,it",
-        "org.postgresql" % "postgresql" % "42.5.4" % "it,test"),
+        "io.bullet"     %% "borer-core"       % borerV    % "test,it",
+        "io.bullet"     %% "borer-derivation" % borerV    % "test,it",
+        "org.postgresql" % "postgresql"       % "42.5.4"  % "it,test",
+      )
+    },
     Test / console / initialCommands := "import org.tresql._; import org.scalatest._; import org.tresql.test.ConsoleResources._",
     IntegrationTest / console / initialCommands := "import org.tresql._; import org.scalatest._; import org.tresql.test.ITConsoleResources._",
     Test / publishArtifact := false,
