@@ -92,10 +92,16 @@ trait Metadata extends AbstractMetadata {
   def macroSignaturesResource: String = null
   /** Override this to load function signatures from object with tresql macros implementations */
   def macrosClass: Class[_] = null
+  /** For running in sbt plugin */
+  def getResourceAsStream(r: String) = getClass.getResourceAsStream(r)
 
   private val functionSignatures: FunctionSignatures = {
-    val sl = new FunctionSignaturesLoader(this)
-    val ml = new MacrosLoader(this)
+    val sl = new FunctionSignaturesLoader(this) {
+      override def getResourceAsStream(r: String) = Metadata.this.getResourceAsStream(r)
+    }
+    val ml = new MacrosLoader(this) {
+      override def getResourceAsStream(r: String) = Metadata.this.getResourceAsStream(r)
+    }
     def loadFromLoader(l: FunctionSignaturesLoader, res: String) = {
       if (res == null) l.loadFunctionSignatures(l.load())
       else l.loadFunctionSignatures(l.load(res).getOrElse(l.load()))

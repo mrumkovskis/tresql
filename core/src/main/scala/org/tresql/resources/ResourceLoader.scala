@@ -5,6 +5,7 @@ import org.tresql.metadata.{FixedReturnType, Par, ParameterReturnType, Procedure
 import org.tresql.ast.{Cast, Exp, Fun, Ident, Obj}
 import org.tresql.parsing.QueryParsers
 
+import java.io.InputStream
 import java.lang.reflect.{Method, ParameterizedType}
 import scala.io.BufferedSource
 import scala.reflect.ManifestFactory
@@ -343,12 +344,13 @@ trait ResourceLoader {
   private val IncludePattern   = """include\s+(.+)""".r
   protected def ResourceFile: String
   protected def DefaultResourceFile: String
+  protected def getResourceAsStream(r: String): InputStream = getClass.getResourceAsStream(r)
 
   def load(res: String): Option[Seq[String]] = {
     def l(r: String)(loaded: Set[String]): Option[Seq[String]] = {
       if (loaded(r)) None
       else {
-        val in = getClass.getResourceAsStream(r)
+        val in = getResourceAsStream(r)
         if (in == null) {
           if (loaded.isEmpty) None
           else sys.error(s"Resource not found: $r (referenced from ${loaded mkString " or "})")
