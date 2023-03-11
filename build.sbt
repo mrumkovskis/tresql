@@ -52,7 +52,7 @@ lazy val macros = (project in file("macro"))
   .disablePlugins(plugins.JUnitXmlReportPlugin)
   .dependsOn(core)
   .settings(
-    name := "macro",
+    name := "tresql-interpolator-macro",
     publish / skip := true,
 )
   .settings(commonSettings: _*)
