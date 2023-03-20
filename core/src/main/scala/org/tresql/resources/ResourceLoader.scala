@@ -340,7 +340,7 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
 }
 
 trait ResourceLoader {
-  private val SeparatorPattern = """\R+(?=[^\s])"""
+  private val SeparatorPattern = """\R+(?=[^\s]|$)"""
   private val IncludePattern   = """include\s+(.+)""".r
   protected def ResourceFile: String
   protected def DefaultResourceFile: String
