@@ -12,6 +12,7 @@ trait CacheBase[E] {
   def put(tresql: String, expr: E): Unit
   def size: Int = ???
   def toMap: Map[String, E]
+  def load(cache: Map[String, E]): Unit
 }
 
 /** Cache based on java concurrent hash map */
@@ -31,6 +32,7 @@ class SimpleCacheBase[E](maxSize: Int) extends CacheBase[E] {
   override def size = cache.size
   def exprs = cache.keySet
   def toMap: Map[String, E] = cache.asScala.toMap
+  def load(cache: Map[String, E]) = this.cache.putAll(cache.asJava)
   override def toString = "Simple cache exprs: " + exprs + "\n" + "Cache size: " + size
 }
 
@@ -45,5 +47,6 @@ class WeakHashCacheBase[E] extends CacheBase[E] {
   override def size = cache.size
   def exprs: java.util.Set[String] = cache.keySet
   def toMap: Map[String, E] = cache.asScala.toMap
+  def load(cache: Map[String, E]) = this.cache.putAll(cache.asJava)
   override def toString = "WeakHashCache exprs: " + exprs + "\n" + "Cache size: " + size
 }
