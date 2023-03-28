@@ -400,7 +400,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
         maybeCols, db
       )
   }, {
-    case (objs: List[Obj] @unchecked) ~ _ ~ _ ~ _ => "Update tables clause must as the first element have " +
+    case _ ~ (objs: List[Obj] @unchecked) ~ _ ~ _ ~ _ => "Update tables clause must as the first element have " +
      "qualifiedIdent with optional alias as a table to be updated" +
      s"Instead encountered: ${objs.map(_.tresql).mkString}"
   }) ^? ({

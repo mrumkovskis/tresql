@@ -2,7 +2,8 @@ package org.tresql.parsing
 
 trait MemParsers extends scala.util.parsing.combinator.Parsers {
   private val intermediateResults = new ThreadLocal[scala.collection.mutable.Map[(String, Int), ParseResult[_]]] {
-    override def initialValue = scala.collection.mutable.HashMap()
+    override def initialValue: scala.collection.mutable.Map[(String, Int), ParseResult[_]] =
+      scala.collection.mutable.HashMap()
   }
 
   class MemParser[+T](underlying: Parser[T]) extends Parser[T] {
@@ -26,5 +27,5 @@ trait MemParsers extends scala.util.parsing.combinator.Parsers {
     }
   }
 
-  implicit def parser2MemParser[T](parser: Parser[T]) = new MemParser(parser)
+  implicit def parser2MemParser[T](parser: Parser[T]): MemParser[T] = new MemParser(parser)
 }

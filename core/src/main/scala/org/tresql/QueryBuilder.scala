@@ -358,7 +358,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     private val rowConverter = env.rowConverter(QueryBuilder.this.queryDepth, initChildIdx)
     if (queryDepth >= env.recursiveStackDepth)
       error(s"Recursive execution stack depth $queryDepth exceeded, check for loops in data or increase {{{Resources#recursiveStackDepth}}} setting.")
-    val qBuilder = newInstance(new Env(QueryBuilder.this, env.db, env.reusableExpr),
+    val qBuilder = QueryBuilder.this.newInstance(new Env(QueryBuilder.this, env.db, env.reusableExpr),
       queryDepth + 1, 0, initChildIdx)
     qBuilder.recursiveQueryExp = recursiveQueryExp
     //TODO pass rowConverter to built SelectExpr!
@@ -952,11 +952,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     )
   }
 
-  private def buildDelete(table: Ident, alias: String, filter: Arr, using: Exp, returning: Option[Cols],
+  private def buildDelete(table: Ident, alias: String, filter: Arr, `using`: Exp, returning: Option[Cols],
                           ctx: Ctx) = {
-    new DeleteExpr(IdentExpr(table.ident), alias,
+    DeleteExpr(IdentExpr(table.ident), alias,
       if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null,
-      buildInternal(using, VALUES_CTX),
+      buildInternal(`using`, VALUES_CTX),
       returning.map(buildCols(_, ctx))
     )
   }
@@ -1199,7 +1199,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       else None
 
     def buildWithNew(db: Option[String], buildFunc: QueryBuilder => Expr) = {
-      val b = newInstance(
+      val b = QueryBuilder.this.newInstance(
         new Env(QueryBuilder.this, db, QueryBuilder.this.env.reusableExpr),
         queryDepth + 1, bindIdx, this.childrenCount)
       val ex = buildFunc(b)

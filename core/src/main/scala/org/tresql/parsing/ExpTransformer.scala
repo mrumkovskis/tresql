@@ -111,8 +111,8 @@ trait ExpTransformer { this: QueryParsers =>
           r map tt(state),
           db
         )
-      case Delete(table, alias, filter, using, returning, db) =>
-        Delete(tt(state)(table), alias, tt(state)(filter), tt(state)(using), returning map tt(state), db)
+      case Delete(table, alias, filter, using_, returning, db) =>
+        Delete(tt(state)(table), alias, tt(state)(filter), tt(state)(using_), returning map tt(state), db)
       case Arr(els) => Arr(els map tt(state))
       case Filters(f) => Filters(f map tt(state))
       case Values(v) => Values(v map tt(state))

@@ -1,10 +1,9 @@
 package org.tresql
 
-//import scala.util.Try
 import sys._
 import metadata.key_
 
-trait Typer { this: QueryBuilder =>
+trait Typer { this: Query =>
 
   trait Def { def alias: String }
   case class TableDef(name: String, alias: String) extends Def

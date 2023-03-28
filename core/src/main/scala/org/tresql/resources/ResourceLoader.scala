@@ -119,7 +119,7 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
 
   def parseSignature(m: Method): Procedure[_] = {
     var repeatedPars = false
-    val pars = m.getGenericParameterTypes.map {
+    val pars: List[Par[_]] = m.getGenericParameterTypes.map {
       case par: ParameterizedType =>
         //consider parameterized type as a Seq[T] of repeated args
         //isVarArgs method of java reflection api does not work on scala repeated args
@@ -132,7 +132,7 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
       case c: Class[_] => ManifestFactory.classType(c)
       case x => ManifestFactory.singleType(x)
     }.zipWithIndex.map { case (m, i) =>
-      Par[Nothing](s"_$i", null, -1, -1, null, m)
+      Par(s"_$i", null, -1, -1, null, m: Manifest[_])
     }.toList.drop(1) // drop builder or parser argument
     val returnType = m.getGenericReturnType match {
       case par: ParameterizedType => sys.error(s"Parametrized return type not supported! Method: $m, parameter: $par")

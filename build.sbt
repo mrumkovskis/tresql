@@ -6,6 +6,7 @@ lazy val commonSettings = Seq(
   crossScalaVersions := Seq(
       scalaV,
       "2.12.17",
+//      "3.2.2",
     ),
   //coverageEnabled := true,
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",
@@ -28,9 +29,8 @@ ThisBuild / versionScheme := Some("early-semver")
 
 def coreDependencies(scalaVer: String) =
   Seq(
-    "org.scala-lang" % "scala-reflect" % scalaVer,
     "org.scala-lang.modules" %% "scala-parser-combinators" % "2.2.0"
-  )
+  ) ++ (if (scalaVer.startsWith("3")) Nil else Seq("org.scala-lang" % "scala-reflect" % scalaVer))
 
 javacOptions ++= Seq("-source", "1.8", "-target", "1.8", "-Xlint")
 initialize := {

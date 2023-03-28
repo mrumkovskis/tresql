@@ -1,12 +1,12 @@
 package org.tresql
 
-trait Transformer { self: QueryBuilder =>
+trait Transformer { this: Query =>
 
   def transform(expr: Expr, f: PartialFunction[Expr, Expr]): Expr = {
     var cf: PartialFunction[Expr, Expr] = null
     cf = f.orElse[Expr, Expr] {
       case null => null
-      case e if e.builder != self => e.builder.transform(e, f)
+      case e if e.builder != this => e.builder.transform(e, f)
     }.orElse[Expr, Expr] {
       case ArrExpr(e) => ArrExpr(e map cf)
       case BinExpr(o, lop, rop) => BinExpr(o, cf(lop), cf(rop))

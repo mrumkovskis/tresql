@@ -114,7 +114,7 @@ trait Query extends QueryBuilder with TypedQuery {
           visibleColCount = s
           Vector(c: _*)
       }
-      (rs, columns, visibleColCount)
+    (rs, columns, visibleColCount)
   }
 
   private[tresql] def update(sql: String) = try {

@@ -447,7 +447,7 @@ trait ORT extends Query {
               (refs.toList, pk.toList)
           }
         }
-        val (refCols, keyCols) =
+        val (refCols: List[(String, String)], keyCols: List[(String, String)]) =
           if (data.keyVals.nonEmpty) data.keyVals.partition(_._1.isInstanceOf[RefKeyCol]) match {
             case (refCols: List[(RefKeyCol, String)@unchecked], keyCols: List[(KeyCol, String)@unchecked]) =>
               val (rc, kc) =
@@ -455,15 +455,15 @@ trait ORT extends Query {
               if (rc.nonEmpty) (rc, kc) else (refsAndKey(data.refsPkVals)._1, kc)
           } else refsAndKey(data.refsPkVals)
 
-          val refColsFilter = refCols.map { case (n, v) => s"$n = $v"}.mkString(" & ")
-          val (key_arr, key_val_expr_arr) = keyCols.unzip match {
-            case (kc, kv) => (s"[${kc.mkString(", ")}]", s"[${kv.mkString(", ")}]")
-          }
-          val filter = filterString(data.filters, _.delete)
-          if (refCols.isEmpty || keyCols.isEmpty) null
-          else
-            s"""_delete_missing_children('$name', $key_arr, $key_val_expr_arr, -${tableWithDb(data.db,
-              data.table, data.alias)}[$refColsFilter & _not_delete_keys($key_arr, $key_val_expr_arr)$filter])"""
+        val refColsFilter = refCols.map { case (n, v) => s"$n = $v"}.mkString(" & ")
+        val (key_arr, key_val_expr_arr) = keyCols.unzip match {
+          case (kc, kv) => (s"[${kc.mkString(", ")}]", s"[${kv.mkString(", ")}]")
+        }
+        val filter = filterString(data.filters, _.delete)
+        if (refCols.isEmpty || keyCols.isEmpty) null
+        else
+          s"""_delete_missing_children('$name', $key_arr, $key_val_expr_arr, -${tableWithDb(data.db,
+            data.table, data.alias)}[$refColsFilter & _not_delete_keys($key_arr, $key_val_expr_arr)$filter])"""
       }
       save_tresql_internal(ctx.copy(view = ctx.view.copy(saveTo = List(saveTo))),
         del_children_tresql, null)
