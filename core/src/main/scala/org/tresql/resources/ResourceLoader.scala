@@ -12,7 +12,7 @@ import scala.reflect.ManifestFactory
 import scala.util.Try
 import scala.util.matching.Regex
 
-case class FunctionSignatures(signatures: Map[String, List[Procedure[_]]]) {
+case class FunctionSignatures(signatures: Map[String, List[Procedure]]) {
   def merge(fs: FunctionSignatures): FunctionSignatures = {
     FunctionSignatures(
       ResourceMerger.mergeResources(signatures, fs.signatures)
@@ -73,7 +73,7 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
         case x => sys.error(s"Invalid function '$signature' paramater - '${x.tresql}'. " +
           s"Expected identifier or identifier with cast.")
       }
-    def createFun(fn: String, pars: List[Par[_]], rt: ReturnType, repPars: Boolean) =
+    def createFun(fn: String, pars: List[Par], rt: ReturnType, repPars: Boolean) =
       Procedure(fn, null, -1, pars, -1, null, rt, repPars)
     Try(qp.parseExp(signature))
       .map {
@@ -101,7 +101,7 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
     sys.error(s"Error in function signature definition '$signatureDef'. " +
       s"Format - <funname>(<param_name>[::type], ...)")
 
-  def parseSignature(signatureDef: String): Procedure[_] =
+  def parseSignature(signatureDef: String): Procedure =
     tryParseSignature(signatureDef).get
 
   protected def trySignatureDef(signatureDef: String): Try[Boolean] = {
@@ -117,9 +117,9 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
     trySignatureDef(signatureDef).get
   }
 
-  def parseSignature(m: Method): Procedure[_] = {
+  def parseSignature(m: Method): Procedure = {
     var repeatedPars = false
-    val pars: List[Par[_]] = m.getGenericParameterTypes.map {
+    val pars: List[Par] = m.getGenericParameterTypes.map {
       case par: ParameterizedType =>
         //consider parameterized type as a Seq[T] of repeated args
         //isVarArgs method of java reflection api does not work on scala repeated args
@@ -167,7 +167,7 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
 
 trait TresqlMacro[A, B] {
   def invoke(env: A, params: IndexedSeq[_]): B
-  def signature: Procedure[_]
+  def signature: Procedure
 }
 
 case class TresqlMacros(parserMacros: Map[String, Seq[TresqlMacro[QueryParsers, Exp]]],
@@ -190,7 +190,7 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
 
   private case class MacroBody(parts: Seq[MacroBodyPart], suffix: String)
   private case class MacroBodyPart(prefix: String, parIdx: Int)
-  private class TresqlResourcesMacro(val signature: Procedure[_], body: MacroBody)
+  private class TresqlResourcesMacro(val signature: Procedure, body: MacroBody)
     extends TresqlMacro[QueryParsers, Exp] {
     private val sigParCount = signature.pars.size
     override def invoke(env: QueryParsers, params: IndexedSeq[_]): Exp = {
@@ -210,7 +210,7 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
     }
     override def toString() = s"Signature - $signature, body - $body"
   }
-  private case class TresqlScalaMacro[A, B](signature: Procedure[_], method: Method, invocationTarget: Any)
+  private case class TresqlScalaMacro[A, B](signature: Procedure, method: Method, invocationTarget: Any)
     extends TresqlMacro[A, B] {
     override def invoke(env: A, params: IndexedSeq[_]): B = {
       val p = method.getParameterTypes

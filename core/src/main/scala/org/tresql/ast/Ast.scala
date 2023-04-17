@@ -252,10 +252,10 @@ object CompilerAst {
 
   sealed trait CompilerExp extends Exp
 
-  trait TypedExp[T] extends CompilerExp {
+  trait TypedExp extends CompilerExp {
     def exp: Exp
 
-    def typ: Manifest[T]
+    def typ: Manifest[_]
 
     def tresql: String = exp.tresql
   }
@@ -274,30 +274,30 @@ object CompilerAst {
     def tresql: String = obj.tresql
   }
 
-  case class ColDef[T](name: String, col: Exp, typ: Manifest[T]) extends TypedExp[T] {
-    def exp: ColDef[T] = this
+  case class ColDef(name: String, col: Exp, typ: Manifest[_]) extends TypedExp {
+    def exp: ColDef = this
 
     override def tresql: String = Col(col, name).tresql
   }
 
-  case class ChildDef(exp: Exp, db: Option[String]) extends TypedExp[ChildDef] {
+  case class ChildDef(exp: Exp, db: Option[String]) extends TypedExp {
     val typ: Manifest[ChildDef] = ManifestFactory.classType(this.getClass)
   }
 
-  case class FunDef[T](name: String, exp: Fun, typ: Manifest[T], procedure: Procedure[_])
-    extends TypedExp[T] {
+  case class FunDef(name: String, exp: Fun, typ: Manifest[_], procedure: Procedure)
+    extends TypedExp {
     if ((procedure.hasRepeatedPar && exp.parameters.size < procedure.pars.size - 1) ||
       (!procedure.hasRepeatedPar && exp.parameters.size != procedure.pars.size))
       error(
         s"Function '$name' has wrong number of parameters: ${exp.parameters.size} instead of ${procedure.pars.size}")
   }
 
-  case class FunAsTableDef[T](exp: FunDef[T], cols: Option[List[TableColDef]], withOrdinality: Boolean)
+  case class FunAsTableDef(exp: FunDef, cols: Option[List[TableColDef]], withOrdinality: Boolean)
     extends CompilerExp {
     def tresql: String = FunAsTable(exp.exp, cols, withOrdinality).tresql
   }
 
-  case class RecursiveDef(exp: Exp) extends TypedExp[RecursiveDef] {
+  case class RecursiveDef(exp: Exp) extends TypedExp {
     val typ: Manifest[RecursiveDef] = ManifestFactory.classType(this.getClass)
   }
 
@@ -307,11 +307,11 @@ object CompilerAst {
   }
 
   /** Marker for compiler macro, to unwrap compiled result */
-  case class PrimitiveDef[T](exp: Exp, typ: Manifest[T]) extends TypedExp[T]
+  case class PrimitiveDef(exp: Exp, typ: Manifest[_]) extends TypedExp
 
   //is superclass of sql query and array
-  trait RowDefBase extends TypedExp[RowDefBase] {
-    def cols: List[ColDef[_]]
+  trait RowDefBase extends TypedExp {
+    def cols: List[ColDef]
 
     val typ: Manifest[RowDefBase] = ManifestFactory.classType(this.getClass)
   }
@@ -338,7 +338,7 @@ object CompilerAst {
   trait SelectDefBase extends SQLDefBase
 
   case class SelectDef(
-                        cols: List[ColDef[_]],
+                        cols: List[ColDef],
                         tables: List[TableDef],
                         exp: Query
                       ) extends SelectDefBase {
@@ -387,7 +387,7 @@ object CompilerAst {
 
   // table definition in with [recursive] statement
   case class WithTableDef(
-                           cols: List[ColDef[_]],
+                           cols: List[ColDef],
                            tables: List[TableDef],
                            recursive: Boolean,
                            exp: SQLDefBase
@@ -408,14 +408,14 @@ object CompilerAst {
 
   /** select definition returned from macro or db function, is used in {{{BinSelectDef}}} */
   case class FunSelectDef(
-                           cols: List[ColDef[_]],
+                           cols: List[ColDef],
                            tables: List[TableDef],
-                           exp: FunDef[_]
+                           exp: FunDef
                          ) extends SelectDefBase
 
   // dml expressions
   case class InsertDef(
-                        cols: List[ColDef[_]],
+                        cols: List[ColDef],
                         tables: List[TableDef],
                         exp: Insert
                       ) extends DMLDefBase {
@@ -427,7 +427,7 @@ object CompilerAst {
   }
 
   case class UpdateDef(
-                        cols: List[ColDef[_]],
+                        cols: List[ColDef],
                         tables: List[TableDef],
                         exp: Update
                       ) extends DMLDefBase {
@@ -451,7 +451,7 @@ object CompilerAst {
   }
 
   case class ReturningDMLDef(
-                              cols: List[ColDef[_]],
+                              cols: List[ColDef],
                               tables: List[TableDef],
                               exp: DMLDefBase
                             ) extends SelectDefBase
@@ -492,7 +492,7 @@ object CompilerAst {
   }
 
   //array
-  case class ArrayDef(cols: List[ColDef[_]]) extends RowDefBase {
+  case class ArrayDef(cols: List[ColDef]) extends RowDefBase {
     def exp = this
 
     override def tresql = cols.map(c => QueryParsers.any2tresql(c.col)).mkString("[", ", ", "]")

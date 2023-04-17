@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap
 trait JDBCMetadata extends Metadata {
 
   private val tableCache = new ConcurrentHashMap[String, Table]
-  private val procedureCache = new ConcurrentHashMap[String, Procedure[_]]
+  private val procedureCache = new ConcurrentHashMap[String, Procedure]
 
   def conn: java.sql.Connection
   def defaultSchema: String = null
@@ -58,7 +58,7 @@ trait JDBCMetadata extends Metadata {
     Option(tableCache.get(name))
   }
 
-  override def procedure(name: String): Procedure[_] = procedureOption(name)
+  override def procedure(name: String): Procedure = procedureOption(name)
     .getOrElse(sys.error(s"Procedure not found: $name"))
   override def procedureOption(name: String) = Option(procedureCache.get(name)).orElse {
     if (conn == null) throw new NullPointerException(
@@ -88,7 +88,7 @@ trait JDBCMetadata extends Metadata {
       }
       val procedureType = rs.getInt("PROCEDURE_TYPE")
       val remarks = rs.getString("REMARKS")
-      var pars = List[Par[_]]()
+      var pars = List[Par]()
       val parsRs = dmd.getProcedureColumns(null, schema, procedureName, null)
       import parsRs._
       while(next) {

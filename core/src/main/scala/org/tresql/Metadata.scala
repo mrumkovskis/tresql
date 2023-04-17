@@ -49,11 +49,11 @@ private [tresql] trait AbstractMetadata extends metadata.TypeMapper {
     }
   }
 
-  def col(table: String, col: String): Col[_] = this.table(table).col(col)
-  def colOption(table: String, col: String): Option[Col[_]] = this.tableOption(table).flatMap(_.colOption(col))
-  def col(col: String): Col[_] = colOption(col)
+  def col(table: String, col: String): Col = this.table(table).col(col)
+  def colOption(table: String, col: String): Option[Col] = this.tableOption(table).flatMap(_.colOption(col))
+  def col(col: String): Col = colOption(col)
     .getOrElse(sys.error(s"Column not found: $col"))
-  def colOption(col: String): Option[Col[_]] = {
+  def colOption(col: String): Option[Col] = {
     val colIdx = col.lastIndexOf('.')
     if (colIdx == -1) sys.error(s"Table must be specified for col in format: <table>.$col")
     tableOption(col.substring(0, colIdx)).flatMap(_.colOption(col.substring(colIdx + 1)))
@@ -61,14 +61,14 @@ private [tresql] trait AbstractMetadata extends metadata.TypeMapper {
 
   def table(name: String): Table
   def tableOption(name: String): Option[Table]
-  def procedure(name: String): Procedure[_] = ???
-  def procedureOption(name: String): Option[Procedure[_]] = ???
+  def procedure(name: String): Procedure = ???
+  def procedureOption(name: String): Option[Procedure] = ???
 }
 
 trait Metadata extends AbstractMetadata {
-  override def procedure(name: String): Procedure[_] = procedureOption(name)
+  override def procedure(name: String): Procedure = procedureOption(name)
     .getOrElse(sys.error(s"Function not found: $name"))
-  override def procedureOption(name: String): Option[Procedure[_]] = {
+  override def procedureOption(name: String): Option[Procedure] = {
     val idx = name.lastIndexOf("#")
     if (idx == -1) functionSignatures.signatures.get(name).flatMap(_.headOption)
     else {
@@ -115,9 +115,9 @@ trait Metadata extends AbstractMetadata {
 
 //TODO pk col storing together with ref col (for multi col key secure support)?
 package metadata {
-  case class Table(name: String, cols: List[Col[_]], key: Key,
+  case class Table(name: String, cols: List[Col], key: Key,
       rfs: Map[String, List[Ref]]) {
-    private val colMap: Map[String, Col[_]] = cols map (c => c.name.toLowerCase -> c) toMap
+    private val colMap: Map[String, Col] = cols map (c => c.name.toLowerCase -> c) toMap
     val refTable: Map[List[String], String] = rfs.flatMap(t => t._2.map(_.cols -> t._1))
     def col(name: String) = colMap(name.toLowerCase)
     def colOption(name: String) = colMap.get(name.toLowerCase)
@@ -150,22 +150,26 @@ package metadata {
       })
     }
   }
-  case class Col[T](name: String, nullable: Boolean, sqlType: Int, scalaType: Manifest[T])
+  case class Col(name: String, nullable: Boolean, sqlType: Int, scalaType: Manifest[_])
   case class Key(cols: List[String])
   case class Ref(cols: List[String], refCols: List[String])
-  case class Procedure[T](name: String, comments: String, procType: Int,
-                          pars: List[Par[_]], returnSqlType: Int, returnTypeName: String, returnType: ReturnType,
-                          hasRepeatedPar: Boolean = false) {
-    def scalaReturnType: Manifest[T] = returnType match {
-      case r: FixedReturnType[T@unchecked] => r.mf
-      case ParameterReturnType(idx) => pars(idx).scalaType.asInstanceOf[Manifest[T]]
+  case class Procedure(
+    name: String, comments: String, procType: Int, pars: List[Par],
+    returnSqlType: Int, returnTypeName: String, returnType: ReturnType,
+    hasRepeatedPar: Boolean = false
+  ) {
+    def scalaReturnType: Manifest[_] = returnType match {
+      case r: FixedReturnType => r.mf
+      case ParameterReturnType(idx) => pars(idx).scalaType
     }
   }
-  case class Par[T](name: String, comments: String, parType: Int, sqlType: Int, typeName: String,
-    scalaType: Manifest[T])
+  case class Par(
+    name: String, comments: String, parType:   Int,
+    sqlType: Int, typeName: String, scalaType: Manifest[_]
+  )
   sealed trait ReturnType
   case class ParameterReturnType(idx: Int) extends ReturnType
-  case class FixedReturnType[T](mf: Manifest[T]) extends ReturnType
+  case class FixedReturnType(mf: Manifest[_]) extends ReturnType
   sealed trait key_ { def cols: List[String] }
   case class uk(cols: List[String]) extends key_
   case class fk(cols: List[String]) extends key_

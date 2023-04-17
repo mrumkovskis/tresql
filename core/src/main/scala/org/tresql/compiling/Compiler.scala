@@ -17,7 +17,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
   trait Scope {
     def tableNames: List[String]
     def table(table: String): Option[Table]
-    def column(col: String): Option[org.tresql.metadata.Col[_]] = None
+    def column(col: String): Option[org.tresql.metadata.Col] = None
     def isEqual(exp: SQLDefBase): Boolean
   }
 
@@ -47,7 +47,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
       protected def table_from_selectdef(name: String, sd: SelectDefBase) =
         Table(name, sd.cols map col_from_coldef, null, Map())
 
-      protected def col_from_coldef(cd: ColDef[_]) =
+      protected def col_from_coldef(cd: ColDef) =
         org.tresql.metadata.Col(name = cd.name, nullable = true, -1, scalaType = cd.typ)
 
       def tableNames: List[String] = exp.tables.collect {
@@ -133,7 +133,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     }
   /** Column declared in any scope in {{{scopes}}} list */
   def column(scopes: List[Scope])(colName: String)(md: TableMetadata,
-                                                   db: Option[String]): Option[org.tresql.metadata.Col[_]] = {
+                                                   db: Option[String]): Option[org.tresql.metadata.Col] = {
     val col = colName.toLowerCase
     (scopes match {
       case Nil => None
@@ -157,7 +157,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
   }
   /** Method is used to resolve column names in group by or order by clause, since they can reference columns by name from column clause. */
   def declaredColumn(scopes: List[Scope])(colName: String)(md: TableMetadata,
-                                                           db: Option[String]): Option[org.tresql.metadata.Col[_]] = {
+                                                           db: Option[String]): Option[org.tresql.metadata.Col] = {
     val col = colName.toLowerCase
     scopes.head.column(col) orElse column(scopes)(col)(md, db)
   }
@@ -221,19 +221,19 @@ trait Compiler extends QueryParsers { thisCompiler =>
         case (_, right) => right
       }
     }
-    def buildCols(ctx: BuildCtx, cols: Cols): List[ColDef[_]] = {
+    def buildCols(ctx: BuildCtx, cols: Cols): List[ColDef] = {
       if (cols != null) (cols.cols map {
           //child dml statement in select
           case c @ ast.Col(_: DMLExp @unchecked, _) => tr_with_c(ctx, QueryCtx, c)
           case c => tr_with_c(ctx, ColsCtx, c)
-        }).asInstanceOf[List[ColDef[_]]] match {
+        }).asInstanceOf[List[ColDef]] match {
           case l if l.exists(_.name == null) => //set names of columns
             l.zipWithIndex.map { case (c, i) =>
               if (c.name == null) c.copy(name = s"_${i + 1}") else c
             }
           case l => l
         }
-      else List[ColDef[_]](ColDef[Nothing](null, All, ManifestFactory.Nothing))
+      else List[ColDef](ColDef(null, All, ManifestFactory.Nothing))
     }
     lazy val builder: TransformerWithState[BuildCtx] = transformerWithState(ctx => {
       case f: Fun => procedure(s"${f.name}#${f.parameters.size}")(ctx.db).map { p =>
@@ -244,14 +244,14 @@ trait Compiler extends QueryParsers { thisCompiler =>
           aggregateWhere = f.aggregateWhere.map(tr(ctx, _))
         ), retType, p)
       }.getOrElse(error(s"Unknown function: ${f.name}"))
-      case ftd: FunAsTable => FunAsTableDef(tr(ctx, ftd.fun).asInstanceOf[FunDef[_]], ftd.cols, ftd.withOrdinality)
+      case ftd: FunAsTable => FunAsTableDef(tr(ctx, ftd.fun).asInstanceOf[FunDef], ftd.cols, ftd.withOrdinality)
       case c: ast.Col =>
         val alias = if (c.alias != null) c.alias else c.col match {
           case Obj(Ident(name), _, _, _, _) => name.last //use last part of qualified ident as name
           case Cast(Obj(Ident(name), _, _, _, _), _) => name.last //use last part of qualified ident as name
           case _ => null
         }
-        ColDef[Nothing](
+        ColDef(
           alias,
           tr(ctx, c.col) match {
             case x: DMLDefBase @unchecked => ChildDef(x, x.db)
@@ -266,7 +266,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         builder(ctx)(Query(List(o), Filters(Nil), null, null, null, null, null))
       case o: Obj if ctx.ctx == BodyCtx =>
         o.copy(obj = builder(ctx)(o.obj), join = builder(ctx)(o.join).asInstanceOf[Join])
-      case PrimitiveExp(q) => PrimitiveDef[Nothing](builder(ctx)(q), Manifest.Nothing)
+      case PrimitiveExp(q) => PrimitiveDef(builder(ctx)(q), Manifest.Nothing)
       case q: Query =>
         val tables = buildTables(ctx, q.tables)
         val cols = buildCols(ctx, q.cols)
@@ -292,10 +292,10 @@ trait Compiler extends QueryParsers { thisCompiler =>
           case (lop: SelectDefBase @unchecked, rop: SelectDefBase @unchecked) =>
             BinSelectDef(lop, rop, b)
           //asume left operand select definition is provided by db function or macro
-          case (lop: FunDef[_] @unchecked, rop: SelectDefBase @unchecked) =>
+          case (lop: FunDef @unchecked, rop: SelectDefBase @unchecked) =>
             BinSelectDef(FunSelectDef(Nil, Nil, lop), rop, b)
           //asume right operand select definition is provided by db function or macro
-          case (lop: SelectDefBase @unchecked, rop: FunDef[_] @unchecked) =>
+          case (lop: SelectDefBase @unchecked, rop: FunDef @unchecked) =>
             BinSelectDef(lop, FunSelectDef(Nil, Nil, rop), b)
           case (lop, rop) => b.copy(lop = lop, rop = rop)
         }
@@ -315,7 +315,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
       }
       case a: Arr if ctx.ctx == QueryCtx => ArrayDef(
         a.elements.zipWithIndex.map { case (el, idx) =>
-          ColDef[Nothing](
+          ColDef(
             s"_${idx + 1}",
             tr(ctx, el) match {
               case r: RowDefBase => ChildDef(r, None)
@@ -337,7 +337,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
             case c @ast.Col(Fun("if_defined", List(_, Obj(_: Ident, _, _, _, _)), _, _, _), _) =>
               tr_with_c(nctx, ColsCtx, c) //optional column
             case c => tr_with_c(nctx, QueryCtx, c) //child expression
-          }.asInstanceOf[List[ColDef[_]]]
+          }.asInstanceOf[List[ColDef]]
           else Nil
         val filter = if (dml.filter != null) tr_with_c(nctx, BodyCtx, dml.filter).asInstanceOf[Arr] else null
         val vals = if (dml.vals != null) tr_with_c(nctx, BodyCtx, dml.vals) else null
@@ -370,7 +370,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         val tables: List[TableDef] = List(TableDef(name, Obj(TableObj(Ident(List(name))), null, null, null)))
         val cols =
           wtCols.map { c =>
-            ColDef[Nothing](c, Ident(List(c)), Manifest.Nothing)
+            ColDef(c, Ident(List(c)), Manifest.Nothing)
           }
         WithTableDef(cols, tables, recursive, exp)
       case With(tables, query) =>
@@ -649,7 +649,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
           error(s"Select must contain only one column, instead:${
             s.cols.map(_.tresql).mkString(", ")}")
         else type_from_const(s.cols.head.typ)
-      case f: FunDef[_] =>
+      case f: FunDef =>
         if (f.typ != null && f.typ != Manifest.Nothing) type_from_const(f.typ)
         else f.procedure.returnType match {
           case FixedReturnType(mf) => type_from_const(mf)
@@ -676,7 +676,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
             (s.tables map type_resolver(ctx.copy(scopes = s :: ctx.scopes))).asInstanceOf[List[TableDef]])
           //resolve types for column defs
           nsd.copy(cols =
-            (nsd.cols map type_resolver(ctx.copy(scopes = nsd :: ctx.scopes))).asInstanceOf[List[ColDef[_]]])
+            (nsd.cols map type_resolver(ctx.copy(scopes = nsd :: ctx.scopes))).asInstanceOf[List[ColDef]])
         case wtd: WithTableDef =>
           val nctx = if (wtd.recursive) ctx.copy(scopes = wtd :: ctx.scopes) else ctx
           val exp = type_resolver(nctx)(wtd.exp).asInstanceOf[SQLDefBase]
@@ -698,7 +698,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
           //resolve types for column defs
           nrdml.copy(cols =
             (nrdml.cols map type_resolver(ctx.copy(scopes = nrdml :: ctx.scopes, db = rdml.exp.db)))
-              .asInstanceOf[List[ColDef[_]]])
+              .asInstanceOf[List[ColDef]])
         case ColDef(n, ChildDef(ch, db), t) =>
           ColDef(n, ChildDef(type_resolver(ctx.copy(db = db))(ch), db), t)
         case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
@@ -757,10 +757,10 @@ trait Compiler extends QueryParsers { thisCompiler =>
     lazy val transform_traverse = local_transformer orElse super.transformer(local_transformer)
     def tt[A <: Exp](exp: A) = transform_traverse(exp).asInstanceOf[A]
     lazy val traverse: Transformer = {
-      case cd: ColDef[_] => cd.copy(col = tt(cd.col))
+      case cd: ColDef => cd.copy(col = tt(cd.col))
       case cd: ChildDef => cd.copy(exp = tt(cd.exp))
-      case fd: FunDef[_] => fd.copy(exp = tt(fd.exp))
-      case ftd: FunAsTableDef[_] => ftd.copy(exp = tt(ftd.exp))
+      case fd: FunDef => fd.copy(exp = tt(fd.exp))
+      case ftd: FunAsTableDef => ftd.copy(exp = tt(ftd.exp))
       case td: TableDef => td.copy(exp = tt(td.exp))
       case to: TableObj => to.copy(obj = tt(to.obj))
       case ta: TableAlias => ta.copy(obj = tt(ta.obj))
@@ -814,10 +814,10 @@ trait Compiler extends QueryParsers { thisCompiler =>
       local_transformer(state) orElse super.transformerWithState(local_transformer)(state)
     def tt[A <: Exp](state: T)(exp: A) = transform_traverse(state)(exp).asInstanceOf[A]
     def traverse(state: T): Transformer = {
-      case cd: ColDef[_] => cd.copy(col = tt(state)(cd.col))
+      case cd: ColDef => cd.copy(col = tt(state)(cd.col))
       case cd: ChildDef => cd.copy(exp = tt(state)(cd.exp))
-      case fd: FunDef[_] => fd.copy(exp = tt(state)(fd.exp))
-      case ftd: FunAsTableDef[_] => ftd.copy(exp = tt(state)(ftd.exp))
+      case fd: FunDef => fd.copy(exp = tt(state)(fd.exp))
+      case ftd: FunAsTableDef => ftd.copy(exp = tt(state)(ftd.exp))
       case td: TableDef => td.copy(exp = tt(state)(td.exp))
       case to: TableObj => to.copy(obj = tt(state)(to.obj))
       case ta: TableAlias => ta.copy(obj = tt(state)(ta.obj))
@@ -872,10 +872,10 @@ trait Compiler extends QueryParsers { thisCompiler =>
     def tr(state: T, e: Exp): T = fun_traverse(state)(e)
     def trl(state: T, l: List[Exp]) = l.foldLeft(state) { (fr, el) => tr(fr, el) }
     def traverse(state: T): PartialFunction[Exp, T] = {
-      case cd: ColDef[_] => tr(state, cd.col)
+      case cd: ColDef => tr(state, cd.col)
       case cd: ChildDef => tr(state, cd.exp)
-      case fd: FunDef[_] => tr(state, fd.exp)
-      case ftd: FunAsTableDef[_] => tr(state, ftd.exp)
+      case fd: FunDef => tr(state, fd.exp)
+      case ftd: FunAsTableDef => tr(state, ftd.exp)
       case td: TableDef => tr(state, td.exp)
       case to: TableObj => tr(state, to.obj)
       case ta: TableAlias => tr(state, ta.obj)

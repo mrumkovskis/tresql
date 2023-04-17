@@ -134,12 +134,12 @@ package object tresql extends CoreTypes {
           colType
         }
         lazy val generator: compiler.Traverser[Ctx] = compiler.traverser(ctx => {
-          case f: FunDef[_] => ctx //for sql_concat function
+          case f: FunDef => ctx //for sql_concat function
             .copy(convRegister =
               q"((${ctx.depth}, ${ctx.childIdx}), identity[RowLike] _)" :: ctx.convRegister)
           //inserts updates deletes
           case dml: DMLDefBase => ctx.copy(className = "DMLResult")
-          case pd: PrimitiveDef[_] =>
+          case pd: PrimitiveDef =>
             val name = c.freshName("tresqlResultConv")
             val funName = TermName(name)
             val typeName = typeNameFromManifest(pd.typ)
@@ -270,7 +270,7 @@ package object tresql extends CoreTypes {
               colNames = ctx.colNames + name,
               colType = tq"${TypeName(selDefCtx.className)}"
             )
-          case ColDef(_, pd: PrimitiveDef[_], _) =>
+          case ColDef(_, pd: PrimitiveDef, _) =>
             val nctx = generator(ctx)(pd)
             nctx.copy(tree = List(q"", q"", q"identity[RowLike] _"))
           case ColDef(colName, _, typ) =>
