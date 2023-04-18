@@ -1,5 +1,6 @@
 package org.tresql.metadata
 
+import org.tresql.ast.CompilerAst.ExprType
 import org.tresql.Metadata
 import java.sql.ResultSet
 import java.sql.DatabaseMetaData
@@ -97,7 +98,7 @@ trait JDBCMetadata extends Metadata {
             getInt("COLUMN_TYPE"),
             getInt("DATA_TYPE"),
             getString("TYPE_NAME"),
-            sql_scala_type_map(getInt("DATA_TYPE"))) :: pars
+            ExprType(sql_scala_type_map(getInt("DATA_TYPE")).toString)) :: pars
       }
       parsRs.close
       val returnPar = pars.filter(_.parType == DatabaseMetaData.procedureColumnReturn) match {
@@ -118,7 +119,7 @@ trait JDBCMetadata extends Metadata {
       l += Map(
         "name" -> rs.getString("COLUMN_NAME"),
         "sql-type" -> rs.getInt("DATA_TYPE"),
-        "scala-type" -> sql_scala_type_map(rs.getInt("DATA_TYPE")),
+        "scala-type" -> ExprType(sql_scala_type_map(rs.getInt("DATA_TYPE")).toString),
         "type-name" -> rs.getString("TYPE_NAME"),
         "size" -> rs.getInt("COLUMN_SIZE"),
         "decimalDigits" -> rs.getInt("DECIMAL_DIGITS"),

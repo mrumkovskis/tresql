@@ -1,5 +1,6 @@
 package org.tresql.resources
 
+import org.tresql.ast.CompilerAst.ExprType
 import org.tresql.{Expr, QueryBuilder}
 import org.tresql.metadata.{FixedReturnType, Par, ParameterReturnType, Procedure, ReturnType, TypeMapper}
 import org.tresql.ast.{Cast, Exp, Fun, Ident, Obj}
@@ -58,17 +59,17 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
       val RetTypeDefRegex(ref, pt) = t
       (ref.nonEmpty, pt)
     }
-    def createPar[T](pn: String, pt: Manifest[T]) = Par(pn, null, -1, -1, null, pt)
+    def createPar[T](pn: String, pt: ExprType) = Par(pn, null, -1, -1, null, pt)
     def parse_params(params: List[Exp]) =
       params.map {
-        case Obj(Ident(List(pn)), null, null, null, false) => createPar(pn, Manifest.Any)
+        case Obj(Ident(List(pn)), null, null, null, false) => createPar(pn, ExprType.Any)
         case Cast(Obj(Ident(List(pn)), null, null, null, false), type_) =>
           val (pt, isRepeated) = parseParType(type_)
           if (isRepeated) repeatedPars = true
           createPar(
             pn,
-            if (pt.isEmpty || typeMapper == null) Manifest.Any
-            else typeMapper.xsd_scala_type_map(pt).asInstanceOf[Manifest[Any]]
+            if (pt.isEmpty || typeMapper == null) ExprType.Any
+            else ExprType(typeMapper.xsd_scala_type_map(pt).toString)
           )
         case x => sys.error(s"Invalid function '$signature' paramater - '${x.tresql}'. " +
           s"Expected identifier or identifier with cast.")
@@ -78,7 +79,7 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
     Try(qp.parseExp(signature))
       .map {
         case Fun(name, parameters, _, None, None) =>
-          createFun(name, parse_params(parameters), FixedReturnType(Manifest.Any), repeatedPars)
+          createFun(name, parse_params(parameters), FixedReturnType(ExprType.Any), repeatedPars)
         case Cast(Fun(name, parameters, _, None, None), type_) =>
           val pars = parse_params(parameters)
           val (isRef, pt) = parseRetType(type_)
@@ -89,8 +90,8 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
               ParameterReturnType(idx)
             }
             else FixedReturnType(
-              if (typeMapper!= null) typeMapper.xsd_scala_type_map(pt).asInstanceOf[Manifest[Any]]
-              else Manifest.Any
+              if (typeMapper!= null) ExprType(typeMapper.xsd_scala_type_map(pt).toString)
+              else ExprType.Any
             )
           createFun(name, pars, rt, repeatedPars)
         case _ => sys.error(s"function signature must be function, instead found - '$signature'")
@@ -132,14 +133,14 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
       case c: Class[_] => ManifestFactory.classType(c)
       case x => ManifestFactory.singleType(x)
     }.zipWithIndex.map { case (m, i) =>
-      Par(s"_$i", null, -1, -1, null, m: Manifest[_])
+      Par(s"_$i", null, -1, -1, null, ExprType(m.toString))
     }.toList.drop(1) // drop builder or parser argument
     val returnType = m.getGenericReturnType match {
       case par: ParameterizedType => sys.error(s"Parametrized return type not supported! Method: $m, parameter: $par")
-      case c: Class[_] => FixedReturnType(primitiveClassAnyValMap.getOrElse(c, ManifestFactory.classType(c)))
+      case c: Class[_] => FixedReturnType(ExprType(primitiveClassAnyValMap.getOrElse(c, ManifestFactory.classType(c)).toString))
       case x =>
         val idx  = pars.indexWhere(_.scalaType.toString == x.toString)
-        if (idx == -1) FixedReturnType(Manifest.Any) else ParameterReturnType(idx)
+        if (idx == -1) FixedReturnType(ExprType.Any) else ParameterReturnType(idx)
     }
     Procedure(m.getName, null, -1, pars, -1, null, returnType, repeatedPars)
   }

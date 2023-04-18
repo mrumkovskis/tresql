@@ -76,7 +76,9 @@ trait Compiler extends QueryParsers { thisCompiler =>
                   scalaType =
                     c.typ
                       .map(metadata.xsd_scala_type_map)
-                      .getOrElse(ManifestFactory.Any))), null, Map()))
+                      .map(_.toString)
+                      .map(ExprType.apply)
+                      .getOrElse(ExprType.Any))), null, Map()))
           case TableDef(_, Obj(_: TableAlias, _, _, _, _)) => Nil
           case x => error(
             s"Unrecognized table clause: '${x.tresql}' [$x]. Try using Query(...)")
@@ -233,7 +235,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
             }
           case l => l
         }
-      else List[ColDef](ColDef(null, All, ManifestFactory.Nothing))
+      else List[ColDef](ColDef(null, All, ExprType.Nothing))
     }
     lazy val builder: TransformerWithState[BuildCtx] = transformerWithState(ctx => {
       case f: Fun => procedure(s"${f.name}#${f.parameters.size}")(ctx.db).map { p =>
@@ -258,7 +260,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
             case x: ReturningDMLDef => ChildDef(x, x.exp.db)
             case x => x
           },
-          ManifestFactory.Nothing
+          ExprType.Nothing
         )
       case Obj(b: Braces, _, _, _, _) if ctx.ctx == QueryCtx =>
         builder(ctx)(b) //unwrap braces top level expression
@@ -266,7 +268,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         builder(ctx)(Query(List(o), Filters(Nil), null, null, null, null, null))
       case o: Obj if ctx.ctx == BodyCtx =>
         o.copy(obj = builder(ctx)(o.obj), join = builder(ctx)(o.join).asInstanceOf[Join])
-      case PrimitiveExp(q) => PrimitiveDef(builder(ctx)(q), Manifest.Nothing)
+      case PrimitiveExp(q) => PrimitiveDef(builder(ctx)(q), ExprType.Nothing)
       case q: Query =>
         val tables = buildTables(ctx, q.tables)
         val cols = buildCols(ctx, q.cols)
@@ -321,7 +323,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
               case r: RowDefBase => ChildDef(r, None)
               case e => e
             },
-            ManifestFactory.Nothing)
+            ExprType.Nothing)
         }
       )
       case dml: DMLExp =>
@@ -370,7 +372,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         val tables: List[TableDef] = List(TableDef(name, Obj(TableObj(Ident(List(name))), null, null, null)))
         val cols =
           wtCols.map { c =>
-            ColDef(c, Ident(List(c)), Manifest.Nothing)
+            ColDef(c, Ident(List(c)), ExprType.Nothing)
           }
         WithTableDef(cols, tables, recursive, exp)
       case With(tables, query) =>
@@ -467,7 +469,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
               val cols = s.cols map { c =>
                 if (c.name == null)
                   error("Null column name in select for insert with asterisk columns")
-                else ColDef(c.name, Ident(List(c.name)), ManifestFactory.Any)
+                else ColDef(c.name, Ident(List(c.name)), ExprType.Any)
               }
               ins.copy(cols = cols, exp = nexp)
             case _ => ins.copy(exp = nexp)
@@ -610,15 +612,22 @@ trait Compiler extends QueryParsers { thisCompiler =>
   }
 
   def resolveColTypes(exp: Exp) = {
-    case class Ctx(scopes: List[Scope], db: Option[String], mf: Manifest[_])
+    case class Ctx(scopes: List[Scope], db: Option[String], mf: ExprType)
     def type_from_const(const: Any): Ctx = Ctx(Nil, None, const match {
-      case n: java.lang.Number => ManifestFactory.classType(n.getClass)
-      case _: Boolean => ManifestFactory.Boolean
-      case s: String => ManifestFactory.classType(s.getClass)
-      case m: Manifest[_] => m
-      case null => Manifest.Any
-      case x => ManifestFactory.classType(x.getClass)
+      case n: java.lang.Number => ExprType(n.getClass.getName)
+      case _: Boolean => ExprType.Boolean
+      case s: String => ExprType(s.getClass.getName)
+      case m: Manifest[_] => ExprType(m.toString)
+      case t: ExprType => t
+      case null => ExprType.Any
+      case x => ExprType(x.getClass.getName)
     })
+    def manifest(exprType: ExprType) = exprType.toString match {
+      case "Any"      => Manifest.Any
+      case "Boolean"  => Manifest.Boolean
+      case null       => Manifest.Nothing
+      case className  => Manifest.classType(Class.forName(className))
+    }
     lazy val typer: Traverser[Ctx] = traverser(ctx => {
       case c: Const => type_from_const(c.value)
       case _: Null => type_from_const(null)
@@ -636,7 +645,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
                 val mf =
                   if (lt.toString == "java.lang.String") lt else if (rt.toString == "java.lang.String") rt
                   else if (lt.toString == "java.lang.Boolean") lt else if (rt.toString == "java.lang.Boolean") rt
-                  else if (lt <:< rt) rt else if (rt <:< lt) lt else lt
+                  else if (manifest(lt) <:< manifest(rt)) rt else lt
                 Ctx(ctx.scopes, ctx.db, mf)
             }
           }
@@ -650,11 +659,11 @@ trait Compiler extends QueryParsers { thisCompiler =>
             s.cols.map(_.tresql).mkString(", ")}")
         else type_from_const(s.cols.head.typ)
       case f: FunDef =>
-        if (f.typ != null && f.typ != Manifest.Nothing) type_from_const(f.typ)
+        if (f.typ != null && f.typ != ExprType.Nothing) type_from_const(f.typ)
         else f.procedure.returnType match {
           case FixedReturnType(mf) => type_from_const(mf)
           case ParameterReturnType(idx) =>
-            if (idx == -1) type_from_const(Manifest.Any) else typer(ctx)(f.exp.parameters(idx))
+            if (idx == -1) type_from_const(ExprType.Any) else typer(ctx)(f.exp.parameters(idx))
         }
       case Cast(_, typ) => type_from_const(metadata.xsd_scala_type_map(typ))
       case PrimitiveDef(e, _) => typer(ctx)(e)
@@ -701,21 +710,21 @@ trait Compiler extends QueryParsers { thisCompiler =>
               .asInstanceOf[List[ColDef]])
         case ColDef(n, ChildDef(ch, db), t) =>
           ColDef(n, ChildDef(type_resolver(ctx.copy(db = db))(ch), db), t)
-        case ColDef(n, exp, typ) if typ == null || typ == Manifest.Nothing =>
+        case ColDef(n, exp, typ) if typ == null || typ == ExprType.Nothing =>
           val nexp = type_resolver(ctx)(exp) //resolve expression in the case it contains select
-          ColDef(n, nexp, typer(Ctx(ctx.scopes, ctx.db, Manifest.Any))(nexp).mf)
+          ColDef(n, nexp, typer(Ctx(ctx.scopes, ctx.db, ExprType.Any))(nexp).mf)
         //resolve return type only for root level function
-        case fd @ FunDef(_, f, typ, p) if ctx.scopes.isEmpty && (typ == null || typ == Manifest.Nothing) =>
+        case fd @ FunDef(_, f, typ, p) if ctx.scopes.isEmpty && (typ == null || typ == ExprType.Nothing) =>
           val t = p.returnType match {
             case ParameterReturnType(idx) =>
-              if (idx == -1) Manifest.Any
-              else typer(Ctx(ctx.scopes, ctx.db, Manifest.Any))(f.parameters(idx)).mf
+              if (idx == -1) ExprType.Any
+              else typer(Ctx(ctx.scopes, ctx.db, ExprType.Any))(f.parameters(idx)).mf
             case FixedReturnType(mf) => mf
           }
           fd.copy(typ = t)
         case PrimitiveDef(exp, _) =>
           val res_exp = type_resolver(ctx)(exp)
-          PrimitiveDef(res_exp, typer(Ctx(ctx.scopes, ctx.db, Manifest.Any))(res_exp).mf)
+          PrimitiveDef(res_exp, typer(Ctx(ctx.scopes, ctx.db, ExprType.Any))(res_exp).mf)
         case ChildDef(ch, db) => ChildDef(type_resolver(ctx.copy(db = db))(ch), db)
       }
     }

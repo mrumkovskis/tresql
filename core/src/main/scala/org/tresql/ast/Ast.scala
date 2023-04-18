@@ -252,10 +252,20 @@ object CompilerAst {
 
   sealed trait CompilerExp extends Exp
 
+  case class ExprType(name: String = null) {
+    override def toString = name
+  }
+
+  object ExprType {
+    val Any     = ExprType("Any")
+    val Boolean = ExprType("Boolean")
+    val Nothing = ExprType()
+  }
+
   trait TypedExp extends CompilerExp {
     def exp: Exp
 
-    def typ: Manifest[_]
+    def typ: ExprType
 
     def tresql: String = exp.tresql
   }
@@ -274,17 +284,17 @@ object CompilerAst {
     def tresql: String = obj.tresql
   }
 
-  case class ColDef(name: String, col: Exp, typ: Manifest[_]) extends TypedExp {
+  case class ColDef(name: String, col: Exp, typ: ExprType) extends TypedExp {
     def exp: ColDef = this
 
     override def tresql: String = Col(col, name).tresql
   }
 
   case class ChildDef(exp: Exp, db: Option[String]) extends TypedExp {
-    val typ: Manifest[ChildDef] = ManifestFactory.classType(this.getClass)
+    val typ: ExprType = ExprType(this.getClass.getName)
   }
 
-  case class FunDef(name: String, exp: Fun, typ: Manifest[_], procedure: Procedure)
+  case class FunDef(name: String, exp: Fun, typ: ExprType, procedure: Procedure)
     extends TypedExp {
     if ((procedure.hasRepeatedPar && exp.parameters.size < procedure.pars.size - 1) ||
       (!procedure.hasRepeatedPar && exp.parameters.size != procedure.pars.size))
@@ -298,7 +308,7 @@ object CompilerAst {
   }
 
   case class RecursiveDef(exp: Exp) extends TypedExp {
-    val typ: Manifest[RecursiveDef] = ManifestFactory.classType(this.getClass)
+    val typ: ExprType = ExprType(this.getClass.getName)
   }
 
   /** Marker for primitive expression (non query) */
@@ -307,13 +317,13 @@ object CompilerAst {
   }
 
   /** Marker for compiler macro, to unwrap compiled result */
-  case class PrimitiveDef(exp: Exp, typ: Manifest[_]) extends TypedExp
+  case class PrimitiveDef(exp: Exp, typ: ExprType) extends TypedExp
 
   //is superclass of sql query and array
   trait RowDefBase extends TypedExp {
     def cols: List[ColDef]
 
-    val typ: Manifest[RowDefBase] = ManifestFactory.classType(this.getClass)
+    val typ: ExprType = ExprType(this.getClass.getName)
   }
 
   //superclass of select and dml statements (insert, update, delete)

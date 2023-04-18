@@ -128,7 +128,7 @@ package object tresql extends CoreTypes {
         def uniqueName(prefix: String, names: Set[String]) = if (names(prefix)) {
           prefix + Stream.from(1).filterNot(i => names(prefix + i)).head
         } else prefix
-        def typeNameFromManifest(m: Manifest[_]) = {
+        def typeNameFromManifest(m: ExprType) = {
           //FIXME bizzare way of getting qualified type name, did not find another way...
           val q"typeOf[$colType]" = c.parse(s"typeOf[${m.toString}]")
           colType

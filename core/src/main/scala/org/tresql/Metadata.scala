@@ -1,5 +1,6 @@
 package org.tresql
 
+import org.tresql.ast.CompilerAst.ExprType
 import org.tresql.metadata.Procedure
 import org.tresql.resources.{FunctionSignatures, FunctionSignaturesLoader, MacrosLoader}
 
@@ -134,7 +135,7 @@ package metadata {
             c("name").toLowerCase,
             c("nullable").asInstanceOf[Boolean],
             c("sql-type").asInstanceOf[Int],
-            c("scala-type").asInstanceOf[Manifest[_]]
+            c("scala-type").asInstanceOf[ExprType],
           )
         }
       }, t("key") match { case l: List[String @unchecked] => Key(l map (_.toLowerCase)) }, t("refs") match {
@@ -150,7 +151,7 @@ package metadata {
       })
     }
   }
-  case class Col(name: String, nullable: Boolean, sqlType: Int, scalaType: Manifest[_])
+  case class Col(name: String, nullable: Boolean, sqlType: Int, scalaType: ExprType)
   case class Key(cols: List[String])
   case class Ref(cols: List[String], refCols: List[String])
   case class Procedure(
@@ -158,18 +159,18 @@ package metadata {
     returnSqlType: Int, returnTypeName: String, returnType: ReturnType,
     hasRepeatedPar: Boolean = false
   ) {
-    def scalaReturnType: Manifest[_] = returnType match {
+    def scalaReturnType: ExprType = returnType match {
       case r: FixedReturnType => r.mf
       case ParameterReturnType(idx) => pars(idx).scalaType
     }
   }
   case class Par(
     name: String, comments: String, parType:   Int,
-    sqlType: Int, typeName: String, scalaType: Manifest[_]
+    sqlType: Int, typeName: String, scalaType: ExprType,
   )
   sealed trait ReturnType
   case class ParameterReturnType(idx: Int) extends ReturnType
-  case class FixedReturnType(mf: Manifest[_]) extends ReturnType
+  case class FixedReturnType(mf: ExprType) extends ReturnType
   sealed trait key_ { def cols: List[String] }
   case class uk(cols: List[String]) extends key_
   case class fk(cols: List[String]) extends key_
