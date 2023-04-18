@@ -262,7 +262,7 @@ object CompilerAst {
     val Nothing = ExprType()
   }
 
-  trait TypedExp extends CompilerExp {
+  sealed trait TypedExp extends CompilerExp {
     def exp: Exp
 
     def typ: ExprType

@@ -315,7 +315,7 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     )
   }
 
-  test("ast serialization") {
+  test("ast (from parser) serialization") {
     import io.bullet.borer._
     import io.bullet.borer.derivation.MapBasedCodecs._
     import io.bullet.borer.Codec
@@ -333,6 +333,49 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
       assertResult(e, st){ Cbor.decode(ev).to[Exp].value }
     })
   }
+
+/*
+  test("ast (from compiler) serialization") {
+    import io.bullet.borer._
+    import io.bullet.borer.derivation.MapBasedCodecs._
+    import io.bullet.borer.Codec
+    import org.tresql.ast._
+    import org.tresql.metadata.{Par, Procedure, ReturnType}
+    import CompilerAst._
+    implicit      val tableColDefCodec: Codec[TableColDef] = deriveCodec    [TableColDef]
+    implicit lazy val expCodec:         Codec[Exp]         = deriveAllCodecs[Exp]
+    implicit lazy val exprTypeCodec:    Codec[ExprType]    = deriveCodec    [ExprType]
+    implicit lazy val parCodec:         Codec[Par]         = deriveCodec    [Par]
+    implicit lazy val returnTypeCodec:  Codec[ReturnType]  = deriveAllCodecs[ReturnType]
+    implicit lazy val procedureCodec:   Codec[Procedure]   = deriveCodec    [Procedure]
+    implicit lazy val joinCodec:        Codec[Join]        = deriveCodec    [Join]
+    implicit lazy val objCodec:         Codec[Obj]         = deriveCodec    [Obj]
+    implicit lazy val ordColCodec:      Codec[OrdCol]      = deriveCodec    [OrdCol]
+    implicit lazy val ordCodec:         Codec[Ord]         = deriveCodec    [Ord]
+    implicit lazy val funCodec:         Codec[Fun]         = deriveCodec    [Fun]
+    implicit lazy val compilerExpCodec: Codec[CompilerExp] = deriveAllCodecs[CompilerExp]
+    val testRes = tresqlResources.withMetadata(
+      new metadata.JDBCMetadata {
+        override def conn: Connection = tresqlResources.conn
+        override def macrosClass: Class[_] = classOf[org.tresql.test.Macros]
+      }
+    )
+    val child_metadata = new JDBCMetadata {
+      override def conn: Connection = testRes.extraResources("contact_db").conn
+      override def macrosClass: Class[_] = classOf[org.tresql.test.Macros1]
+      override def functionSignaturesResource: String = "/tresql-function-signatures-db1.txt"
+    }
+    val compiler = new QueryCompiler(testRes.metadata,
+      Map("contact_db" -> child_metadata, "emp_db" -> testRes.metadata), testRes)
+    testTresqls("/test.txt", (st, _, _, nr) => {
+      val e = compiler.compile(compiler.parseExp(st))
+      val ev = try Cbor.encode(e).toByteArray catch {
+        case e: Exception => throw new RuntimeException(s"Error encoding statement nr. $nr:\n$st", e)
+      }
+      assertResult(e, st){ Cbor.decode(ev).to[Exp].value }
+    })
+  }
+*/
 
   test("cache") {
     Option(tresqlResources.cache) foreach(c => println(s"\nCache size: ${c.size}\n"))
