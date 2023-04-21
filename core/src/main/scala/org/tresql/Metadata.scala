@@ -155,8 +155,8 @@ package metadata {
   case class Key(cols: List[String])
   case class Ref(cols: List[String], refCols: List[String])
   case class Procedure(
-    name: String, comments: String, procType: Int, pars: List[Par],
-    returnSqlType: Int, returnTypeName: String, returnType: ReturnType,
+    name: String, comments: String = null, procType: Int, pars: List[Par],
+    returnSqlType: Int, returnTypeName: String = null, returnType: ReturnType,
     hasRepeatedPar: Boolean = false
   ) {
     def scalaReturnType: ExprType = returnType match {
@@ -165,8 +165,8 @@ package metadata {
     }
   }
   case class Par(
-    name: String, comments: String, parType:   Int,
-    sqlType: Int, typeName: String, scalaType: ExprType,
+    name: String, comments: String = null, parType:   Int,
+    sqlType: Int, typeName: String = null, scalaType: ExprType,
   )
   sealed trait ReturnType
   case class ParameterReturnType(idx: Int) extends ReturnType

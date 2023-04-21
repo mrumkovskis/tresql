@@ -175,7 +175,7 @@ case class With(tables: List[WithTable], query: Exp) extends Exp {
 case class Values(values: List[Arr]) extends Exp {
   def tresql = values map (_.tresql) mkString ", "
 }
-case class Insert(table: Ident, alias: String = null, cols: List[Col], vals: Exp = null, returning: Option[Cols],
+case class Insert(table: Ident = null, alias: String = null, cols: List[Col], vals: Exp = null, returning: Option[Cols],
                   db: Option[String])
   extends DMLExp {
   override def filter = null
@@ -185,7 +185,7 @@ case class Insert(table: Ident, alias: String = null, cols: List[Col], vals: Exp
     (if (vals != null) any2tresql(vals) else "") +
     returning.map(_.tresql).getOrElse("")
 }
-case class Update(table: Ident, alias: String = null, filter: Arr = null, cols: List[Col], vals: Exp = null,
+case class Update(table: Ident = null, alias: String = null, filter: Arr = null, cols: List[Col], vals: Exp = null,
                   returning: Option[Cols], db: Option[String])
   extends DMLExp {
   def tresql = {
@@ -205,7 +205,7 @@ case class ValuesFromSelect(select: Query) extends Exp {
     if (select.tables.size > 1) select.copy(tables = select.tables.tail).tresql
     else ""
 }
-case class Delete(table: Ident, alias: String = null, filter: Arr, using: Exp = null, returning: Option[Cols],
+case class Delete(table: Ident = null, alias: String = null, filter: Arr, using: Exp = null, returning: Option[Cols],
                   db: Option[String])
   extends DMLExp {
   override def cols = null
@@ -284,7 +284,7 @@ object CompilerAst {
     def tresql: String = obj.tresql
   }
 
-  case class ColDef(name: String, col: Exp, typ: ExprType) extends TypedExp {
+  case class ColDef(name: String = null, col: Exp, typ: ExprType) extends TypedExp {
     def exp: ColDef = this
 
     override def tresql: String = Col(col, name).tresql
@@ -320,7 +320,7 @@ object CompilerAst {
   case class PrimitiveDef(exp: Exp, typ: ExprType) extends TypedExp
 
   //is superclass of sql query and array
-  trait RowDefBase extends TypedExp {
+  sealed trait RowDefBase extends TypedExp {
     def cols: List[ColDef]
 
     val typ: ExprType = ExprType(this.getClass.getName)
@@ -340,12 +340,12 @@ object CompilerAst {
   }
 
   //is superclass of insert, update, delete
-  trait DMLDefBase extends SQLDefBase {
+  sealed trait DMLDefBase extends SQLDefBase {
     def db: Option[String]
   }
 
   //is superclass of select, union, intersect etc.
-  trait SelectDefBase extends SQLDefBase
+  sealed trait SelectDefBase extends SQLDefBase
 
   case class SelectDef(
                         cols: List[ColDef],
@@ -467,17 +467,17 @@ object CompilerAst {
                             ) extends SelectDefBase
 
   // with [recursive] expressions
-  trait WithQuery extends SQLDefBase {
+  sealed trait WithQuery extends SQLDefBase {
     def exp: SQLDefBase
 
     def withTables: List[WithTableDef]
   }
 
-  trait WithSelectBase extends SelectDefBase with WithQuery {
+  sealed trait WithSelectBase extends SelectDefBase with WithQuery {
     def exp: SelectDefBase
   }
 
-  trait WithDMLQuery extends DMLDefBase with WithQuery {
+  sealed trait WithDMLQuery extends DMLDefBase with WithQuery {
     def exp: DMLDefBase
 
     override def db: Option[String] = None
