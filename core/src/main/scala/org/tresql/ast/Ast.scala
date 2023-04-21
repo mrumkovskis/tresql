@@ -15,8 +15,6 @@ private[tresql] object QueryParsers {
 import QueryParsers.any2tresql
 import org.tresql.metadata.Procedure
 
-import scala.reflect.ManifestFactory
-
 sealed trait Exp {
   def tresql: String
 }
