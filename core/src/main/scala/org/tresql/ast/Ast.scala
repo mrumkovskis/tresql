@@ -222,7 +222,7 @@ case class Arr(elements: List[Exp]) extends Exp {
 case class Filters(filters: List[Arr]) extends Exp {
   def tresql = filters map any2tresql mkString
 }
-object All extends Exp {
+case object All extends Exp {
   def tresql = "*"
 }
 case class IdentAll(ident: Ident) extends Exp {
