@@ -229,12 +229,12 @@ package object tresql extends CoreTypes {
                   val membConvInvocations =
                     (colTypes zip membResConvs).zipWithIndex map { case ((ct, (mn, _)), i) =>
                       if (mn == null)
-                        if (ct == null) q"res.typed[CompiledResult[_]]($i)"
-                        else q"res.typed[CompiledResult[$ct]]($i)"
+                        if (ct == null) q"res.typed[Result[_]]($i)"
+                        else q"res.typed[Result[$ct]]($i)"
                       else
                         q"${TermName(mn)}(res.typed[Result[_]]($i))"
                     }
-                  (n, q"""def ${TermName(n)}(res: CompiledResult[_]) = {
+                  (n, q"""def ${TermName(n)}(res: Result[_]) = {
                             ..${membResConvs.filter(_._1 != null).map(_._2)}
                             (..$membConvInvocations)
                           }""")
