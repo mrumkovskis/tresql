@@ -134,9 +134,6 @@ package object tresql extends CoreTypes {
           colType
         }
         lazy val generator: compiler.Traverser[Ctx] = compiler.traverser(ctx => {
-          case f: FunDef => ctx //for sql_concat function
-            .copy(convRegister =
-              q"((${ctx.depth}, ${ctx.childIdx}), identity[RowLike] _)" :: ctx.convRegister)
           //inserts updates deletes
           case dml: DMLDefBase => ctx.copy(className = "DMLResult")
           case pd: PrimitiveDef =>
