@@ -29,7 +29,7 @@ ThisBuild / versionScheme := Some("early-semver")
 
 def coreDependencies(scalaVer: String) =
   Seq(
-    "org.scala-lang.modules" %% "scala-parser-combinators" % "2.2.0"
+    "org.scala-lang.modules" %% "scala-parser-combinators" % "2.3.0"
   ) ++ (if (scalaVer.startsWith("3")) Nil else Seq("org.scala-lang" % "scala-reflect" % scalaVer))
 
 javacOptions ++= Seq("-source", "1.8", "-target", "1.8", "-Xlint")
