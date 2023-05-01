@@ -86,16 +86,9 @@ package object tresql extends CoreTypes {
     def impl(c: Context)(params: c.Expr[Any]*)(resources: c.Expr[Resources]): c.Expr[Result[RowLike]] = {
       import c.universe._
       import CoreTypes.RowConverter
-      val (macroSettings, verbose) = settings(c.settings)
-      val logger = if (verbose) new Resources {
-        override def logger = (msg, params, _) => {
-          println(msg)
-          if (params != null && params.nonEmpty) println(s" Params: $params")
-        }
-        log("Verbose flag set")
-      } else new Resources {}
+      val (macroSettings, verbose) = settings
       def info(msg: Any) = if (verbose) c.info(c.enclosingPosition, String.valueOf(msg), false)
-      logger.log(s"Macro compiler settings:\n$macroSettings")
+      info(s"Macro compiler settings:\n$macroSettings")
       val q"org.tresql.`package`.Tresql(scala.StringContext.apply(..$parts)).tresql(..$pars)($res)" =
         c.macroApplication
       val tresqlString = parts.map {
@@ -331,14 +324,15 @@ package object tresql extends CoreTypes {
       c.Expr(tree)
     }
     val macroPropertiesResourceName = "/tresql-scala-macro.properties"
-    def settings(sett: List[String]): (Map[String, String], Boolean) = {
+    val verboseProp = "tresql.scala.macro.verbose"
+    def settings: (Map[String, String], Boolean) = {
       val p = new Properties()
       val macroPropertiesStream = getClass.getResourceAsStream(macroPropertiesResourceName)
       if (macroPropertiesStream == null)
         sys.error(s"Resource not found: $macroPropertiesResourceName")
       p.load(macroPropertiesStream)
       import scala.collection.JavaConverters._
-      val (settings, verbose) = (p.asScala.toMap, sett.exists(_.trim == "verbose"))
+      val (settings, verbose) = (p.asScala.toMap, System.getProperties.containsKey(verboseProp))
       if (verbose) println(s"Scala compiler macro settings:\n$settings")
       (settings, verbose)
     }
