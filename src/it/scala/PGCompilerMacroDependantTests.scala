@@ -75,8 +75,8 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
         r.d.hiredate.toString))
     assertResult("1982-12-09 00:00:00.0")(Query("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) =>
         r.t.hiredate.toString))
-    assertResult("KING PRESIDENT")(Query("emp[7839] {ename, job}").foldLeft("")((x, r) =>
-        r.ename + " " + r.job))
+    assertResult("KING PRESIDENT")(Query("emp[7839] {ename, job}").foldLeft("")((_, r) =>
+        r.ename.toString + " " + r.job))
     //typed tests
     assertResult(("MILLER", BigDecimal(2300.35)))(Query.head[(String, BigDecimal)]("emp[hiredate = '1982-01-23']{ename, sal}"))
     assertResult(List(("CLARK", "ACCOUNTING", 2450.00), ("KING", "ACCOUNTING", 5000.00),
@@ -193,7 +193,8 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
       Map("deptno" -> 50, "dname" -> "LAW", "loc" -> "FLORIDA",
         "emps" -> List(Map("empno" -> 1111, "ename" -> "BROWN", "deptno" -> 50),
           Map("empno" -> 2222, "ename" -> "CHRIS", "deptno" -> 50)))))
-    assertResult(List(2, 1))(Query("emp - [deptno = 50], dept - [50]"))
+    assertResult(List(new DeleteResult(count = Some(2)), new DeleteResult(count = Some(1))))(
+      Query("emp - [deptno = 50], dept - [50]"))
     assertResult(new InsertResult(count = Some(1), children = List(
       ("emps", List(new InsertResult(count = Some(1), id = Some(10002)),
         new InsertResult(count = Some(1), id = Some(10003))))), id = Some(10001)))(Query(
@@ -276,7 +277,7 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
       id = Some(10009)))(ORT.insert("dept", obj))
 
     obj = Map("ename" -> "KIKI", "deptno" -> 50, "car"-> List(Map("name"-> "GAZ")))
-    assertResult((1,10012))(ORT.insert("emp", obj))
+    assertResult(new InsertResult(count = Some(1), id = Some(10012)))(ORT.insert("emp", obj))
 
     //Ambiguous references to table: emp. Refs: List(Ref(List(empno)), Ref(List(empno_mgr)))
     obj = Map("emp" -> Map("empno" -> null, "ename" -> "BROWN", "deptno" -> null,
@@ -304,7 +305,7 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
 
     //multiple column primary key
     obj = Map("empno"->7788, "car_nr" -> "1111")
-    assertResult(1)(ORT.insert("car_usage", obj))
+    assertResult(new InsertResult(count = Some(1)))(ORT.insert("car_usage", obj))
     //primary key component not specified error must be thrown
     obj = Map("car_nr" -> "1111")
     intercept[TresqlException](ORT.insert("car_usage", obj))
@@ -315,7 +316,7 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
 
     //value clause test
     obj = Map("car_nr" -> 2222, "empno" -> 7788, "date_from" -> java.sql.Date.valueOf("2013-11-06"))
-    assertResult(1)(ORT.insert("car_usage", obj))
+    assertResult(new InsertResult(count = Some(1)))(ORT.insert("car_usage", obj))
 
     println("\n--- UPDATE ---\n")
 
@@ -356,7 +357,7 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
         "calculated_children"->List(Map("x"->5)), "deptno"->40,
         "car"-> List(Map("nr" -> "AAA", "name"-> "GAZ", "deptno" -> 15)))
-    assertResult(1)(ORT.update("emp", obj))
+    assertResult(new UpdateResult(count = Some(1)))(ORT.update("emp", obj))
 
     //ambiguous relation is found with work
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
@@ -374,7 +375,7 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
     //value clause test
     //nr column is varchar. postgres is picky about types: 4444 passed in as varchar "4444"
     obj = Map("nr" -> "4444", "deptnr" -> 10)
-    assertResult(1)(ORT.update("car", obj))
+    assertResult(new UpdateResult(count = Some(1)))(ORT.update("car", obj))
     obj = Map("nr" -> "4444", "deptnr" -> -1)
     //intercept[java.sql.SQLIntegrityConstraintViolationException](ORT.update("car", obj))
     intercept[TresqlException](ORT.update("car", obj))
@@ -423,7 +424,7 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
 
     println("\n--- DELETE ---\n")
 
-    assertResult(1)(ORT.delete("emp", 7934))
+    assertResult(new DeleteResult(count = Some(1)))(ORT.delete("emp", 7934))
 
     println("\n--- SAVE - merge children ---\n")
 
@@ -529,13 +530,13 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
     println("\n-------- LOOKUP object editing --------\n")
     //edit lookup object
     obj = Map("brand" -> "DUNLOP", "season" -> "W", "carnr" -> Map("name" -> "VW"))
-    assertResult((1,10029)) { ORT.insert("tyres", obj) }
+    assertResult(new InsertResult(count = Some(1), id = Some(10029))) { ORT.insert("tyres", obj) }
     obj = Map("brand" -> "CONTINENTAL", "season" -> "W", "carnr" -> Map("nr" -> "UUU", "name" -> "VW"))
-    assertResult((1,10030)) { ORT.insert("tyres", obj) }
+    assertResult(new InsertResult(count = Some(1), id = Some(10030))) { ORT.insert("tyres", obj) }
     obj = Map("nr" -> 10029, "season" -> "S", "carnr" -> Map("name" -> "SKODA"))
-    assertResult(1) { ORT.update("tyres", obj) }
+    assertResult(new UpdateResult(count = Some(1))) { ORT.update("tyres", obj) }
     obj = Map("nr" -> 10029, "brand" -> "DUNLOP", "carnr" -> Map("nr" -> "UUU", "name" -> "VOLKSWAGEN"))
-    assertResult(1) { ORT.update("tyres", obj) }
+    assertResult(new UpdateResult(count = Some(1))) { ORT.update("tyres", obj) }
     //one to one relationship with lookup for extended table
     obj = Map("dname" -> "MARKETING", "addr" -> "Valkas str. 1",
         "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Riga"))
@@ -556,7 +557,7 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
     }
     //insert of lookup object where it's pk is present but null
     obj = Map("nr" -> 10029, "brand" -> "DUNLOP", "carnr" -> Map("nr" -> null, "name" -> "AUDI"))
-    assertResult(1) { ORT.update("tyres", obj) }
+    assertResult(new UpdateResult(count = Some(1))) { ORT.update("tyres", obj) }
 
     println("\n----------------- Multiple table INSERT UPDATE extended cases ----------------------\n")
 
@@ -639,10 +640,10 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
 
     println("\n-------- INSERT, UPDATE, DELETE with additional filter --------\n")
     //insert, update with additional filter
-    assertResult(0){ORT.insert("dummy", Map("dummy" -> 2), "dummy = -1")}
-    assertResult(1){ORT.insert("dummy d", Map("dummy" -> 2), "d.dummy = 2")}
-    assertResult(0){ORT.update("address a", Map("nr" -> 10033, "addr" -> "gugu"), "a.addr ~ 'Ri'")}
-    assertResult(0) { ORT.delete("emp e", 10053, "ename ~~ :ename", Map("ename" -> "ivans%")) }
+    assertResult(new InsertResult(count = Some(0))){ORT.insert("dummy", Map("dummy" -> 2), "dummy = -1")}
+    assertResult(new InsertResult(count = Some(1))){ORT.insert("dummy d", Map("dummy" -> 2), "d.dummy = 2")}
+    assertResult(new UpdateResult(count = Some(0))){ORT.update("address a", Map("nr" -> 10033, "addr" -> "gugu"), "a.addr ~ 'Ri'")}
+    assertResult(new DeleteResult(count = Some(0))) { ORT.delete("emp e", 10053, "ename ~~ :ename", Map("ename" -> "ivans%")) }
     //assertResult(1) { ORT.delete("emp e", 10053, "ename ~~ :ename", Map("ename" -> "van%")) }
 
     println("\n---- Object INSERT, UPDATE ------\n")
@@ -650,7 +651,7 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
     implicit def pohatoMap[T <: Poha](o: T): (String, Map[String, _]) = o match {
       case Car(nr, name) => "car" -> Map("nr" -> nr, "name" -> name)
     }
-    assertResult((1,8888))(ORT.insertObj(Car(8888, "OPEL")))
+    assertResult(new InsertResult(count = Some(1), id = Some(8888)))(ORT.insertObj(Car(8888, "OPEL")))
     //assertResult(1)(ORT.updateObj(Car(8888, "SAAB")))
 
     println("\n-------- SAVE - extended cases --------\n")
@@ -965,7 +966,11 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
 
     assertResult(15)(tresql"{inc_val_5(10)}".head._1)
 
-    assertResult((1,1,1))(tresql"dummy + [10], dummy[dummy = 10] = [11], dummy - [dummy = 11]")
+    assertResult((new InsertResult(count = Some(1)),
+      new UpdateResult(count = Some(1)), new DeleteResult(count = Some(1))))(
+      tresql"dummy + [10], dummy[dummy = 10] = [11], dummy - [dummy = 11]"
+        .asInstanceOf[(DMLResult, DMLResult, DMLResult)] // must do cast to avoid scala 3 compiler error. scalatest bug?
+    )
 
     //braces test
     //assertResult(List(0, 0, 2, 2))(tresql"((dummy)d2 ++ ((dummy)d1)d3)d4#(1)".map(_.dummy).toList)
@@ -1005,7 +1010,7 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
       val dn = "acc"
       val params = Map("ename" -> "cl%")
       assertResult(List(Vector("ACCOUNTING", "CLARK")))(
-        tresql"emp/dept[dname ~~ $dn || '%' & ename ~~ :ename]{dname, ename}#(1, 2)"(
+        tresql"emp/dept[dname ~~ $dn || '%' & ename ~~ :ename]{dname, ename}#(1, 2)"(using
           resources.withParams(params)).toListOfVectors)
     }
 
@@ -1065,9 +1070,11 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
 
     //expressions without select
     assertResult(1)(tresql"1")
-    assertResult((1,2,3))(tresql"1, 2, 3")
+    assertResult((1,2,3))(tresql"1, 2, 3".asInstanceOf[(BigDecimal, BigDecimal, BigDecimal)]) // must do cast to avoid scala 3 compiler error. scalatest bug?
     assertResult(2.34)(tresql"round(2.33555, 2)")
-    assertResult((2.34, 3 ,14))(tresql"round(2.33555, 2), round(3.1,0), 5 + 9")
+    assertResult((2.34, 3 ,14))(tresql"round(2.33555, 2), round(3.1,0), 5 + 9"
+      .asInstanceOf[(BigDecimal, BigDecimal, BigDecimal)]
+    ) // must do cast to avoid scala 3 compiler error. scalatest bug?
     assertResult(7.3)(tresql"1 + 4 - 0 + round(2.3, 5)")
     assertResult("2.34")(tresql"round(2.33555, 2)::string")
     assertResult(2)(tresql"2.3::int")
@@ -1076,8 +1083,10 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
     assertResult(java.sql.Timestamp.valueOf("2000-01-01 00:00:00.0"))(tresql"'2000/01/01'::timestamp")
     assertResult(2)(tresql"round(2.3, 1)::int")
     assertResult((2, 2.3, java.sql.Date.valueOf("2000-01-01"), java.sql.Timestamp.valueOf("2000-01-01 00:00:00.0")))(
-      tresql"2.3::int, '2.3'::decimal, '2000/01/01'::date, '2000/01/01'::timestamp")
-    assertResult((3,5))(tresql"(1 + 2)::int, (2 + 3)::int")
+      tresql"2.3::int, '2.3'::decimal, '2000/01/01'::date, '2000/01/01'::timestamp"
+        .asInstanceOf[(Integer, BigDecimal, java.sql.Date, java.sql.Timestamp)] // must do cast to avoid scala 3 compiler error. scalatest bug?
+    )
+    assertResult((3,5))(tresql"(1 + 2)::int, (2 + 3)::int".asInstanceOf[(Integer, Integer)]) // must do cast to avoid scala 3 compiler error. scalatest bug?
     assertResult(2.3) {
       val x = 1;
       tresql"round(2.33555, $x)"
@@ -1099,8 +1108,7 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
       ename, ((dept d[e.deptno = d.deptno]{dname}) x {dname}) dname}"""
         .map(r => r.ename -> r.dname).toList.head)
 
-    //repeating column names
-    assertResult(List(3, 9))(tresql"dummy{dummy nr, dummy + 1 nr, dummy + 2 nr}"
+    assertResult(List(3, 9))(tresql"dummy{dummy nr, dummy + 1 nr1, dummy + 2 nr2}"
       .map(r => r.nr + r.nr1 + r.nr2).toList.sorted)
   }
 }

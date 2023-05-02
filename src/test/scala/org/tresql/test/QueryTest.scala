@@ -50,7 +50,7 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
       .withConn(connection)
       .withDialect(hsqlDialect)
       .withIdExpr(_ => "nextval('seq')")
-      .withMacros(Macros)
+      .withMacros(org.tresql.test.Macros)
       .withCache(new SimpleCache(-1))
       .withLogger((msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg))
 
@@ -315,26 +315,7 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     )
   }
 
-  test("ast (from parser) serialization") {
-    import io.bullet.borer._
-    import io.bullet.borer.derivation.MapBasedCodecs._
-    import io.bullet.borer.Codec
-    import org.tresql.ast._
-    import CompilerAst._
-    implicit val exc: Codec[CompilerExp] = Codec(Encoder { (w, _) => w.writeNull() }, Decoder { r => r.readNull() })
-    implicit val tableColDefCodec: Codec[TableColDef] = deriveCodec[TableColDef]
-    implicit lazy val expCodec: Codec[Exp] = deriveAllCodecs[Exp]
-    val p = new QueryParser()
-    testTresqls("/test.txt", (st, _, _, nr) => {
-      val e = p.parseExp(st)
-      val ev = try Cbor.encode(e).toByteArray catch {
-        case e: Exception => throw new RuntimeException(s"Error encoding statement nr. $nr:\n$st", e)
-      }
-      assertResult(e, st){ Cbor.decode(ev).to[Exp].value }
-    })
-  }
-
-  test("ast (from compiler) serialization") {
+  test("ast serialization") {
     import io.bullet.borer._
     import io.bullet.borer.derivation.MapBasedCodecs._
     import io.bullet.borer.Codec
@@ -384,11 +365,15 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     val compiler = new QueryCompiler(testRes.metadata,
       Map("contact_db" -> child_metadata, "emp_db" -> testRes.metadata), testRes)
     testTresqls("/test.txt", (st, _, _, nr) => {
-      val e = compiler.compile(compiler.parseExp(st))
-      val ev = try Cbor.encode(e).toByteArray catch {
-        case ex: Exception => throw new RuntimeException(s"Error encoding statement nr. $nr:\n$st\n$e", ex)
+      def check(e: Exp) = {
+        val ev = try Cbor.encode(e).toByteArray catch {
+          case ex: Exception => throw new RuntimeException(s"Error encoding statement nr. $nr:\n$st\n$e", ex)
+        }
+        assertResult(e, st) { Cbor.decode(ev).to[Exp].value }
       }
-      assertResult(e, st){ Cbor.decode(ev).to[Exp].value }
+      val pe = compiler.parseExp(st)
+      check(pe)
+      check(compiler.compile(pe))
     })
   }
 

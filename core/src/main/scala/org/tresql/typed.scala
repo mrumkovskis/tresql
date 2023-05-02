@@ -59,6 +59,18 @@ trait TypedResult[+R <: RowLike] { this: Result[R] =>
       } else None
     finally close
 
+  /** Used by tresql scala macro to convert result to single value */
+  def headValue(typeName: String): Any =
+    headOptionValue(typeName).getOrElse(throw new NoSuchElementException("No rows in result"))
+  /** Used by tresql scala macro to convert result to single value */
+  def headOptionValue(typeName: String): Option[Any] =
+    try
+      if (hasNext) {
+        next()
+        Some(this.asInstanceOf[RowLike].typed(0, typeName))
+      } else None
+    finally close
+
   def unique[T: Manifest](implicit converter: CoreTypes.Converter[T]): T =
     uniqueOption[T].getOrElse(throw new NoSuchElementException("No rows in result"))
 

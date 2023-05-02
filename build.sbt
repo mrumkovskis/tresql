@@ -1,18 +1,19 @@
-val scalaV = "2.13.10"
+val scalaV = "3.3.0-RC5"
 
 lazy val commonSettings = Seq(
   organization := "org.tresql",
   scalaVersion := scalaV,
   crossScalaVersions := Seq(
       scalaV,
+      "2.13.10",
       "2.12.17",
-//      "3.2.2",
-    ),
+  ),
   //coverageEnabled := true,
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",
     "-language:postfixOps", "-language:implicitConversions", "-language:reflectiveCalls",
     "-language:existentials",
   ),
+  scalacOptions ++= (if (scalaVersion.value.startsWith("3")) Seq("-explain") else Nil),
   publishTo := {
     val nexus = "https://oss.sonatype.org/"
     if (version.value.trim.endsWith("SNAPSHOT"))
@@ -45,6 +46,8 @@ lazy val core = (project in file("core"))
   .settings(
     name := "tresql-core",
     libraryDependencies ++= coreDependencies(scalaVersion.value),
+    unmanagedSources / excludeFilter :=
+      (if(scalaVersion.value.startsWith("3")) "" else "Scala3*.scala"),
     publish / skip := true,
   ).settings(commonSettings: _*)
 
@@ -53,6 +56,8 @@ lazy val macros = (project in file("macro"))
   .dependsOn(core)
   .settings(
     name := "tresql-interpolator-macro",
+    unmanagedSources / excludeFilter :=
+      (if(scalaVersion.value.startsWith("3")) "*.*" else ""),
     publish / skip := true,
 )
   .settings(commonSettings: _*)
@@ -74,7 +79,6 @@ lazy val tresql = (project in file("."))
   .disablePlugins(plugins.JUnitXmlReportPlugin)
   .dependsOn(core % "test->test;compile->compile", macros)
   .aggregate(core, macros)
-  //.settings(scalacOptions += "-Xmacro-settings:verbose")
   .settings(commonSettings: _*)
   .settings(packageMerges: _*)
   .settings(

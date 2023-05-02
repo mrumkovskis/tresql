@@ -329,7 +329,7 @@ package object tresql extends CoreTypes {
       val p = new Properties()
       val macroPropertiesStream = getClass.getResourceAsStream(macroPropertiesResourceName)
       if (macroPropertiesStream == null)
-        sys.error(s"Resource not found: $macroPropertiesResourceName")
+        sys.error(s"Macro properties resource not found: $macroPropertiesResourceName")
       p.load(macroPropertiesStream)
       import scala.collection.JavaConverters._
       val (settings, verbose) = (p.asScala.toMap, System.getProperties.containsKey(verboseProp))
