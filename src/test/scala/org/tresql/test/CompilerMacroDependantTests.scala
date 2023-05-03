@@ -2458,14 +2458,15 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     assertResult(6000)(tresql"1000 + (emp[ename = 'KING']{sal})")
 
     assertResult("ACCOUNTING")(tresql"macro_interpolator_test4(dept, dname)".map(_.dname).toList.head)
-    assertResult(List(("RESEARCH",
-      List(("ADAMS", List()), ("FORD", List()), ("JONES", List()), ("MĀRTIŅŠ ŽVŪKŠĶIS", List()), ("SCOTT", List(8))),
-      List(("BMW", List("Barum")), ("MERCEDES", List("MICHELIN", "NOKIAN")))))) {
+    // deeper hierarchical query with type checking
+    assertResult(List(("RESEARCH(8)",
+      List(("adams", List()), ("ford", List()), ("jones", List()), ("mārtiņš žvūkšķis", List()), ("scott", List(7))),
+      List(("bmw", List("barum")), ("mercedes", List("michelin", "nokian")))))) {
       tresql"dept [dname = 'RESEARCH'] {dname, |emp{ename, |[emp.empno = work.empno]work{hours}#(1) work}#(1) emps, |car{name, |tyres{brand}#(1) tyres}#(1) cars}#(1)"
         .map { d =>
-          ( d.dname,
-            d.emps.map(e => e.ename -> e.work.map(_.hours).toList).toList,
-            d.cars.map(c => c.name -> c.tyres.map(_.brand).toList).toList
+          ( s"${d.dname}(${d.dname.size})",
+            d.emps.map(e => e.ename.toLowerCase -> e.work.map(_.hours - 1).toList).toList,
+            d.cars.map(c => c.name.toLowerCase -> c.tyres.map(_.brand.toLowerCase).toList).toList
           )
       }.toList
     }
