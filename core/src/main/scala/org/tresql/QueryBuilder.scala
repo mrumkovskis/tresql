@@ -93,13 +93,12 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   /*****************************************************************************
   ****************** methods to be implemented or overriden ********************
   ******************************************************************************/
-  private[tresql] def newInstance(env: Env, queryDepth: Int, bindIdx: Int, childIdx: Int): QueryBuilder
+  private[tresql] def newInstance(env: Env, bindIdx: Int, childIdx: Int): QueryBuilder
   def env: Env = ???
-  private[tresql] def queryDepth: Int = ???
+  private[tresql] def queryPos: List[Int] = Nil
   private[tresql] def bindIdx: Int = ???
   private[tresql] def bindIdx_=(idx: Int): Unit = ???
   //childIdx indicates this builder index relatively to it's parent
-  private[tresql] def childIdx: Int = ???
   /*****************************************************************************/
 
   case class ConstExpr(value: Any) extends BaseExpr {
@@ -355,11 +354,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   case class RecursiveExpr(exp: ast.Query) extends BaseExpr {
     //take this from childrenCount, since it RecursiveExpr is not built with new builder
     private val initChildIdx = QueryBuilder.this.childrenCount
-    private val rowConverter = env.rowConverter(QueryBuilder.this.queryDepth, initChildIdx)
-    if (queryDepth >= env.recursiveStackDepth)
-      error(s"Recursive execution stack depth $queryDepth exceeded, check for loops in data or increase {{{Resources#recursiveStackDepth}}} setting.")
+    private val rowConverter = env.rowConverter(QueryBuilder.this.queryPos)
+    if (queryPos.size >= env.recursiveStackDepth)
+      error(s"Recursive execution stack depth ${queryPos.size} exceeded, check for loops in data or increase {{{Resources#recursiveStackDepth}}} setting.")
     val qBuilder = QueryBuilder.this.newInstance(new Env(QueryBuilder.this, env.db, env.reusableExpr),
-      queryDepth + 1, 0, initChildIdx)
+      0, initChildIdx)
     qBuilder.recursiveQueryExp = recursiveQueryExp
     //TODO pass rowConverter to built SelectExpr!
     lazy val expr: Expr = qBuilder.buildInternal(exp, QUERY_CTX)
@@ -374,7 +373,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case e: VarExpr => wrapExprInSelect(e)()
         case e => e()
       }
-      env.rowConverter(queryDepth, childIdx).map { conv =>
+      env.rowConverter(queryPos).map { conv =>
         new CompiledArrayResult(result, conv)
       }.getOrElse(new DynamicArrayResult(result))
     }
@@ -417,7 +416,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     }
     override def toString = sql + " (" + QueryBuilder.this + ")\n" +
       cols.cols.filter(_.separateQuery).map {
-        "    " * (queryDepth + 1) + _.toString
+        "    " * (queryPos.size + 1) + _.toString
       }.mkString
   }
   case class Table(table: Expr, alias: String, join: TableJoin, outerJoin: String, nullable: Boolean, schema: String)
@@ -1201,7 +1200,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     def buildWithNew(db: Option[String], buildFunc: QueryBuilder => Expr) = {
       val b = QueryBuilder.this.newInstance(
         new Env(QueryBuilder.this, db, QueryBuilder.this.env.reusableExpr),
-        queryDepth + 1, bindIdx, this.childrenCount)
+        bindIdx, this.childrenCount)
       val ex = buildFunc(b)
       this.separateQueryFlag = true
       this.bindIdx = b.bindIdx
@@ -1379,7 +1378,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     }
   }
   //for debugging purposes
-  def envId() = s"$queryDepth#${System.identityHashCode(this)}"
+  def envId() = s"${queryPos}#${System.identityHashCode(this)}"
 
 }
 

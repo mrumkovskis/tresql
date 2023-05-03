@@ -12,13 +12,14 @@ trait ORT extends Query {
   type ObjToMapConverter[T] = T => (String, Map[String, _])
 
   /** QueryBuilder methods **/
-  override private[tresql] def newInstance(e: Env, depth: Int, idx: Int, chIdx: Int) =
+  override private[tresql] def newInstance(e: Env, idx: Int, chIdx: Int) = {
+    val qpos = chIdx :: queryPos
     new ORT {
       override def env = e
-      override private[tresql] def queryDepth = depth
+      override private[tresql] def queryPos = qpos
       override private[tresql] var bindIdx = idx
-      override private[tresql] def childIdx = chIdx
     }
+  }
 
   case class ParentRef(table: String, ref: String)
   sealed trait IdOrRefVal { def name: String; def value: String }
@@ -198,7 +199,7 @@ trait ORT extends Query {
       val b =
         newInstance(
           new Env(ORT.this, env.db, false),
-          queryDepth + 1, bindIdx, childrenCount
+          bindIdx, childrenCount
         )
       if (params != null) b.env.update(params)
       val expr = b.buildExpr(exp)

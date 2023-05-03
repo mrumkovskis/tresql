@@ -2458,16 +2458,16 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     assertResult(6000)(tresql"1000 + (emp[ename = 'KING']{sal})")
 
     assertResult("ACCOUNTING")(tresql"macro_interpolator_test4(dept, dname)".map(_.dname).toList.head)
-
-    // TODO multilevel tresql test
-//    assertResult(1) {
-//      tresql"dept [dname = 'RESEARCH'] {dname, |emp{ename, |[emp.empno = work.empno]work{hours} work} emps, |car{name, |tyres{brand} tyres} cars}"
-//        .map { d =>
-//          ( d.dname,
-//            d.emps.map(e => e.ename -> e.work.map(_.hours).toList).toList,
-//            d.cars.map(c => c.name -> c.tyres.map(_.brand).toList).toList
-//          )
-//      }.toList
-//    }
+    assertResult(List(("RESEARCH",
+      List(("ADAMS", List()), ("FORD", List()), ("JONES", List()), ("MĀRTIŅŠ ŽVŪKŠĶIS", List()), ("SCOTT", List(8))),
+      List(("BMW", List("Barum")), ("MERCEDES", List("MICHELIN", "NOKIAN")))))) {
+      tresql"dept [dname = 'RESEARCH'] {dname, |emp{ename, |[emp.empno = work.empno]work{hours}#(1) work}#(1) emps, |car{name, |tyres{brand}#(1) tyres}#(1) cars}#(1)"
+        .map { d =>
+          ( d.dname,
+            d.emps.map(e => e.ename -> e.work.map(_.hours).toList).toList,
+            d.cars.map(c => c.name -> c.tyres.map(_.brand).toList).toList
+          )
+      }.toList
+    }
   }
 }

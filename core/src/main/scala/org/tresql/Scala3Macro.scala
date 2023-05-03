@@ -71,15 +71,14 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
     parts.head + parts.tail.zipWithIndex.map {case (s, i) => s":_$i$s" }.mkString
   info(s"Compiling: $tresqlString")
 
-  case class ExPos(depth: Int, idx: Int)
   sealed trait Ex
   case class ColEx(col: String, typ: String | Ex, idx: Int) extends Ex
-  case class QueryEx(cols: List[ColEx], pos: List[ExPos], isArr: Boolean) extends Ex
+  case class QueryEx(cols: List[ColEx], pos: List[Int], isArr: Boolean) extends Ex
   case object DMLEx extends Ex
   case class PrimitiveEx(typ: String) extends Ex
 
   type ColConv      = quoted.Expr[RowConverter[Any]]
-  type RowConv      = quoted.Expr[((Int, Int), RowConverter[RowLike])]
+  type RowConv      = quoted.Expr[(List[Int], RowConverter[RowLike])]
   type ResultConv   = quoted.Expr[Result[_] => Any]
 
   sealed trait Res { def typ: TypeRepr }
@@ -142,9 +141,8 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
         case ((rt, rc), col) =>
           val cr = colRes(col)
           (Refinement(rt, cr.name, cr.typ), cr :: rc)
-    val ExPos(depth, idx) = query.pos.head
     val conv: RowConv = '{
-      ( (${ quoted.Expr(depth) }, ${ quoted.Expr(idx) }),
+      ( ${ quoted.Expr(query.pos) },
         (row: RowLike) => new Record(ListMap[String, Any](
           ${
             Varargs(crs.reverse.map { cr => '{ ${ quoted.Expr(cr.name) } -> ${ cr.conv } (row) } })
@@ -162,9 +160,8 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
           val cr = colRes(col)
           val resType = AppliedType(TypeRepr.of[*:[_, _]], List(cr.typ, rt))
           (resType, cr :: rc)
-    val ExPos(depth, idx) = arr.pos.head
     val conv: RowConv = '{
-      ( (${ quoted.Expr(depth) }, ${ quoted.Expr(idx) }),
+      ( ${ quoted.Expr(arr.pos) },
         identity[RowLike] _
       )
     }
@@ -178,47 +175,41 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
     }
     ArrRes(at, convs, colConv)
 
-  case class Ctx(ex: Ex, path: List[ExPos], colIdx: Int)
+  case class Ctx(ex: Ex, path: List[Int], colIdx: Int, childIdx: Int)
   lazy val exGenerator: compiler.Traverser[Ctx] = compiler.traverser(ctx => {
     case _: DMLDefBase => ctx.copy(ex = DMLEx)
     case PrimitiveDef(_, ExprType(tn)) => ctx.copy(PrimitiveEx(tn))
     case rd: RowDefBase =>
-      val np = ExPos(ctx.path.head.depth, -1)
-      val nctx = ctx.copy(path = np :: ctx.path)
-      val (_, exs) = rd.cols.zipWithIndex.foldLeft(nctx -> List[ColEx]()):
-        case ((rctx, rcols), (col, idx)) =>
-          val c = exGenerator(rctx.copy(colIdx = idx))(col)
-          (c, c.ex.asInstanceOf[ColEx] :: rcols)
+      val (_, exs) = rd.cols.foldLeft(ctx -> List[ColEx]()):
+        case ((rctx, rcols), col) =>
+          val cctx = exGenerator(rctx)(col)
+          (rctx.copy(colIdx = rctx.colIdx + 1, childIdx = cctx.childIdx),
+            cctx.ex.asInstanceOf[ColEx] :: rcols)
       val cols = exs.reverse
       val ex = QueryEx(cols, ctx.path, rd.isInstanceOf[ArrayDef])
       ctx.copy(ex = ex)
     case ColDef(name, exp, ExprType(tn)) =>
       val (nctx, ex) = exp match
         case c: ChildDef =>
-          val ExPos(depth, idx) = ctx.path.head
-          val path = ExPos(depth, idx + 1) :: ctx.path.tail
-          val cctx = ctx.copy(path = path)
-          val ex = exGenerator(cctx)(c).ex
-          (cctx, ex)
-        case PrimitiveDef(_, ExprType(tn)) => (ctx, PrimitiveEx(tn))
+          (ctx.copy(childIdx = ctx.childIdx + 1), exGenerator(ctx)(exp).ex)
+        case p: PrimitiveDef =>
+          (ctx, exGenerator(ctx)(exp).ex)
         case _ => (ctx, tn)
       nctx.copy(ex = ColEx(name, ex, ctx.colIdx))
     case ChildDef(exp, _) =>
-      val ExPos(depth, idx) = ctx.path.head
-      val path = ExPos(depth + 1, idx) :: ctx.path.tail
-      val nctx = ctx.copy(path = path)
-      nctx.copy(ex = exGenerator(nctx)(exp).ex)
+      val nctx = ctx.copy(path = ctx.childIdx :: ctx.path, colIdx = 0, childIdx = 0)
+      ctx.copy(ex = exGenerator(nctx)(exp).ex)
   })
 
   val compiledExp = try compiler.compile(tresqlString) catch
     case ex: CompilerException => report.errorAndAbort(ex.getMessage)
-  val exp = exGenerator(Ctx(null, List(ExPos(0, 0)), -1))(compiledExp).ex
+  val exp = exGenerator(Ctx(null, List(0), 0, 0))(compiledExp).ex
   val resMd = res(exp)
   val queryExpr = resMd match
     case row: RowRes => '{
       new Query {
-        override def converters =
-          Map[(Int, Int), RowConverter[RowLike]](${ Varargs(row.convs) }: _*)
+        override private[tresql] def converters =
+          Map[List[Int], RowConverter[RowLike]](${ Varargs(row.convs) }: _*)
       }
     }
     case _ => '{Query}

@@ -45,8 +45,7 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
   private var _rowCount = 0
   //used in macro to convert result at certain query depth and child position to macro generated object
   //converter map is set from macro and are stored in level Env object i.e. provider is None
-  private var _rowConverters: Option[Map[(Int /*query depth*/,
-    Int /*col idx*/), RowConverter[_ <: RowLike]]] = None
+  private var _rowConverters: Option[Map[List[Int], RowConverter[_ <: RowLike]]] = None
 
   def apply(name: String): Any = get(name).map {
     case e: Expr => e()
@@ -156,13 +155,11 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
     provider.map(_.env.rowCount = rc).getOrElse (this._rowCount = rc)
   }
 
-  private[tresql] def rowConverter(depth: Int, child: Int): Option[RowConverter[_ <: RowLike]] =
-    rowConverters.flatMap(_.get((depth, child)))
-  private[tresql] def rowConverters: Option[Map[(Int /*query depth*/,
-    Int /*child idx*/), RowConverter[_ <: RowLike]]] =
+  private[tresql] def rowConverter(queryPos: List[Int]): Option[RowConverter[_ <: RowLike]] =
+    rowConverters.flatMap(_.get(queryPos))
+  private[tresql] def rowConverters: Option[Map[List[Int], RowConverter[_ <: RowLike]]] =
     provider.flatMap(_.env.rowConverters) orElse _rowConverters
-  private[tresql] def rowConverters_=(rc: Map[(Int /*query depth*/,
-    Int /*child idx*/), RowConverter[_ <: RowLike]]): Unit = {
+  private[tresql] def rowConverters_=(rc: Map[List[Int], RowConverter[_ <: RowLike]]): Unit = {
     provider.map(_.env.rowConverters = rc).getOrElse (this._rowConverters = Option(rc))
   }
 

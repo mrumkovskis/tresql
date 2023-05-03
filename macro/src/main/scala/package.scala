@@ -109,10 +109,10 @@ package object tresql extends CoreTypes {
                       //class name which extends RowLike
                       className: String,
                       tree: List[c.Tree], //class (field) & converter definition.
-                      depth: Int, //select descendancy idx (i.e. QueryBuilder.queryDepth)
+                      path: List[Int], // QueryBuilder.queryPos
                       colIdx: Int, //column idx - used in converter
                       childIdx: Int, //child select index - used to get converter from env
-                      convRegister: List[c.Tree], //Map of converters for Env in form of (Int, Int) -> RowConveter[_]
+                      convRegister: List[c.Tree], //Map of converters for Env in form of List[Int] -> RowConveter[_]
                       colNames: Set[String], //field names (stored in order to avoid duplicates)
                       colType: Tree, //filled by ColDef, may be used in result converter
                       resultConverter: Option[(String, c.Tree)] //function in form (functionName -> CompiledResult[_] -> T)
@@ -140,7 +140,7 @@ package object tresql extends CoreTypes {
                  }
                """
             ctx.copy(convRegister =
-              q"((${ctx.depth}, ${ctx.childIdx}), identity[RowLike] _)" :: ctx.convRegister,
+              q"(${ctx.path}, identity[RowLike] _)" :: ctx.convRegister,
               resultConverter = Some(name, conv))
           //queries are compiled to CompiledResult[_ <: RowLike], arrays are compiled to tuples.
           case sd: RowDefBase =>
@@ -162,7 +162,7 @@ package object tresql extends CoreTypes {
                 val ct = generator(Ctx(
                   className,
                   Nil,
-                  ctx.depth,
+                  ctx.path,
                   colCt.colIdx,
                   colCt.childIdx,
                   colCt.convRegister,
@@ -212,7 +212,7 @@ package object tresql extends CoreTypes {
                 }
               }
             """
-            val converterRegister = q"((${ctx.depth}, ${ctx.childIdx}), $converterName)"
+            val converterRegister = q"(${ctx.path}, $converterName)"
             def maybeResConv(colTypes: List[c.Tree], membResConvs: List[(String, c.Tree)]) =
               resultConv.map {
                 case (n, _) =>
@@ -232,7 +232,7 @@ package object tresql extends CoreTypes {
             Ctx(
               className,
               classDef :: converterDef :: children,
-              ctx.depth,
+              ctx.path,
               ctx.colIdx,
               ctx.childIdx,
               converterRegister :: colsCtx.convRegister,
@@ -241,7 +241,7 @@ package object tresql extends CoreTypes {
               maybeResConv(colsCtx.colTypes.reverse, colsCtx.resultConvs.reverse)
             )
           case ColDef(colName, ChildDef(sd: RowDefBase, _), _) =>
-            val selDefCtx = generator(Ctx(ctx.className, Nil, ctx.depth + 1,
+            val selDefCtx = generator(Ctx(ctx.className, Nil, ctx.childIdx :: ctx.path,
               ctx.colIdx, ctx.childIdx, ctx.convRegister,
               Set(), null, ctx.resultConverter))(sd)
             val name = uniqueName(colName, ctx.colNames)
@@ -275,9 +275,9 @@ package object tresql extends CoreTypes {
             )
             ctx.copy(tree = l, colNames = ctx.colNames + name, colType = q"$colType")
           case ChildDef(ch, _) =>
-            generator(ctx.copy(depth = ctx.depth + 1))(ch)
+            generator(ctx.copy(path = ctx.childIdx :: ctx.path))(ch)
         })
-        generator(Ctx(null, Nil, 0, 0, 0, Nil, Set(), null, None))(exp)
+        generator(Ctx(null, Nil, List(0), 0, 0, Nil, Set(), null, None))(exp)
       }
 
       val resultClassCtx = resultClassTree(compiledExp)
@@ -297,7 +297,7 @@ package object tresql extends CoreTypes {
         var optionalVars = Set[Int]()
         val query = new Query {
           override def converters =
-            Map[(Int, Int), RowConverter[_ <: RowLike]](..$convRegister)
+            Map[List[Int], RowConverter[_ <: RowLike]](..$convRegister)
         }
         def result = query.compiledResult[$classType](
           StringContext.processEscapes(${parts.head}) +

@@ -12,7 +12,7 @@ trait Query extends QueryBuilder with TypedQuery {
     implicit resources: Resources): Result[T] =
     exec(expr, normalizePars(params: _*), resources).asInstanceOf[Result[T]]
 
-  private[tresql] def converters: Map[(Int, Int), RowConverter[_ <: RowLike]] = null
+  private[tresql] def converters: Map[List[Int], RowConverter[_ <: RowLike]] = null
 
   private def exec(
     expr: String,
@@ -38,22 +38,21 @@ trait Query extends QueryBuilder with TypedQuery {
     val pars =
       if (resources.params.isEmpty) params
       else if (params != null) resources.params ++ params else resources.params
-    newInstance(new Env(pars, resources, reusableExpr), 0, 0, 0).buildExpr(expr)
+    newInstance(new Env(pars, resources, reusableExpr), 0, 0).buildExpr(expr)
   }
 
   /** QueryBuilder methods **/
   private[tresql] def newInstance(
     e: Env,
-    depth: Int,
     idx: Int,
     chIdx: Int
   ) = {
     if (converters != null) e.rowConverters = converters
+    val qpos = chIdx :: queryPos
     new Query {
       override def env = e
-      override private[tresql] def queryDepth = depth
+      override private[tresql] def queryPos = qpos
       override private[tresql] var bindIdx = idx
-      override private[tresql] def childIdx = chIdx
     }
   }
 
@@ -64,7 +63,7 @@ trait Query extends QueryBuilder with TypedQuery {
 
   private[tresql] def sel(sql: String, cols: QueryBuilder#ColsExpr): Result[_ <: RowLike] = try {
     val (rs, columns, visibleColCount) = sel_result(sql, cols)
-    val result = env.rowConverter(queryDepth, childIdx).map { conv =>
+    val result = env.rowConverter(queryPos).map { conv =>
       new CompiledSelectResult(rs, columns, env, sql,registeredBindVariables,
         env.maxResultSize, visibleColCount, conv)
     }.getOrElse {
@@ -134,7 +133,7 @@ trait Query extends QueryBuilder with TypedQuery {
       if (st.execute) {
         val rs = st.getResultSet
         val md = rs.getMetaData
-        val res = env.rowConverter(queryDepth, childIdx).map { conv =>
+        val res = env.rowConverter(queryPos).map { conv =>
           new CompiledSelectResult(
             rs,
             Vector(1 to md.getColumnCount map { i => Column(i, md.getColumnLabel(i), null) }: _*),
@@ -188,7 +187,7 @@ trait Query extends QueryBuilder with TypedQuery {
       env.statement = null
     }
     if (outs.isEmpty) result
-    else env.rowConverter(queryDepth, childIdx).map { conv =>
+    else env.rowConverter(queryPos).map { conv =>
       new CompiledArrayResult(if (result== null) outs else result :: outs, conv)
     }.getOrElse(new DynamicArrayResult(if (result== null) outs else result :: outs))
   } catch {
