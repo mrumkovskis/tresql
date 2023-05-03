@@ -122,7 +122,7 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
       case md => res(md.asInstanceOf[Ex]) match
         case QueryRes(typ, convs) =>
           val ct = typ.asType match
-            case '[t] => TypeRepr.of[Result[t & RowLike]]
+            case '[t] => TypeRepr.of[Result[t & RowLike]].simplified
           ColRes(colName, ct, conv(idx, ct.typeSymbol.name), convs)
         case ArrRes(typ, convs, colConv) =>
           val c =
@@ -237,8 +237,8 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
         case '[typ] => '{$arrConv($queryResExpr).asInstanceOf[typ]}
       case _ =>
         resMd.typ.asType match
-          case '[typ] =>
-            '{$queryResExpr.asInstanceOf[Result[typ & RowLike]]}
+          case '[typ] => TypeRepr.of[Result[typ & RowLike]].simplified.asType match
+            case '[t] => '{$queryResExpr.asInstanceOf[t]}
 
   info("------ Generated code ---------")
   info(resExpr.asTerm.show(using Printer.TreeShortCode))
