@@ -141,9 +141,7 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
       query.cols.foldLeft((TypeRepr.of[Record], List[ColRes]())):
         case ((rt, rc), col) =>
           val cr = colRes(col)
-          val resType = cr.typ.asType match
-            case '[t] => Refinement(rt, cr.name, TypeRepr.of[t])
-          (resType, cr :: rc)
+          (Refinement(rt, cr.name, cr.typ), cr :: rc)
     val ExPos(depth, idx) = query.pos.head
     val conv: RowConv = '{
       ( (${ quoted.Expr(depth) }, ${ quoted.Expr(idx) }),
@@ -162,8 +160,7 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
       arr.cols.reverse.foldLeft((TypeRepr.of[EmptyTuple], List[ColRes]())):
         case ((rt, rc), col) =>
           val cr = colRes(col)
-          val resType = cr.typ.asType match
-            case '[t] => AppliedType(TypeRepr.of[*:[_, _]], List(TypeRepr.of[t], rt))
+          val resType = AppliedType(TypeRepr.of[*:[_, _]], List(cr.typ, rt))
           (resType, cr :: rc)
     val ExPos(depth, idx) = arr.pos.head
     val conv: RowConv = '{
