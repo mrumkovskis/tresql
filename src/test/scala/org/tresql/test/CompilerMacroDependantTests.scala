@@ -410,10 +410,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     assertResult(("SALES", "CHICAGO")) {
       tresql"""concat_exps('dept[dname = "SALES"]{', ',', '}', dname, loc)""".unique[String, String]
     }
-    assertResult(("x a y", "x b y")) {
-      tresql"map_exps('x ' || ['a', 'b'] || ' y')"
-        .asInstanceOf[(String, String)] // must do cast to avoid scala 3 compiler error. scalatest bug?
-    }
+    assertResult(("x a y", "x b y")) { tresql"map_exps('x ' || ['a', 'b'] || ' y')" }
     assertResult(("x a y", "x b y")) {
       tresql"concat_exps('{', ',', '}', map_exps('x ' || ['a', 'b'] || ' y'))".unique[String, String]
     }
@@ -2329,7 +2326,6 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       assertResult((new InsertResult(count = Some(1)),
         new UpdateResult(count = Some(1)), new DeleteResult(count = Some(1))))(
         tresql"dummy + [10], dummy[dummy = 10] = [11], dummy - [dummy = 11]"
-          .asInstanceOf[(DMLResult, DMLResult, DMLResult)] // must do cast to avoid scala 3 compiler error, scalatest bug?
       )
 
       //braces test
@@ -2426,8 +2422,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
 
     //expressions without select
     assertResult(2.34)(tresql"round(2.33555, 2)")
-    assertResult((2.34, 3, 14))(tresql"round(2.33555, 2), round(3.1,0), 5 + 9"
-      .asInstanceOf[(BigDecimal, BigDecimal, BigDecimal)]) // must do cast to avoid scala 3 compiler error. scalatest bug?
+    assertResult((2.34, 3, 14))(tresql"round(2.33555, 2), round(3.1,0), 5 + 9")
     assertResult(7.3)(tresql"1 + 4 - 0 + round(2.3, 5)")
     assertResult((3,3,2,(2,2))) {
       val x = 1

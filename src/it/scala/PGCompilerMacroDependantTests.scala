@@ -969,7 +969,6 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
     assertResult((new InsertResult(count = Some(1)),
       new UpdateResult(count = Some(1)), new DeleteResult(count = Some(1))))(
       tresql"dummy + [10], dummy[dummy = 10] = [11], dummy - [dummy = 11]"
-        .asInstanceOf[(DMLResult, DMLResult, DMLResult)] // must do cast to avoid scala 3 compiler error. scalatest bug?
     )
 
     //braces test
@@ -1070,11 +1069,9 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
 
     //expressions without select
     assertResult(1)(tresql"1")
-    assertResult((1,2,3))(tresql"1, 2, 3".asInstanceOf[(BigDecimal, BigDecimal, BigDecimal)]) // must do cast to avoid scala 3 compiler error. scalatest bug?
+    assertResult((1,2,3))(tresql"1, 2, 3")
     assertResult(2.34)(tresql"round(2.33555, 2)")
-    assertResult((2.34, 3 ,14))(tresql"round(2.33555, 2), round(3.1,0), 5 + 9"
-      .asInstanceOf[(BigDecimal, BigDecimal, BigDecimal)]
-    ) // must do cast to avoid scala 3 compiler error. scalatest bug?
+    assertResult((2.34, 3 ,14))(tresql"round(2.33555, 2), round(3.1,0), 5 + 9")
     assertResult(7.3)(tresql"1 + 4 - 0 + round(2.3, 5)")
     assertResult("2.34")(tresql"round(2.33555, 2)::string")
     assertResult(2)(tresql"2.3::int")
@@ -1084,9 +1081,8 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
     assertResult(2)(tresql"round(2.3, 1)::int")
     assertResult((2, 2.3, java.sql.Date.valueOf("2000-01-01"), java.sql.Timestamp.valueOf("2000-01-01 00:00:00.0")))(
       tresql"2.3::int, '2.3'::decimal, '2000/01/01'::date, '2000/01/01'::timestamp"
-        .asInstanceOf[(Integer, BigDecimal, java.sql.Date, java.sql.Timestamp)] // must do cast to avoid scala 3 compiler error. scalatest bug?
     )
-    assertResult((3,5))(tresql"(1 + 2)::int, (2 + 3)::int".asInstanceOf[(Integer, Integer)]) // must do cast to avoid scala 3 compiler error. scalatest bug?
+    assertResult((3,5))(tresql"(1 + 2)::int, (2 + 3)::int")
     assertResult(2.3) {
       val x = 1;
       tresql"round(2.33555, $x)"

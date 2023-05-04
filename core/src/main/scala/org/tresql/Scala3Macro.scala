@@ -158,7 +158,9 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
       arr.cols.reverse.foldLeft((TypeRepr.of[EmptyTuple], List[ColRes]())):
         case ((rt, rc), col) =>
           val cr = colRes(col)
-          val resType = AppliedType(TypeRepr.of[*:[_, _]], List(cr.typ, rt))
+          val resType = cr.typ.asType match
+            case '[ct] => rt.asType match
+              case '[bt] => TypeRepr.of[*:[ct, bt & Tuple]] // do no use AppliedType since it does not work well
           (resType, cr :: rc)
     val conv: RowConv = '{
       ( ${ quoted.Expr(arr.pos) },
@@ -173,7 +175,7 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
             (res, cr) => '{ $res :* ${ cr.conv } (row) }
         }
     }
-    ArrRes(at, convs, colConv)
+    ArrRes(at.simplified, convs, colConv)
 
   case class Ctx(ex: Ex, path: List[Int], colIdx: Int, childIdx: Int)
   lazy val exGenerator: compiler.Traverser[Ctx] = compiler.traverser(ctx => {
