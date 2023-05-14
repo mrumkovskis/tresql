@@ -327,6 +327,7 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     implicit lazy val parCodec:           Codec[Par]            = deriveCodec    [Par]
     implicit lazy val returnTypeCodec:    Codec[ReturnType]     = deriveAllCodecs[ReturnType]
     implicit lazy val procedureCodec:     Codec[Procedure]      = deriveCodec    [Procedure]
+    // deriveAllCodecs fixed in borer 1.10.3, cleanup for scala 3 possible:
     implicit lazy val joinCodec:          Codec[Join]           = deriveCodec    [Join]          // TODO
     implicit lazy val objCodec:           Codec[Obj]            = deriveCodec    [Obj]           // TODO
     implicit lazy val tableDefCodec:      Codec[TableDef]       = deriveCodec    [TableDef]      // TODO
