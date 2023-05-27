@@ -2465,5 +2465,16 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
           )
       }.toList
     }
+    //builder macro invocation in column clause, must return Any type
+    assertResult(List("ACCOUNTING")) {
+      val l: List[Any] =
+        tresql"dept[dname = 'ACCOUNTING']{sql('dname') dn}".map(_.dn).toList
+      l
+    }
+    //builder macro with function signature
+    assertResult(List(3)) {
+      val l: List[java.lang.Long] = tresql"{plus(1,2) r}".map(_.r).toList
+      l
+    }
   }
 }

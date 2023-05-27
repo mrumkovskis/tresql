@@ -28,6 +28,9 @@ class Macros extends org.tresql.Macros {
   def null_macros(b: QueryBuilder): Expr = null
   def dummy(b: QueryBuilder) = b.buildExpr("dummy")
   def dummy_table(b: QueryBuilder) = b.IdentExpr(List("dummy"))
+  // add this macro to function signatures to specify return type
+  def plus(b: QueryBuilder, e1: Expr, e2: Expr) =
+    b.BinExpr("+", e1, e2)
 }
 
 class Macros1 extends Macros {

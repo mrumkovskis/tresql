@@ -120,24 +120,26 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
 
   def parseSignature(m: Method): Procedure = {
     var repeatedPars = false
+    // parameter types and return types are Any since this is considered
+    // macro parsing where arguments are expressions. if macro function needs
+    // parameter or return types during tresql compilation, put it into
+    // function signatures
     val pars: List[Par] = m.getGenericParameterTypes.map {
       case par: ParameterizedType =>
         //consider parameterized type as a Seq[T] of repeated args
         //isVarArgs method of java reflection api does not work on scala repeated args
         repeatedPars = true
         par.getActualTypeArguments match {
-          case scala.Array(c: Class[_]) => ManifestFactory.classType(c)
-          case scala.Array(x) => ManifestFactory.singleType(x)
-          case x => sys.error(s"Multiple type parameters not supported! Method: $m, parameter: $par")
+          case scala.Array(_) => ExprType.Any
+          case _ => sys.error(s"Multiple type parameters not supported! Method: $m, parameter: $par")
         }
-      case c: Class[_] => ManifestFactory.classType(c)
-      case x => ManifestFactory.singleType(x)
-    }.zipWithIndex.map { case (m, i) =>
-      Par(s"_$i", null, -1, -1, null, ExprType(m.toString))
+      case _ => ExprType.Any
+    }.zipWithIndex.map { case (et, i) =>
+      Par(s"_$i", null, -1, -1, null, et)
     }.toList.drop(1) // drop builder or parser argument
     val returnType = m.getGenericReturnType match {
       case par: ParameterizedType => sys.error(s"Parametrized return type not supported! Method: $m, parameter: $par")
-      case c: Class[_] => FixedReturnType(ExprType(primitiveClassAnyValMap.getOrElse(c, ManifestFactory.classType(c)).toString))
+      case _: Class[_] => FixedReturnType(ExprType.Any)
       case x =>
         val idx  = pars.indexWhere(_.scalaType.toString == x.toString)
         if (idx == -1) FixedReturnType(ExprType.Any) else ParameterReturnType(idx)
@@ -383,7 +385,7 @@ private object ResourceMerger {
   def mergeResources[A](m1: Map[String, Seq[A]], m2: Map[String, Seq[A]]): Map[String, Seq[A]] = {
     m1.foldLeft(m2) { case (res, (n, ml1)) =>
       res.get(n).map { ml2 =>
-        res + (n -> (ml1 ++: ml2))
+        res + (n -> (ml2 ++: ml1)) // put right resources in front of left
       }.getOrElse(res + (n -> ml1))
     }
   }

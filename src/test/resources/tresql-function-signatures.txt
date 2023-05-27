@@ -22,3 +22,5 @@ in_out(a::int, b::string, c::string)::unit
 date_add(d::date, interval::any)::date
 //hsqldb
 regexp_matches(s::string, regex::string)::boolean
+//builder macro
+plus(e1::integer, e2::integer)::integer
