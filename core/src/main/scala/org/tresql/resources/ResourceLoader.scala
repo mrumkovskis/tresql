@@ -62,13 +62,13 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
     def createPar[T](pn: String, pt: ExprType) = Par(pn, null, -1, -1, null, pt)
     def parse_params(params: List[Exp]) =
       params.map {
-        case Obj(Ident(List(pn)), null, null, null, false) => createPar(pn, ExprType.Any)
+        case Obj(Ident(List(pn)), null, null, null, false) => createPar(pn, ExprType.Nothing)
         case Cast(Obj(Ident(List(pn)), null, null, null, false), type_) =>
           val (pt, isRepeated) = parseParType(type_)
           if (isRepeated) repeatedPars = true
           createPar(
             pn,
-            if (pt.isEmpty || typeMapper == null) ExprType.Any
+            if (pt.isEmpty || typeMapper == null) ExprType.Nothing
             else ExprType(typeMapper.xsd_scala_type_map(pt).toString)
           )
         case x => sys.error(s"Invalid function '$signature' paramater - '${x.tresql}'. " +

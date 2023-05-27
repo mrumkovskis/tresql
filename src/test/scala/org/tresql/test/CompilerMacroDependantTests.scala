@@ -2476,5 +2476,10 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       val l: List[java.lang.Long] = tresql"{plus(1,2) r}".map(_.r).toList
       l
     }
+    //return type dependent on parameter type
+    assertResult(List("yes")) {
+      val l: List[String] = tresql"{(case(1 = 1, 'yes', 'no')) r}".map(_.r).toList
+      l
+    }
   }
 }
