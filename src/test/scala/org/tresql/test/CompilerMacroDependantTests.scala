@@ -320,7 +320,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     assertResult((110, 111)) {
       //thread local resources test
       val res = new ThreadLocalResources {
-        override val resourcesTemplate = super.resourcesTemplate.copy(queryTimeout = 110)
+        override def initResourcesTemplate = super.initResourcesTemplate.copy(queryTimeout = 110)
       }.withFetchSize(111)
       res.queryTimeout -> res.fetchSize
     }

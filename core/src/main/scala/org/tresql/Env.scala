@@ -257,11 +257,12 @@ final case class ResourcesTemplate(override val conn: java.sql.Connection,
 /** Implementation of [[Resources]] with thread local instance based on template */
 trait ThreadLocalResources extends Resources {
 
+  lazy final val resourcesTemplate: ResourcesTemplate = initResourcesTemplate
   /** Creates resources template with default values from {{{Resources}}}.
    * {{{cache, logger, bindVarLogFilter}}} are taken from this object instance
    * Subclasses can override this method.
    * */
-  def resourcesTemplate: ResourcesTemplate = new ResourcesTemplate(new Resources {
+  def initResourcesTemplate: ResourcesTemplate = new ResourcesTemplate(new Resources {
     override def cache: Cache = ThreadLocalResources.this.cache
     override def logger: TresqlLogger = ThreadLocalResources.this.logger
     override def bindVarLogFilter: BindVarLogFilter = ThreadLocalResources.this.bindVarLogFilter
