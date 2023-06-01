@@ -1658,6 +1658,93 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       println(s"\nResult check:")
       tresql"emp/dept[ename = 'Binny']{ename, dname}".map(e => e.ename -> e.dname).toList
     }
+    // key is composite primary key
+    obj = Map("car_nr" -> tresql"car[name = 'Mercedes Benz']{nr}".head[String],
+      "empno" -> tresql"emp[ename = 'Lara']{empno}".head[Long])
+    assertResult(List(("Lara", "Dodge"), ("Lara", "Mercedes Benz"))) {
+      import OrtMetadata._
+      ORT.insert(
+        View(
+          List(SaveTo("car_usage", Set(), List("car_nr", "empno"))), None, null,
+          List(
+            Property("car_nr", KeyValue("", TresqlValue(":car_nr")), false, true, true),
+            Property("empno", KeyValue("", TresqlValue(":empno")), false, true, true)
+          ),
+          null
+        ), obj)
+      println(s"\nResult check:")
+      tresql"car_usage/car;car_usage/emp[ename = 'Lara']{ename, name}#(1, 2)".map(r => (r.ename, r.name)).toList
+    }
+
+    obj = Map("old_car_nr" -> tresql"car[name = 'FIAT']{nr}".head[String],
+      "car_nr" -> tresql"car[name = 'Tesla']{nr}".head[String],
+      "empno" -> tresql"emp[ename = 'Paul']{empno}".head[Long])
+    assertResult(List(("Paul", "Mercedes Benz"), ("Paul", "Tesla"))) {
+      import OrtMetadata._
+      ORT.save(
+        View(
+          List(SaveTo("car_usage", Set(), List("car_nr", "empno"))), None, null,
+          List(
+            Property("car_nr", KeyValue(":old_car_nr", TresqlValue(":car_nr")), false, true, true),
+            Property("empno", KeyValue(":empno", TresqlValue(":empno")), false, true, true)
+          ),
+          null
+        ), obj)
+      println(s"\nResult check:")
+      tresql"car_usage/car;car_usage/emp[ename = 'Paul']{ename, name}#(1, 2)".map(r => (r.ename, r.name)).toList
+    }
+
+    obj = Map("nr"-> "C1", "car_name" -> "Citroen", "usage" -> List(
+        Map("empno" -> tresql"emp[ename = 'Lara']{empno}".head[Long]),
+        Map("empno" -> tresql"emp[ename = 'Paul']{empno}".head[Long])
+      )
+    )
+    def car_with_usage_view = {
+      import OrtMetadata._
+      View(
+        List(SaveTo("car", Set(), List("nr"))), None, null,
+        List(
+          Property("name", TresqlValue(":car_name"), false, true, true),
+          Property("usage", ViewValue(
+            View(
+              List(SaveTo("car_usage", Set(), List("car_nr", "empno"))), None, null,
+              List(
+                Property("empno",
+                  KeyValue(":old_empno", TresqlValue(":empno")),
+                  false, true, true
+                )
+              ),
+              null
+            ),
+            SaveOptions(doInsert = true, doDelete = true, doUpdate = true)),
+            false, true, true
+          )
+        ),
+        null
+      )
+    }
+    assertResult(List(("Lara", "Citroen"), ("Paul", "Citroen"))) {
+      ORT.insert(car_with_usage_view, obj)
+      println(s"\nResult check:")
+      tresql"car_usage/car;car_usage/emp[nr = 'C1']{ename, name}#(1, 2)".map(r => (r.ename, r.name)).toList
+    }
+
+    obj = Map("nr" -> "C1", "car_name" -> "Citroen", "usage" -> List(
+      Map(
+        "empno" -> tresql"emp[ename = 'Nicky']{empno}".head[Long],
+        "old_empno" -> tresql"emp[ename = 'Lara']{empno}".head[Long]
+      ),
+      Map(
+        "empno" -> tresql"emp[ename = 'SCOTT']{empno}".head[Long],
+        "old_empno" -> tresql"emp[ename = 'SCOTT']{empno}".head[Long]
+
+      )
+    ))
+    assertResult(List(("Nicky", "Citroen"), ("SCOTT", "Citroen"))) {
+      ORT.save(car_with_usage_view, obj)
+      println(s"\nResult check:")
+      tresql"car_usage/car;car_usage/emp[nr = 'C1']{ename, name}#(1, 2)".map(r => (r.ename, r.name)).toList
+    }
   }
 
   private def ortOnExtraDatabase(implicit resources: Resources) = {
