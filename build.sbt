@@ -6,7 +6,7 @@ lazy val commonSettings = Seq(
   crossScalaVersions := Seq(
       scalaV,
       "2.13.10",
-      "2.12.17",
+      "2.12.18",
   ),
   //coverageEnabled := true,
   scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-language:dynamics",
