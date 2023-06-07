@@ -536,13 +536,6 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     //multiple column primary key
     obj = Map("empno"->7788, "car_nr" -> "1111")
     assertResult(new InsertResult(count = Some(1)))(ORT.insert("car_usage", obj))
-    //primary key component not specified error must be thrown
-    obj = Map("car_nr" -> "1111")
-    intercept[TresqlException](ORT.insert("car_usage", obj))
-    obj = Map("date_from" -> "2013-10-24")
-    intercept[TresqlException](ORT.insert("car_usage", obj))
-    obj = Map("empno" -> 7839)
-    intercept[TresqlException](ORT.insert("car_usage", obj))
 
     //value clause test
     obj = Map("car_nr" -> 2222, "empno" -> 7788, "date_from" -> java.sql.Date.valueOf("2013-11-06"))
@@ -812,8 +805,8 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
 
     obj = Map("dname" -> "AD", "ename" -> "Lee", "wdate" -> java.sql.Date.valueOf("2000-01-01"), "hours" -> 3)
     assertResult( new InsertResult(count = Some(1), children =
-      List((null,new InsertResult(count = Some(1), id = Some(10036))),
-        (null,new InsertResult(count = Some(1), id = Some(10036)))),
+      List((null, new InsertResult(count = Some(1), id = Some(10036))),
+        (null, new InsertResult(count = Some(1), id = Some(10036)))),
       id = Some(10036))) { ORT.insertMultiple(obj, "dept", "emp", "work:empno")() }
 
     obj = Map("deptno" -> 10036, "wdate" -> java.sql.Date.valueOf("2015-10-01"), "hours" -> 4)
@@ -912,9 +905,12 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     obj = Map("name" -> "Dodge", "car_usage" -> List(
       Map("empno" -> Map("empno" -> null, "ename" -> "Nicky", "job" -> "MGR", "deptno" -> 10)),
       Map("empno" -> Map("empno" -> 10052, "ename" -> "Lara", "job" -> "MGR", "deptno" -> 10))))
-    assertResult(new InsertResult(count = Some(1), children = List(
-      ("car_usage", List(List(10055, new InsertResult(count = Some(1))),
-        List(10052, new InsertResult(count = Some(1)))))), id = Some(10054))) { ORT.insert("car", obj) }
+    assertResult(new InsertResult(count = Some(1),
+      children = List(("car_usage", List(
+        List(10055, new InsertResult(count = Some(1))),
+        List(10052, new InsertResult(count = Some(1)))
+      ))), id = Some(10054))
+    ) { ORT.insert("car", obj) }
 
     println("\n-------- INSERT, UPDATE, DELETE with additional filter --------\n")
     //insert, update with additional filter
@@ -1099,14 +1095,14 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     assertResult(new UpdateResult(count = Some(1), children = List(
       (null,new DeleteResult(count = Some(0))),
       ("emp#car_usage", List(10071, new InsertResult(count = Some(1), children = List(
-        (null,new InsertResult(count = Some(1), id = Some(10072)))), id = Some(10072)))))))(ORT.update("car", obj))
+        (null,new InsertResult(count = Some(1)))), id = Some(10072)))))))(ORT.update("car", obj))
 
     println("\n--- LOOKUP extended case - separate lookup expression from previous insert expr values ---\n")
     obj = Map("dname" -> "Design", "name" -> "Tesla", "date_from" -> "2015-11-20",
       "empno" -> Map("ename" -> "Inna", "deptno" -> 10068))
     assertResult(new InsertResult(count = Some(1), children = List(
       (null,new InsertResult(count = Some(1), id = Some(10073))),
-      (null, List(10074, new InsertResult(count = Some(1), id = Some(10073))))), id = Some(10073)))(
+      (null, List(10074, new InsertResult(count = Some(1))))), id = Some(10073)))(
       ORT.insertMultiple(obj, "dept", "car", "car_usage")())
 
     println("\n--- Delete all children with save options specified ---\n")
@@ -1377,6 +1373,14 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       }
     }
 
+    //primary key component not specified error must be thrown
+    obj = Map("car_nr" -> "1111")
+    intercept[TresqlException](ORT.insert("car_usage", obj))
+    obj = Map("date_from" -> "2013-10-24")
+    intercept[TresqlException](ORT.insert("car_usage", obj))
+    obj = Map("empno" -> 7839)
+    intercept[TresqlException](ORT.insert("car_usage", obj))
+
     ortKeyTests
     ortOnExtraDatabase
     ortPkName_ne_BindVarName
@@ -1556,7 +1560,17 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       Map("empno" -> 10036, "ename" -> "Andy", "job" -> "clerk"),
     ))
     assertResult(List(List(("Andy", "clerk"), ("Ibo", "clerk")))) {
-      ORT.update("dept[dname]", obj)
+      import OrtMetadata._
+      ORT.update(View(List(SaveTo("dept",Set(),List("dname"))),None,null,
+        List(
+          Property("dname", TresqlValue(":dname"), false, true, true),
+          Property("emp[empno][+=]", ViewValue(View(List(SaveTo("emp", Set(),List("empno"))),None,null,
+            List(
+              Property("empno", KeyValue(":empno", TresqlValue("#emp"), Some(TresqlValue(":empno"))), false,true,true),
+              Property("ename",TresqlValue(":ename"), false,true,true),
+              Property("job",TresqlValue(":job"),false,true,true)),null
+          ),
+        SaveOptions(true,true,false)), false,true,true)), null), obj)
       println(s"\nResult check:")
       tresql"dept[dname = 'ADVERTISING'] { |emp {ename, job}#(ename) e}".map(_.e.map(e => e.ename -> e.job).toList).toList
     }
@@ -1566,7 +1580,18 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       Map("empno" -> 10036, "ename" -> "Andy", "job" -> "operator"),
     ))
     assertResult(List(List(("Andy", "operator"), ("Solomon", "operator")))) {
-      ORT.update("dept[dname]", obj)
+      import OrtMetadata._
+      ORT.update(View(List(SaveTo("dept", Set(), List("dname"))), None, null,
+        List(
+          Property("dname", TresqlValue(":dname"), false, true, true),
+          Property("emp[deptno, empno][+-=]",
+            ViewValue(View(List(SaveTo("emp", Set(), List("deptno", "empno"))), None, null,
+              List(
+                Property("empno", KeyValue(":empno", TresqlValue("#emp"), Some(TresqlValue(":empno"))), false, true, true),
+                Property("ename", TresqlValue(":ename"), false, true, true),
+                Property("job", TresqlValue(":job"), false, true, true)), null
+            ),
+            SaveOptions(true, true, true)), false, true, true)), null), obj)
       println(s"\nResult check:")
       tresql"dept[dname = 'ADVERTISING'] { |emp {ename, job}#(ename) e}".map(_.e.map(e => e.ename -> e.job).toList).toList
     }
@@ -1744,6 +1769,39 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       ORT.save(car_with_usage_view, obj)
       println(s"\nResult check:")
       tresql"car_usage/car;car_usage/emp[nr = 'C1']{ename, name}#(1, 2)".map(r => (r.ename, r.name)).toList
+    }
+
+    // children composite primary key
+    obj = {
+      def nr(name: String) = tresql"car[name = $name]{nr}".head[String]
+      Map("empno" -> tresql"emp[ename = 'SCOTT']{empno}".head[Long], "car_usage[+-=]" ->
+        List(
+          Map("car_nr" -> nr("BMW")),
+          Map("car_nr" -> nr("Citroen")),
+          Map("car_nr" -> nr("Tesla")),
+        )
+      )
+    }
+    assertResult(List("BMW", "Citroen", "Tesla")) {
+      ORT.update("emp", obj)
+      println(s"\nResult check:")
+      tresql"car_usage/car;car_usage/emp[ename = 'SCOTT']{name}#(1)".map(_.name).toList
+    }
+
+    obj = {
+      def nr(name: String) = tresql"car[name = $name]{nr}".head[String]
+      Map("empno" -> tresql"emp[ename = 'SCOTT']{empno}".head[Long], "car_usage[car_nr][+-=]" ->
+        List(
+          Map("car_nr" -> nr("VW")),
+          Map("car_nr" -> nr("Citroen")),
+          Map("car_nr" -> nr("Tesla")),
+        )
+      )
+    }
+    assertResult(List("Citroen", "Tesla", "VW")) {
+      ORT.update("emp", obj)
+      println(s"\nResult check:")
+      tresql"car_usage/car;car_usage/emp[ename = 'SCOTT']{name}#(1)".map(_.name).toList
     }
   }
 

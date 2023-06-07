@@ -27,9 +27,7 @@ trait ORT extends Query {
   case class IdVal(name: String, value: String) extends IdOrRefVal
   /** This is use in update and missing children delete expression */
   case class IdRefVal(name: String, value: String) extends IdOrRefVal
-  /** This is used for save to multiple linked tables or if reference to parent matches primary key */
-  case class IdRefIdVal(name: String, value: String) extends IdOrRefVal
-  /** This is used to set child reference to parent */
+  /** This is used to set child reference to parent or linked reference */
   case class IdParentVal(name: String, value: String) extends IdOrRefVal
   sealed trait KeyPart { def name: String }
   case class KeyCol(name: String) extends KeyPart
@@ -44,7 +42,9 @@ trait ORT extends Query {
                          table: metadata.Table,
                          saveTo: SaveTo,
                          refToParent: String)
-  case class ColVal(col: String, value: String, forInsert: Boolean, forUpdate: Boolean)
+  case class ColVal(col: String, value: String,
+                    forInsert: Boolean, forUpdate: Boolean,
+                    updateValue: Option[String] = None)
   case class SaveData(table: String,
                       pk: List[String],
                       alias: String,
@@ -440,13 +440,14 @@ trait ORT extends Query {
       s"-${tableWithDb(view.db, tableName, view.alias)}[$refToParent = :#$parent${filterString(ctx.view.filters, _.delete)}]"
     def delMissingChildren = {
       def del_children_tresql(data: SaveData) = {
-        def refsAndKey(rk: Set[IdOrRefVal]) = {
-          val rkf = rk.collect {case x if !x.isInstanceOf[IdVal] => (x.name, x.value)}
-          val pk = data.pk.headOption.orNull
-          rkf.partition(_._1 != pk) match {
-            case (refs: Set[(String, String)@unchecked], pk: Set[(String, String)@unchecked]) =>
-              (refs.toList, pk.toList)
-          }
+        def refsAndKey(rk: Set[IdOrRefVal]) = rk.filter(!_.isInstanceOf[IdVal])
+          .partition(_.isInstanceOf[IdParentVal]) match {
+          case (refs, pks) =>
+            ( refs.map(r => (r.name, r.value)).toList,
+              if (data.pk.forall(c => pks.exists(_.name == c) || refs.exists(_.name == c)))
+                pks.map(p => (p.name, p.value)).toList
+              else Nil
+            )
         }
         val (refCols: List[(String, String)], keyCols: List[(String, String)]) =
           if (data.keyVals.nonEmpty) data.keyVals.partition(_._1.isInstanceOf[RefKeyCol]) match {
@@ -475,8 +476,9 @@ trait ORT extends Query {
         val filteredColsVals =  // filter out key columns from updatable columns where value match key search value
           (if (keyVals.nonEmpty)
             colsVals.collect {
-              case cv @ ColVal(c, v, _, true)
-                if !keyVals.exists { case (k, kv) => k.name == c && v == kv } => cv
+              case cv @ ColVal(c, v, _, true, uvo)
+                if !keyVals.exists { case (k, kv) => k.name == c && v == kv } =>
+                uvo.map(uv => cv.copy(value = uv)).getOrElse(cv)
             }
           else colsVals.filter(_.forUpdate))
             .map(cv => cv.col -> cv.value)
@@ -587,8 +589,9 @@ trait ORT extends Query {
       def hasOptionalFields(view: View) = view.properties.exists(_.optional)
       ctx.view.properties.flatMap {
         case OrtMetadata.Property(col, _, _, _, _) if refsAndPk.exists(_.name == col) => Nil
-        case OrtMetadata.Property(col, KeyValue(_, TresqlValue(valueTresql)), _, forInsert, forUpdate) =>
-          List(ColVal(table.colOption(col).map(_.name).orNull, valueTresql, forInsert, forUpdate))
+        case OrtMetadata.Property(col, KeyValue(_, TresqlValue(valueTresql), updValOpt), _, forInsert, forUpdate) =>
+          List(ColVal(table.colOption(col).map(_.name).orNull,
+            valueTresql, forInsert, forUpdate, updValOpt.map(_.tresql)))
         case OrtMetadata.Property(col, TresqlValue(tresql), _, forInsert, forUpdate) =>
           val (t, c) = col.split("\\.") match {
             case Array(a, b) => (a, b)
@@ -690,49 +693,54 @@ trait ORT extends Query {
     val headTable = ctx.view.saveTo.head
     val parent = ctx.parents.headOption.map(_.table).orNull
     def refsPkAndKey(tbl: metadata.Table,
-                     refs: Set[String],
+                     linkedRefs: Set[String],
                      key: Seq[String]): (Set[IdOrRefVal], Seq[(KeyPart, String)]) = {
       def idRefId(idRef: String, id: String) = s"_id_ref_id($idRef, $id)"
-      def getPk(t: metadata.Table) = t.key.cols match { case List(c) => c case _ => null }
-      def idExp(t: String, pk: String): Set[IdOrRefVal] = {
-        ctx.view.properties.collectFirst {
-          case OrtMetadata.Property(`pk`, TresqlValue(tresql), _, _, _)
-            if tresql.startsWith(":") && tresql.substring(1) != pk =>
-            Set[IdOrRefVal](IdVal(pk, s"#$t$tresql"), IdRefVal(pk, s":#$t$tresql"))
-        }.getOrElse(Set[IdOrRefVal](IdVal(pk, s"#$t"), IdRefVal(pk, s":#$t:$pk")))
+      def idExps: Set[IdOrRefVal] = {
+        val t = tbl.name
+        val colNames = ctx.view.properties.map(_.col).toSet
+        val excludeCols = (linkedRefs + ctx.refToParent) ++ key.toSet.filter(colNames(_))
+        val pk = tbl.key.cols.filterNot(excludeCols(_))
+        val useBindVarName = pk.size > 1
+        def exps(n: String, idVal: String, idRefVal: String): Set[IdOrRefVal] =
+          Set(IdVal(n, idVal), IdRefVal(n, idRefVal))
+        def idExp(t: String, useBindVarTresql: Boolean, pk: String): Set[IdOrRefVal] =
+          ctx.view.properties.collectFirst {
+            case OrtMetadata.Property(`pk`, TresqlValue(tresql), _, _, _)
+              if tresql.startsWith(":") && (tresql.substring(1) != pk || useBindVarTresql) =>
+              exps(pk, s"#$t$tresql", s":#$t$tresql")
+            case OrtMetadata.Property(`pk`, _: LookupViewValue, _, _, _) => Set[IdOrRefVal]() // lookup statement should handle value
+          }.getOrElse(exps(pk, s"#$t:$pk", s":#$t:$pk"))
+        pk.flatMap(idExp(t, useBindVarName, _)).toSet
       }
-      val pk = getPk(ctx.table)
-      val refsPk: Set[IdOrRefVal] =
+      val ref_to_parent_and_pk: Set[IdOrRefVal] = {
         //ref table (set fk and pk)
-        (if (tbl.name == ctx.table.name && ctx.refToParent != null)
-          if (ctx.refToParent == pk)
-            Set(IdRefIdVal(pk, idRefId(parent, tbl.name)))
-          else
-            Set(IdParentVal(ctx.refToParent, s":#$parent")) ++
-              (if (pk == null || refs.contains(pk)) Set() else idExp(tbl.name, pk))
-        //not ref table (set pk)
-        else
-          Option(tbl.key.cols)
-            .collectFirst{ case k if k.size == 1 && !refs.contains(k.head) => k.head }
-            .map(idExp(tbl.name, _)).getOrElse(Set())
-        ) ++ //set refs
+        (if (tbl.name == ctx.table.name && ctx.refToParent != null) {
+          val pks = tbl.key.cols
+          val refStr =
+            if (pks.size == 1 && pks.contains(ctx.refToParent)) idRefId(parent, tbl.name)
+            else s":#$parent"
+          Set(IdParentVal(ctx.refToParent, refStr))
+        } else Set()) ++ idExps
+      }
+      val refsPk = ref_to_parent_and_pk ++ //set linked refs
         ( if(tbl.name == headTable.table)
             Set()
           else //filter out pk of the linked table in case it matches refToParent
-            refs
+            linkedRefs
               .filterNot(tbl.name == ctx.table.name && _ == ctx.refToParent)
-              .map(IdRefIdVal(_, idRefId(headTable.table, tbl.name)))
+              .map(IdParentVal(_, idRefId(headTable.table, tbl.name)))
         )
       (refsPk,
         key.map(k =>
-          refsPk.collectFirst { case x if x.name == k && k != pk =>
+          refsPk.collectFirst { case x if x.name == k && x.name == ctx.refToParent =>
             RefKeyCol(x.name) -> x.value
           }
           .getOrElse(
             KeyCol(k) -> ctx.view.properties
               .collectFirst {
                 case OrtMetadata.Property(`k`, TresqlValue(v), _, _, _) => v
-                case OrtMetadata.Property(`k`, KeyValue(whereTresql, _), _, _, _) => whereTresql
+                case OrtMetadata.Property(`k`, KeyValue(whereTresql, _, _), _, _, _) => whereTresql
               }
               .getOrElse(s":$k")
           )
@@ -744,10 +752,10 @@ trait ORT extends Query {
       val linkedTresqls =
         for {
           linkedTable <- ctx.view.saveTo.tail
-          tableDef <- md.tableOption(linkedTable.table)
+          linkedTableDef <- md.tableOption(linkedTable.table)
         } yield
-          tresql_string(tableDef, ctx.view.alias,
-            refsPkAndKey(tableDef, linkedTable.refs, linkedTable.key),
+          tresql_string(linkedTableDef, ctx.view.alias,
+            refsPkAndKey(linkedTableDef, linkedTable.refs, linkedTable.key),
             Nil, true) //no children, set upsert flag for linked table
 
       Option(tresql_string(tableDef, ctx.view.alias, refsPkAndKey(tableDef, Set(), headTable.key),
@@ -782,7 +790,9 @@ object OrtMetadata {
    * @param whereTresql   key find tresql
    * @param valueTresql   key value tresql
    * */
-  case class KeyValue(whereTresql: String, valueTresql: TresqlValue) extends OrtValue
+  case class KeyValue(whereTresql: String,
+                      valueTresql: TresqlValue,
+                      updValueTresql: Option[TresqlValue] = None) extends OrtValue
 
   /** Saveable column.
    *

@@ -594,8 +594,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     extends DeleteExpr(table, alias, null, null, returning) {
     override def apply() = super.apply() match {
       case r: DMLResult =>
-        //include in result id value of the inserted record if it's obtained from IdExpr
-        val id = env.currIdOption(table.defaultSQL)
+        //include in result id value of the inserted record if it's obtained from IdExpr and key consists of one column
+        val id = env.currIdOption(table.defaultSQL).filter(_ => env.table(table.sql).key.cols.size < 2)
         new InsertResult(r.count, r.children, id)
       case r => r
     }

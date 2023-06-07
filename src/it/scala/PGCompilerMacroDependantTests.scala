@@ -306,13 +306,6 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
     //multiple column primary key
     obj = Map("empno"->7788, "car_nr" -> "1111")
     assertResult(new InsertResult(count = Some(1)))(ORT.insert("car_usage", obj))
-    //primary key component not specified error must be thrown
-    obj = Map("car_nr" -> "1111")
-    intercept[TresqlException](ORT.insert("car_usage", obj))
-    obj = Map("date_from" -> "2013-10-24")
-    intercept[TresqlException](ORT.insert("car_usage", obj))
-    obj = Map("empno" -> 7839)
-    intercept[TresqlException](ORT.insert("car_usage", obj))
 
     //value clause test
     obj = Map("car_nr" -> 2222, "empno" -> 7788, "date_from" -> java.sql.Date.valueOf("2013-11-06"))
@@ -950,6 +943,14 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
 
 //    assertResult(List("DEVOP"))(tresql"dept[10079]{dname}".map(_.dname).toList)
     assertResult(List("ATTORNEY"))(tresql"dept[10042]{dname}".map(_.dname).toList)
+
+    //primary key component not specified error must be thrown
+    obj = Map("car_nr" -> "1111")
+    intercept[TresqlException](ORT.insert("car_usage", obj))
+    obj = Map("date_from" -> "2013-10-24")
+    intercept[TresqlException](ORT.insert("car_usage", obj))
+    obj = Map("empno" -> 7839)
+    intercept[TresqlException](ORT.insert("car_usage", obj))
   }
   override def compilerMacro(implicit resources: Resources) = {
     println("\n-------------- TEST compiler macro ----------------\n")
