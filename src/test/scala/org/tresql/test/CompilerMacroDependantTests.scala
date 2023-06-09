@@ -1643,6 +1643,18 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         .map(d => d.dname -> d.e.map(e => e.ename -> e.job).toList).toList
     }
 
+    obj = Map("id" -> 0, "name" -> "Zero")
+    assertResult(0) {
+      import OrtMetadata._
+      ORT.insert(View(
+        List(SaveTo("dept",Set(),List())), None, null, List(
+          Property("deptno", KeyValue(":id", TresqlValue(":id"), None), false,true,false),
+      Property("dname", TresqlValue(":name"), false,true,true)
+      ),null), obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'Zero']{deptno}".head[Long]
+    }
+
     println("------ KEY UPDATE test ------")
 
     obj = Map("number" -> "000", "new_number" -> "000000")

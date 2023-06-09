@@ -724,6 +724,17 @@ trait ORT extends Query {
             case OrtMetadata.Property(`pk`, TresqlValue(tresql), _, _, _)
               if tresql.startsWith(":") && (tresql.substring(1) != pk || useBindVarTresql) =>
               exps(pk, s"#$t$tresql", s":#$t$tresql")
+            case OrtMetadata.Property(`pk`, KeyValue(_, insVal, updVal), _, _, _) =>
+              val insTr = insVal.tresql
+              val (idVal, idRefVal1) =
+                if (insTr.startsWith(":")) (s"#$t$insTr", s":#$t$insTr")
+                else (insTr, insTr)
+              val idRefVal = updVal.map {
+                case v if v.tresql.startsWith(":") => s":#$t${v.tresql}"
+                case v => v.tresql
+              }
+              .getOrElse(idRefVal1)
+              exps(pk, idVal, idRefVal)
             case OrtMetadata.Property(`pk`, _: LookupViewValue, _, _, _) => Set[IdOrRefVal]() // lookup statement should handle value
           }.getOrElse(exps(pk, s"#$t:$pk", s":#$t:$pk"))
         pk.flatMap(idExp(t, useBindVarName, _)).toSet
