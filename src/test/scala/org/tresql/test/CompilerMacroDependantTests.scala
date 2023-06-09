@@ -1576,6 +1576,27 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     }
 
     obj = Map("dname" -> "ADVERTISING", "emp[deptno, empno][+-=]" -> List(
+      Map("empno" -> null, "ename" -> "Zizo", "job" -> "arborist"),
+      Map("empno" -> 10036, "ename" -> "Andy", "job" -> "arborist"),
+    ))
+    assertResult(List(List(("Andy", "arborist"), ("Zizo", "arborist")))) {
+      import OrtMetadata._
+      ORT.update(View(List(SaveTo("dept", Set(), List("dname"))), None, null,
+        List(
+          Property("dname", TresqlValue(":dname"), false, true, true),
+          Property("emp[deptno, empno][+-=]",
+            ViewValue(View(List(SaveTo("emp", Set(), List("deptno", "empno"))), None, null,
+              List(
+                Property("empno", KeyValue(":empno", AutoValue(":empno"), Some(AutoValue(":empno"))), false, true, true),
+                Property("ename", TresqlValue(":ename"), false, true, true),
+                Property("job", TresqlValue(":job"), false, true, true)), null
+            ),
+              SaveOptions(true, true, true)), false, true, true)), null), obj)
+      println(s"\nResult check:")
+      tresql"dept[dname = 'ADVERTISING'] { |emp {ename, job}#(ename) e}".map(_.e.map(e => e.ename -> e.job).toList).toList
+    }
+
+    obj = Map("dname" -> "ADVERTISING", "emp[deptno, empno][+-=]" -> List(
       Map("empno" -> null, "ename" -> "Solomon", "job" -> "operator"),
       Map("empno" -> 10036, "ename" -> "Andy", "job" -> "operator"),
     ))

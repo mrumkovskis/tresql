@@ -1,6 +1,6 @@
 package org.tresql
 
-import org.tresql.OrtMetadata.{Filters, KeyValue, LookupViewValue, Property, SaveOptions, SaveTo, TresqlValue, View, ViewValue}
+import org.tresql.OrtMetadata.{AutoValue, Filters, KeyValue, LookupViewValue, Property, SaveOptions, SaveTo, TresqlValue, View, ViewValue}
 import org.tresql.ast.Exp
 
 import scala.util.matching.Regex
@@ -587,11 +587,23 @@ trait ORT extends Query {
     ) = {
       val (refsAndPk, key) = refsPkAndKey
       def hasOptionalFields(view: View) = view.properties.exists(_.optional)
+      def autoValue(tbl: metadata.Table, col: String, value: String, autoRef: Boolean): String =
+        if (tbl.key.cols.contains(col) && value.startsWith(":")) {
+          (if (autoRef) ":" else "") + s"#${tbl.name}$value"
+        } else value
+
       ctx.view.properties.flatMap {
         case OrtMetadata.Property(col, _, _, _, _) if refsAndPk.exists(_.name == col) => Nil
         case OrtMetadata.Property(col, KeyValue(_, TresqlValue(valueTresql), updValOpt), _, forInsert, forUpdate) =>
           List(ColVal(table.colOption(col).map(_.name).orNull,
             valueTresql, forInsert, forUpdate, updValOpt.map(_.tresql)))
+        case OrtMetadata.Property(col, KeyValue(_, AutoValue(valueTresql), updValOpt), _, forInsert, forUpdate) =>
+          List(ColVal(table.colOption(col).map(_.name).orNull,
+            autoValue(table, col, valueTresql, false), forInsert, forUpdate,
+            updValOpt.map {
+              case AutoValue(v) => autoValue(table, col, v, true)
+              case v => v.tresql
+            }))
         case OrtMetadata.Property(col, TresqlValue(tresql), _, forInsert, forUpdate) =>
           val (t, c) = col.split("\\.") match {
             case Array(a, b) => (a, b)
@@ -664,6 +676,9 @@ trait ORT extends Query {
             // TODO lookupTresql will be executed always regardless of forInsert, forUpdate settings
             List(lookupTresql, ColVal(refColName, refColTresql, forInsert, forUpdate))
           }).getOrElse(Nil)
+        case OrtMetadata.Property(col, AutoValue(tresql), _, forInsert, forUpdate) =>
+          List(ColVal(table.colOption(col).map(_.name).orNull,
+            autoValue(table, col, tresql, false), forInsert, forUpdate))
       }.partition(_.isInstanceOf[String]) match {
         case (lookups: List[String@unchecked], colsVals: List[ColVal@unchecked]) =>
           val tableName = table.name
@@ -766,12 +781,22 @@ trait ORT extends Query {
 
 object OrtMetadata {
   sealed trait OrtValue
+  sealed trait OrtSimpleValue extends OrtValue { def tresql: String }
 
   /** Column value
    *
    * @param tresql        tresql statement
    * */
-  case class TresqlValue(tresql: String) extends OrtValue
+  case class TresqlValue(tresql: String) extends OrtSimpleValue
+
+  /** Column value
+   *  If tresql value is bind variable and column name of containing {{{Property}}} corresponds to
+   *  current table's primary key column id or id ref expressions will appear in ort's generated
+   *  insert or update statement.
+   *  Otherwise behaves like {{{TresqlValue}}}
+   * @param tresql tresql statement
+   * */
+  case class AutoValue(tresql: String) extends OrtSimpleValue
 
   /** Column value
    * @param view          child view
@@ -791,8 +816,8 @@ object OrtMetadata {
    * @param valueTresql   key value tresql
    * */
   case class KeyValue(whereTresql: String,
-                      valueTresql: TresqlValue,
-                      updValueTresql: Option[TresqlValue] = None) extends OrtValue
+                      valueTresql: OrtSimpleValue,
+                      updValueTresql: Option[OrtSimpleValue] = None) extends OrtValue
 
   /** Saveable column.
    *
