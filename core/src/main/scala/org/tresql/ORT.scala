@@ -1,6 +1,6 @@
 package org.tresql
 
-import org.tresql.OrtMetadata.{AutoValue, Filters, KeyValue, LookupViewValue, Property, SaveOptions, SaveTo, TresqlValue, View, ViewValue}
+import org.tresql.OrtMetadata.{AutoValue, Filters, KeyValue, LookupViewValue, OrtSimpleValue, Property, SaveOptions, SaveTo, TresqlValue, View, ViewValue}
 import org.tresql.ast.Exp
 
 import scala.util.matching.Regex
@@ -636,6 +636,8 @@ trait ORT extends Query {
                 v.properties.flatMap {
                   case OrtMetadata.Property(col, TresqlValue(v), _, _, _) if key.contains(col) =>
                     List((col, v))
+                  case OrtMetadata.Property(col, KeyValue(where, _, _), _, _, _) if key.contains(col) =>
+                    List((col, where))
                   case _ => Nil
                 }
               }
@@ -650,6 +652,9 @@ trait ORT extends Query {
               Option(pkCol(t)).flatMap { pk =>
                 v.properties.collectFirst {
                   case OrtMetadata.Property(`pk`, TresqlValue(v), _, _, _) =>
+                    if (v.startsWith(":")) v.substring(1) else pk
+                  case OrtMetadata.Property(`pk`, KeyValue(_, ov, _), _, _, _) =>
+                    val v = ov.tresql
                     if (v.startsWith(":")) v.substring(1) else pk
                 }
               }.orNull

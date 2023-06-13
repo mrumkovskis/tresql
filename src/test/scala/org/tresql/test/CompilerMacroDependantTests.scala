@@ -2358,6 +2358,22 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       tresql"emp[ename = 'Britney']{ename, (dept d[d.deptno = emp.deptno]{loc}) dept}"
         .map(e => (e.ename, e.dept)).toList
     }
+
+    view = {
+      import OrtMetadata._
+      val lookupView =
+        View(
+          List(SaveTo("dept", Set(), List("deptno"))), None, null,
+          List(
+            Property("deptno", KeyValue(":deptno", AutoValue(":deptno"), Some(AutoValue(":deptno"))), false, true, true),
+          ), null)
+      View(
+        List(SaveTo("emp", Set(), List("ename"))), None, null,
+        List(
+          Property("ename", TresqlValue(":ename"), false, true, true),
+          Property("deptno", LookupViewValue("dept", lookupView), false, true, true)
+        ), null)
+    }
     obj = Map("ename" -> "Britney", "dept" -> Map("deptno" -> tresql"dept[dname = 'Mount']{deptno}".unique[Long]))
     assertResult(List(("Britney", "Tbilisi"))) {
       ORT.save(view, obj)
@@ -2481,6 +2497,34 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       ORT.update(view, obj)
       println("\nResult check:")
       tresql"emp[ename = 'Leopold']/dept{dname}".map(_.dname).toList
+    }
+
+    view = {
+      import OrtMetadata._
+      val lookupDept =
+        View(
+          List(SaveTo("dept", Set(), List("dname"))), None, null,
+          List(
+            Property("dname", KeyValue(":dname", TresqlValue(":dname"), None), false, true, true),
+            Property("loc", TresqlValue(":loc"), false, true, true),
+          ), null)
+      View(
+        List(SaveTo("emp", Set(), List())), None, null,
+        List(
+          Property("empno", TresqlValue(":empno"), false, true, true),
+          Property("ename", TresqlValue(":ename?"), true, true, true),
+          Property("job", TresqlValue(":job?"), true, true, true),
+          Property("deptno", LookupViewValue("dept", lookupDept), true, true, true),
+        ), null)
+    }
+
+    obj = Map("empno" -> Query("emp[ename = 'Leopold']{empno}").unique[Long], "job" -> "pharmac",
+      "dept" -> Map("dname" -> "Pharmacy", "loc" -> "Brunenieku st"))
+
+    assertResult(List(("pharmac", "Pharmacy", "Brunenieku st"))) {
+      ORT.update(view, obj)
+      println("\nResult check:")
+      tresql"emp[ename = 'Leopold']/dept{job, dname, loc}".map(r => (r.job, r.dname, r.loc)).toList
     }
   }
 
