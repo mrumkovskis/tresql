@@ -894,13 +894,15 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       ORT.insert("dept", obj)
     }
 
-    obj = Map("deptno" -> 10046, "dname" -> "METEO", "loc" -> "Texas", "emp" -> List(
+    obj = Map("deptno" -> 10046, "dname" -> "METEO", "loc" -> "Texas", "emp[+-=]" -> List(
       Map("ename" -> "Selina", "mgr" -> null),
       Map("ename" -> "Vano", "mgr" -> Map("ename" -> "Pedro", "deptno" -> Map("deptno" -> 10048, "dname" -> "Head")))))
     assertResult(new UpdateResult(count = Some(1), children = List(
       (null,new DeleteResult(count = Some(2))),
-      ("emp", List(List(null, new InsertResult(count = Some(1), id = Some(10051))),
-        List(10052, new InsertResult(count = Some(1), id = Some(10053)))))))) { ORT.update("dept", obj) }
+      ("emp[+-=]", List(List(null, new InsertResult(count = Some(1), id = Some(10051))),
+        List(10052, new InsertResult(count = Some(1), id = Some(10053)))))))) {
+      ORT.update("dept", obj)
+    }
 
     obj = Map("name" -> "Dodge", "car_usage" -> List(
       Map("empno" -> Map("empno" -> null, "ename" -> "Nicky", "job" -> "MGR", "deptno" -> 10)),

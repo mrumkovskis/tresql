@@ -439,36 +439,41 @@ trait ORT extends Query {
     def delAllChildren =
       s"-${tableWithDb(view.db, tableName, view.alias)}[$refToParent = :#$parent${filterString(ctx.view.filters, _.delete)}]"
     def delMissingChildren = {
-      def del_children_tresql(data: SaveData) = {
+      val delCtx = ctx.copy(view = ctx.view.copy(saveTo = List(saveTo)))
+      val md = tresqlMetadata(delCtx.view.db)
+      md.tableOption(delCtx.saveTo.table).map { delTable =>
+        val (refsPkVals, keyVals) = refsPkAndKey(delCtx, delTable, Set(), saveTo.key)
         def refsAndKey(rk: Set[IdOrRefVal]) = rk.filter(!_.isInstanceOf[IdVal])
           .partition(_.isInstanceOf[IdParentVal]) match {
           case (refs, pks) =>
-            ( refs.map(r => (r.name, r.value)).toList,
-              if (data.pk.forall(c => pks.exists(_.name == c) || refs.exists(_.name == c)))
+            val pk = delTable.key.cols
+            (refs.map(r => (r.name, r.value)).toList,
+              if (pk.forall(c => pks.exists(_.name == c) || refs.exists(_.name == c)))
                 pks.map(p => (p.name, p.value)).toList
               else Nil
             )
         }
+
         val (refCols: List[(String, String)], keyCols: List[(String, String)]) =
-          if (data.keyVals.nonEmpty) data.keyVals.partition(_._1.isInstanceOf[RefKeyCol]) match {
+          if (keyVals.nonEmpty) keyVals.partition(_._1.isInstanceOf[RefKeyCol]) match {
             case (refCols: List[(RefKeyCol, String)@unchecked], keyCols: List[(KeyCol, String)@unchecked]) =>
               val (rc, kc) =
                 (refCols.map { case (k, v) => (k.name, v) }, keyCols.map { case (k, v) => (k.name, v) })
-              if (rc.nonEmpty) (rc, kc) else (refsAndKey(data.refsPkVals)._1, kc)
-          } else refsAndKey(data.refsPkVals)
+              if (rc.nonEmpty) (rc, kc) else (refsAndKey(refsPkVals)._1, kc)
+          } else refsAndKey(refsPkVals)
 
-        val refColsFilter = refCols.map { case (n, v) => s"$n = $v"}.mkString(" & ")
+        val refColsFilter = refCols.map { case (n, v) => s"$n = $v" }.mkString(" & ")
         val (key_arr, key_val_expr_arr) = keyCols.unzip match {
           case (kc, kv) => (s"[${kc.mkString(", ")}]", s"[${kv.mkString(", ")}]")
         }
-        val filter = filterString(data.filters, _.delete)
+        val filter = filterString(delCtx.view.filters, _.delete)
         if (refCols.isEmpty || keyCols.isEmpty) null
         else
-          s"""_delete_missing_children('$name', $key_arr, $key_val_expr_arr, -${tableWithDb(data.db,
-            data.table, data.alias)}[$refColsFilter & _not_delete_keys($key_arr, $key_val_expr_arr)$filter])"""
-      }
-      save_tresql_internal(ctx.copy(view = ctx.view.copy(saveTo = List(saveTo))),
-        del_children_tresql, null)
+          s"""_delete_missing_children('$name', $key_arr, $key_val_expr_arr, -${
+            tableWithDb(delCtx.view.db,
+              delCtx.saveTo.table, delCtx.view.alias)
+          }[$refColsFilter & _not_delete_keys($key_arr, $key_val_expr_arr)$filter])"""
+      }.orNull
     }
     def upd = {
       def table_save_tresql(data: SaveData) = {
@@ -711,60 +716,84 @@ trait ORT extends Query {
 
     val md = tresqlMetadata(ctx.view.db)
     val headTable = ctx.view.saveTo.head
-    val parent = ctx.parents.headOption.map(_.table).orNull
-    def refsPkAndKey(tbl: metadata.Table,
-                     linkedRefs: Set[String],
-                     key: Seq[String]): (Set[IdOrRefVal], Seq[(KeyPart, String)]) = {
-      def idRefId(idRef: String, id: String) = s"_id_ref_id($idRef, $id)"
-      def idExps: Set[IdOrRefVal] = {
-        val t = tbl.name
-        val colNames = ctx.view.properties.map(_.col).toSet
-        val excludeCols = (linkedRefs + ctx.refToParent) ++ key.toSet.filter(colNames(_))
-        val pk = tbl.key.cols.filterNot(excludeCols(_))
-        val useBindVarName = pk.size > 1
-        def exps(n: String, idVal: String, idRefVal: String): Set[IdOrRefVal] =
-          Set(IdVal(n, idVal), IdRefVal(n, idRefVal))
-        def idExp(t: String, useBindVarTresql: Boolean, pk: String): Set[IdOrRefVal] =
-          ctx.view.properties.collectFirst {
-            case OrtMetadata.Property(`pk`, TresqlValue(tresql), _, _, _)
-              if tresql.startsWith(":") && (tresql.substring(1) != pk || useBindVarTresql) =>
-              exps(pk, s"#$t$tresql", s":#$t$tresql")
-            case OrtMetadata.Property(`pk`, KeyValue(_, insVal, updVal), _, _, _) =>
-              val insTr = insVal.tresql
-              val (idVal, idRefVal1) =
-                if (insTr.startsWith(":")) (s"#$t$insTr", s":#$t$insTr")
-                else (insTr, insTr)
-              val idRefVal = updVal.map {
+    md.tableOption(headTable.table).flatMap { tableDef =>
+      val linkedTresqls =
+        for {
+          linkedTable <- ctx.view.saveTo.tail
+          linkedTableDef <- md.tableOption(linkedTable.table)
+        } yield
+          tresql_string(linkedTableDef, ctx.view.alias,
+            refsPkAndKey(ctx, linkedTableDef, linkedTable.refs, linkedTable.key),
+            Nil, true) //no children, set upsert flag for linked table
+
+      Option(tresql_string(tableDef, ctx.view.alias, refsPkAndKey(ctx, tableDef, Set(), headTable.key),
+        linkedTresqls.filter(_ != null), false))
+    }.orNull
+  }
+
+  private def refsPkAndKey(
+    ctx: SaveContext,
+    tbl: metadata.Table,
+    linkedRefs: Set[String],
+    key: Seq[String]
+  ): (Set[IdOrRefVal], Seq[(KeyPart, String)]) = {
+    def idRefId(idRef: String, id: String) = s"_id_ref_id($idRef, $id)"
+
+    def idExps: Set[IdOrRefVal] = {
+      val t = tbl.name
+      val colNames = ctx.view.properties.map(_.col).toSet
+      val excludeCols = (linkedRefs + ctx.refToParent) ++ key.toSet.filter(colNames(_))
+      val pk = tbl.key.cols.filterNot(excludeCols(_))
+      val useBindVarName = pk.size > 1
+
+      def exps(n: String, idVal: String, idRefVal: String): Set[IdOrRefVal] =
+        Set(IdVal(n, idVal), IdRefVal(n, idRefVal))
+
+      def idExp(t: String, useBindVarTresql: Boolean, pk: String): Set[IdOrRefVal] =
+        ctx.view.properties.collectFirst {
+          case OrtMetadata.Property(`pk`, TresqlValue(tresql), _, _, _)
+            if tresql.startsWith(":") && (tresql.substring(1) != pk || useBindVarTresql) =>
+            exps(pk, s"#$t$tresql", s":#$t$tresql")
+          case OrtMetadata.Property(`pk`, KeyValue(_, insVal, updVal), _, _, _) =>
+            val insTr = insVal.tresql
+            val (idVal, idRefVal1) =
+              if (insTr.startsWith(":")) (s"#$t$insTr", s":#$t$insTr")
+              else (insTr, insTr)
+            val idRefVal = updVal.map {
                 case v if v.tresql.startsWith(":") => s":#$t${v.tresql}"
                 case v => v.tresql
               }
               .getOrElse(idRefVal1)
-              exps(pk, idVal, idRefVal)
-            case OrtMetadata.Property(`pk`, _: LookupViewValue, _, _, _) => Set[IdOrRefVal]() // lookup statement should handle value
-          }.getOrElse(exps(pk, s"#$t:$pk", s":#$t:$pk"))
-        pk.flatMap(idExp(t, useBindVarName, _)).toSet
-      }
-      val ref_to_parent_and_pk: Set[IdOrRefVal] = {
-        //ref table (set fk and pk)
-        (if (tbl.name == ctx.table.name && ctx.refToParent != null) {
-          val pks = tbl.key.cols
-          val refStr =
-            if (pks.size == 1 && pks.contains(ctx.refToParent)) idRefId(parent, tbl.name)
-            else s":#$parent"
-          Set(IdParentVal(ctx.refToParent, refStr))
-        } else Set()) ++ idExps
-      }
-      val refsPk = ref_to_parent_and_pk ++ //set linked refs
-        ( if(tbl.name == headTable.table)
-            Set()
-          else //filter out pk of the linked table in case it matches refToParent
-            linkedRefs
-              .filterNot(tbl.name == ctx.table.name && _ == ctx.refToParent)
-              .map(IdParentVal(_, idRefId(headTable.table, tbl.name)))
+            exps(pk, idVal, idRefVal)
+          case OrtMetadata.Property(`pk`, _: LookupViewValue, _, _, _) => Set[IdOrRefVal]() // lookup statement should handle value
+        }.getOrElse(exps(pk, s"#$t:$pk", s":#$t:$pk"))
+
+      pk.flatMap(idExp(t, useBindVarName, _)).toSet
+    }
+
+    val parent = ctx.parents.headOption.map(_.table).orNull
+    val headTable = ctx.view.saveTo.head
+    val ref_to_parent_and_pk: Set[IdOrRefVal] = {
+      //ref table (set fk and pk)
+      (if (tbl.name == ctx.table.name && ctx.refToParent != null) {
+        val pks = tbl.key.cols
+        val refStr =
+          if (pks.size == 1 && pks.contains(ctx.refToParent)) idRefId(parent, tbl.name)
+          else s":#$parent"
+        Set(IdParentVal(ctx.refToParent, refStr))
+      } else Set()) ++ idExps
+    }
+    val refsPk = ref_to_parent_and_pk ++ //set linked refs
+      (if (tbl.name == headTable.table)
+        Set()
+      else //filter out pk of the linked table in case it matches refToParent
+        linkedRefs
+          .filterNot(tbl.name == ctx.table.name && _ == ctx.refToParent)
+          .map(IdParentVal(_, idRefId(headTable.table, tbl.name)))
         )
-      (refsPk,
-        key.map(k =>
-          refsPk.collectFirst { case x if x.name == k && x.name == ctx.refToParent =>
+    (refsPk,
+      key.map(k =>
+        refsPk.collectFirst { case x if x.name == k && x.name == ctx.refToParent =>
             RefKeyCol(x.name) -> x.value
           }
           .getOrElse(
@@ -775,23 +804,8 @@ trait ORT extends Query {
               }
               .getOrElse(s":$k")
           )
-        )
       )
-    }
-
-    md.tableOption(headTable.table).flatMap { tableDef =>
-      val linkedTresqls =
-        for {
-          linkedTable <- ctx.view.saveTo.tail
-          linkedTableDef <- md.tableOption(linkedTable.table)
-        } yield
-          tresql_string(linkedTableDef, ctx.view.alias,
-            refsPkAndKey(linkedTableDef, linkedTable.refs, linkedTable.key),
-            Nil, true) //no children, set upsert flag for linked table
-
-      Option(tresql_string(tableDef, ctx.view.alias, refsPkAndKey(tableDef, Set(), headTable.key),
-        linkedTresqls.filter(_ != null), false))
-    }.orNull
+    )
   }
 }
 
