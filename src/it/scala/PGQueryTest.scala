@@ -49,6 +49,8 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
           "time" -> "time",
           "dateTime" -> "timestamp",
           "bytes" -> "bytea",
+          "java.lang.Integer" -> "integer",
+          "java.lang.String" -> "text",
         ).getOrElse(typeName, typeName)
       } else super.to_sql_type(vendor, typeName)
     }
