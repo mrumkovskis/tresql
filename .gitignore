@@ -32,3 +32,10 @@ lift_proto*
 .ensime_cache/
 
 tmp/
+
+# vs code scala plugin
+.metals/
+.vscode/
+.bloop/
+project/metals.sbt
+project/project/metals.sbt
