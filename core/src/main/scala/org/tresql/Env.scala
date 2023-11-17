@@ -418,10 +418,8 @@ class MacroResourcesImpl(scalaMacros: Any, typeMapper: TypeMapper) extends Macro
   private val macros = {
     val ml = new MacrosLoader(typeMapper)
     val tm =
-      if (macroResource == null)
-        ml.loadTresqlMacros(ml.load())
-      else
-        ml.load(macroResource).map(ml.loadTresqlMacros).getOrElse(TresqlMacros.empty)
+      if (macroResource == null) ml.loadTresqlMacros(ml.load())
+      else ml.loadTresqlMacros(ml.load(macroResource).getOrElse(ml.load()))
     tm.merge(ml.loadTresqlScalaMacros(scalaMacros))
   }
 
