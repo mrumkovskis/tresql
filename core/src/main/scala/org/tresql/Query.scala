@@ -2,6 +2,7 @@ package org.tresql
 
 import java.sql.{CallableStatement, PreparedStatement, ResultSet, SQLException}
 import CoreTypes.RowConverter
+import org.tresql.ast.Exp
 
 trait Query extends QueryBuilder with TypedQuery {
 
@@ -35,6 +36,18 @@ trait Query extends QueryBuilder with TypedQuery {
   )(implicit resources: Resources): Expr = {
     require(resources != null, "Resources cannot be null.")
     resources.log(expr, Nil, LogTopic.tresql)
+    val pars =
+      if (resources.params.isEmpty) params
+      else if (params != null) resources.params ++ params else resources.params
+    newInstance(new Env(pars, resources, reusableExpr), 0, 0).buildExpr(expr)
+  }
+
+  def buildFromAst(
+    expr: Exp,
+    params: Map[String, Any] = null,
+    reusableExpr: Boolean = true
+  )(implicit resources: Resources): Expr = {
+    require(resources != null, "Resources cannot be null.")
     val pars =
       if (resources.params.isEmpty) params
       else if (params != null) resources.params ++ params else resources.params
