@@ -14,6 +14,7 @@ private[tresql] object QueryParsers {
 
 import QueryParsers.any2tresql
 import org.tresql.metadata.Procedure
+import org.tresql.parsing.ExpTransformer
 
 sealed trait Exp {
   def tresql: String
@@ -237,6 +238,9 @@ case object NullUpdate extends Null
 
 case class Braces(expr: Exp) extends Exp {
   def tresql = "(" + any2tresql(expr) + ")"
+}
+case class TransformerExp(transformer: ExpTransformer#Transformer) extends Exp {
+  def tresql = ???
 }
 
 class CompilerException(message: String,

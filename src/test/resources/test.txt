@@ -549,6 +549,12 @@ dept[deptno in if_all_missing(1, 2, emp[ename ~~ 'x' || '%' & job = 'y']{deptno}
 dept[in_twice(deptno, 10)] --> [[10, "ACCOUNTING", "NEW YORK"]]
 dept[in_twice(deptno, :deptno)] --> deptno = 10 -->[[10, "ACCOUNTING", "NEW YORK"]]
 
+//query transformer macro
+[build_values_cursor(:data)]int_values{sum(cast(value, 'integer')) s, avg(cast(value, 'integer')) a} --> data=[] --> [[null, null]]
+[build_values_cursor(:data)]int_values{sum(cast(value, 'integer')) s, avg(cast(value, 'integer')) a} --> data=[1,2,3] --> [[6, 2]]
+summary(#s, a) { int_values{sum(cast(value, 'integer')) s, avg(cast(value, 'integer')) a} } [build_values_cursor(:data)]summary --> data=[1,2,3,4] --> [[10, 2]]
+summary(#s, a) { int_values{sum(cast(value, 'integer')) s, avg(cast(value, 'integer')) a} } [build_values_cursor(:data)]summary { s + :s, a + :a } --> data=[1,2,3,4];s=2;a=3 --> [[12, 5]]
+
 //macro interpolator test
 {macro_interpolator_test1(1, 2)} --> [[3]]
 dummy {macro_interpolator_test1((dept{count(*)}) + 0, (emp{count(*)}) + 0)} --> [[19]]

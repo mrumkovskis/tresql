@@ -90,6 +90,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     c <- tc._2
   } yield ColExpr(IdentExpr(List(tc._1, c)), tc._1 + "_" + c + "_", Some(false), hidden = true)
 
+  private[tresql] var transformers: List[PartialFunction[Expr, Expr]] = Nil
+
   /*****************************************************************************
   ****************** methods to be implemented or overriden ********************
   ******************************************************************************/
@@ -729,6 +731,15 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     def defaultSQL = expr.filter(_ != null).map(_.sql) mkString ""
   }
 
+  /** This expr type can be returned from macro, transformer will be executed at the end of build, so
+   * it can transform entire expression. */
+  case class TransformerExpr(transformer: PartialFunction[Expr, Expr]) extends PrimitiveExpr {
+    def defaultSQL: String = s"TransformerExpr($transformer)"
+  }
+  case class DeferredBuildPlaceholderExpr(exp: Exp) extends PrimitiveExpr {
+    def defaultSQL = s"DeferredBuildPlaceholderExpr(${exp.tresql})"
+  }
+
   abstract class BaseExpr extends PrimitiveExpr {
     override def apply(params: Map[String, Any]): Any = {
       env update params
@@ -1165,14 +1176,14 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         exp match {
           case fun: QueryBuilder#FunExpr =>
             if (env isBuilderMacroDefined fun.name) {
-              env.invokeBuilderMacro(fun.name, expb, fun.params)
+              invokeMacro(exp, fun.name, expb, false, fun.params)
             } else if (fun.params.contains(null)) null else fun
           case binExpr: QueryBuilder#BinExpr =>
             if (!(STANDART_BIN_OPS contains binExpr.op)) {
               val macroName = scala.reflect.NameTransformer.encode(binExpr.op)
-              if (env isBuilderMacroDefined macroName)
-                env.invokeBuilderMacro(macroName, expb, List(binExpr.lop, binExpr.rop))
-              else binExpr
+              if (env isBuilderMacroDefined macroName) {
+                invokeMacro(exp, macroName, expb, false, List(binExpr.lop, binExpr.rop))
+              } else binExpr
             } else binExpr
           case _ => sys.error("Unexpected exp type")
         }, {
@@ -1193,15 +1204,30 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       )
     }
     def maybeCallDeferredBuildMacro(fun: Fun) =
-      if (env isBuilderDeferredMacroDefined fun.name)
-        Some(env.invokeBuilderDeferredMacro(fun.name, QueryBuilder.this, fun.parameters))
-      else None
+      if (env isBuilderDeferredMacroDefined fun.name) {
+        // wrap ast.Exp into DeferredBuildPlaceholderExpr in the case macro returns transformer
+        // in order to be able to identify ast.Exp during transformation
+        Some(invokeMacro(DeferredBuildPlaceholderExpr(fun), fun.name, QueryBuilder.this, true, fun.parameters))
+      } else None
+
+    def invokeMacro(expr: Expr, n: String, b: QueryBuilder, isDeferred: Boolean, args: List[_]) = {
+      val mr =
+        if (isDeferred) env.invokeBuilderDeferredMacro(n, b, args.asInstanceOf[List[Exp]])
+        else            env.invokeBuilderMacro(n, b, args.asInstanceOf[List[Expr]])
+      mr match {
+        case null => null
+        case TransformerExpr(t) =>
+          transformers ::= t
+          expr
+        case e: Expr => e
+      }
+    }
 
     def buildWithNew(db: Option[String], buildFunc: QueryBuilder => Expr) = {
       val b = QueryBuilder.this.newInstance(
         new Env(QueryBuilder.this, db, QueryBuilder.this.env.reusableExpr),
         bindIdx, this.childrenCount)
-      val ex = buildFunc(b)
+      val ex = maybeTransformExpr(buildFunc(b), b.transformers)
       this.separateQueryFlag = true
       this.bindIdx = b.bindIdx
       this.childrenCount += 1
@@ -1366,8 +1392,14 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     } finally ctxStack = ctxStack.tail
   }
 
+  private def maybeTransformExpr(expr: Expr, tfs: List[PartialFunction[Expr, Expr]]): Expr = tfs match {
+    case Nil => expr
+    case t :: tail => maybeTransformExpr(expr.builder.transform(expr, t), tail)
+  }
+
   def buildExpr(ex: String): Expr = buildExpr(new QueryParser(env, env.cache).parseExp(ex))
-  def buildExpr(ex: Exp): Expr = buildInternal(ex, ctxStack.headOption.getOrElse(QUERY_CTX))
+  def buildExpr(ex: Exp): Expr =
+    maybeTransformExpr(buildInternal(ex, ctxStack.headOption.getOrElse(QUERY_CTX)), transformers)
 
   //for debugging purposes
   def printBuilderChain: Unit = {

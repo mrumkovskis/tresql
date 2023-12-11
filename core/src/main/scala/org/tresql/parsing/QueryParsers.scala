@@ -11,10 +11,15 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
 
   def parseExp(exp: String): Exp = {
     phrase(exprList)(new scala.util.parsing.input.CharSequenceReader(exp)) match {
-      case Success(r, _) => r
+      case Success(r, _) => maybeTransform(r, transformers) match {
+        case _: TransformerExp => sys.error("Parsing error - cannot return TransformerExp!")
+        case e => e
+      }
       case x => sys.error(x.toString)
     }
   }
+
+  private var transformers: List[Transformer] = Nil
 
   val reserved = Set("in", "null", "false", "true")
 
@@ -102,13 +107,18 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   }, {
     case _ ~ _ ~ _ ~ _ ~ _ ~ f => s"Aggregate function filter must contain only one elements, instead of ${
       f.map(_.elements.size).getOrElse(0)}"
-  }) ^^ { case f: Fun =>
-    if (macros != null && macros.isMacroDefined(f.name)) {
+  }) ^^ { f =>
+    if (isMacro(f.name)) {
       if (f.distinct || f.aggregateOrder.nonEmpty || f.aggregateWhere.nonEmpty) {
         sys.error(s"Macro '${f.name}' invocation error. " +
           s"Neither distinct nor order by nor filter clause can be used in macro invocation.")
       } else {
-        macros.invokeMacro(f.name, QueryParsers.this, f.parameters)
+        macros.invokeMacro(f.name, QueryParsers.this, f.parameters) match {
+          case TransformerExp(t) =>
+            transformers ::= t
+            f
+          case e => e
+        }
       }
     } else f
   } named "function"
@@ -492,6 +502,14 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     case q: Query =>
       q.copy(tables = q.tables.updated(0, transformHeadJoin(join)(q.tables.head).asInstanceOf[Obj]))
     case o: Obj => o.copy(join = join) //set join to parent
+  }
+
+  protected def isMacro(name: String): Boolean = macros != null && macros.isMacroDefined(name) &&
+    !macros.isBuilderMacroDefined(name) && !macros.isBuilderDeferredMacroDefined(name)
+
+  protected def maybeTransform(e: Exp, ts: List[Transformer]): Exp = ts match {
+    case Nil => e
+    case t :: tail => maybeTransform(t(e), tail)
   }
 
   /** Copied from scala.util.parsing.combinator.SubSequence since it cannot be instantiated. */

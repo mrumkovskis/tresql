@@ -138,8 +138,7 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
       Par(s"_$i", null, -1, -1, null, et)
     }.toList.drop(1) // drop builder or parser argument
     val returnType = m.getGenericReturnType match {
-      case par: ParameterizedType => sys.error(s"Parametrized return type not supported! Method: $m, parameter: $par")
-      case _: Class[_] => FixedReturnType(ExprType.Any)
+      case _: ParameterizedType | _: Class[_] => FixedReturnType(ExprType.Any)
       case x =>
         val idx  = pars.indexWhere(_.scalaType.toString == x.toString)
         if (idx == -1) FixedReturnType(ExprType.Any) else ParameterReturnType(idx)

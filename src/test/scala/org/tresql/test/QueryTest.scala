@@ -351,6 +351,15 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     implicit lazy val binOpCodec:         Codec[BinOp]          = deriveCodec    [BinOp]         // TODO
     implicit lazy val selectDefBaseCodec: Codec[SelectDefBase]  = deriveAllCodecs[SelectDefBase] // TODO
     implicit lazy val sqlDefBaseCodec:    Codec[SQLDefBase]     = deriveAllCodecs[SQLDefBase]    // TODO
+    // define explicitly empty transformer exp codec since it cannot be derived
+    implicit lazy val transformerExpCodec: Codec[TransformerExp] = Codec(
+      new Encoder[TransformerExp] {
+        override def write(w: Writer, value: TransformerExp): Writer = ???
+      },
+      new Decoder[TransformerExp] {
+        override def read(r: Reader): TransformerExp = ???
+      }
+    )
     implicit lazy val expCodec:           Codec[Exp]            = deriveAllCodecs[Exp]
     val testRes = tresqlResources.withMetadata(
       new metadata.JDBCMetadata {
