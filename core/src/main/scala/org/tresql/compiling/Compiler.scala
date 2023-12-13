@@ -121,7 +121,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     scopes match {
       case Nil => None
       case scope :: tail => scope.table(tn).flatMap {
-        case Table(n, Nil, _, _, _) => table(tail)(n)(md, db) //alias is decoded ask parent scope
+        case Table(n, Nil, _, _) => table(tail)(n)(md, db) //alias is decoded ask parent scope
         case t => Some(t)
       } orElse declaredTable(tail)(tn)(md, db)
     }

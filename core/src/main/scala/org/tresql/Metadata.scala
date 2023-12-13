@@ -117,7 +117,7 @@ trait Metadata extends AbstractMetadata {
 //TODO pk col storing together with ref col (for multi col key secure support)?
 package metadata {
   case class Table(name: String, cols: List[Col], key: Key,
-      rfs: Map[String, List[Ref]], children: List[String] = null) {
+      rfs: Map[String, List[Ref]]) {
     private val colMap: Map[String, Col] = cols map (c => c.name.toLowerCase -> c) toMap
     val refTable: Map[List[String], String] = rfs.flatMap(t => t._2.map(_.cols -> t._1))
     def col(name: String) = colMap(name.toLowerCase)
