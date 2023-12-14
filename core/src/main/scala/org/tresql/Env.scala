@@ -98,6 +98,9 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
   def containsNearest(name: String): Boolean =
     vars.map(_.contains(name)).getOrElse(provider.exists(_.env.containsNearest(name)))
 
+  override def params: Map[String, Any] =
+    (vars.map(_.toMap) orElse provider.map(_.env.params)).getOrElse(Map())
+
   private[tresql] def update(name: String, value: Any): Unit = {
     vars.map(_(name) = value) orElse provider.map(_.env(name) = value)
   }
