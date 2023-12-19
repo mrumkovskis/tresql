@@ -22,6 +22,19 @@ trait TypeMapper {
     case "unit" => Manifest.Unit
     case _ => ManifestFactory.Any
   }
+  def scala_xsd_type_map(scalaType: String): String = scalaType match {
+    case "java.lang.Long" => "long"
+    case "java.lang.Integer" => "int"
+    case "scala.math.BigDecimal" => "decimal"
+    case "java.sql.Date" => "date"
+    case "java.sql.Timestamp" => "dateTime"
+    case "java.sql.Time" => "time"
+    case "java.lang.String" => "string"
+    case "java.lang.Boolean" => "boolean"
+    case "Array[Byte]" => "base64Binary"
+    case "Any" => "anyType"
+    case _ => "anyType"
+  }
   def sql_xsd_type_map(sqlType: Int): String = sqlType match {
     case Types.ARRAY => "base64Binary"
     case Types.BIGINT => "long"
