@@ -9,8 +9,8 @@ import scala.reflect.ManifestFactory
 
 trait Compiler extends QueryParsers { thisCompiler =>
 
-  protected def metadata: Metadata
-  protected def extraMetadata: Map[String, Metadata] = Map()
+  def metadata: Metadata
+  def extraMetadata: Map[String, Metadata] = Map()
 
   protected def error(msg: String, cause: Exception = null) = throw new CompilerException(msg, cause = cause)
 
