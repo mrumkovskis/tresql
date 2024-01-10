@@ -17,15 +17,15 @@ trait CacheBase[E] {
 }
 
 /** Cache based on java concurrent hash map */
-class SimpleCache(maxSize: Int) extends SimpleCacheBase[Exp](maxSize) with Cache
-class SimpleCacheBase[E](maxSize: Int) extends CacheBase[E] {
+class SimpleCache(maxSize: Int, name: String = "Tresql cache") extends SimpleCacheBase[Exp](maxSize, name) with Cache
+class SimpleCacheBase[E](val maxSize: Int, val name: String) extends CacheBase[E] {
   private val cache: java.util.Map[String, E] = new ConcurrentHashMap[String, E]
 
   def get(tresql: String) = Option(cache.get(tresql))
   def put(tresql: String, expr: E) = {
     if (maxSize != -1 && cache.size >= maxSize) {
       cache.clear
-      println(s"[WARN] Tresql cache cleared, size exceeded $maxSize")
+      println(s"[WARN] $name cleared, size exceeded $maxSize")
     }
     cache.putIfAbsent(tresql, expr)
   }
