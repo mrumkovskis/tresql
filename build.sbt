@@ -75,6 +75,19 @@ val packageMerges = for {
 import scala.xml.{Node => XmlNode, NodeSeq => XmlNodeSeq, _}
 import scala.xml.transform.{RewriteRule, RuleTransformer}
 
+lazy val it = (project in file("src/it"))
+  .dependsOn(tresql % "compile -> compile; test -> test")
+  .settings(commonSettings: _*)
+  .settings(
+    publish / skip := true,
+    libraryDependencies ++= Seq(
+      "org.postgresql" % "postgresql"       % "42.7.1"  %  Test,
+    ),
+    Test / scalaSource := baseDirectory.value / "scala",
+    Test / resourceDirectory := baseDirectory.value / "resources",
+    // IntegrationTest / console / initialCommands := "import org.tresql._; import org.scalatest._; import org.tresql.test.ITConsoleResources._",
+  )
+
 lazy val tresql = (project in file("."))
   .disablePlugins(plugins.JUnitXmlReportPlugin)
   .dependsOn(core % "test->test;compile->compile", macros)
@@ -92,15 +105,13 @@ lazy val tresql = (project in file("."))
         case v if v startsWith "3"    => "1.13.0"
       }
       Seq(
-        "org.scalatest" %% "scalatest"        % "3.2.17"  % "test,it",
-        "org.hsqldb"     % "hsqldb"           % "2.7.2"   % "test"    classifier "jdk8",
-        "io.bullet"     %% "borer-core"       % borerV    % "test,it",
-        "io.bullet"     %% "borer-derivation" % borerV    % "test,it",
-        "org.postgresql" % "postgresql"       % "42.7.1"  % "it,test",
+        "org.scalatest" %% "scalatest"        % "3.2.17"  %  Test,
+        "org.hsqldb"     % "hsqldb"           % "2.7.2"   %  Test     classifier "jdk8",
+        "io.bullet"     %% "borer-core"       % borerV    %  Test,
+        "io.bullet"     %% "borer-derivation" % borerV    %  Test,
       )
     },
     Test / console / initialCommands := "import org.tresql._; import org.scalatest._; import org.tresql.test.ConsoleResources._",
-    IntegrationTest / console / initialCommands := "import org.tresql._; import org.scalatest._; import org.tresql.test.ITConsoleResources._",
     Test / publishArtifact := false,
     Compile / publishArtifact := true,
     pomIncludeRepository := { _ => false },
@@ -141,5 +152,3 @@ lazy val tresql = (project in file("."))
         </developer>
       </developers>
   )
-  .configs(IntegrationTest extend(Test))
-  .settings(Defaults.itSettings)
