@@ -95,7 +95,7 @@ lazy val tresql = (project in file("."))
         ("org.hsqldb" % "hsqldb" % "2.7.1" % "test").classifier("jdk8"),
         "io.bullet"     %% "borer-core"       % borerV    % "test,it",
         "io.bullet"     %% "borer-derivation" % borerV    % "test,it",
-        "org.postgresql" % "postgresql"       % "42.6.0"  % "it,test",
+        "org.postgresql" % "postgresql"       % "42.7.1"  % "it,test",
       )
     },
     Test / console / initialCommands := "import org.tresql._; import org.scalatest._; import org.tresql.test.ConsoleResources._",
