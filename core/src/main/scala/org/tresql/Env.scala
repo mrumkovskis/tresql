@@ -262,13 +262,9 @@ trait ThreadLocalResources extends Resources {
 
   lazy final val resourcesTemplate: ResourcesTemplate = initResourcesTemplate
   /** Creates resources template with default values from {{{Resources}}}.
-   * {{{cache, logger, bindVarLogFilter}}} are taken from this object instance
    * Subclasses can override this method.
    * */
   def initResourcesTemplate: ResourcesTemplate = new ResourcesTemplate(new Resources {
-    override def cache: Cache = ThreadLocalResources.this.cache
-    override def logger: TresqlLogger = ThreadLocalResources.this.logger
-    override def bindVarLogFilter: BindVarLogFilter = ThreadLocalResources.this.bindVarLogFilter
   })
 
   private val _threadResources = new ThreadLocal[Resources] {
@@ -299,12 +295,12 @@ trait ThreadLocalResources extends Resources {
   override def invokeBuilderDeferredMacro(name: String, builder: QueryBuilder, args: List[Exp]): Expr =
     threadResources.invokeBuilderDeferredMacro(name, builder, args)
 
-  /** Cache is global not thread local. To be overriden in subclasses. This implementation returns {{{super.cache}}} */
-  override def cache: Cache = super.cache
-  /** Logger is global not thread local. To be overriden in subclasses. This implementation returns {{{super.logger}}} */
-  override def logger: TresqlLogger = super.logger
-  /** Filter is global not thread local. To be overriden in subclasses. This implementation returns {{{super.bindVarLogFilter}}} */
-  override def bindVarLogFilter: BindVarLogFilter = super.bindVarLogFilter
+  override def cache: Cache = threadResources.cache
+  def cache_=(idExpr: String => String) = sys.error("Do not set per thread cache for ThreadLocalResources. Cache is global")
+  override def logger: TresqlLogger = threadResources.logger
+  def logger_=(idExpr: String => String) = sys.error("Do not set per thread logger for ThreadLocalResources. Logger is global")
+  override def bindVarLogFilter: BindVarLogFilter = threadResources.bindVarLogFilter
+  def bindVarLogFilter_=(idExpr: String => String) = sys.error("Do not set per thread bindVarLogFilter for ThreadLocalResources. bindVarLogFilter is global")
 
   private def setProp(f: Resources => Resources): Unit = threadResources = f(threadResources)
 
