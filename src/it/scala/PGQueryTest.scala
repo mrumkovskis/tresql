@@ -6,7 +6,7 @@ import org.scalatest.funsuite.AnyFunSuite
 
 import java.sql.{Connection, DriverManager}
 import org.tresql._
-import org.tresql.metadata.{JDBCMetadata, TypeMapper}
+import org.tresql.metadata.JDBCMetadata
 
 import scala.util.control.NonFatal
 import sys._
@@ -31,30 +31,6 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
       null
 
   var tresqlResources: Resources = null
-
-  trait PGTypeMapper extends TypeMapper {
-    override def to_sql_type(vendor: String, typeName: String): String = {
-      if (vendor == "postgresql") {
-        Map(
-          "string" -> "text",
-          "short" -> "smallint",
-          "int" -> "integer",
-          "long" -> "bigint",
-          "integer" -> "numeric",
-          "float" -> "float",
-          "double" -> "double precision",
-          "decimal" -> "numeric",
-          "boolean" -> "bool",
-          "date" -> "date",
-          "time" -> "time",
-          "dateTime" -> "timestamp",
-          "bytes" -> "bytea",
-          "java.lang.Integer" -> "integer",
-          "java.lang.String" -> "text",
-        ).getOrElse(typeName, typeName)
-      } else super.to_sql_type(vendor, typeName)
-    }
-  }
 
   override def beforeAll(configMap: ConfigMap) = {
     //initialize environment
@@ -106,7 +82,7 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
         throw sys.error(s"Unable to connect to database: ${e.toString}.\n" +
           "For postgres docker container try command: it/testOnly * -- -oD -Ddocker=postgres -Dport=<port> -Dwait_after_startup_millis=<time to wait for postgres for startup>")
     }
-    val md = new JDBCMetadata with PGTypeMapper {
+    val md = new JDBCMetadata {
       override def conn: Connection = connection
     }
     tresqlResources = new Resources {}
@@ -221,7 +197,7 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
     println("\n-------------- TEST compiler ----------------\n")
     //set new metadata
     val testRes = tresqlResources.withMetadata(
-      new JDBCMetadata with PGTypeMapper {
+      new JDBCMetadata {
         override def conn: java.sql.Connection = tresqlResources.conn
         override def macrosClass: Class[_] = classOf[org.tresql.test.Macros]
       }
@@ -328,7 +304,7 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
     )
     implicit lazy val expCodec: Codec[Exp] = deriveAllCodecs[Exp]
     val testRes = tresqlResources.withMetadata(
-      new JDBCMetadata with PGTypeMapper {
+      new JDBCMetadata {
         override def conn: java.sql.Connection = tresqlResources.conn
         override def macrosClass: Class[_] = classOf[org.tresql.test.Macros]
       }

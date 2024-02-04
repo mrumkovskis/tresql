@@ -3,9 +3,51 @@ package metadata
 
 import java.sql.Types
 import scala.reflect.{Manifest, ManifestFactory}
+import scala.collection.immutable.Map
 
 trait TypeMapper {
-  def to_sql_type(vendor: String, typeName: String): String = typeName
+  private val typeToVendorType:  Map[String, Map[String, String]] = Map(
+    "Array[Byte]"             -> Map("postgresql" -> "bytea", "sql" -> "blob"),
+    "base64Binary"            -> Map("postgresql" -> "bytea", "sql" -> "blob"),
+    "boolean"                 -> Map("oracle" -> "char", "postgresql" -> "bool", "sql" -> "boolean"),
+    "bytes"                   -> Map("postgresql" -> "bytea", "sql" -> "blob"),
+    "date"                    -> Map("sql" -> "date"),
+    "dateTime"                -> Map("sql" -> "timestamp"),
+    "decimal"                 -> Map("sql" -> "numeric"),
+    "double"                  -> Map("hsqldb" -> "float", "sql" -> "double precision"),
+    "float"                   -> Map("hsqldb" -> "real", "postgresql" -> "real", "sql" -> "float"),
+    "int"                     -> Map("oracle" -> "numeric(9)", "sql" -> "integer"),
+    "integer"                 -> Map("sql" -> "numeric"),
+    "long"                    -> Map("oracle" -> "numeric(18)", "sql" -> "bigint"),
+    "short"                   -> Map("sql" -> "smallint"),
+    "string"                  -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "varchar"),
+    "time"                    -> Map("sql" -> "time"),
+    "Boolean"                 -> Map("oracle" -> "char", "postgresql" -> "bool", "sql" -> "boolean"),
+    "java.lang.Boolean"       -> Map("oracle" -> "char", "postgresql" -> "bool", "sql" -> "boolean"),
+    "Double"                  -> Map("hsqldb" -> "float", "sql" -> "double precision"),
+    "java.lang.Double"        -> Map("hsqldb" -> "float", "sql" -> "double precision"),
+    "Float"                   -> Map("hsqldb" -> "real", "postgresql" -> "real", "sql" -> "float"),
+    "java.lang.Float"         -> Map("hsqldb" -> "real", "postgresql" -> "real", "sql" -> "float"),
+    "Int"                     -> Map("oracle" -> "numeric(9)", "sql" -> "integer"),
+    "java.lang.Integer"       -> Map("oracle" -> "numeric(9)", "sql" -> "integer"),
+    "Long"                    -> Map("oracle" -> "numeric(18)", "sql" -> "bigint"),
+    "java.lang.Long"          -> Map("oracle" -> "numeric(18)", "sql" -> "bigint"),
+    "Short"                   -> Map("sql" -> "smallint"),
+    "java.lang.Short"         -> Map("sql" -> "smallint"),
+    "java.sql.Date"           -> Map("sql" -> "date"),
+    "java.sql.Time"           -> Map("sql" -> "time"),
+    "java.sql.Timestamp"      -> Map("sql" -> "timestamp"),
+    "java.time.LocalDate"     -> Map("sql" -> "date"),
+    "java.time.LocalDateTime" -> Map("sql" -> "timestamp"),
+    "java.time.LocalTime"     -> Map("sql" -> "time"),
+    "java.util.Date"          -> Map("sql" -> "date"),
+    "scala.math.BigDecimal"   -> Map("sql" -> "numeric"),
+    "scala.math.BigInt"       -> Map("sql" -> "numeric"),
+    "String"                  -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "varchar"),
+    "java.lang.String"        -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "varchar"),
+  )
+  def to_sql_type(vendor: String, typeName: String): String =
+    typeToVendorType.get(typeName).flatMap(vt => vt.get(vendor).orElse(vt.get("sql"))) getOrElse typeName
   def sql_scala_type_map(sqlType: Int): Manifest[_] = xsd_scala_type_map(sql_xsd_type_map(sqlType))
   def xsd_scala_type_map(xsdType: String): Manifest[_] = xsdType match {
     case "integer" => ManifestFactory.classType(classOf[java.lang.Long])
