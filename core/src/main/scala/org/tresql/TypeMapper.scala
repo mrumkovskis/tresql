@@ -21,6 +21,7 @@ trait TypeMapper {
     "long"                    -> Map("oracle" -> "numeric(18)", "sql" -> "bigint"),
     "short"                   -> Map("sql" -> "smallint"),
     "string"                  -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "varchar"),
+    "text"                    -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "varchar"),
     "time"                    -> Map("sql" -> "time"),
     "Boolean"                 -> Map("oracle" -> "char", "postgresql" -> "bool", "sql" -> "boolean"),
     "java.lang.Boolean"       -> Map("oracle" -> "char", "postgresql" -> "bool", "sql" -> "boolean"),
@@ -60,6 +61,7 @@ trait TypeMapper {
     case "dateTime" | "timestamp" => ManifestFactory.classType(classOf[java.sql.Timestamp])
     case "time" => ManifestFactory.classType(classOf[java.sql.Time])
     case "string" => ManifestFactory.classType(classOf[String])
+    case "text"   => ManifestFactory.classType(classOf[String])
     case "boolean" => ManifestFactory.classType(classOf[java.lang.Boolean])
     case "base64Binary" | "bytes" => ManifestFactory.classType(classOf[Array[Byte]])
     case "anyType" | "any" => ManifestFactory.Any
