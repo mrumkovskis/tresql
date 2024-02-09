@@ -118,3 +118,34 @@ trait TypeMapper {
     case x => sys.error("Unexpected jdbc type code: " + x)
   }
 }
+
+object TypeMapper {
+  def scalaToJdbc(scalaTypeName: String): Int = scalaTypeName match {
+    case "Array[Byte]"              => Types.VARBINARY
+    case "Boolean"                  => Types.BOOLEAN
+    case "Double"                   => Types.DOUBLE
+    case "Int"                      => Types.INTEGER
+    case "java.io.InputStream"      => Types.LONGVARBINARY
+    case "java.io.Reader"           => Types.LONGVARCHAR
+    case "java.lang.Boolean"        => Types.BOOLEAN
+    case "java.lang.Double"         => Types.DOUBLE
+    case "java.lang.Integer"        => Types.INTEGER
+    case "java.lang.Long"           => Types.BIGINT
+    case "java.lang.String"         => Types.VARCHAR
+    case "java.math.BigDecimal"     => Types.DECIMAL
+    case "java.math.BigInteger"     => Types.NUMERIC
+    case "java.sql.Blob"            => Types.BLOB
+    case "java.sql.Clob"            => Types.CLOB
+    case "java.sql.Date"            => Types.DATE
+    case "java.sql.Time"            => Types.TIME
+    case "java.sql.Timestamp"       => Types.TIMESTAMP
+    case "java.time.LocalDate"      => Types.DATE
+    case "java.time.LocalDateTime"  => Types.TIMESTAMP
+    case "java.time.LocalTime"      => Types.TIME
+    case "java.util.Date"           => Types.TIMESTAMP
+    case "Long"                     => Types.BIGINT
+    case "scala.math.BigDecimal"    => Types.DECIMAL
+    case "scala.math.BigInt"        => Types.NUMERIC
+    case _                          => Types.OTHER
+  }
+}
