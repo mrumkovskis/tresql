@@ -50,7 +50,7 @@ trait TypeMapper {
     typeToVendorType.get(typeName).flatMap(vt => vt.get(vendor).orElse(vt.get("sql"))) getOrElse typeName
 
   def to_scala_type(typeName: String): String = xsd_scala_type_map(typeName).toString()
-  def sql_scala_type_map(sqlType: Int): Manifest[_] = xsd_scala_type_map(sql_xsd_type_map(sqlType))
+  def sql_scala_type_map(jdbcTypeCode: Int): Manifest[_] = xsd_scala_type_map(from_jdbc_type(jdbcTypeCode))
   def xsd_scala_type_map(xsdType: String): Manifest[_] = xsdType match {
     case "integer" => ManifestFactory.classType(classOf[java.lang.Long])
     case "long" => ManifestFactory.classType(classOf[java.lang.Long])
@@ -79,7 +79,7 @@ trait TypeMapper {
     case "Any" => "anyType"
     case _ => "anyType"
   }
-  def sql_xsd_type_map(sqlType: Int): String = sqlType match {
+  def from_jdbc_type(jdbcTypeCode: Int): String = jdbcTypeCode match {
     case Types.ARRAY => "base64Binary"
     case Types.BIGINT => "long"
     case Types.BINARY => "base64Binary"
