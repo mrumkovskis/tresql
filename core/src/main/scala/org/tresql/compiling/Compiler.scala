@@ -48,7 +48,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         Table(name, sd.cols map col_from_coldef, null, Map())
 
       protected def col_from_coldef(cd: ColDef) =
-        org.tresql.metadata.Col(name = cd.name, nullable = true, -1, scalaType = cd.typ)
+        org.tresql.metadata.Col(name = cd.name, nullable = true, scalaType = cd.typ)
 
       def tableNames: List[String] = exp.tables.collect {
         //collect table names in this sql (i.e. exclude tresql no join aliases)
@@ -72,7 +72,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
             List(Table(alias,
               cols.map(c =>
                 org.tresql.metadata.Col(name = c.name,
-                  nullable = true, -1,
+                  nullable = true,
                   scalaType =
                     c.typ
                       .map(metadata.xsd_scala_type_map)
@@ -155,7 +155,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         case x => declaredTable(scopes)(col.substring(0, x))(md, db).flatMap(_.colOption(col.substring(x + 1)))
       }
     }).orElse(procedure(s"$col#0")(db).map(p => //check for empty pars function declaration
-      org.tresql.metadata.Col(name = col, nullable = true, -1, scalaType = p.scalaReturnType)))
+      org.tresql.metadata.Col(name = col, nullable = true, scalaType = p.scalaReturnType)))
   }
   /** Method is used to resolve column names in group by or order by clause, since they can reference columns by name from column clause. */
   def declaredColumn(scopes: List[Scope])(colName: String)(md: TableMetadata,

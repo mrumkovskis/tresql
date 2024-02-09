@@ -151,7 +151,7 @@ package object dialects {
               case c@b.ColExpr(e, a, _, _) if colNames(a) =>
                 val md = c.builder.env.metadata
                 md.colOption(table, a).map {
-                  case org.tresql.metadata.Col(_, _, _, ExprType(tn)) => md.to_sql_type("postgresql", tn)
+                  case org.tresql.metadata.Col(_, _, ExprType(tn)) => md.to_sql_type("postgresql", tn)
                 }
                 .map(typ => c.copy(col = b.CastExpr(e, typ)))
                 .getOrElse(c)

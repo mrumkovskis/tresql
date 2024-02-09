@@ -134,7 +134,6 @@ package metadata {
           Col(
             c("name").toLowerCase,
             c("nullable").asInstanceOf[Boolean],
-            c("sql-type").asInstanceOf[Int],
             c("scala-type").asInstanceOf[ExprType],
           )
         }
@@ -151,7 +150,7 @@ package metadata {
       })
     }
   }
-  case class Col(name: String, nullable: Boolean, sqlType: Int, scalaType: ExprType)
+  case class Col(name: String, nullable: Boolean, scalaType: ExprType)
   case class Key(cols: List[String])
   case class Ref(cols: List[String], refCols: List[String])
   case class Procedure(
