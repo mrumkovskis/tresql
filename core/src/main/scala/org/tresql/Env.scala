@@ -367,9 +367,9 @@ trait Resources extends MacroResources with CacheResources with Logging {
   def recursiveStackDepth: Int = 50
   def params: Map[String, Any] = Map()
   def extraResources: Map[String, Resources] = Map()
-  override def isMacroDefined(name: String): Boolean = ???
-  override def isBuilderMacroDefined(name: String): Boolean = ???
-  override def isBuilderDeferredMacroDefined(name: String): Boolean = ???
+  override def isMacroDefined(name: String): Boolean = false
+  override def isBuilderMacroDefined(name: String): Boolean = false
+  override def isBuilderDeferredMacroDefined(name: String): Boolean = false
   override def invokeMacro(name: String, parser: QueryParsers, args: List[Exp]): Exp = ???
   override def invokeBuilderMacro(name: String, builder: QueryBuilder, args: List[Expr]): Expr = ???
   override def invokeBuilderDeferredMacro(name: String, builder: QueryBuilder, args: List[Exp]): Expr = ???
