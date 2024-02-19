@@ -259,7 +259,6 @@ object CompilerAst {
   }
   object ExprType {
     val Any     = ExprType("any")
-    val Boolean = ExprType("boolean")
   }
   sealed trait TypedExp extends CompilerExp {
     def exp: Exp
