@@ -5,7 +5,6 @@ import org.tresql.parsing._
 import org.tresql.ast._
 import org.tresql.ast.CompilerAst._
 import org.tresql.metadata._
-import scala.reflect.ManifestFactory
 
 trait Compiler extends QueryParsers { thisCompiler =>
 
@@ -48,7 +47,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         Table(name, sd.cols map col_from_coldef, null, Map())
 
       protected def col_from_coldef(cd: ColDef) =
-        org.tresql.metadata.Col(name = cd.name, nullable = true, scalaType = cd.typ)
+        org.tresql.metadata.Col(name = cd.name, nullable = true, colType = cd.typ)
 
       def tableNames: List[String] = exp.tables.collect {
         //collect table names in this sql (i.e. exclude tresql no join aliases)
@@ -73,10 +72,8 @@ trait Compiler extends QueryParsers { thisCompiler =>
               cols.map(c =>
                 org.tresql.metadata.Col(name = c.name,
                   nullable = true,
-                  scalaType =
+                  colType =
                     c.typ
-                      .map(metadata.xsd_scala_type_map)
-                      .map(_.toString)
                       .map(ExprType.apply)
                       .getOrElse(ExprType.Any))), null, Map()))
           case TableDef(_, Obj(_: TableAlias, _, _, _, _)) => Nil
@@ -155,7 +152,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         case x => declaredTable(scopes)(col.substring(0, x))(md, db).flatMap(_.colOption(col.substring(x + 1)))
       }
     }).orElse(procedure(s"$col#0")(db).map(p => //check for empty pars function declaration
-      org.tresql.metadata.Col(name = col, nullable = true, scalaType = p.scalaReturnType)))
+      org.tresql.metadata.Col(name = col, nullable = true, colType = p.resolveReturnType)))
   }
   /** Method is used to resolve column names in group by or order by clause, since they can reference columns by name from column clause. */
   def declaredColumn(scopes: List[Scope])(colName: String)(md: TableMetadata,
@@ -235,11 +232,11 @@ trait Compiler extends QueryParsers { thisCompiler =>
             }
           case l => l
         }
-      else List[ColDef](ColDef(null, All, ExprType.Nothing))
+      else List[ColDef](ColDef(null, All, ExprType()))
     }
     lazy val builder: TransformerWithState[BuildCtx] = transformerWithState(ctx => {
       case f: Fun => procedure(s"${f.name}#${f.parameters.size}")(ctx.db).map { p =>
-        val retType = p.scalaReturnType
+        val retType = p.resolveReturnType
         FunDef(p.name, f.copy(
           parameters = f.parameters map(tr(ctx, _)),
           aggregateOrder = f.aggregateOrder.map(tr(ctx, _).asInstanceOf[Ord]),
@@ -260,7 +257,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
             case x: ReturningDMLDef => ChildDef(x, x.exp.db)
             case x => x
           },
-          ExprType.Nothing
+          ExprType()
         )
       case Obj(b: Braces, _, _, _, _) if ctx.ctx == QueryCtx =>
         builder(ctx)(b) //unwrap braces top level expression
@@ -268,7 +265,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         builder(ctx)(Query(List(o), Filters(Nil), null, null, null, null, null))
       case o: Obj if ctx.ctx == BodyCtx =>
         o.copy(obj = builder(ctx)(o.obj), join = builder(ctx)(o.join).asInstanceOf[Join])
-      case PrimitiveExp(q) => PrimitiveDef(builder(ctx)(q), ExprType.Nothing)
+      case PrimitiveExp(q) => PrimitiveDef(builder(ctx)(q), ExprType())
       case q: Query =>
         val tables = buildTables(ctx, q.tables)
         val cols = buildCols(ctx, q.cols)
@@ -323,7 +320,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
               case r: RowDefBase => ChildDef(r, None)
               case e => e
             },
-            ExprType.Nothing)
+            ExprType())
         }
       )
       case dml: DMLExp =>
@@ -372,7 +369,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         val tables: List[TableDef] = List(TableDef(name, Obj(TableObj(Ident(List(name))), null, null, null)))
         val cols =
           wtCols.map { c =>
-            ColDef(c, Ident(List(c)), ExprType.Nothing)
+            ColDef(c, Ident(List(c)), ExprType())
           }
         WithTableDef(cols, tables, recursive, exp)
       case With(tables, query) =>
@@ -425,13 +422,13 @@ trait Compiler extends QueryParsers { thisCompiler =>
         sql.cols.flatMap {
           case ColDef(_, All, _) => sql.tables.flatMap { td =>
             table(ctx.scopes)(td.name)(EnvMetadata, ctx.db).map(_.cols.map { c =>
-              ColDef(c.name, createCol(s"${td.name}.${c.name}").col, c.scalaType)
+              ColDef(c.name, createCol(s"${td.name}.${c.name}").col, c.colType)
             }).getOrElse(error(s"Cannot find table: ${td.name}\nScopes:\n${ctx.scopes}"))
           }
           case ColDef(_, IdentAll(Ident(ident)), _) =>
             val alias = ident mkString "."
             table(ctx.scopes)(alias)(EnvMetadata, ctx.db)
-              .map(_.cols.map { c => ColDef(c.name, createCol(s"$alias.${c.name}").col, c.scalaType) })
+              .map(_.cols.map { c => ColDef(c.name, createCol(s"$alias.${c.name}").col, c.colType) })
               .getOrElse(error(s"Cannot find table: $alias"))
           case ColDef(n, e, t) => List(ColDef(n, resolver(ctx)(e), t))
         }
@@ -612,27 +609,39 @@ trait Compiler extends QueryParsers { thisCompiler =>
   }
 
   def resolveColTypes(exp: Exp) = {
-    case class Ctx(scopes: List[Scope], db: Option[String], mf: ExprType)
-    def type_from_const(const: Any): Ctx = Ctx(Nil, None, const match {
-      case n: java.lang.Number => ExprType(n.getClass.getName)
-      case _: Boolean => ExprType.Boolean
-      case s: String => ExprType(s.getClass.getName)
-      case m: Manifest[_] => ExprType(m.toString)
-      case t: ExprType => t
-      case null => ExprType.Any
-      case x => ExprType(x.getClass.getName)
-    })
-    def manifest(exprType: ExprType) = exprType.toString match {
-      case "Any"      => Manifest.Any
-      case "Boolean"  => Manifest.Boolean
-      case null       => Manifest.Nothing
-      case className  => Manifest.classType(Class.forName(className))
+    case class Ctx(scopes: List[Scope], db: Option[String], exprType: ExprType)
+
+    def value_to_ctx_with_type(value: Any) = {
+      def expr_type(clazz: Class[_]) = {
+        val mfName = Manifest.classType(clazz).toString
+        ExprType(metadata.from_jdbc_type(TypeMapper.scalaToJdbc(mfName)))
+      }
+
+      val et = value match {
+        case c: Const => c match {
+            case _: StringConst => expr_type(classOf[String])
+            case _: BooleanConst => expr_type(classOf[java.lang.Boolean])
+            case _: IntConst => expr_type(classOf[java.lang.Integer])
+            case _: BigDecimalConst => expr_type(classOf[scala.math.BigDecimal])
+          }
+        case _: Boolean => expr_type(classOf[java.lang.Boolean])
+        case t: ExprType => t
+        case _ => expr_type(classOf[Object])
+      }
+      Ctx(Nil, None, et)
     }
+
+    def manifestFromExprType(exprType: ExprType) =
+      metadata.xsd_scala_type_map(exprType.toString)
+
+    val s_mf = Manifest.classType(classOf[String])
+    val b_mf = Manifest.classType(classOf[java.lang.Boolean])
+
     lazy val typer: Traverser[Ctx] = traverser(ctx => {
-      case c: Const => type_from_const(c.value)
-      case _: Null => type_from_const(null)
+      case c: Const => value_to_ctx_with_type(c)
+      case _: Null => value_to_ctx_with_type(Null)
       case Ident(ident) =>
-        Ctx(ctx.scopes, ctx.db, column(ctx.scopes)(ident mkString ".")(EnvMetadata, ctx.db).map(_.scalaType).get)
+        Ctx(ctx.scopes, ctx.db, column(ctx.scopes)(ident mkString ".")(EnvMetadata, ctx.db).map(_.colType).get)
       case UnOp(_, operand) => typer(ctx)(operand)
       case BinOp(op, lop, rop) =>
         comp_op.findAllIn(op).toList match {
@@ -641,31 +650,31 @@ trait Compiler extends QueryParsers { thisCompiler =>
             case l => rop match {
               case _: Variable => typer(ctx)(l) //variable is Any try left operand
               case r =>
-                val (lt, rt) = (typer(ctx)(l).mf, typer(ctx)(r).mf)
+                val (lt, rt) = (typer(ctx)(l).exprType, typer(ctx)(r).exprType)
                 val mf =
-                  if (lt.toString == "java.lang.String") lt else if (rt.toString == "java.lang.String") rt
-                  else if (lt.toString == "java.lang.Boolean") lt else if (rt.toString == "java.lang.Boolean") rt
-                  else if (manifest(lt) <:< manifest(rt)) rt else lt
+                  if (manifestFromExprType(lt) == s_mf) lt else if (manifestFromExprType(rt) == s_mf) rt
+                  else if (manifestFromExprType(lt) == b_mf) lt else if (manifestFromExprType(rt) == b_mf) rt
+                  else if (manifestFromExprType(lt) <:< manifestFromExprType(rt)) rt else lt
                 Ctx(ctx.scopes, ctx.db, mf)
             }
           }
-          case _ => type_from_const(true)
+          case _ => value_to_ctx_with_type(true)
         }
-      case _: TerOp => type_from_const(true)
-      case _: In => type_from_const(true)
+      case _: TerOp => value_to_ctx_with_type(true)
+      case _: In => value_to_ctx_with_type(true)
       case s: SelectDefBase =>
         if (s.cols.size > 1)
           error(s"Select must contain only one column, instead:${
             s.cols.map(_.tresql).mkString(", ")}")
-        else type_from_const(s.cols.head.typ)
+        else value_to_ctx_with_type(s.cols.head.typ)
       case f: FunDef =>
-        if (f.typ != null && f.typ != ExprType.Nothing) type_from_const(f.typ)
+        if (f.typ != null && f.typ != ExprType()) value_to_ctx_with_type(f.typ)
         else f.procedure.returnType match {
-          case FixedReturnType(mf) => type_from_const(mf)
+          case FixedReturnType(tn) => value_to_ctx_with_type(tn)
           case ParameterReturnType(idx) =>
-            if (idx == -1) type_from_const(ExprType.Any) else typer(ctx)(f.exp.parameters(idx))
+            if (idx == -1) value_to_ctx_with_type(ExprType.Any) else typer(ctx)(f.exp.parameters(idx))
         }
-      case Cast(_, typ) => type_from_const(metadata.xsd_scala_type_map(typ))
+      case Cast(_, typ) => value_to_ctx_with_type(ExprType(typ))
       case PrimitiveDef(e, _) => typer(ctx)(e)
     })
     case class ResolverCtx(scopes: List[Scope], db: Option[String])
@@ -710,21 +719,21 @@ trait Compiler extends QueryParsers { thisCompiler =>
               .asInstanceOf[List[ColDef]])
         case ColDef(n, ChildDef(ch, db), t) =>
           ColDef(n, ChildDef(type_resolver(ctx.copy(db = db))(ch), db), t)
-        case ColDef(n, exp, typ) if typ == null || typ == ExprType.Nothing =>
+        case ColDef(n, exp, typ) if typ == null || typ == ExprType() =>
           val nexp = type_resolver(ctx)(exp) //resolve expression in the case it contains select
-          ColDef(n, nexp, typer(Ctx(ctx.scopes, ctx.db, ExprType.Any))(nexp).mf)
+          ColDef(n, nexp, typer(Ctx(ctx.scopes, ctx.db, ExprType.Any))(nexp).exprType)
         //resolve return type only for root level function
-        case fd @ FunDef(_, f, typ, p) if ctx.scopes.isEmpty && (typ == null || typ == ExprType.Nothing) =>
+        case fd @ FunDef(_, f, typ, p) if ctx.scopes.isEmpty && (typ == null || typ == ExprType()) =>
           val t = p.returnType match {
             case ParameterReturnType(idx) =>
               if (idx == -1) ExprType.Any
-              else typer(Ctx(ctx.scopes, ctx.db, ExprType.Any))(f.parameters(idx)).mf
+              else typer(Ctx(ctx.scopes, ctx.db, ExprType.Any))(f.parameters(idx)).exprType
             case FixedReturnType(mf) => mf
           }
           fd.copy(typ = t)
         case PrimitiveDef(exp, _) =>
           val res_exp = type_resolver(ctx)(exp)
-          PrimitiveDef(res_exp, typer(Ctx(ctx.scopes, ctx.db, ExprType.Any))(res_exp).mf)
+          PrimitiveDef(res_exp, typer(Ctx(ctx.scopes, ctx.db, ExprType.Any))(res_exp).exprType)
         case ChildDef(ch, db) => ChildDef(type_resolver(ctx.copy(db = db))(ch), db)
       }
     }

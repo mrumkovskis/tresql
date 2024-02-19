@@ -150,26 +150,22 @@ package metadata {
       })
     }
   }
-  case class Col(name: String, nullable: Boolean, scalaType: ExprType)
+  case class Col(name: String, nullable: Boolean, colType: ExprType)
   case class Key(cols: List[String])
   case class Ref(cols: List[String], refCols: List[String])
   case class Procedure(
-    name: String, comments: String = null, procType: Int, pars: List[Par],
-    returnSqlType: Int, returnTypeName: String = null, returnType: ReturnType,
+    name: String, comments: String = null, procType: Int, pars: List[Par], returnType: ReturnType,
     hasRepeatedPar: Boolean = false
   ) {
-    def scalaReturnType: ExprType = returnType match {
-      case r: FixedReturnType => r.mf
-      case ParameterReturnType(idx) => pars(idx).scalaType
+    def resolveReturnType: ExprType = returnType match {
+      case r: FixedReturnType => r.retType
+      case ParameterReturnType(idx) => pars(idx).parType
     }
   }
-  case class Par(
-    name: String, comments: String = null, parType:   Int,
-    sqlType: Int, typeName: String = null, scalaType: ExprType,
-  )
+  case class Par(name: String, comments: String = null, parType: ExprType)
   sealed trait ReturnType
   case class ParameterReturnType(idx: Int) extends ReturnType
-  case class FixedReturnType(mf: ExprType) extends ReturnType
+  case class FixedReturnType(retType: ExprType) extends ReturnType
   sealed trait key_ { def cols: List[String] }
   case class uk(cols: List[String]) extends key_
   case class fk(cols: List[String]) extends key_

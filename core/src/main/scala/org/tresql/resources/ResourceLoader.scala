@@ -36,19 +36,6 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
     override val reserved: Set[String] = Set()
   }
 
-  private val primitiveClassAnyValMap: Map[Class[_], Manifest[_]] =
-    Map(
-      java.lang.Byte.TYPE -> ManifestFactory.Byte,
-      java.lang.Short.TYPE  -> ManifestFactory.Short,
-      java.lang.Character.TYPE  -> ManifestFactory.Char,
-      java.lang.Integer.TYPE -> ManifestFactory.Int,
-      java.lang.Long.TYPE -> ManifestFactory.Long,
-      java.lang.Float.TYPE -> ManifestFactory.Float,
-      java.lang.Double.TYPE -> ManifestFactory.Double,
-      java.lang.Boolean.TYPE -> ManifestFactory.Boolean,
-      java.lang.Void.TYPE -> ManifestFactory.Unit
-    )
-
   protected def tryParseSignature(signature: String) = {
     var repeatedPars = false
     def parseParType(t: String) = {
@@ -59,23 +46,23 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
       val RetTypeDefRegex(ref, pt) = t
       (ref.nonEmpty, pt)
     }
-    def createPar[T](pn: String, pt: ExprType) = Par(pn, null, -1, -1, null, pt)
+    def createPar[T](pn: String, pt: ExprType) = Par(pn, null, pt)
     def parse_params(params: List[Exp]) =
       params.map {
-        case Obj(Ident(List(pn)), null, null, null, false) => createPar(pn, ExprType.Nothing)
+        case Obj(Ident(List(pn)), null, null, null, false) => createPar(pn, ExprType())
         case Cast(Obj(Ident(List(pn)), null, null, null, false), type_) =>
           val (pt, isRepeated) = parseParType(type_)
           if (isRepeated) repeatedPars = true
           createPar(
             pn,
-            if (pt.isEmpty || typeMapper == null) ExprType.Nothing
-            else ExprType(typeMapper.xsd_scala_type_map(pt).toString)
+            if (pt.isEmpty || typeMapper == null) ExprType()
+            else ExprType(pt)
           )
         case x => sys.error(s"Invalid function '$signature' paramater - '${x.tresql}'. " +
           s"Expected identifier or identifier with cast.")
       }
     def createFun(fn: String, pars: List[Par], rt: ReturnType, repPars: Boolean) =
-      Procedure(fn, null, -1, pars, -1, null, rt, repPars)
+      Procedure(fn, null, -1, pars, rt, repPars)
     Try(qp.parseExp(signature))
       .map {
         case Fun(name, parameters, _, None, None) =>
@@ -90,7 +77,7 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
               ParameterReturnType(idx)
             }
             else FixedReturnType(
-              if (typeMapper!= null) ExprType(typeMapper.xsd_scala_type_map(pt).toString)
+              if (typeMapper!= null) ExprType(pt)
               else ExprType.Any
             )
           createFun(name, pars, rt, repeatedPars)
@@ -135,15 +122,15 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
         }
       case _ => ExprType.Any
     }.zipWithIndex.map { case (et, i) =>
-      Par(s"_$i", null, -1, -1, null, et)
+      Par(s"_$i", null, et)
     }.toList.drop(1) // drop builder or parser argument
     val returnType = m.getGenericReturnType match {
       case _: ParameterizedType | _: Class[_] => FixedReturnType(ExprType.Any)
       case x =>
-        val idx  = pars.indexWhere(_.scalaType.toString == x.toString)
+        val idx  = pars.indexWhere(_.parType.toString == x.toString)
         if (idx == -1) FixedReturnType(ExprType.Any) else ParameterReturnType(idx)
     }
-    Procedure(m.getName, null, -1, pars, -1, null, returnType, repeatedPars)
+    Procedure(m.getName, null, -1, pars, returnType, repeatedPars)
   }
 
   def loadFunctionSignatures(signatures: Seq[String]): FunctionSignatures = {

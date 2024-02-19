@@ -52,6 +52,7 @@ trait TypeMapper {
 
   def to_scala_type(typeName: String): String = xsd_scala_type_map(typeName).toString()
   def sql_scala_type_map(jdbcTypeCode: Int): Manifest[_] = xsd_scala_type_map(from_jdbc_type(jdbcTypeCode))
+
   def xsd_scala_type_map(xsdType: String): Manifest[_] = xsdType match {
     case "integer" => ManifestFactory.classType(classOf[java.lang.Long])
     case "long" => ManifestFactory.classType(classOf[java.lang.Long])
@@ -68,19 +69,7 @@ trait TypeMapper {
     case "unit" => Manifest.Unit
     case _ => ManifestFactory.Any
   }
-  def scala_xsd_type_map(scalaType: String): String = scalaType match {
-    case "java.lang.Long" => "long"
-    case "java.lang.Integer" => "int"
-    case "scala.math.BigDecimal" => "decimal"
-    case "java.sql.Date" => "date"
-    case "java.sql.Timestamp" => "dateTime"
-    case "java.sql.Time" => "time"
-    case "java.lang.String" => "string"
-    case "java.lang.Boolean" => "boolean"
-    case "Array[Byte]" => "base64Binary"
-    case "Any" => "anyType"
-    case _ => "anyType"
-  }
+
   def from_jdbc_type(jdbcTypeCode: Int): String = jdbcTypeCode match {
     case Types.ARRAY                    => "bytes"
     case Types.BIGINT                   => "long"
@@ -106,7 +95,7 @@ trait TypeMapper {
     case Types.NULL                     => "string"
     case Types.NUMERIC                  => "decimal"
     case Types.NVARCHAR                 => "string"
-    case Types.OTHER                    => "bytes"
+    case Types.OTHER                    => "any"
     case Types.REAL                     => "float"
     case Types.REF                      => "string"
     case Types.REF_CURSOR               => "string"

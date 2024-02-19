@@ -90,13 +90,15 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
                           typ: TypeRepr = TypeRepr.of[Result[RowLike]]) extends Res
   case class DMLRes(typ: TypeRepr) extends Res
 
-  def typeRepr(className: String) = className match
-    case "Any" => TypeRepr.of[Any]
-    case "Boolean" => TypeRepr.of[Boolean]
-    case "Unit" => TypeRepr.of[Unit]
-    case cn => TypeRepr.typeConstructorOf(Class.forName(cn))
-  def resultConv(typeName: String) =
-    '{ (result: Result[_]) => result.headValue(${ quoted.Expr(typeName) }) }
+  def typeRepr(tn: String) = tn match
+      case "any" | "anyType" => TypeRepr.of[Any]
+      case "unit" => TypeRepr.of[Unit]
+      case _ => TypeRepr.typeConstructorOf(Class.forName(compiler.metadata.to_scala_type(tn)))
+
+  def resultConv(typeName: String) = {
+    val scalaType = compiler.metadata.to_scala_type(typeName)
+    '{ (result: Result[_]) => result.headValue(${ quoted.Expr(scalaType) }) }
+  }
 
   def res(md: Ex): Res = md match
     case q: QueryEx => if q.isArr then arrRes(q) else rowRes(q)
@@ -107,7 +109,8 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
 
   def colRes(col: ColEx): ColRes =
     def conv(i: Int, tn: String) =
-      '{ (row: RowLike) => row.typed(${ quoted.Expr(i) }, ${ quoted.Expr(tn) }) }
+      val scalaType = compiler.metadata.to_scala_type(tn)
+      '{ (row: RowLike) => row.typed(${ quoted.Expr(i) }, ${ quoted.Expr(scalaType) }) }
 
     val ColEx(colName, colType, idx) = col
     colType match

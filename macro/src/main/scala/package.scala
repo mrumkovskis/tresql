@@ -123,7 +123,8 @@ package object tresql extends CoreTypes {
         } else prefix
         def typeNameFromManifest(m: ExprType) = {
           //FIXME bizzare way of getting qualified type name, did not find another way...
-          val q"typeOf[$colType]" = c.parse(s"typeOf[${m.toString}]")
+          val scalaType = compiler.metadata.to_scala_type(m.toString)
+          val q"typeOf[$colType]" = c.parse(s"typeOf[${scalaType}]")
           colType
         }
         lazy val generator: compiler.Traverser[Ctx] = compiler.traverser(ctx => {

@@ -257,13 +257,10 @@ object CompilerAst {
   case class ExprType(name: String = null) {
     override def toString = name
   }
-
   object ExprType {
-    val Any     = ExprType("Any")
-    val Boolean = ExprType("Boolean")
-    val Nothing = ExprType()
+    val Any     = ExprType("any")
+    val Boolean = ExprType("boolean")
   }
-
   sealed trait TypedExp extends CompilerExp {
     def exp: Exp
 

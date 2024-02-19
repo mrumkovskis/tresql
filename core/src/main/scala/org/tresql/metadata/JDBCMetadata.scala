@@ -89,24 +89,21 @@ trait JDBCMetadata extends Metadata {
       }
       val procedureType = rs.getInt("PROCEDURE_TYPE")
       val remarks = rs.getString("REMARKS")
-      var pars = List[Par]()
+      var pars = List[(Par, Int)]()
       val parsRs = dmd.getProcedureColumns(null, schema, procedureName, null)
       import parsRs._
       while(next) {
-        pars = Par(getString("COLUMN_NAME").toLowerCase,
+        pars = (Par(getString("COLUMN_NAME").toLowerCase,
             getString("REMARKS"),
-            getInt("COLUMN_TYPE"),
-            getInt("DATA_TYPE"),
-            getString("TYPE_NAME"),
-            ExprType(sql_scala_type_map(getInt("DATA_TYPE")).toString)) :: pars
+            ExprType(from_jdbc_type(getInt("DATA_TYPE")))) -> getInt("COLUMN_TYPE")) :: pars
       }
       parsRs.close
-      val returnPar = pars.filter(_.parType == DatabaseMetaData.procedureColumnReturn) match {
-        case par :: Nil => (par.sqlType, par.typeName, par.scalaType)
-        case _ => (-1, null, null)
+      val returnPar = pars.filter(_._2 == DatabaseMetaData.procedureColumnReturn) match {
+        case (par, _) :: Nil => par.parType
+        case _ => null
       }
       procedureCache.put(name, Procedure(procedureName.toLowerCase, remarks, procedureType,
-          pars.reverse, returnPar._1, returnPar._2, FixedReturnType(returnPar._3)))
+          pars.map(_._1).reverse, FixedReturnType(returnPar)))
     }
     rs.close
     super.procedureOption(name) orElse Option(procedureCache.get(name))
@@ -119,7 +116,7 @@ trait JDBCMetadata extends Metadata {
       l += Map(
         "name" -> rs.getString("COLUMN_NAME"),
         "sql-type" -> rs.getInt("DATA_TYPE"),
-        "scala-type" -> ExprType(sql_scala_type_map(rs.getInt("DATA_TYPE")).toString),
+        "scala-type" -> ExprType(from_jdbc_type(rs.getInt("DATA_TYPE"))),
         "type-name" -> rs.getString("TYPE_NAME"),
         "size" -> rs.getInt("COLUMN_SIZE"),
         "decimalDigits" -> rs.getInt("DECIMAL_DIGITS"),
