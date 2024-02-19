@@ -631,8 +631,12 @@ trait Compiler extends QueryParsers { thisCompiler =>
       Ctx(Nil, None, et)
     }
 
-    def manifestFromExprType(exprType: ExprType) =
-      metadata.xsd_scala_type_map(exprType.toString)
+    def manifestFromExprType(exprType: ExprType) = metadata.to_scala_type(exprType.toString) match {
+      case "Any" => Manifest.Any
+      case "Unit" => Manifest.Unit
+      case "Array[Byte]" => Manifest.classType(classOf[Array[Byte]])
+      case mf => Manifest.classType(Class.forName(mf))
+    }
 
     val s_mf = Manifest.classType(classOf[String])
     val b_mf = Manifest.classType(classOf[java.lang.Boolean])

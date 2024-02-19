@@ -90,10 +90,11 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
                           typ: TypeRepr = TypeRepr.of[Result[RowLike]]) extends Res
   case class DMLRes(typ: TypeRepr) extends Res
 
-  def typeRepr(tn: String) = tn match
-      case "any" | "anyType" => TypeRepr.of[Any]
-      case "unit" => TypeRepr.of[Unit]
-      case _ => TypeRepr.typeConstructorOf(Class.forName(compiler.metadata.to_scala_type(tn)))
+  def typeRepr(tn: String) = compiler.metadata.to_scala_type(tn) match
+    case "Any" => TypeRepr.of[Any]
+    case "Unit" => TypeRepr.of[Unit]
+    case "Array[Byte]" => TypeRepr.of[Array[Byte]]
+    case mf => TypeRepr.typeConstructorOf(Class.forName(mf))
 
   def resultConv(typeName: String) = {
     val scalaType = compiler.metadata.to_scala_type(typeName)
