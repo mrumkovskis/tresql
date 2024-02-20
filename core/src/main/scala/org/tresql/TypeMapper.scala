@@ -7,11 +7,9 @@ import scala.collection.immutable.Map
 
 trait TypeMapper {
   private val typeToVendorType:  Map[String, Map[String, String]] = Map(
-    "Array[Byte]"             -> Map("postgresql" -> "bytea", "sql" -> "blob"),
     "base64Binary"            -> Map("postgresql" -> "bytea", "sql" -> "blob"),
     "boolean"                 -> Map("oracle" -> "char", "postgresql" -> "bool", "sql" -> "boolean"),
     "bytes"                   -> Map("postgresql" -> "bytea", "sql" -> "blob"),
-    "date"                    -> Map("sql" -> "date"),
     "dateTime"                -> Map("sql" -> "timestamp"),
     "decimal"                 -> Map("sql" -> "numeric"),
     "double"                  -> Map("hsqldb" -> "float", "sql" -> "double precision"),
@@ -22,30 +20,6 @@ trait TypeMapper {
     "short"                   -> Map("sql" -> "smallint"),
     "string"                  -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "varchar"),
     "text"                    -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "varchar"),
-    "time"                    -> Map("sql" -> "time"),
-    "Boolean"                 -> Map("oracle" -> "char", "postgresql" -> "bool", "sql" -> "boolean"),
-    "java.lang.Boolean"       -> Map("oracle" -> "char", "postgresql" -> "bool", "sql" -> "boolean"),
-    "Double"                  -> Map("hsqldb" -> "float", "sql" -> "double precision"),
-    "java.lang.Double"        -> Map("hsqldb" -> "float", "sql" -> "double precision"),
-    "Float"                   -> Map("hsqldb" -> "real", "postgresql" -> "real", "sql" -> "float"),
-    "java.lang.Float"         -> Map("hsqldb" -> "real", "postgresql" -> "real", "sql" -> "float"),
-    "Int"                     -> Map("oracle" -> "numeric(9)", "sql" -> "integer"),
-    "java.lang.Integer"       -> Map("oracle" -> "numeric(9)", "sql" -> "integer"),
-    "Long"                    -> Map("oracle" -> "numeric(18)", "sql" -> "bigint"),
-    "java.lang.Long"          -> Map("oracle" -> "numeric(18)", "sql" -> "bigint"),
-    "Short"                   -> Map("sql" -> "smallint"),
-    "java.lang.Short"         -> Map("sql" -> "smallint"),
-    "java.sql.Date"           -> Map("sql" -> "date"),
-    "java.sql.Time"           -> Map("sql" -> "time"),
-    "java.sql.Timestamp"      -> Map("sql" -> "timestamp"),
-    "java.time.LocalDate"     -> Map("sql" -> "date"),
-    "java.time.LocalDateTime" -> Map("sql" -> "timestamp"),
-    "java.time.LocalTime"     -> Map("sql" -> "time"),
-    "java.util.Date"          -> Map("sql" -> "date"),
-    "scala.math.BigDecimal"   -> Map("sql" -> "numeric"),
-    "scala.math.BigInt"       -> Map("sql" -> "numeric"),
-    "String"                  -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "varchar"),
-    "java.lang.String"        -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "varchar"),
   )
   def to_sql_type(vendor: String, typeName: String): String =
     typeToVendorType.get(typeName).flatMap(vt => vt.get(vendor).orElse(vt.get("sql"))) getOrElse typeName
@@ -122,13 +96,16 @@ object TypeMapper {
     case "Array[Byte]"              => Types.VARBINARY
     case "Boolean"                  => Types.BOOLEAN
     case "Double"                   => Types.DOUBLE
+    case "Float"                    => Types.REAL
     case "Int"                      => Types.INTEGER
     case "java.io.InputStream"      => Types.LONGVARBINARY
     case "java.io.Reader"           => Types.LONGVARCHAR
     case "java.lang.Boolean"        => Types.BOOLEAN
     case "java.lang.Double"         => Types.DOUBLE
+    case "java.lang.Float"          => Types.REAL
     case "java.lang.Integer"        => Types.INTEGER
     case "java.lang.Long"           => Types.BIGINT
+    case "java.lang.Short"          => Types.SMALLINT
     case "java.lang.String"         => Types.VARCHAR
     case "java.math.BigDecimal"     => Types.DECIMAL
     case "java.math.BigInteger"     => Types.NUMERIC
@@ -144,6 +121,8 @@ object TypeMapper {
     case "Long"                     => Types.BIGINT
     case "scala.math.BigDecimal"    => Types.DECIMAL
     case "scala.math.BigInt"        => Types.NUMERIC
+    case "Short"                    => Types.SMALLINT
+    case "String"                   => Types.VARCHAR
     case _                          => Types.OTHER
   }
 }
