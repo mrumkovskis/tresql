@@ -50,23 +50,27 @@ trait TypeMapper {
   def to_sql_type(vendor: String, typeName: String): String =
     typeToVendorType.get(typeName).flatMap(vt => vt.get(vendor).orElse(vt.get("sql"))) getOrElse typeName
 
-  def to_scala_type(typeName: String): String = xsd_scala_type_map(typeName).toString()
-
-  def xsd_scala_type_map(xsdType: String): Manifest[_] = xsdType match {
-    case "integer" => ManifestFactory.classType(classOf[java.lang.Long])
-    case "long" => ManifestFactory.classType(classOf[java.lang.Long])
-    case "short" | "int" => ManifestFactory.classType(classOf[java.lang.Integer])
-    case "float" | "double" | "decimal" => ManifestFactory.classType(classOf[BigDecimal])
-    case "date" => ManifestFactory.classType(classOf[java.sql.Date])
-    case "dateTime" | "timestamp" => ManifestFactory.classType(classOf[java.sql.Timestamp])
-    case "time" => ManifestFactory.classType(classOf[java.sql.Time])
-    case "string" => ManifestFactory.classType(classOf[String])
-    case "text"   => ManifestFactory.classType(classOf[String])
-    case "boolean" => ManifestFactory.classType(classOf[java.lang.Boolean])
-    case "base64Binary" | "bytes" => ManifestFactory.classType(classOf[Array[Byte]])
-    case "anyType" | "any" => ManifestFactory.Any
-    case "unit" => Manifest.Unit
-    case _ => ManifestFactory.Any
+  def to_scala_type(typeName: String): String = typeName match {
+    case "any"          => "Any"
+    case "anyType"      => "Any"
+    case "base64Binary" => "Array[Byte]"
+    case "boolean"      => "java.lang.Boolean"
+    case "bytes"        => "Array[Byte]"
+    case "date"         => "java.sql.Date"
+    case "dateTime"     => "java.sql.Timestamp"
+    case "decimal"      => "scala.math.BigDecimal"
+    case "double"       => "scala.math.BigDecimal"
+    case "float"        => "scala.math.BigDecimal"
+    case "int"          => "java.lang.Integer"
+    case "integer"      => "java.lang.Long"
+    case "long"         => "java.lang.Long"
+    case "short"        => "java.lang.Integer"
+    case "string"       => "java.lang.String"
+    case "text"         => "java.lang.String"
+    case "time"         => "java.sql.Time"
+    case "timestamp"    => "java.sql.Timestamp"
+    case "unit"         => "Unit"
+    case _              => "Any"
   }
 
   def from_jdbc_type(jdbcTypeCode: Int): String = jdbcTypeCode match {
