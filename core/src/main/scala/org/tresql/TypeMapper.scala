@@ -7,19 +7,19 @@ import scala.collection.immutable.Map
 
 trait TypeMapper {
   private val typeToVendorType:  Map[String, Map[String, String]] = Map(
-    "base64Binary"            -> Map("postgresql" -> "bytea", "sql" -> "blob"),
-    "boolean"                 -> Map("oracle" -> "char", "postgresql" -> "bool", "sql" -> "boolean"),
-    "bytes"                   -> Map("postgresql" -> "bytea", "sql" -> "blob"),
-    "dateTime"                -> Map("sql" -> "timestamp"),
-    "decimal"                 -> Map("sql" -> "numeric"),
-    "double"                  -> Map("hsqldb" -> "float", "sql" -> "double precision"),
-    "float"                   -> Map("hsqldb" -> "real", "postgresql" -> "real", "sql" -> "float"),
-    "int"                     -> Map("oracle" -> "numeric(9)", "sql" -> "integer"),
-    "integer"                 -> Map("sql" -> "numeric"),
-    "long"                    -> Map("oracle" -> "numeric(18)", "sql" -> "bigint"),
-    "short"                   -> Map("sql" -> "smallint"),
-    "string"                  -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "varchar"),
-    "text"                    -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "varchar"),
+    "base64Binary" -> Map("postgresql" -> "bytea", "sql" -> "blob"),
+    "boolean"      -> Map("oracle" -> "char", "postgresql" -> "bool", "sql" -> "boolean"),
+    "bytes"        -> Map("postgresql" -> "bytea", "sql" -> "blob"),
+    "dateTime"     -> Map("sql" -> "timestamp"),
+    "decimal"      -> Map("sql" -> "numeric"),
+    "double"       -> Map("hsqldb" -> "float", "sql" -> "double precision"),
+    "float"        -> Map("hsqldb" -> "real", "postgresql" -> "real", "sql" -> "float"),
+    "int"          -> Map("oracle" -> "numeric(9)", "sql" -> "integer"),
+    "integer"      -> Map("sql" -> "numeric"),
+    "long"         -> Map("oracle" -> "numeric(18)", "sql" -> "bigint"),
+    "short"        -> Map("sql" -> "smallint"),
+    "string"       -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "varchar"),
+    "text"         -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "varchar"),
   )
   def to_sql_type(vendor: String, typeName: String): String =
     typeToVendorType.get(typeName).flatMap(vt => vt.get(vendor).orElse(vt.get("sql"))) getOrElse typeName
