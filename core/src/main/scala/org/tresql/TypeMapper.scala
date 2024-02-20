@@ -7,7 +7,6 @@ import scala.collection.immutable.Map
 
 trait TypeMapper {
   private val typeToVendorType:  Map[String, Map[String, String]] = Map(
-    "base64Binary" -> Map("postgresql" -> "bytea", "sql" -> "blob"),
     "boolean"      -> Map("oracle" -> "char", "postgresql" -> "bool", "sql" -> "boolean"),
     "bytes"        -> Map("postgresql" -> "bytea", "sql" -> "blob"),
     "dateTime"     -> Map("sql" -> "timestamp"),
@@ -26,8 +25,6 @@ trait TypeMapper {
 
   def to_scala_type(typeName: String): String = typeName match {
     case "any"          => "Any"
-    case "anyType"      => "Any"
-    case "base64Binary" => "Array[Byte]"
     case "boolean"      => "java.lang.Boolean"
     case "bytes"        => "Array[Byte]"
     case "date"         => "java.sql.Date"

@@ -6,9 +6,7 @@
  * string,
  * integer, int, long, short, float, double, decimal,
  * date, time, dateTime, timestamp,
- * boolean,
- * base64Binary, bytes,
- * anyType, any
+ * boolean, bytes, any
  * ------
  * any other type results as Any
  * Function parameter type can end with asterisk - '*' indicating multiple arguments
