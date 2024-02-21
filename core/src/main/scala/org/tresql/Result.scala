@@ -516,7 +516,9 @@ class InsertResult(
   override val id: Option[Any] = None
 ) extends DMLResult
 
-case class Column(idx: Int, name: String, private[tresql] val expr: Expr)
+case class Column(idx: Int, name: String, private[tresql] val expr: Expr) {
+  def isResult: Boolean = expr != null
+}
 
 class TooManyRowsException(message: String) extends RuntimeException(message)
 
