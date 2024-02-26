@@ -266,6 +266,7 @@ trait Query extends QueryBuilder with TypedQuery {
         case rd: java.io.Reader => st.setCharacterStream(idx, rd)
         case cl: java.sql.Clob => st.setClob(idx, cl)
         case ab: Array[Byte] => st.setBytes(idx, ab)
+        case ar: java.sql.Array => st.setArray(idx, ar)
         //array binding
         case i: scala.collection.Iterable[_] => i foreach bindVar; idx -= 1
         case a: Array[_] => a foreach bindVar; idx -= 1

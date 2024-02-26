@@ -94,6 +94,9 @@ DEPT_EQUIPMENT{DEPT_NAME, EQUIPMENT} + ["ACCOUNTING", "TABLE"], ["RESEARCH", "PR
 //DUMMY
 DUMMY {DUMMY} + [0] --> [[1]]
 
+//RESULTS
++results {id = ?, scores = ?, names = ?} --> 49; {1,2,3}::decimal; {'A, 'B, 'C}::text --> [[1]]
+
 //----SELECT----
 dummy --> [[0]]
 // before rewrite: (dummy) {*} ++ (dummy) {*} --> [[0], [0]]
@@ -691,3 +694,8 @@ i(# id) { dept{max(deptno) + 1} }, ins(#) { +dept{deptno, dname, loc} [(i{id}), 
 +dummy{*} dummy[dummy = 10]{dummy dummy} --> [[0]]
 +dummy{*} d(#) { dummy[dummy = 10] } d{dummy} --> [[0]]
 +dummy{*} d(#) { dummy[dummy = 10] } d{dummy} ++ dummy[dummy = 10]{dummy} --> [[0]]
+
+// sql array
+results { names, scores }#(1) --> [[["A", "B", "C"], [1, 2, 3]]]
+=results [id = 49] { names = ?, scores = ? } --> {'D}::text; {4}::decimal --> [[1]]
+results { names, scores }#(1) --> [[["D"], [4]]]

@@ -128,13 +128,14 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
 
   test("tresql statements") {
     implicit val testResources = tresqlResources
-    def parsePars(pars: String, sep:String = ";"): Map[String, Any] = {
+    def parsePars(pars: String, conn: Connection, sep:String = ";"): Map[String, Any] = {
       val DF = new java.text.SimpleDateFormat("yyyy-MM-dd")
       val TF = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
       val D = """(\d{4}-\d{1,2}-\d{1,2})""".r
       val T = """(\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}:\d{1,2})""".r
       val N = """(-?\d+(\.\d*)?|\d*\.\d+)""".r
       val A = """(\[(.*)\])""".r
+      val SA = """\{(.*)\}::([^;]+)""".r
       val VAR = """(\w+)\s*=\s*(.+)""".r
       var map = false
       def par(p: String): Any = p.trim match {
@@ -149,6 +150,12 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
         case A(_, ac) =>
           if (ac.isEmpty) List()
           else ac.split(",").map(par).toList
+        case SA(els, typ) =>
+          val arr: Array[AnyRef] =
+            if (els.isEmpty) Array()
+            else els.split(",").map(par).map { case bd: BigDecimal => bd.bigDecimal case x => x }
+              .asInstanceOf[Array[AnyRef]]
+          conn.createArrayOf(typ, arr)
         case x => error("unparseable parameter: " + x)
       }
       val pl = pars.split(sep).map(par).toList
@@ -168,7 +175,12 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
     testTresqls("/pgtest.txt", (st, params, patternRes, nr) => {
       val pattern = jsonDomToAny(Json.decode(patternRes.getBytes("UTF8")).to[Element].value)
       assertResult(pattern, st) {
-        jsonDomToAny(resultToJsonDom(if (params == null) Query(st) else Query(st, parsePars(params))))
+        jsonDomToAny(
+          resultToJsonDom(
+            if (params == null) Query(st)
+            else Query(st, parsePars(params, implicitly[Resources].conn))
+          )
+        )
       }
     })
   }
