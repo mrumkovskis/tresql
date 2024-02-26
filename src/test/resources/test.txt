@@ -40,6 +40,9 @@ CAR {NR, NAME, IS_ACTIVE, DEPTNR} + [1111, "PORCHE", false, 10], [2222, "BMW", t
 TYRES + [1, 3333, "MICHELIN", "S"] --> [[1]]
 +TYRES { NR = 2, CARNR = 3333, BRAND = ?, SEASON = :season } --> 'NOKIAN; season='W --> [[1]]
 
+//RESULTS
++results {id = ?, scores = ?, names = ?} --> 49; {1,2,3}::DECIMAL; {'A, 'B, 'C}::VARCHAR --> [[1]]
+
 //CAR TYRES
 CAR[3333] {TYRES_NR} = [2] --> [[1]]
 
@@ -686,6 +689,10 @@ dept [deptno = 60] {dname, |dept_equipment{equipment}} --> [["D6", [["EQ6"]]]]
 -dept_equipment [dept_name = 'D6'] --> [[1]]
 -dept [deptno in (55, 56, 57, 58, 59, 60)] --> [[6]]
 
+// sql array
+results { names, scores }#(1) --> [[["A", "B", "C"], [1, 2, 3]]]
+=results [id = 49] { names = ?, scores = ? } --> {'D}::VARCHAR; {4}::DECIMAL --> [[1]]
+results { names, scores }#(1) --> [[["D"], [4]]]
 
 // another schema test
 accounts.account --> []

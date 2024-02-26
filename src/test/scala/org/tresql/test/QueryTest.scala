@@ -87,13 +87,14 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
   }
 
   test("tresql statements") {
-    def parsePars(pars: String, sep:String = ";"): Map[String, Any] = {
+    def parsePars(pars: String, conn: Connection, sep:String = ";"): Map[String, Any] = {
       val DF = new java.text.SimpleDateFormat("yyyy-MM-dd")
       val TF = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
       val D = """(\d{4}-\d{1,2}-\d{1,2})""".r
       val T = """(\d{4}-\d{1,2}-\d{1,2} \d{1,2}:\d{1,2}:\d{1,2})""".r
       val N = """(-?\d+(\.\d*)?|\d*\.\d+)""".r
-      val A = """(\[(.*)\])""".r
+      val A = """\[(.*)\]""".r
+      val SA = """\{(.*)\}::([^;]+)""".r
       val VAR = """(\w+)\s*=\s*(.+)""".r
       var map = false
       def par(p: String): Any = p.trim match {
@@ -105,9 +106,15 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
         case D(d) => DF.parse(d)
         case T(t) => TF.parse(t)
         case N(n,_) => BigDecimal(n)
-        case A(a, ac) =>
-          if (ac.length == 0) List()
+        case A(ac) =>
+          if (ac.isEmpty) List()
           else ac.split(",").map(par).toList
+        case SA(els, typ) =>
+          val arr: Array[AnyRef] =
+            if (els.isEmpty) Array()
+            else els.split(",").map(par).map { case bd: BigDecimal => bd.bigDecimal case x => x }
+              .asInstanceOf[Array[AnyRef]]
+          conn.createArrayOf(typ, arr)
         case x => error("unparseable parameter: " + x)
       }
       val pl = pars.split(sep).map(par).toList
@@ -128,7 +135,11 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
       println(s"Executing test #$nr:")
       val pattern = jsonDomToAny(Json.decode(patternRes.getBytes("UTF8")).to[Element].value)
       assertResult(pattern, st) {
-        jsonDomToAny(resultToJsonDom(if (params == null) Query(st) else Query(st, parsePars(params))))
+        jsonDomToAny(
+          resultToJsonDom(
+            if (params == null) Query(st) else Query(st, parsePars(params, implicitly[Resources].conn))
+          )
+        )
       }
     })
   }
@@ -425,6 +436,7 @@ object TresqlResultBorerElementTranscoder {
   def resultToJsonDom(r: Result[_]): Element = {
     def anyToElement(v: Any): Element = v match {
       case i: Iterable[_] => ArrayElem.Unsized((i map anyToElement).toVector)
+      case a: Array[_] => ArrayElem.Unsized((a map anyToElement).toVector)
       case b: Boolean => BooleanElem(b)
       case n: Byte => IntElem(n)
       case n: Short => IntElem(n)
@@ -439,6 +451,7 @@ object TresqlResultBorerElementTranscoder {
       case t: java.sql.Timestamp => StringElem(t.toString.substring(0, 19))
       case d: java.sql.Date => StringElem(d.toString)
       case null => NullElem
+      case a: java.sql.Array => anyToElement(a.getArray)
       case x => StringElem(x.toString)
     }
     anyToElement(r.toListOfVectors)

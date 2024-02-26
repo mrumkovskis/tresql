@@ -133,6 +133,8 @@ CREATE TABLE IF NOT EXISTS SALGRADE
 //
 CREATE TABLE IF NOT EXISTS DUMMY (DUMMY INTEGER);
 //
+CREATE TABLE RESULTS (ID INTEGER PRIMARY KEY, SCORES DECIMAL[], NAMES VARCHAR[])
+//
 alter table dept add primary key (deptno);
 //
 alter table dept add unique (dname);
