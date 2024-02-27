@@ -34,6 +34,7 @@ abstract class CoreTypes {
   implicit def convReader(r: RowLike, m: Manifest[java.io.Reader]): java.io.Reader = r.reader(0)
   implicit def convBlob(r: RowLike, m: Manifest[java.sql.Blob]): java.sql.Blob = r blob 0
   implicit def convClob(r: RowLike, m: Manifest[java.sql.Clob]): java.sql.Clob = r clob 0
+  implicit def convArray(r: RowLike, m: Manifest[java.sql.Array]): java.sql.Array = r array 0
   implicit def convUnit(r: RowLike, m: Manifest[Unit]): Unit = ()
   //do not make Product conversion implicit since it spans also case classes
   def convTuple[T <: Product](r: RowLike, m: Manifest[T]) = if (m.toString.startsWith("scala.Tuple"))

@@ -40,12 +40,13 @@ trait TypeMapper {
     case "text"         => "java.lang.String"
     case "time"         => "java.sql.Time"
     case "timestamp"    => "java.sql.Timestamp"
+    case "array"        => "java.sql.Array"
     case "unit"         => "Unit"
     case _              => "Any"
   }
 
   def from_jdbc_type(jdbcTypeCode: Int): String = jdbcTypeCode match {
-    case Types.ARRAY                    => "bytes"
+    case Types.ARRAY                    => "array"
     case Types.BIGINT                   => "long"
     case Types.BINARY                   => "bytes"
     case Types.BIT                      => "boolean"
@@ -111,6 +112,7 @@ object TypeMapper {
     case "java.sql.Date"            => Types.DATE
     case "java.sql.Time"            => Types.TIME
     case "java.sql.Timestamp"       => Types.TIMESTAMP
+    case "java.sql.Array"           => Types.ARRAY
     case "java.time.LocalDate"      => Types.DATE
     case "java.time.LocalDateTime"  => Types.TIMESTAMP
     case "java.time.LocalTime"      => Types.TIME

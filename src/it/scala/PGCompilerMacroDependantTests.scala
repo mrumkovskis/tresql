@@ -234,6 +234,12 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
     assertResult((10, "ACCOUNTING"))(tresql"dept{deptno, dname}#(1)".head[Int, String])
     assertResult(List((10, "ACCOUNTING"), (20, "RESEARCH")))(
       tresql"dept{deptno, dname}#(1)@(2)".list[Int, String])
+
+    //sql array test
+    assertResult(("D", "D")) {
+      (tresql"results{names}".map(_.names.getArray.asInstanceOf[Array[_]].toList).toList.head.head,
+        Query("results{names}").head[java.sql.Array].getArray.asInstanceOf[Array[_]].toList.head)
+    }
   }
 
   override def ort(implicit resources: Resources) = {
