@@ -270,11 +270,15 @@ trait SelectResult[T <: RowLike] extends Result[T] {
     } else children(columnIndex).asInstanceOf[java.lang.Boolean]
   }
   override def jBoolean(columnLabel: String): java.lang.Boolean = jBoolean(colMap(columnLabel))
+  override def array(columnIndex: Int): java.sql.Array = {
+    if (cols(columnIndex).idx != -1) rs.getArray(cols(columnIndex).idx)
+    else children(columnIndex).asInstanceOf[java.sql.Array]
+  }
 
   private def asAny(pos: Int): Any = {
     import java.sql.Types._
     md.getColumnType(pos) match {
-      case ARRAY | BINARY | BLOB | DATALINK | DISTINCT | JAVA_OBJECT | LONGVARBINARY | NULL |
+      case BINARY | BLOB | DATALINK | DISTINCT | JAVA_OBJECT | LONGVARBINARY | NULL |
         OTHER | REF | STRUCT | VARBINARY => rs.getObject(pos)
       //scala BigDecimal is returned instead of java.math.BigDecimal
       //because it can be easily compared using standart operators (==, <, >, etc)
@@ -291,6 +295,7 @@ trait SelectResult[T <: RowLike] extends Result[T] {
       case TIMESTAMP => rs.getTimestamp(pos)
       case TIME => rs.getTime(pos)
       case DOUBLE | FLOAT | REAL => val v = rs.getDouble(pos); if (rs.wasNull) null else v
+      case ARRAY => rs.getArray(pos)
     }
   }
 }
@@ -605,6 +610,8 @@ trait RowLike extends Typed with AutoCloseable {
   def jBigInteger(name: String) = typed[java.math.BigInteger](name)
   def jbd(idx: Int) = jBigDecimal(idx)
   def jbd(name: String) = jBigDecimal(name)
+  def array(idx: Int) = typed[java.sql.Array](idx)
+  def array(name: String) = typed[java.sql.Array](name)
   def listOfRows(idx: Int): List[this.type] = this(idx).asInstanceOf[List[this.type]]
   def listOfRows(name: String) = this(name).asInstanceOf[List[this.type]]
   /** Converts row to map preserving column sequence.

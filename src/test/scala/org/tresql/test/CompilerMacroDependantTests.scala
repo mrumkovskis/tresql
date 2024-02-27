@@ -467,6 +467,12 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       Map("_1" -> 1, "a" -> 2, "_2" -> 3, "b" -> 4))))) {
       Query("{ 1 a, 2, 3 b, 4, |null{ 1, 2 a, 3, 4 b } }").toListOfMaps
     }
+
+    //sql array test
+    assertResult((List(List(4)), List("D"))) {
+      (tresql"results{scores}".map(_.scores.getArray.asInstanceOf[Array[_]].toList).toList,
+        Query("results{names}").head[java.sql.Array].getArray.asInstanceOf[Array[_]].toList)
+    }
   }
 
   override def ort(implicit resources: Resources) = {

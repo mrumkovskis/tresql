@@ -29,6 +29,7 @@ trait Typed { this: RowLike =>
     case "java.io.Reader"             => reader(columnIndex)
     case "java.sql.Blob"              => blob(columnIndex)
     case "java.sql.Clob"              => clob(columnIndex)
+    case "java.sql.Array"             => array(columnIndex)
     case _                            => apply(columnIndex)
   }
 
