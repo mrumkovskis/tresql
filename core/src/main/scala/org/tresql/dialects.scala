@@ -64,7 +64,9 @@ package object dialects {
           b.ConstExpr(to: String)), false, None, None) if from.length == to.length =>
           (from zip to).foldLeft(col.sql)((s, a) => "replace(" + s + ", '" + a._1 + "', '" + a._2 + "')")
         case b.FunExpr("nextval", List(b.ConstExpr(seq)), false, None, None) => "next value for " + seq
-        case v: QueryBuilder#VarExpr if is_sql_array(v) => s"array[${sql_arr_bind_vars(v())}]"
+        case v: QueryBuilder#VarExpr if is_sql_array(v) =>
+          v.defaultSQL // register bind variable
+          s"array[${sql_arr_bind_vars(v())}]"
         case c: QueryBuilder#CastExpr => s"cast(${c.exp.sql} as ${c.builder.env.to_sql_type("hsqldb", c.typ)})"
         case b.BinExpr("`~`", lop, rop) => s"regexp_matches(${lop.sql}, ${rop.sql})"
         case s @ b.SelectExpr(List(b.Table(b.ConstExpr(ast.Null), _, _, _, _, _)), _, _, _, _, _, _, _, _, _) =>
