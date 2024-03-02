@@ -212,8 +212,6 @@ trait Query extends QueryBuilder with TypedQuery {
     val conn = env.conn
     if (conn == null) throw new NullPointerException(
       """Connection not found in environment.""")
-    log(sql, registeredBindVariables)
-    val bindValues = registeredBindVariables.map(_())
     val st = if (env.reusableExpr)
       if (env.statement == null) {
         val s = if (call) conn.prepareCall(sql) else {
@@ -226,13 +224,19 @@ trait Query extends QueryBuilder with TypedQuery {
     else conn.prepareStatement(sql, ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)
     if (env.queryTimeout > 0) st.setQueryTimeout(env.queryTimeout)
     if (env.fetchSize > 0) st.setFetchSize(env.fetchSize)
+
+    log(sql, registeredBindVariables)
+    val bindValues = registeredBindVariables.map {
+      case v: QueryBuilder#VarExpr  => (v.allowArrBind, v())
+      case e                        => (false,          e())
+    }
     bindVars(st, bindValues)
     st
   }
 
-  private def bindVars(st: PreparedStatement, bindVariables: List[Any]) = {
+  private def bindVars(st: PreparedStatement, bindVariables: List[(Boolean, Any)]) = {
     var idx = 1
-    def bindVar(p: Any): Unit = {
+    def bindVar(allowArrBind: Boolean, p: Any): Unit = {
       try p match {
         case null => st.setNull(idx, java.sql.Types.NULL)
         case i: Int => st.setInt(idx, i)
@@ -268,18 +272,22 @@ trait Query extends QueryBuilder with TypedQuery {
         case ab: Array[Byte] => st.setBytes(idx, ab)
         case ar: java.sql.Array => st.setArray(idx, ar)
         //array binding
-        case i: scala.collection.Iterable[_] => i foreach bindVar; idx -= 1
-        case a: Array[_] => a foreach bindVar; idx -= 1
-        case p@InOutPar(v) => {
-          bindVar(v)
+        case a: Array[_] =>
+//          if (allowArrBind)
+          bindColl(a.toSeq)
+//          else bindArr(st, a, idx) // unable to construct sql array since type is unknown
+        case o: Option[_] => bindColl(o.orElse(Some(null)).toSeq)
+        case i: scala.collection.Iterable[_] =>
+//          if (allowArrBind)
+            bindColl(i)
+//          else bindArr(st, i, idx) // unable to construct sql array since type is unknown
+        case p@InOutPar(v) =>
+          bindVar(allowArrBind, v)
           idx -= 1
           registerOutPar(st.asInstanceOf[CallableStatement], p, idx)
-        }
         //OutPar must be matched bellow InOutPar since it is superclass of InOutPar
         case p@OutPar(_) => registerOutPar(st.asInstanceOf[CallableStatement], p, idx)
         //unknown object
-        case Some(o) => bindVar(o); idx -= 1
-        case None => bindVar(null); idx -= 1
         case obj => st.setObject(idx, obj)
       } catch {
         case e:Exception => throw new RuntimeException("Failed to bind variable at index " +
@@ -290,7 +298,22 @@ trait Query extends QueryBuilder with TypedQuery {
       }
       idx += 1
     }
-    bindVariables.foreach { bindVar }
+    def bindColl(i: Iterable[_]) = {
+      i.foreach(bindVar(true, _))
+      idx -= 1
+    }
+    def bindArr(st: java.sql.PreparedStatement, value: Any, idx: Int) = {
+      val conn = st.getConnection
+      val arr = value match {
+        case a: Array[_] => a
+        case i: Iterable[_] => i.toArray[Any]
+        case _ => sys.error(s"Unexpected value, cannot bind array: $value")
+      }
+      val bv = conn.createArrayOf("array", arr.asInstanceOf[Array[Object]])
+      st.setArray(idx, bv)
+    }
+
+    bindVariables.foreach { case (arrb, v) => bindVar(arrb, v) }
   }
 
   private def registerOutPar(st: CallableStatement, par: OutPar, idx: Int) = {

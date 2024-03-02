@@ -49,6 +49,8 @@ package object dialects {
         case b.FunExpr("translate", List(_, b.ConstExpr(from: String),
           b.ConstExpr(to: String)), false, None, None) if from.length == to.length => true
         case b.FunExpr("nextval", List(b.ConstExpr(_)), false, None, None) => true
+        case v: QueryBuilder#VarExpr if is_sql_array(v) => true
+        case c: QueryBuilder#CastExpr => true
         case b.BinExpr("`~`", _, _) => true
         case b.SelectExpr(List(b.Table(b.ConstExpr(ast.Null), _, _, _, _, _)), _, _, _, _, _, _, _, _, _) => true
         case _ => false
@@ -62,6 +64,8 @@ package object dialects {
           b.ConstExpr(to: String)), false, None, None) if from.length == to.length =>
           (from zip to).foldLeft(col.sql)((s, a) => "replace(" + s + ", '" + a._1 + "', '" + a._2 + "')")
         case b.FunExpr("nextval", List(b.ConstExpr(seq)), false, None, None) => "next value for " + seq
+        case v: QueryBuilder#VarExpr if is_sql_array(v) => s"array[${sql_arr_bind_vars(v())}]"
+        case c: QueryBuilder#CastExpr => s"cast(${c.exp.sql} as ${c.builder.env.to_sql_type("hsqldb", c.typ)})"
         case b.BinExpr("`~`", lop, rop) => s"regexp_matches(${lop.sql}, ${rop.sql})"
         case s @ b.SelectExpr(List(b.Table(b.ConstExpr(ast.Null), _, _, _, _, _)), _, _, _, _, _, _, _, _, _) =>
           s.copy(tables = List(s.tables.head.copy(table = b.IdentExpr(List("(values(0))"))))).sql
@@ -130,6 +134,9 @@ package object dialects {
   val PostgresqlRawDialect: CoreTypes.Dialect = {
     case c: QueryBuilder#ColExpr if c.alias != null => Option(c.col).map(_.sql).getOrElse("null") + " as " + c.alias
     case c: QueryBuilder#CastExpr => c.exp.sql + "::" + c.builder.env.metadata.to_sql_type("postgresql", c.typ)
+    case v: QueryBuilder#VarExpr if is_sql_array(v) =>
+      v.defaultSQL // register bind variable
+      s"array[${sql_arr_bind_vars(v())}]"
     case f: QueryBuilder#FunExpr if f.name == "decode" && f.params.size > 2 =>
       f.params.tail.grouped(2).map { g =>
         if (g.size == 2) s"when ${g(0).sql} then ${g(1).sql}"
@@ -166,6 +173,19 @@ package object dialects {
           ).defaultSQL
         case _ => i.defaultSQL
       }
+  }
+
+  def is_sql_array(variable: QueryBuilder#VarExpr): Boolean = !variable.allowArrBind && {
+    val value = variable()
+    !value.isInstanceOf[Array[Byte]] && value.isInstanceOf[Array[_]] || value.isInstanceOf[Iterable[_]]
+  }
+  def sql_arr_bind_vars(value: Any) = {
+    def sql(i: Iterable[_]) = i.iterator.map(_ => "?").mkString(", ")
+    value match {
+      case a: Array[_] => sql(a.toSeq)
+      case i: Iterable[_] => sql(i)
+      case x => sys.error(s"Cannot make bind vars string from $x, iterable needed")
+    }
   }
 
   def HSQLDialect: CoreTypes.Dialect =
