@@ -196,7 +196,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
 
     //bind variables test
     assertResult(List(10, 20, 30, 40)){
-      val ex = Query.build("dept[?]{deptno}")
+      val ex = Query.build("dept[deptno in ?]{deptno}")
       val res = List(10, 20, 30, 40) flatMap {p=> ex(List(p)).asInstanceOf[DynamicResult].map(_.deptno)}
       ex.close
       res

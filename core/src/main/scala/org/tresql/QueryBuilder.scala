@@ -34,6 +34,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   val STANDART_BIN_OPS = Set("<=", ">=", "<", ">", "!=", "=", "~", "!~", "in", "!in",
       "++", "+",  "-", "&&", "||", "*", "/", "&", "|")
   val OPTIONAL_OPERAND_BIN_OPS = Set("++", "+",  "-", "&&", "||", "*", "/", "&", "|")
+  val ARR_BIND_OPS = Set("in", "!in")
 
   //bind variables for jdbc prepared statement
   class RegisteredBindVariables {
@@ -126,19 +127,20 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     def defaultSQL = name.mkString(".") + ".*"
   }
 
-  case class VarExpr(name: String, members: List[String], opt: Boolean) extends BaseVarExpr {
+  case class VarExpr(name: String, members: List[String], opt: Boolean,
+                     allowArrBind: Boolean) extends BaseVarExpr {
     override def apply() = env(name, members)
     override def defaultSQL = {
       QueryBuilder.this.bindVars.register(this)
       val s = if (!env.reusableExpr && (env contains name) && (members == null | members == Nil)) {
         this() match {
-          case l: scala.collection.Iterable[_] =>
+          case l: scala.collection.Iterable[_] if allowArrBind =>
             if (l.nonEmpty) "?," * (l size) dropRight 1 else {
               //return null for empty collection (not to fail in 'in' operator)
               "null"
             }
           case _: Array[Byte] => "?"
-          case a: Array[_] => if (a.length > 0) "?," * (a length) dropRight 1 else {
+          case a: Array[_] if allowArrBind => if (a.length > 0) "?," * (a length) dropRight 1 else {
             //return null for empty array (not to fail in 'in' operator)
             "null"
           }
@@ -264,7 +266,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case "-" => if (isQueryOrReturning(this)) sel(sql, cols) else super.apply()
         case "=" => lop match {
           //assign expression
-          case VarExpr(variable, _, _) =>
+          case VarExpr(variable, _, _, _) =>
             env(variable) = rop()
             env(variable)
           case x => super.apply()
@@ -1236,6 +1238,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
 
     ctxStack ::= parseCtx
     try {
+      def maybe_var_arr_bind(e: Expr, allow: Boolean) =
+        e match { case v: VarExpr if allow => v.copy(allowArrBind = true) case x => x }
       parsedExpr match {
         case c: Const => ConstExpr(c.value)
         case Sql(sqlStr) =>
@@ -1322,10 +1326,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           case ARR_CTX if op != "=" /*do not create new query builder for assignment or equals operation*/=>
             buildWithNew(None, _.buildInternal(e, QUERY_CTX))
           case ctx =>
-            val l = buildInternal(lop, ctx)
-            val r = buildInternal(rop, ctx)
+            def buildOp(opEx: Exp) = maybe_var_arr_bind(buildInternal(opEx, ctx), ARR_BIND_OPS(op))
+            val l = buildOp(lop)
+            val r = buildOp(rop)
             if (l != null && r != null) maybeCallMacro(BinExpr(op, l, r))
-            else if (OPTIONAL_OPERAND_BIN_OPS contains op)
+            else if (OPTIONAL_OPERAND_BIN_OPS(op))
               if (l != null) l else if (r != null) r else null
             else null
         }
@@ -1333,9 +1338,9 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case in @ In(lop, rop, not) => parseCtx match {
           case ARR_CTX => buildWithNew(None, _.buildInternal(in, QUERY_CTX))
           case _ =>
-            val l = buildInternal(lop, parseCtx)
+            val l = maybe_var_arr_bind(buildInternal(lop, parseCtx), true)
             if (l == null) null else {
-              val r = rop.map(buildInternal(_, parseCtx)).filter(_ != null)
+              val r = rop.map(e => maybe_var_arr_bind(buildInternal(e, parseCtx), true)).filter(_ != null)
               if (r.isEmpty) null else InExpr(l, r, not)
             }
         }
@@ -1361,9 +1366,9 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           case ctx => buildArray(a, ctx)
         }
         case Variable("?", _, o) =>
-          this.bindIdx += 1; VarExpr(this.bindIdx.toString, Nil, o)
+          this.bindIdx += 1; VarExpr(this.bindIdx.toString, Nil, o, allowArrBind = false)
         case Variable(n, m, o) =>
-          if (!env.reusableExpr && o && !(env.contains(n, m))) null else VarExpr(n, m, o)
+          if (!env.reusableExpr && o && !(env.contains(n, m))) null else VarExpr(n, m, o, allowArrBind = false)
         case Id(seq) => IdExpr(seq)
         case IdRef(seq) => IdRefExpr(seq)
         case Res(r, c) => ResExpr(r, c)

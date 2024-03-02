@@ -26,7 +26,7 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
     assertResult((10, "ACCOUNTING", "NEW YORK"))(
       Query("dept{deptno, dname, loc}#(1)").toList.map(r => (r.l.deptno, r.s.dname, r.s.loc)).head)
     //option binding
-    assertResult("ACCOUNTING")(Query.unique[String]("dept[?]{dname}#(deptno)", Some(10)))
+    assertResult("ACCOUNTING")(Query.unique[String]("dept[deptno in ?]{dname}#(deptno)", Some(10)))
     assertResult("1981-11-17")(Query.unique[java.sql.Date]("emp[sal = 5000]{hiredate}").toString)
     assertResult(BigDecimal(10))(Query.unique[BigDecimal]("dept[10]{deptno}#(deptno)"))
     assertResult(5)(Query.unique[Int]("inc_val_5(?)", 0))
@@ -129,7 +129,7 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
 
     //bind variables test
     assertResult(List(10, 20, 30, 40)){
-      val ex = Query.build("dept[?]{deptno}")
+      val ex = Query.build("dept[deptno in ?]{deptno}")
       val res = List(10, 20, 30, 40) flatMap {p=> ex(List(p)).asInstanceOf[DynamicResult].map(_.deptno)}
       ex.close
       res

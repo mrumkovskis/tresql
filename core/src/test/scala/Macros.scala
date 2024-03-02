@@ -16,7 +16,7 @@ class Macros extends org.tresql.Macros {
     val value = String.valueOf(const.value)
     val vars = varRegex.findAllIn(value).toList
       .map(_ substring 2)
-      .map(v => b.VarExpr(v.replace("?", ""), Nil, v endsWith "?"))
+      .map(v => b.VarExpr(v.replace("?", ""), Nil, v endsWith "?", allowArrBind = false))
     val sqlSnippet = varRegex.replaceAllIn(value, " ?")
     if (vars.exists(v => v.opt && !(b.env contains v.name)))
       b.SQLExpr("null", Nil)
@@ -73,7 +73,7 @@ class Macros extends org.tresql.Macros {
       ) =>
         def value(i: Int) =
           if (i < 0) b.ConstExpr(i)
-          else b.VarExpr(v.name, v.members :+ i.toString, false)
+          else b.VarExpr(v.name, v.members :+ i.toString, opt = false, allowArrBind = false)
         def sel(i: Int, filter: Expr) =
           b.SelectExpr(List(
             b.Table(b.ConstExpr(ast.Null), null, b.TableJoin(false, null, true, null), null, false, null)),

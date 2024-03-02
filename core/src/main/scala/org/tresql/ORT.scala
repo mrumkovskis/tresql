@@ -139,11 +139,11 @@ trait ORT extends Query {
       case keyVals: Seq[_] if keyVals.isEmpty => ConstExpr(true).sql
       case keyVals: Seq[_] => key_val_exprs match {
         case List(_: BaseVarExpr) =>
-          InExpr(key.head, List(VarExpr("keys", Nil, false)), true).sql
+          InExpr(key.head, List(VarExpr("keys", Nil, opt = false, allowArrBind = true)), not = true).sql
         case _ =>
           def comp(key_part_and_expr: (Expr, Expr), i: Int) =
             BinExpr("=", key_part_and_expr._1, transform(key_part_and_expr._2, {
-              case VarExpr(n, Nil, opt) => VarExpr("keys", List(i.toString, n), opt)
+              case VarExpr(n, Nil, opt, allowArrBind) => VarExpr("keys", List(i.toString, n), opt, allowArrBind)
             }))
           def and(l: List[(Expr, Expr)], i: Int): Expr = l match {
             case Nil  => null
