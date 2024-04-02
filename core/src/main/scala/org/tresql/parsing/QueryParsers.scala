@@ -2,6 +2,8 @@ package org.tresql.parsing
 
 import org.tresql.MacroResources
 import org.tresql.ast._
+
+import scala.annotation.tailrec
 import scala.util.parsing.combinator.JavaTokenParsers
 
 
@@ -491,9 +493,14 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     case l => Arr(l)
   } named "expr-list"
 
-  private def binOp(p: Exp ~ List[String ~ Exp]): Exp = p match {
-    case lop ~ Nil => lop
-    case lop ~ ((o ~ rop) :: l) => BinOp(o, lop, binOp(QueryParsers.this.~(rop, l)))
+  private def binOp(p: Exp ~ List[String ~ Exp]) = p match {
+    case op ~ Nil => op
+    case op ~ l => bin_op_rec(l, op)
+  }
+  /** Create BinOp with non recursive function (tailrec annotation) to avoid StackOverflowError */
+  @tailrec private final def bin_op_rec(p: List[String ~ Exp], r: Exp): Exp = p match {
+    case Nil => r
+    case (o ~ rop) :: l => bin_op_rec(l, BinOp(o, r, rop))
   }
 
   private def transformHeadJoin(join: Join): Transformer = transformer {
