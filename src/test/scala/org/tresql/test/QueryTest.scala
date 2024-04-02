@@ -13,9 +13,7 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
 
   val compilerMacroDependantTests = new CompilerMacroDependantTests()
 
-  val hsqlDialect: CoreTypes.Dialect = dialects.HSQLDialect orElse dialects.VariableNameDialect orElse {
-    case c: QueryBuilder#CastExpr => c.exp.sql
-  }
+  val hsqlDialect: CoreTypes.Dialect = dialects.HSQLDialect orElse dialects.VariableNameDialect
 
   var tresqlResources: Resources = null
 

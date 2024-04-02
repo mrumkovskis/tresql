@@ -17,8 +17,8 @@ trait TypeMapper {
     "integer"      -> Map("sql" -> "numeric"),
     "long"         -> Map("oracle" -> "numeric(18)", "sql" -> "bigint"),
     "short"        -> Map("sql" -> "smallint"),
-    "string"       -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "varchar"),
-    "text"         -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "varchar"),
+    "string"       -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "longvarchar"),
+    "text"         -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "longvarchar"),
   )
   def to_sql_type(vendor: String, typeName: String): String =
     typeToVendorType.get(typeName).flatMap(vt => vt.get(vendor).orElse(vt.get("sql"))) getOrElse typeName
