@@ -100,7 +100,13 @@ case class In(lop: Exp, rop: List[Exp], not: Boolean) extends Exp {
     "in(", ", ", ")")
 }
 case class BinOp(op: String, lop: Exp, rop: Exp) extends Exp {
-  def tresql = lop.tresql + " " + op + " " + rop.tresql
+  def tresql = { // use flatten method to avoid StackOverflowError
+    val (h, l) = BinOp.flatten(this)
+    l.foldLeft(new StringBuilder(h.exp.tresql)) { case (r, (op, o)) =>
+      r ++= (s" $op ${o.exp.tresql}")
+    }.result()
+    //  lop.tresql + " " + op + " " + rop.tresql
+  }
 }
 
 object BinOp {
@@ -113,27 +119,28 @@ object BinOp {
 //    case x => (x, Nil)
 //  }
 
+  case class Operand(exp: Exp, isRight: Boolean)
   /** Flattens BinOp. Is useful for very long (deep) binary expressions to avoid stack overflow */
-  def flatten(exp: Exp): (Exp, List[(String, Exp)]) = {
+  def flatten(exp: Exp): (Operand, List[(String, Operand)]) = {
     require(exp != null, "null argument not allowed")
-    var opers = List[Exp]()
+    var opers = List[Operand]()
     var ops = List[String]()
-    val st = scala.collection.mutable.Stack[Exp]()
+    val st = scala.collection.mutable.Stack[Operand]()
     val op_st = scala.collection.mutable.Stack[String]()
-    var e = exp
-    while (e != null) {
-      e match {
+    var o = Operand(exp, false)
+    while (o != null) {
+      o.exp match {
         case BinOp(op, lop, rop) =>
-          st.push(rop)
-          st.push(lop)
+          st.push(Operand(rop, true))
+          st.push(Operand(lop, false))
           op_st.push(op)
         case _ =>
-          opers ::= e
+          opers ::= o
           if (op_st.nonEmpty) ops ::= op_st.pop()
       }
-      e = if (st.nonEmpty) st.pop() else null
+      o = if (st.nonEmpty) st.pop() else null
     }
-    var res = List[(String, Exp)]()
+    var res = List[(String, Operand)]()
     while(ops.nonEmpty) {
       res ::= (ops.head, opers.head)
       ops = ops.tail
