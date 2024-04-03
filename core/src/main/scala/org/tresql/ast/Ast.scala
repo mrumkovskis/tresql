@@ -102,6 +102,46 @@ case class In(lop: Exp, rop: List[Exp], not: Boolean) extends Exp {
 case class BinOp(op: String, lop: Exp, rop: Exp) extends Exp {
   def tresql = lop.tresql + " " + op + " " + rop.tresql
 }
+
+object BinOp {
+
+//  def flatten_recursive(e: Exp): (Exp, List[(String, Exp)]) = e match {
+//    case BinOp(o, lo, ro) =>
+//      val (l, l1) = flatten_recursive(lo)
+//      val (r, l2) = flatten_recursive(ro)
+//      (l, l1 ++ List((o, r)) ++ l2)
+//    case x => (x, Nil)
+//  }
+
+  /** Flattens BinOp. Is useful for very long (deep) binary expressions to avoid stack overflow */
+  def flatten(exp: Exp): (Exp, List[(String, Exp)]) = {
+    require(exp != null, "null argument not allowed")
+    var opers = List[Exp]()
+    var ops = List[String]()
+    val st = scala.collection.mutable.Stack[Exp]()
+    val op_st = scala.collection.mutable.Stack[String]()
+    var e = exp
+    while (e != null) {
+      e match {
+        case BinOp(op, lop, rop) =>
+          st.push(rop)
+          st.push(lop)
+          op_st.push(op)
+        case _ =>
+          opers ::= e
+          if (op_st.nonEmpty) ops ::= op_st.pop()
+      }
+      e = if (st.nonEmpty) st.pop() else null
+    }
+    var res = List[(String, Exp)]()
+    while(ops.nonEmpty) {
+      res ::= (ops.head, opers.head)
+      ops = ops.tail
+      opers = opers.tail
+    }
+    (opers.head, res)
+  }
+}
 case class TerOp(lop: Exp, op1: String, mop: Exp, op2: String, rop: Exp) extends Exp {
   def content = BinOp("&", BinOp(op1, lop, mop), BinOp(op2, mop, rop))
   def tresql = s"${any2tresql(lop)} $op1 ${any2tresql(mop)} $op2 ${any2tresql(rop)}"
