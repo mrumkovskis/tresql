@@ -243,8 +243,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case x => sys.error(s"Unexpected ColExpr type: `${x.getClass}`")
       }
       @tailrec def not_bin_lop(b: BinExpr): Expr = b.lop match {
-        case x if !x.isInstanceOf[BinExpr] => x
         case bl: BinExpr => not_bin_lop(bl)
+        case x => x
       }
       c(lop)
     }
