@@ -1310,17 +1310,24 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
             case e => CastExpr(e, typ)
           }
         }
-        case e @ BinOp(op, lop, rop) => parseCtx match {
-          case ARR_CTX if op != "=" /*do not create new query builder for assignment or equals operation*/=>
+        case e: BinOp => parseCtx match {
+          case ARR_CTX if e.op != "=" /*do not create new query builder for assignment or equals operation*/=>
             buildWithNew(None, _.buildInternal(e, QUERY_CTX))
           case ctx =>
-            def buildOp(opEx: Exp) = maybe_var_arr_bind(buildInternal(opEx, ctx), BinOp.ARR_BIND_OPS(op))
-            val l = buildOp(lop)
-            val r = buildOp(rop)
-            if (l != null && r != null) BinExpr(op, l, r)
-            else if (BinOp.OPTIONAL_OPERAND_BIN_OPS(op))
-              if (l != null) l else if (r != null) r else null
-            else null
+            val buildOp = buildInternal(_, ctx)
+            val chain = BinOp.flattenBinOp(e) match {
+              case (s, ch) => (
+                buildOp(s),
+                ch.map { case (o, BinOp.Operand(e, isRight)) => (o, BinOp.Operand(buildOp(e), isRight)) }
+              )
+            }
+            BinOp.fromChain[Expr](chain, (o, l, r) => {
+              val maybe_arr_bind = maybe_var_arr_bind(_, BinOp.ARR_BIND_OPS(o))
+              if (l != null && r != null) BinExpr(o, maybe_arr_bind(l), maybe_arr_bind(r))
+              else if (BinOp.OPTIONAL_OPERAND_BIN_OPS(o))
+                if (l != null) l else if (r != null) r else null
+              else null
+            })
         }
         case t: TerOp => buildInternal(t.content, parseCtx)
         case in @ In(lop, rop, not) => parseCtx match {

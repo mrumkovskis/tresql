@@ -16,6 +16,8 @@ import QueryParsers.any2tresql
 import org.tresql.metadata.Procedure
 import org.tresql.parsing.ExpTransformer
 
+import scala.annotation.tailrec
+
 sealed trait Exp {
   def tresql: String
 }
@@ -101,8 +103,8 @@ case class In(lop: Exp, rop: List[Exp], not: Boolean) extends Exp {
 }
 case class BinOp(op: String, lop: Exp, rop: Exp) extends Exp {
   def tresql = { // use flatten method to avoid StackOverflowError
-    val (h, l) = BinOp.flattenBinOp(this)
-    l.foldLeft(new StringBuilder(h.exp.tresql)) { case (r, (op, o)) =>
+    val (e, l) = BinOp.flattenBinOp(this)
+    l.foldLeft(new StringBuilder(e.tresql)) { case (r, (op, o)) =>
       r ++= (s" $op ${o.exp.tresql}")
     }.result()
     //  lop.tresql + " " + op + " " + rop.tresql
@@ -128,7 +130,7 @@ object BinOp {
 
   case class Operand[E](exp: E, isRight: Boolean)
   /** Flattens BinOp. Is useful for very long (deep) binary expressions to avoid stack overflow */
-  def flatten[E](exp: E, binOpExtr: BinOpExtractor[E]): (Operand[E], List[(String, Operand[E])]) = {
+  def flatten[E](exp: E, binOpExtr: BinOpExtractor[E]): (E, List[(String, Operand[E])]) = {
     require(exp != null, "null argument not allowed")
     var opers = List[Operand[E]]()
     var ops = List[String]()
@@ -153,10 +155,46 @@ object BinOp {
       ops = ops.tail
       opers = opers.tail
     }
-    (opers.head, res)
+    (opers.head.exp, res)
   }
-  def flattenBinOp(exp: Exp): (Operand[Exp], List[(String, Operand[Exp])]) =
+  def flattenBinOp(exp: Exp): (Exp, List[(String, Operand[Exp])]) =
     flatten(exp, { case BinOp(o, l, r) => Some((o, l, r)) case _ => None } )
+
+  trait BinOpConstructor[E] {
+    def apply(op: String, lop: E, rop: E): E
+  }
+
+  def fromChain[E](chain: (E, List[(String, Operand[E])]), constructor: BinOpConstructor[E]): E = {
+    @tailrec
+    def iter(
+      res: E,
+      left: List[(String, Operand[E])],
+      right: List[(String, Operand[E])]): (E, List[(String, Operand[E])], List[(String, Operand[E])]
+    ) = right match {
+      case Nil => (res, left, Nil)
+      case (op, Operand(e, true)) :: tail => left match {
+        case Nil => (constructor(op, res, e), Nil, tail)
+        case (hop, Operand(le, _)) :: ltail =>
+          (res, (hop, Operand(constructor(op, le, e), true)) :: ltail, tail)
+      }
+      case (e@(_, Operand(_, false))) :: tail => iter(res, e :: left, tail)
+    }
+    @tailrec
+    def result(res: E, right: List[(String, Operand[E])]): (E, List[(String, Operand[E])]) = right match {
+      case Nil => (res, Nil)
+      case rest =>
+        val (tres, l, r) = iter(res, Nil, rest)
+        @tailrec def concat_reverse[T](reverse: List[T], l: List[T]): List[T] = reverse match {
+          case Nil => l
+          case e :: tail => concat_reverse(tail, e :: l)
+        }
+        result(tres, concat_reverse(l, r))
+    }
+    result(chain._1, chain._2)._1
+  }
+
+  def binOpFromChain(chain: (Exp, List[(String, Operand[Exp])])): Exp =
+    fromChain[Exp](chain, (op, lop, rop) => BinOp(op, lop, rop))
 }
 case class TerOp(lop: Exp, op1: String, mop: Exp, op2: String, rop: Exp) extends Exp {
   def content = BinOp("&", BinOp(op1, lop, mop), BinOp(op2, mop, rop))
