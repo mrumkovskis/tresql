@@ -101,7 +101,7 @@ case class In(lop: Exp, rop: List[Exp], not: Boolean) extends Exp {
 }
 case class BinOp(op: String, lop: Exp, rop: Exp) extends Exp {
   def tresql = { // use flatten method to avoid StackOverflowError
-    val (h, l) = BinOp.flatten(this)
+    val (h, l) = BinOp.flattenBinOp(this)
     l.foldLeft(new StringBuilder(h.exp.tresql)) { case (r, (op, o)) =>
       r ++= (s" $op ${o.exp.tresql}")
     }.result()
@@ -122,19 +122,22 @@ object BinOp {
 //      (l, l1 ++ List((o, r)) ++ l2)
 //    case x => (x, Nil)
 //  }
+  trait BinOpExtractor[E] {
+    def unapply(exp: E): Option[(String, E, E)]
+  }
 
-  case class Operand(exp: Exp, isRight: Boolean)
+  case class Operand[E](exp: E, isRight: Boolean)
   /** Flattens BinOp. Is useful for very long (deep) binary expressions to avoid stack overflow */
-  def flatten(exp: Exp): (Operand, List[(String, Operand)]) = {
+  def flatten[E](exp: E, binOpExtr: BinOpExtractor[E]): (Operand[E], List[(String, Operand[E])]) = {
     require(exp != null, "null argument not allowed")
-    var opers = List[Operand]()
+    var opers = List[Operand[E]]()
     var ops = List[String]()
-    val st = scala.collection.mutable.Stack[Operand]()
+    val st = scala.collection.mutable.Stack[Operand[E]]()
     val op_st = scala.collection.mutable.Stack[String]()
     var o = Operand(exp, false)
     while (o != null) {
       o.exp match {
-        case BinOp(op, lop, rop) =>
+        case binOpExtr(op, lop, rop) =>
           st.push(Operand(rop, true))
           st.push(Operand(lop, false))
           op_st.push(op)
@@ -144,7 +147,7 @@ object BinOp {
       }
       o = if (st.nonEmpty) st.pop() else null
     }
-    var res = List[(String, Operand)]()
+    var res = List[(String, Operand[E])]()
     while(ops.nonEmpty) {
       res ::= (ops.head, opers.head)
       ops = ops.tail
@@ -152,6 +155,8 @@ object BinOp {
     }
     (opers.head, res)
   }
+  def flattenBinOp(exp: Exp): (Operand[Exp], List[(String, Operand[Exp])]) =
+    flatten(exp, { case BinOp(o, l, r) => Some((o, l, r)) case _ => None } )
 }
 case class TerOp(lop: Exp, op1: String, mop: Exp, op2: String, rop: Exp) extends Exp {
   def content = BinOp("&", BinOp(op1, lop, mop), BinOp(op2, mop, rop))
