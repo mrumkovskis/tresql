@@ -31,11 +31,6 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
 
   import QueryBuildCtx._
 
-  val STANDART_BIN_OPS = Set("<=", ">=", "<", ">", "!=", "=", "~", "!~", "in", "!in",
-      "++", "+",  "-", "&&", "||", "*", "/", "&", "|")
-  val OPTIONAL_OPERAND_BIN_OPS = Set("++", "+",  "-", "&&", "||", "*", "/", "&", "|")
-  val ARR_BIND_OPS = Set("in", "!in")
-
   //bind variables for jdbc prepared statement
   class RegisteredBindVariables {
     private val bindVariables = scala.collection.mutable.ListBuffer[Expr]()
@@ -1180,13 +1175,6 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
             if (env isBuilderMacroDefined fun.name) {
               invokeMacro(exp, fun.name, expb, false, fun.params)
             } else if (fun.params.contains(null)) null else fun
-          case binExpr: QueryBuilder#BinExpr =>
-            if (!(STANDART_BIN_OPS contains binExpr.op)) {
-              val macroName = scala.reflect.NameTransformer.encode(binExpr.op)
-              if (env isBuilderMacroDefined macroName) {
-                invokeMacro(exp, macroName, expb, false, List(binExpr.lop, binExpr.rop))
-              } else binExpr
-            } else binExpr
           case _ => sys.error("Unexpected exp type")
         }, {
           case v: QueryBuilder#BaseVarExpr =>
@@ -1326,11 +1314,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           case ARR_CTX if op != "=" /*do not create new query builder for assignment or equals operation*/=>
             buildWithNew(None, _.buildInternal(e, QUERY_CTX))
           case ctx =>
-            def buildOp(opEx: Exp) = maybe_var_arr_bind(buildInternal(opEx, ctx), ARR_BIND_OPS(op))
+            def buildOp(opEx: Exp) = maybe_var_arr_bind(buildInternal(opEx, ctx), BinOp.ARR_BIND_OPS(op))
             val l = buildOp(lop)
             val r = buildOp(rop)
-            if (l != null && r != null) maybeCallMacro(BinExpr(op, l, r))
-            else if (OPTIONAL_OPERAND_BIN_OPS(op))
+            if (l != null && r != null) BinExpr(op, l, r)
+            else if (BinOp.OPTIONAL_OPERAND_BIN_OPS(op))
               if (l != null) l else if (r != null) r else null
             else null
         }

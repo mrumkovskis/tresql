@@ -86,11 +86,16 @@ class Macros {
   def sql_concat(b: QueryBuilder, exprs: Expr*) =
     b.SQLConcatExpr(exprs: _*)
 
-  def ~~ (b: QueryBuilder, lop: Expr, rop: Expr) =
-    b.BinExpr("~", b.FunExpr("lower", List(lop)), b.FunExpr("lower", List(rop)))
-
-  def !~~ (b: QueryBuilder, lop: Expr, rop: Expr) =
-    b.BinExpr("!~", b.FunExpr("lower", List(lop)), b.FunExpr("lower", List(rop)))
+  def bin_op_function(b: QueryBuilder, op: QueryBuilder#ConstExpr, lop: Expr, rop: Expr) = {
+    if (lop == null || rop == null) null else {
+      def ex(o: String) = b.BinExpr(o, b.FunExpr("lower", List(lop)), b.FunExpr("lower", List(rop)))
+      String.valueOf(op.value) match {
+        case "~~" => ex("~")
+        case "!~~" => ex("!~")
+        case x => b.BinExpr(x, lop, rop)
+      }
+    }
+  }
 
   /** Allows to specify table name as bind variable value.
    * Like {{{ []dynamic_table(:table)[deptno = 10]{dname} }}}

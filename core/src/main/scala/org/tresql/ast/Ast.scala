@@ -110,6 +110,10 @@ case class BinOp(op: String, lop: Exp, rop: Exp) extends Exp {
 }
 
 object BinOp {
+  val STANDART_BIN_OPS = Set("<=", ">=", "<", ">", "!=", "=", "~", "!~", "in", "!in",
+    "++", "+",  "-", "&&", "||", "*", "/", "&", "|")
+  val OPTIONAL_OPERAND_BIN_OPS = Set("++", "+",  "-", "&&", "||", "*", "/", "&", "|")
+  val ARR_BIND_OPS = Set("in", "!in")
 
 //  def flatten_recursive(e: Exp): (Exp, List[(String, Exp)]) = e match {
 //    case BinOp(o, lo, ro) =>

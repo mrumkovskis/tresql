@@ -474,7 +474,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   def comp: MemParser[Exp] = plusMinus ~ rep(comp_op ~ plusMinus) ^? (
       {
         case lop ~ Nil => lop
-        case lop ~ ((o ~ rop) :: Nil) => BinOp(o, lop, rop)
+        case lop ~ ((o ~ rop) :: Nil) =>
+          if (BinOp.STANDART_BIN_OPS contains o) BinOp(o, lop, rop)
+          else Fun("bin_op_function", List(StringConst(o), lop, rop), false, None, None) // non standart op
         case lop ~ List((o1 ~ mop), (o2 ~ rop)) => TerOp(lop, o1, mop, o2, rop)
       },
       {
