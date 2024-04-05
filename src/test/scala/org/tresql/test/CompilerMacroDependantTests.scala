@@ -473,6 +473,15 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       (tresql"results{scores}".map(_.scores.getArray.asInstanceOf[Array[_]].toList).toList,
         Query("results{names}").head[java.sql.Array].getArray.asInstanceOf[Array[_]].toList)
     }
+
+    //stack overflow test for long bin exps
+    assertResult(1) {
+      val s = List.fill(1024 * 4)("{1}").mkString("+")
+      Query(s)(implicitly[Resources].withLogger(
+        (msg, _, _) =>
+          println(if (msg.length > 256) msg.take(128) + " ... " + msg.substring(msg.length - 127) else msg)
+      )).head[Int]
+    }
   }
 
   override def ort(implicit resources: Resources) = {
