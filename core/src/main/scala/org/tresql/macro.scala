@@ -20,22 +20,22 @@ class Macros {
     if (v.members != null && v.members.nonEmpty) b.env.contains(v.name, v.members)
     else b.env contains v.name
 
-  def if_defined(b: QueryBuilder, v: Expr, e: Expr) = v match {
+  def if_defined(b: QueryBuilder, v: Expr, e: Expr): Expr = v match {
     case ve: QueryBuilder#VarExpr => if (containsVar(b, ve)) e else null
     case null => null
     case _ => e
   }
 
-  def if_defined_or_else(b: QueryBuilder, v: Expr, e1: Expr, e2: Expr) =
+  def if_defined_or_else(b: QueryBuilder, v: Expr, e1: Expr, e2: Expr): Expr =
     Option(if_defined(b, v, e1)).getOrElse(e2)
 
-  def if_missing(b: QueryBuilder, v: Expr, e: Expr) = v match {
+  def if_missing(b: QueryBuilder, v: Expr, e: Expr): Expr = v match {
     case ve: QueryBuilder#VarExpr => if (containsVar(b, ve)) null else e
     case null => e
     case _ => null
   }
 
-  def if_all_defined(b: QueryBuilder, e: Expr*) = {
+  def if_all_defined(b: QueryBuilder, e: Expr*): Expr = {
     if (e.size < 2) sys.error("if_all_defined macro must have at least two arguments")
     val vars = e dropRight 1
     val expr = e.last
@@ -47,7 +47,7 @@ class Macros {
     else null
   }
 
-  def if_any_defined(b: QueryBuilder, e: Expr*) = {
+  def if_any_defined(b: QueryBuilder, e: Expr*): Expr = {
     if (e.size < 2) sys.error("if_any_defined macro must have at least two arguments")
     val vars = e dropRight 1
     val expr = e.last
@@ -59,7 +59,7 @@ class Macros {
     else null
   }
 
-  def if_all_missing(b: QueryBuilder, e: Expr*) = {
+  def if_all_missing(b: QueryBuilder, e: Expr*): Expr = {
     if (e.size < 2) sys.error("if_all_missing macro must have at least two arguments")
     val vars = e dropRight 1
     val expr = e.last
@@ -71,7 +71,7 @@ class Macros {
     else null
   }
 
-  def if_any_missing(b: QueryBuilder, e: Expr*) = {
+  def if_any_missing(b: QueryBuilder, e: Expr*): Expr = {
     if (e.size < 2) sys.error("if_any_missing macro must have at least two arguments")
     val vars = e dropRight 1
     val expr = e.last
@@ -83,10 +83,10 @@ class Macros {
     else null
   }
 
-  def sql_concat(b: QueryBuilder, exprs: Expr*) =
+  def sql_concat(b: QueryBuilder, exprs: Expr*): Expr =
     b.SQLConcatExpr(exprs: _*)
 
-  def bin_op_function(b: QueryBuilder, op: QueryBuilder#ConstExpr, lop: Expr, rop: Expr) = {
+  def bin_op_function(b: QueryBuilder, op: QueryBuilder#ConstExpr, lop: Expr, rop: Expr): Expr = {
     if (lop == null || rop == null) null else {
       def ex(o: String) = b.BinExpr(o, b.FunExpr("lower", List(lop)), b.FunExpr("lower", List(rop)))
       String.valueOf(op.value) match {
