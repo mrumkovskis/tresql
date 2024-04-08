@@ -5,7 +5,7 @@ lazy val commonSettings = Seq(
   scalaVersion := scalaV,
   crossScalaVersions := Seq(
       scalaV,
-      "2.13.12",
+      "2.13.13",
       "2.12.19",
   ),
   //coverageEnabled := true,
