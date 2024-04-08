@@ -82,7 +82,7 @@ lazy val it = (project in file("src/it"))
   .settings(
     publish / skip := true,
     libraryDependencies ++= Seq(
-      "org.postgresql" % "postgresql"       % "42.7.2"  %  Test,
+      "org.postgresql" % "postgresql"       % "42.7.3"  %  Test,
     ),
     Test / scalaSource := baseDirectory.value / "scala",
     Test / resourceDirectory := baseDirectory.value / "resources",
