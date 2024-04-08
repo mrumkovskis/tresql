@@ -1,4 +1,4 @@
-val scalaV = "3.3.1"
+val scalaV = "3.3.3"
 
 lazy val commonSettings = Seq(
   organization := "org.tresql",
