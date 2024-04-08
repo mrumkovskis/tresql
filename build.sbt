@@ -27,6 +27,7 @@ lazy val commonSettings = Seq(
 )
 
 ThisBuild / versionScheme := Some("early-semver")
+ThisBuild / versionPolicyIntention := Compatibility.BinaryCompatible
 
 def coreDependencies(scalaVer: String) =
   Seq(
