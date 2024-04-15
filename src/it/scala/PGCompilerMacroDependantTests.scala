@@ -240,6 +240,13 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
       (tresql"results{names}".map(_.names.getArray.asInstanceOf[Array[_]].toList).toList.head.head,
         Query("results{names}").head[java.sql.Array].getArray.asInstanceOf[Array[_]].toList.head)
     }
+    assertResult(List("x", "y")) {
+      Query("=results [id = 49] { names = :a::'text[]', scores = :b::'decimal[]'}")(
+        implicitly[Resources].withParams(Map("a" -> List("x", "y"), "b" -> List(1,2,3)))
+      )
+      // do not choose scores because java.math.BigDecimal cannot be compared with Int
+      tresql"results[id = 49] {names, scores}".map(r => r.names.getArray.asInstanceOf[Array[_]].toList).toList.head
+    }
   }
 
   override def ort(implicit resources: Resources) = {
