@@ -7,6 +7,7 @@ import scala.collection.immutable.Map
 
 trait TypeMapper {
   private val typeToVendorType:  Map[String, Map[String, String]] = Map(
+    "array"        -> Map("postgresql" -> "[]", "sql" -> " array"),
     "boolean"      -> Map("oracle" -> "char", "postgresql" -> "bool", "sql" -> "boolean"),
     "bytes"        -> Map("postgresql" -> "bytea", "sql" -> "blob"),
     "dateTime"     -> Map("sql" -> "timestamp"),
@@ -20,7 +21,14 @@ trait TypeMapper {
     "string"       -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "longvarchar"),
     "text"         -> Map("sql" -> "clob", "oracle" -> "varchar2", "postgresql" -> "text", "hsqldb" -> "longvarchar"),
   )
+
   def to_sql_type(vendor: String, typeName: String): String =
+    if (typeName endsWith "]") // isArray
+      s"${toVendorType(vendor, typeName.substring(0, typeName.indexOf('[')))}${toVendorType(vendor, "array")}"
+    else
+      toVendorType(vendor, typeName)
+
+  private def toVendorType(vendor: String, typeName: String) =
     typeToVendorType.get(typeName).flatMap(vt => vt.get(vendor).orElse(vt.get("sql"))) getOrElse typeName
 
   def to_scala_type(typeName: String): String = typeName match {
