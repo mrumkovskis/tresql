@@ -10,6 +10,7 @@ trait TypeMapper {
     "array"        -> Map("postgresql" -> "[]", "sql" -> " array"),
     "boolean"      -> Map("oracle" -> "char", "postgresql" -> "bool", "sql" -> "boolean"),
     "bytes"        -> Map("postgresql" -> "bytea", "sql" -> "blob"),
+    "bytes[]"      -> Map("hsqldb" -> s"varbinary(${1024 * 1024 * 1024}) array", "postgresql" -> "bytea[]", "sql" -> "varbinary array"),
     "dateTime"     -> Map("sql" -> "timestamp"),
     "decimal"      -> Map("sql" -> "numeric"),
     "double"       -> Map("hsqldb" -> "float", "sql" -> "double precision"),
@@ -24,7 +25,10 @@ trait TypeMapper {
 
   def to_sql_type(vendor: String, typeName: String): String =
     if (typeName endsWith "]") // isArray
-      s"${toVendorType(vendor, typeName.substring(0, typeName.indexOf('[')))}${toVendorType(vendor, "array")}"
+      if (typeToVendorType contains typeName)
+        toVendorType(vendor, typeName)
+      else
+        s"${to_sql_type(vendor, typeName.substring(0, typeName.indexOf('[')))}${toVendorType(vendor, "array")}"
     else
       toVendorType(vendor, typeName)
 
