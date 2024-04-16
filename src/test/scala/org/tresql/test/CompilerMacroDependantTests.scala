@@ -482,6 +482,15 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
           println(if (msg.length > 256) msg.take(128) + " ... " + msg.substring(msg.length - 127) else msg)
       )).head[Int]
     }
+
+    //implicit conversion from java.sql.ResultSet to org.tresql.Result
+    assertResult(List(Vector("ACCOUNTING"), Vector("LAW"), Vector("OPERATIONS"), Vector("RESEARCH"), Vector("SALES"))) {
+      import org.tresql.given
+      val s = implicitly[Resources].conn.prepareStatement("select dname from dept order by 1")
+      s.execute
+      val r: Result[RowLike] = s.getResultSet
+      r.toListOfVectors
+    }
   }
 
   override def ort(implicit resources: Resources) = {

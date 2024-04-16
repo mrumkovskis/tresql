@@ -358,4 +358,7 @@ package object tresql extends CoreTypes {
       i => Column(i, md.getColumnLabel(i), null)
     }): _*), new Env(Map[String, Any](), new Resources {}, false), "<not available>", Nil)
   }
+
+  /** For scala 3 compatiblity, so that one can write import org.tresql.given */
+  object given
 }
