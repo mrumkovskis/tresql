@@ -61,6 +61,10 @@ dummy --> [[0]]
 (dummy{dummy d} + dummy{dummy}) d{d} --> [[0]]
 (dummy) tmp --> [[0]]
 
+//where clause
+emp[(ename = :ename) & (job = :job) & (mgr = (emp[ename = :mgr]{empno})) & (sal = :sal) & (deptno = (dept[dname = :dname]{deptno})) & (:hiredate = hiredate)] {comm}#(:sort::integer) --> ename='MARTIN; job='SALESMAN;mgr='BLAKE;sal=1250;dname='SALES;hiredate='1981-09-28;sort=1 --> [[1400.00]]
+emp[ename = :ename & job = :job & mgr = (emp[ename = :mgr]{empno}) & sal = :sal & deptno = (dept[dname = :dname]{deptno}) & :hiredate = hiredate] {comm}#(:sort::integer) --> hiredate='1981-09-28;sort=1;dname='SALES;sal=1250;mgr='BLAKE;job='SALESMAN;ename='MARTIN --> [[1400.00]]
+
 //alias
 dummy {1 int} --> [[1]]
 
