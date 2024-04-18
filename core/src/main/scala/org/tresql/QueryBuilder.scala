@@ -1181,11 +1181,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           val bfl: List[Expr] = l.map(f => transformExpr(buildInternal(f, WHERE_CTX)) match {
             case null => null case b: BracesExpr => b case e => BracesExpr(e)
           })
-          if (bfl.nonEmpty)
-            BinOp.fromChain[Expr]((bfl.head, bfl.tail.map(e => ("&", BinOp.Operand(e, true)))), (o, l, r) => {
-              if (l != null && r != null) BinExpr(o, l, r) else if (l != null) l else if (r != null) r else null
-            })
-          else null
+          if (bfl.nonEmpty) {
+            bfl.tail.foldLeft(bfl.head) { (l, r) =>
+              if (l != null && r != null) BinExpr("&", l, r) else if (l != null) l else if (r != null) r else null
+            }
+          } else null
       }
     }
     def maybeCallMacro(exp: Expr) = {
