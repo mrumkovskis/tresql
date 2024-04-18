@@ -203,3 +203,27 @@ END;
 DROP SEQUENCE IF EXISTS seq;
 //
 CREATE SEQUENCE seq START WITH 10000;
+//
+create table if not exists log(
+  id bigint,
+  timestamp timestamp NOT NULL,
+  related_activity_id varchar,
+  session_id varchar NOT NULL,
+  endpoint_id varchar(200),
+  action_type varchar(30) NOT NULL,
+  request_ip varchar NOT NULL,
+  service_metadata json,
+  event_details json,
+  sender_id varchar NOT NULL,
+  sender_type varchar(25) NOT NULL,
+  sender_metadata json,
+  sender_connection_metadata json,
+  subject_id varchar(200),
+  subject_type varchar,
+  subject_metadata json,
+  owner_id varchar,
+  owner_name varchar,
+  request_ip4_addr inet,
+  client_id varchar(256),
+  primary key (id)
+);

@@ -108,9 +108,6 @@ dummy --> [[0]]
 (dummy ++ dummy) d{count(# d.dummy)} --> [[1]]
 // 
 (dummy{dummy d} + dummy{dummy}) d{d} --> [[0]]
-//where clause
-emp[(ename = :ename) & (job = :job) & (mgr = (emp[ename = :mgr]{empno})) & (sal = :sal) & (deptno = (dept[dname = :dname]{deptno})) & (hiredate = :hiredate::date)] {comm}#(:sort) --> sort=1;ename='MARTIN; job='SALESMAN;mgr='BLAKE;sal=1250;dname='SALES;hiredate='1981-09-28 --> [[1400.00]]
-emp[ename = :ename & job = :job & mgr = (emp[ename = :mgr]{empno}) & sal = :sal & deptno = (dept[dname = :dname]{deptno}) & hiredate = :hiredate::date] {comm}#(:sort) --> sort=1;ename='MARTIN; job='SALESMAN;mgr='BLAKE;sal=1250;dname='SALES;hiredate='1981-09-28 --> [[1400.00]]
 
 //alias
 dummy {1 int} --> [[1]]
@@ -187,6 +184,12 @@ dept d/emp? e[e.deptno != null]#{d.deptno}#(d.deptno) --> [[10], [20], [30]]
 
 //right outer join
 emp e/?dept d[e.deptno != null]#{d.deptno}#(d.deptno) --> [[10], [20], [30]]
+
+//where clause
+emp[(ename = :ename) & (job = :job) & (mgr = (emp[ename = :mgr]{empno})) & (sal = :sal) & (deptno = (dept[dname = :dname]{deptno})) & (hiredate = :hiredate::date)] {comm}#(:sort) --> sort=1;ename='MARTIN; job='SALESMAN;mgr='BLAKE;sal=1250;dname='SALES;hiredate='1981-09-28 --> [[1400.00]]
+emp[ename = :ename & job = :job & mgr = (emp[ename = :mgr]{empno}) & sal = :sal & deptno = (dept[dname = :dname]{deptno}) & hiredate = :hiredate::date] {comm}#(:sort) --> sort=1;ename='MARTIN; job='SALESMAN;mgr='BLAKE;sal=1250;dname='SALES;hiredate='1981-09-28 --> [[1400.00]]
+emp[ename = :ename][job = :job][mgr = (emp[ename = :mgr]{empno})][sal = :sal][deptno = (dept[dname = :dname]{deptno})][hiredate = :hiredate::date] {comm}#(:sort) --> sort=1;ename='MARTIN; job='SALESMAN;mgr='BLAKE;sal=1250;dname='SALES;hiredate='1981-09-28 --> [[1400.00]]
+log[if_defined(:owner_id, owner_id = :owner_id)][if_defined(:sender_id, sender_id = :sender_id)][if_defined(:subject_id, subject_id = :subject_id)][if_defined(:subject_ids, subject_id in :subject_ids)][if_defined(:action_type, action_type = :action_type)][if_defined(:request_ip_inet, request_ip4_addr = :request_ip_inet::inet)][if_defined(:request_ip_cidr, `request_ip4_addr << :request_ip_cidr::cidr`)][if_defined(:sender_type, sender_type = :sender_type)][if_defined(:subject_type, subject_type = :subject_type)][if_defined(:client_id, client_id = :client_id)][if_defined(:timestamp_from, :timestamp_from::timestamp <= timestamp)][if_defined(:timestamp_to, timestamp <= :timestamp_to::timestamp)][if_defined(:is_success, `(event_details ->> 'successful')::boolean`)][if_defined(:is_failure, `not (event_details ->> 'successful')::boolean`)] {log.id, log.timestamp, log.action_type, log.request_ip4_addr, log.sender_id, log.sender_type, log.subject_id, log.subject_type, log.owner_id, log.owner_name}#(timestamp)@(?) --> subject_type='nenoteikts; timestamp_from='2024-04-17 18:06:34; sender_type='datu patērētājs; subject_id='fpr_person; sender_id='10000110001; 1=1 --> []
 
 //query in join clause
 emp e[e.deptno = (dept dj[dj.deptno = d.deptno] {dj.deptno})]dept d[d.dname = 'ACCOUNTING']{dname, ename}#(1, 2) --> [["ACCOUNTING", "CLARK"], ["ACCOUNTING", "KING"], ["ACCOUNTING", "MILLER"]]

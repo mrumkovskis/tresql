@@ -61,10 +61,6 @@ dummy --> [[0]]
 (dummy{dummy d} + dummy{dummy}) d{d} --> [[0]]
 (dummy) tmp --> [[0]]
 
-//where clause
-emp[(ename = :ename) & (job = :job) & (mgr = (emp[ename = :mgr]{empno})) & (sal = :sal) & (deptno = (dept[dname = :dname]{deptno})) & (:hiredate = hiredate)] {comm}#(:sort::integer) --> ename='MARTIN; job='SALESMAN;mgr='BLAKE;sal=1250;dname='SALES;hiredate='1981-09-28;sort=1 --> [[1400.00]]
-emp[ename = :ename & job = :job & mgr = (emp[ename = :mgr]{empno}) & sal = :sal & deptno = (dept[dname = :dname]{deptno}) & :hiredate = hiredate] {comm}#(:sort::integer) --> hiredate='1981-09-28;sort=1;dname='SALES;sal=1250;mgr='BLAKE;job='SALESMAN;ename='MARTIN --> [[1400.00]]
-
 //alias
 dummy {1 int} --> [[1]]
 
@@ -430,6 +426,12 @@ dept{deptno}#(deptno)@(:o? :l?) --> [[10], [20], [30], [40]]
 dept{deptno}#(deptno)@(:o? :l?) --> o=3 --> [[40]]
 dept{deptno}#(deptno)@(:o? :l?) --> l=1 --> [[10]]
 dummy[dummy in (dummy[dummy = :dummy?]{dummy} ++ dummy[dummy = 1]{dummy})] --> []
+
+//where clause
+emp[(ename = :ename) & (job = :job) & (mgr = (emp[ename = :mgr]{empno})) & (sal = :sal) & (deptno = (dept[dname = :dname]{deptno})) & (:hiredate = hiredate)] {comm}#(:sort::integer) --> ename='MARTIN; job='SALESMAN;mgr='BLAKE;sal=1250;dname='SALES;hiredate='1981-09-28;sort=1 --> [[1400.00]]
+emp[ename = :ename & job = :job & mgr = (emp[ename = :mgr]{empno}) & sal = :sal & deptno = (dept[dname = :dname]{deptno}) & :hiredate = hiredate] {comm}#(:sort::integer) --> hiredate='1981-09-28;sort=1;dname='SALES;sal=1250;mgr='BLAKE;job='SALESMAN;ename='MARTIN --> [[1400.00]]
+emp[ename = :ename][job = :job][mgr = (emp[ename = :mgr]{empno})][sal = :sal][deptno = (dept[dname = :dname]{deptno})][hiredate = :hiredate::date] {comm}#(:sort::integer) --> sort=1;ename='MARTIN; job='SALESMAN;mgr='BLAKE;sal=1250;dname='SALES;hiredate='1981-09-28 --> [[1400.00]]
+emp[if_defined(:ename, ename = :ename)][if_defined(:job, job = :job)][if_defined(:mgr, mgr = (emp[ename = :mgr]{empno}))][if_defined(:sal, sal = :sal)][if_defined(:dname, deptno = (dept[dname = :dname]{deptno}))][if_defined(:hiredate, :hiredate::date = hiredate)] {comm}#(:sort::integer) --> sort=1;mgr='BLAKE;dname='SALES;hiredate='1981-09-28 --> [[1400.00]]
 
 
 //distinct
