@@ -188,6 +188,9 @@ dept d[(dept[deptno = 10 & d.deptno = dept.deptno]) | (dept[d.dname = 'SALES' & 
 dept[deptno in ((dept[:id]){deptno})]{deptno}#(1) --> id=10 --> [[10]]
 (dummy) d1[](dummy {dummy} ++ dummy {dummy}) d2[](dummy) d3 {d1.*, d2.*, d3.*} --> [[0, 0, 0], [0, 0, 0]]
 
+//binding order test
+{:d = :a + :b * :c} --> a=1; b=2; c=3; d=7 --> [[true]]
+
 //array binding
 emp [empno in ?]{empno, ename, job}#(empno) --> [] --> []
 emp [empno !in ?]{empno, ename, job}#(empno) --> [] --> []

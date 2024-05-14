@@ -248,7 +248,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       }
       c(lop)
     }
-    def isQuery(e: Expr) = e.exprType == classOf[SelectExpr]
+    def isQuery(e: Expr) = e != null && e.exprType == classOf[SelectExpr]
     def isQueryOrReturning(e: Expr): Boolean = {
       // do not use recursive function to avoid stack overflow error for very long (deep) bin expr
       val st = scala.collection.mutable.Stack[Expr]()
@@ -285,49 +285,53 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       }
 
     def defaultSQL = {
-      // flatten sql generation to avoid stack overflow error
-      val chain = BinOp.flatten[Expr](this, { case BinExpr(o, l, r) => Some((o, l, r)) case _ => None })
       val is_query_or_returning = isQueryOrReturning(this)
-      BinOp.fromChain[Expr](chain, (op, lop, rop) => SQLExpr(
-        op match {
-          case "*" => lop.sql + " * " + rop.sql
-          case "/" => lop.sql + " / " + rop.sql
-          case "||" => lop.sql + " || " + rop.sql
-          case "++" => lop.sql + " union all " + rop.sql
-          case "&&" => lop.sql + " intersect " + rop.sql
-          case "+" => lop.sql + (if (is_query_or_returning) " union " else " + ") + rop.sql
-          case "-" => lop.sql + (if (is_query_or_returning) " except " else " - ") + rop.sql
-          case "=" => rop match {
-            case ConstExpr(Null) => lop.sql + " is " + rop.sql
-            case _: ArrExpr => lop.sql + " in " + rop.sql
-            case _ => lop.sql + " = " + rop.sql
-          }
-          case "!=" => rop match {
-            case ConstExpr(Null) => lop.sql + " is not " + rop.sql
-            case _: ArrExpr => lop.sql + " not in " + rop.sql
-            case _ => lop.sql + " != " + rop.sql
-          }
-          case "<" => lop.sql + " < " + rop.sql
-          case ">" => lop.sql + " > " + rop.sql
-          case "<=" => lop.sql + " <= " + rop.sql
-          case ">=" => lop.sql + " >= " + rop.sql
-          case "&" => (if (isQuery(lop)) "exists " else "") +
-            lop.sql + " and " + (if (isQuery(rop)) "exists " else "") +
-            rop.sql
-          case "|" => (if (isQuery(lop)) "exists " else "") + lop.sql +
-            " or " + (if (isQuery(rop)) "exists " else "") + rop.sql
-          case "~" => lop.sql + " like " + rop.sql
-          case "!~" => lop.sql + " not like " + rop.sql
-          case s @ ("in" | "!in") => lop.sql + (if (s.startsWith("!")) " not" else "") + " in " +
-            (rop match {
-              case _: BracesExpr | _: ArrExpr => rop.sql
-              case _ => "(" + rop.sql + ")"
-            })
-          case x if x.startsWith("`") && x.endsWith("`") =>
-            //sql operator escape syntax
-            lop.sql + x.replace('`', ' ') + rop.sql
-          case _ => error("unknown operation " + op)
-        }, Nil)).sql
+      // flatten sql generation to avoid stack overflow error
+      val chain = BinOp.flatten[Expr](this, { case BinExpr(o, l, r) => Some((o, l, r)) case _ => None }) match {
+        case (e, rest) => ((e.sql, e), rest.map { case (o, bop) => (o, bop.copy(exp = (bop.exp.sql, bop.exp)))})
+      }
+      BinOp.fromChain[(String, Expr)](chain, (op, l, r) => {
+        val (lsql, lop) = l
+        val (rsql, rop) = r
+        ( op match {
+            case "*" => lsql + " * " + rsql
+            case "/" => lsql + " / " + rsql
+            case "||" => lsql + " || " + rsql
+            case "++" => lsql + " union all " + rsql
+            case "&&" => lsql + " intersect " + rsql
+            case "+" => lsql + (if (is_query_or_returning) " union " else " + ") + rsql
+            case "-" => lsql + (if (is_query_or_returning) " except " else " - ") + rsql
+            case "=" => rop match {
+              case ConstExpr(Null) => lsql + " is " + rsql
+              case _: ArrExpr => lsql + " in " + rsql
+              case _ => lsql + " = " + rsql
+            }
+            case "!=" => rop match {
+              case ConstExpr(Null) => lsql + " is not " + rsql
+              case _: ArrExpr => lsql + " not in " + rsql
+              case _ => lsql + " != " + rsql
+            }
+            case "<" => lsql + " < " + rsql
+            case ">" => lsql + " > " + rsql
+            case "<=" => lsql + " <= " + rsql
+            case ">=" => lsql + " >= " + rsql
+            case "&" => (if (isQuery(lop)) "exists " else "") +
+              lsql + " and " + (if (isQuery(rop)) "exists " else "") +
+              rsql
+            case "|" => (if (isQuery(lop)) "exists " else "") + lsql +
+              " or " + (if (isQuery(rop)) "exists " else "") + rsql
+            case "~" => lsql + " like " + rsql
+            case "!~" => lsql + " not like " + rsql
+            case s @ ("in" | "!in") => lsql + (if (s.startsWith("!")) " not" else "") + " in " +
+              (rop match {
+                case _: BracesExpr | _: ArrExpr => rsql
+                case _ => "(" + rsql + ")"
+              })
+            case x if x.startsWith("`") && x.endsWith("`") =>
+              //sql operator escape syntax
+              lsql + x.replace('`', ' ') + rsql
+            case _ => error("unknown operation " + op)
+          }, null)})._1
     }
     override def exprType: Class[_] =
       if (List("&&", "++", "+", "-", "*", "/") contains op) {
