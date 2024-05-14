@@ -290,9 +290,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       val chain = BinOp.flatten[Expr](this, { case BinExpr(o, l, r) => Some((o, l, r)) case _ => None }) match {
         case (e, rest) => ((e.sql, e), rest.map { case (o, bop) => (o, bop.copy(exp = (bop.exp.sql, bop.exp)))})
       }
-      BinOp.fromChain[(String, Expr)](chain, (op, l, r) => {
-        val (lsql, lop) = l
-        val (rsql, rop) = r
+      BinOp.fromChain[(String, Expr)](chain, { case (op, (lsql, lop), (rsql, rop)) =>
         ( op match {
             case "*" => lsql + " * " + rsql
             case "/" => lsql + " / " + rsql
@@ -331,7 +329,9 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
               //sql operator escape syntax
               lsql + x.replace('`', ' ') + rsql
             case _ => error("unknown operation " + op)
-          }, null)})._1
+          }, null
+        )
+      })._1
     }
     override def exprType: Class[_] =
       if (List("&&", "++", "+", "-", "*", "/") contains op) {
