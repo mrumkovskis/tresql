@@ -244,6 +244,7 @@ dept {deptno in (deptno)}@(1) --> [[true]]
 dept{dname, case(deptno in(10, 40), "east") region}#(1) --> [["ACCOUNTING", "east"], ["OPERATIONS", "east"], ["RESEARCH", null], ["SALES", null]]
 dept{dname, case(deptno = 20, "south", "other") region}#(2,1) --> [["ACCOUNTING", "other"], ["OPERATIONS", "other"], ["SALES", "other"], ["RESEARCH", "south"]]
 dept{dname, case(deptno = 10, trim("east"), deptno=30, "north", deptno=20, "south", "other") region}#(2,1) --> [["ACCOUNTING", "east"], ["SALES", "north"], ["OPERATIONS", "other"], ["RESEARCH", "south"]]
+{case(:is_new = true | :x::integer != :y::integer, 'yes', 'no')} --> is_new=true; x=1; y=1 --> [["yes"]]
 
 //in subselect
 dept [deptno in (emp{deptno})]#(deptno) --> [[10, "ACCOUNTING", "NEW YORK"], [20, "RESEARCH", "DALLAS"], [30, "SALES", "CHICAGO"]]
