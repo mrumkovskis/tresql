@@ -449,11 +449,11 @@ trait CacheResources {
 
 trait Logging {
   type TresqlLogger = (=> String, => Seq[(String, Any)], LogTopic) => Unit
-  type BindVarLogFilter = PartialFunction[Expr, String]
+  type BindVarLogFilter = PartialFunction[(String, Any), String]
 
   def logger: TresqlLogger = null
   def bindVarLogFilter: BindVarLogFilter = {
-    case v: QueryBuilder#VarExpr if v.name == "password" => v.fullName + " = ***"
+    case (fullName, _) if fullName == "password" || fullName.startsWith("password.") => fullName + " = ***"
   }
 
   def log(msg: => String, params: => Seq[(String, Any)] = Nil, topic: LogTopic = LogTopic.info): Unit =
