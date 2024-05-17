@@ -453,7 +453,7 @@ trait Logging {
 
   def logger: TresqlLogger = null
   def bindVarLogFilter: BindVarLogFilter = {
-    case (fullName, _) if fullName == "password" || fullName.startsWith("password.") => fullName + " = ***"
+    case (fullName, _) if fullName == "password" || fullName.startsWith("password.") => "***"
   }
 
   def log(msg: => String, params: => Seq[(String, Any)] = Nil, topic: LogTopic = LogTopic.info): Unit =
