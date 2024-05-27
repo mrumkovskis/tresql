@@ -139,8 +139,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   def filter: MemParser[Arr] = array named "filter"
   def filters: MemParser[Filters] = rep(filter) ^^ Filters named "filters"
   /** objContent is meant to be table, column or division operation operand */
-  private def objContent = const | functionWithoutFilter | result | variable | qualifiedIdent | braces
-  private def alias =
+  private def objContent: MemParser[Exp] = const | functionWithoutFilter | result | variable | qualifiedIdent | braces
+  private def alias: MemParser[(String, Option[List[TableColDef]], Boolean)] =
     ident ~ opt("(" ~> opt("#") ~ rep1sep(ident ~ opt(cast), ",") <~ ")") ^^ {
       case id ~ Some(mbOrd ~ colDefs) =>
         (id, Some(colDefs.map { case cn ~ typ => TableColDef(cn, typ) }), mbOrd.isDefined)
@@ -464,7 +464,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     case Some(_ ~ (db: Option[String]@unchecked)) ~ (q: Exp) => ChildQuery(q, db)
     case del: Exp => del
   } named "unary-exp"
-  private def cast = "::" ~> (ident | stringLiteral)
+  private def cast: MemParser[String] = "::" ~> (ident | stringLiteral)
   def castExpr: MemParser[Exp] = unaryExpr ~ opt(cast) ^^ {
     case e ~ Some(t) => Cast(e, t)
     case e ~ None => e
