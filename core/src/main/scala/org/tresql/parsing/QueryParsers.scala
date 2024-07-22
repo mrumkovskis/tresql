@@ -335,7 +335,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     ("++" | "+" | "-" | "&&") ~ (withQuery | queryWithCols)) ^^ binOp named "values-select"
 
   def insert: MemParser[Insert] =
-    (("+" ~> opt(ident <~ ":") ~ qualifiedIdent ~ opt(ident) ~ opt(columns) ~ opt(valuesSelect | rep1sep(array, ","))) |
+    (("+" ~> opt(ident <~ ":") ~ qualifiedIdent ~ opt(ident) ~ opt(columns) ~ opt(valuesSelect | values)) |
     ((qualifiedIdent ~ opt(ident) ~ opt(columns) <~ "+") ~ values)) ~ opt(columns) ^^ {
       case (db: Option[String@unchecked]) ~ (t: Ident) ~ a ~ Some(c) ~ None ~ maybeReturning if
         c.cols.nonEmpty && c.cols.forall {
@@ -348,10 +348,10 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
         }.unzip
         // insert in form +table{col1 = val2, col2 = val2, ...}
         Insert(t, a.orNull, cols, Values(List(Arr(vals))), maybeReturning, db)
-      case (db: Option[String@unchecked]) ~ (t: Ident) ~ a ~ c ~ (v: Option[_]) ~ maybeReturning =>
+      case (db: Option[String@unchecked]) ~ (t: Ident) ~ a ~ c ~ (v: Option[Exp@unchecked]) ~ maybeReturning =>
         Insert(
           t, a.orNull, c.map(_.cols).getOrElse(Nil),
-          v.map { case v: List[Arr] @unchecked => Values(v) case s: Exp @unchecked => s }.getOrElse(Values(Nil)),
+          v.getOrElse(Values(Nil)),
           maybeReturning, db
         )
       case (t: Ident) ~ a ~ c ~ (v: Values @unchecked) ~ maybeCols =>
