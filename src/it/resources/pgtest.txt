@@ -709,3 +709,10 @@ results { names, scores }#(1) --> [[["A", "B", "C"], [1, 2, 3]]]
 results { names, scores }#(1) --> [[[], []]]
 =results [id = 49] { names = ?, scores = ? } --> {'D}::text; {4}::decimal --> [[1]]
 results { names, scores }#(1) --> [[["D"], [4]]]
+
+// on conflict do (upsert)
++dept {deptno, dname, loc} [7777, 'conflict', 'confl-loc'] --> [[1]]
++dept {deptno, dname, loc} [7777, 'conflict', 'confl-loc']? --> [[0]]
++dept{deptno, dname, loc} [7777, 'conflict', 'confl-loc']? /*unused for pg*/t(a,b) (dname)[1 = 1] =[dept.loc = :ol] {loc} [:loc] {loc} --> ol='confl-loc;loc='CL --> [["CL"]]
++dept{deptno, dname, loc} [7777, :cf, :loc]? (deptno) = {dname, loc} [excluded.dname, excluded.loc] {dname, loc} --> cf='C1;loc='New Loc --> [["C1", "New Loc"]]
+-dept[dname = 'C1'] --> [[1]]

@@ -22,7 +22,8 @@ trait Transformer { this: Query =>
       case wi: WithInsertExpr => new WithInsertExpr(
         wi.tables.map(cf(_).asInstanceOf[WithTableExpr]), cf(wi.query).asInstanceOf[InsertExpr])
       case i: InsertExpr => new InsertExpr(cf(i.table).asInstanceOf[IdentExpr], i.alias,
-        i.cols map cf, cf(i.vals), (i.returning map cf).asInstanceOf[Option[ColsExpr]])
+        i.cols map cf, cf(i.vals), cf(i.insertConflict).asInstanceOf[InsertConflictExpr],
+        (i.returning map cf).asInstanceOf[Option[ColsExpr]])
       case Order(exprs) => Order(exprs map (e => (cf(e._1), cf(e._2), cf(e._3))))
       case SelectExpr(tables, filter, cols, distinct, group, order,
         offset, limit, aliases, parentJoin) =>
@@ -47,6 +48,8 @@ trait Transformer { this: Query =>
           (d.returning map cf).asInstanceOf[Option[ColsExpr]])
       case ValuesExpr(vals) => ValuesExpr(vals map cf)
       case vfs: ValuesFromSelectExpr => vfs.copy(select = cf(vfs.select).asInstanceOf[SelectExpr])
+      case InsertConflictExpr(ct, cfl, c, v, f, a, cd) =>
+        InsertConflictExpr(ct map cf, cf(cfl), c map cf, cf(v), cf(f), a, cd)
       case e => e
     }
     cf(expr)

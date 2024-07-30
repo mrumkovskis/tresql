@@ -41,13 +41,16 @@ trait ExpTransformer { this: QueryParsers =>
         Query(objs map tt, tt(filters), tt(cols), tt(gr), tt(ord), tt(off), tt(lim))
       case WithTable(n, c, r, q) => WithTable(n, c, r, tt(q))
       case With(ts, q) => With(ts map tt, tt(q))
-      case Insert(t, a, cols, vals, r, db) => Insert(tt(t), a, cols map tt, tt(vals), r map tt, db)
+      case Insert(t, a, cols, vals, r, db, cf) => Insert(tt(t), a, cols map tt, tt(vals), r map tt, db, tt(cf))
       case Update(t, a, filter, cols, vals, r, db) => Update(tt(t), a, tt(filter), cols map tt, tt(vals), r map tt, db)
       case Delete(t, a, filter, u, r, db) => Delete(tt(t), a, tt(filter), tt(u), r map tt, db)
       case Arr(els) => Arr(els map tt)
       case Filters(f) => Filters(f map tt)
       case Values(v) => Values(v map tt)
       case ValuesFromSelect(s) => ValuesFromSelect(tt(s))
+      case InsertConflict(a, t, al, cd) => InsertConflict(tt(a), tt(t), al, cd)
+      case InsertConflictAction(c, f, v) => InsertConflictAction(c map tt, tt(f), tt(v))
+      case InsertConflictTarget(t, f) => InsertConflictTarget(t map tt, tt(f))
       case Braces(expr) => Braces(tt(expr))
       case null => null
     }
@@ -97,8 +100,8 @@ trait ExpTransformer { this: QueryParsers =>
         )
       case WithTable(n, c, r, q) => WithTable(n, c, r, tt(state)(q))
       case With(ts, q) => With(ts map { wt => tt(state)(wt) }, tt(state)(q))
-      case Insert(t, a, cols, vals, r, db) => Insert(tt(state)(t), a,
-          cols map { c => tt(state)(c) }, tt(state)(vals), r map tt(state), db)
+      case Insert(t, a, cols, vals, r, db, cf) => Insert(tt(state)(t), a,
+          cols map { c => tt(state)(c) }, tt(state)(vals), r map tt(state), db, tt(state)(cf))
       case Update(table, alias, filter, cols, vals, r, db) =>
         Update(
           tt(state)(table),
@@ -115,6 +118,9 @@ trait ExpTransformer { this: QueryParsers =>
       case Filters(f) => Filters(f map tt(state))
       case Values(v) => Values(v map tt(state))
       case ValuesFromSelect(s) => ValuesFromSelect(tt(state)(s))
+      case InsertConflict(a, t, _, _) => InsertConflict(tt(state)(a), tt(state)(t))
+      case InsertConflictAction(c, f, v) => InsertConflictAction(c map tt(state), tt(state)(f), tt(state)(v))
+      case InsertConflictTarget(t, f) => InsertConflictTarget(t map tt(state), tt(state)(f))
       case Braces(expr) => Braces(tt(state)(expr))
       case null => null
     }
@@ -151,13 +157,16 @@ trait ExpTransformer { this: QueryParsers =>
         tr(tr(tr(tr(tr(tr(trl(state, objs), filters), cols), gr), ord), off), lim)
       case WithTable(_, _, _, q) => tr(state, q)
       case With(ts, q) => tr(trl(state, ts), q)
-      case Insert(t, _, cols, vals, r, _) => tro(tr(trl(tr(state, t), cols), vals), r)
+      case Insert(t, _, cols, vals, r, _, cf) => tr(tro(tr(trl(tr(state, t), cols), vals), r), cf)
       case Update(t, _, filter, cols, vals, r, _) => tro(tr(trl(tr(tr(state, t), filter), cols), vals), r)
       case Delete(t, _, filter, u, r, _) => tro(tr(tr(tr(state, t), u), filter), r)
       case Arr(els) => trl(state, els)
       case Filters(f) => trl(state, f)
       case Values(v) => trl(state, v)
       case ValuesFromSelect(s) => tr(state, s)
+      case InsertConflict(a, t, _, _) => tr(tr(state, a), t)
+      case InsertConflictAction(c, f, v) => tr(tr(trl(state, c), f), v)
+      case InsertConflictTarget(t, f) => tr(trl(state, t), f)
       case Braces(expr) => tr(state, expr)
     }
     fun_traverse

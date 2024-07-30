@@ -268,15 +268,45 @@ case class With(tables: List[WithTable], query: Exp) extends Exp {
 case class Values(values: List[Arr]) extends Exp {
   def tresql = values map (_.tresql) mkString ", "
 }
-case class Insert(table: Ident = null, alias: String = null, cols: List[Col], vals: Exp = null, returning: Option[Cols],
-                  db: Option[String])
-  extends DMLExp {
+case class Insert(
+  table: Ident = null,
+  alias: String = null,
+  cols: List[Col],
+  vals: Exp = null,
+  returning: Option[Cols],
+  db: Option[String],
+  insertConflict: InsertConflict = null,
+) extends DMLExp {
   override def filter = null
   def tresql = "+" + db.map(_ + ":").mkString + table.tresql +
     Option(alias).map(" " + _).getOrElse("") +
     (if (cols.nonEmpty) cols.map(_.tresql).mkString("{", ",", "}") else "") +
     (if (vals != null) any2tresql(vals) else "") +
+    (if (insertConflict != null) insertConflict.tresql else "") +
     returning.map(_.tresql).getOrElse("")
+}
+case class InsertConflict(
+  conflictAction: InsertConflictAction = null,
+  conflictTarget: InsertConflictTarget = null,
+  valuesAlias: String = null,
+  valuesCols: List[TableColDef] = Nil,
+) extends Exp {
+  def tresql = {
+    (if (conflictTarget != null || valuesAlias != null)
+      " ?" + (if (valuesAlias != null) " " + valuesAlias else "") +
+        (if (valuesCols != null && valuesCols.nonEmpty)
+          valuesCols.map(c => c.name + c.typ.map("::" + _).getOrElse("")).mkString("(", ",", ")")
+        else "") + conflictTarget.tresql else "") +
+      (if (conflictAction != null) conflictAction.tresql else "")
+  }
+}
+case class InsertConflictTarget(target: List[Exp] = Nil, filter: Exp = null) extends Exp {
+  def tresql = (if(target != null && target.nonEmpty) "(" + target.map(_.tresql).mkString(", ") + ")" else "") +
+    (if (filter != null) filter.tresql else "")
+}
+case class InsertConflictAction(cols: List[Col], filter: Exp = null, vals: Exp) extends Exp {
+  def tresql = " =" + (if (filter != null ) filter.tresql else "") +
+    cols.map(_.tresql).mkString("{", ",", "}") + (if (vals == null) "" else " " + vals.tresql)
 }
 case class Update(table: Ident = null, alias: String = null, filter: Arr = null, cols: List[Col], vals: Exp = null,
                   returning: Option[Cols], db: Option[String])
@@ -287,7 +317,7 @@ case class Update(table: Ident = null, alias: String = null, filter: Arr = null,
     val valsTresql = if (vals != null) any2tresql(vals) else ""
     "=" + db.map(_ + ":").mkString + table.tresql + Option(alias).map(" " + _).getOrElse("") +
       (vals match {
-        case vfs: ValuesFromSelect => valsTresql + filterTresql + colsTresql
+        case _: ValuesFromSelect => valsTresql + filterTresql + colsTresql
         case _ => filterTresql + colsTresql + valsTresql
       }) +
       returning.map(_.tresql).getOrElse("")

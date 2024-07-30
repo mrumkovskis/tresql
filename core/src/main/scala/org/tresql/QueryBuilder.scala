@@ -604,7 +604,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     override def apply() = sel(sql, query.cols)
   }
   class WithInsertExpr(val tables: List[WithTableExpr], val query: InsertExpr)
-    extends InsertExpr(query.table, query.alias, query.cols, query.vals, query.returning)
+    extends InsertExpr(query.table, query.alias, query.cols, query.vals, query.insertConflict, query.returning)
     with WithExpr
   class WithUpdateExpr(val tables: List[WithTableExpr], val query: UpdateExpr)
     extends UpdateExpr(query.table, query.alias, query.filter, query.cols, query.vals, query.returning)
@@ -614,7 +614,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     with WithExpr
 
   class InsertExpr(table: IdentExpr, alias: String, val cols: List[Expr], val vals: Expr,
-      returning: Option[ColsExpr])
+                   val insertConflict: InsertConflictExpr, returning: Option[ColsExpr])
     extends DeleteExpr(table, alias, null, null, returning) {
     override def apply() = super.apply() match {
       case r: DMLResult =>
@@ -624,7 +624,29 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       case r => r
     }
     override protected def _sql = "insert into " + table.sql + (if (alias == null) "" else " " + alias) +
-      " (" + cols.map(_.sql).mkString(", ") + ")" + " " + vals.sql + returningSql
+      " (" + cols.map(_.sql).mkString(", ") + ")" + " " + vals.sql +
+      (if (insertConflict != null) insertConflict.sql else "") + returningSql
+  }
+  case class InsertConflictExpr(
+    target: List[Expr], targetFilter: Expr,
+    cols: List[Expr], vals: Expr, filter: Expr,
+    valuesAlias: String, valuesCols: TableColDefsExpr) extends PrimitiveExpr {
+    // postgres style on conlict do ... clause
+    override def defaultSQL: String = " on conflict " +
+      (if (target != null && target.nonEmpty) target.map(_.sql).mkString("(", ", ", ") ") else "") +
+      (if (targetFilter != null) "where " + targetFilter.sql + " " else "") +
+      (if (cols == null) {
+        "do nothing"
+      } else {
+        println(s"COLS, VALS:!!!!!!!\n$cols\n$vals")
+        "do update set " + (vals match {
+          case ArrExpr(v) =>
+            println(s"VVVV: ($v)\n ${cols zip v}")
+            (cols zip v map { v => v._1.sql + " = " + v._2.sql }).mkString(", ")
+          case q: SelectExpr => cols.map(_.sql).mkString("(", ", ", ")") + " = " + "(" + q.sql + ")"
+          case x => error("Knipis: " + x)
+        }) + (if (filter != null) " where " + filter.sql else "")
+      })
   }
   case class ValuesExpr(vals: List[Expr]) extends PrimitiveExpr {
     def defaultSQL = vals map (_.sql) mkString("values ", ",", "")
@@ -859,7 +881,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
 
   //DML statements are defined outside of buildInternal method since they are called from other QueryBuilder
   private def buildInsert(table: Ident, alias: String, cols: List[Col], vals: Exp,
-                          returning: Option[Cols], ctx: Ctx) = {
+                          returning: Option[Cols], insertConflict: InsertConflict, ctx: Ctx) = {
     lazy val insertCols = this.table(table).cols.map(c => IdentExpr(List(c.name)))
     val transformer: ExpTransformer = new QueryParser()
     def extractor[A](f: PartialFunction[Exp, A]) = {
@@ -922,6 +944,12 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           case Nil => patchVals(table, colExprs, Nil)
           case l => l
         }) -> Set()
+      case Arr(a) => // on conflict set values
+        val e = a.map(buildInternal(_, VALUES_CTX))
+        val idxs = e.zipWithIndex.foldLeft(Set[Int]()) { case (s, (c, i)) =>
+          if (c == null) s + i else s
+        }
+        if (idxs.isEmpty) ArrExpr(e) -> idxs else ArrExpr(e.filter(_ != null)) -> idxs
       case q =>
         val e = buildInternal(q, VALUES_CTX)
         if (hasEqualColValCount) { // extract macro eliminated column indexes
@@ -934,12 +962,37 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           e -> extract_indexes(e)
         } else e -> Set()
     }
+    def buildInsertConflict(ic: InsertConflict) = if (ic == null) null else {
+      val ct = ic.conflictTarget
+      val (target, targetFilter) =
+        if (ct != null)
+          (if (ct.target != null) ct.target.map(buildInternal(_, DML_CTX)) else null,
+            if (ct.filter != null) buildInternal(ct.filter, DML_CTX) else null)
+        else (null, null)
+      val colDefs =
+        if (ic.valuesCols == null) null
+        else TableColDefsExpr(ic.valuesCols.map(c => TableColDefExpr(c.name, c.typ)))
+      val ca = ic.conflictAction
+      val (cols, vals, filter) =
+        if (ca != null) {
+          val (v, idxs) = buildValues(ca.vals)
+          val c = ca.cols.map(buildInternal(_, COL_CTX)).filter {
+            case ColExpr(IdentExpr(_), _, _, _) => true
+            case null => false // optional binding
+            case _ => sys.error("Unexpected InsertExpr type")
+          }.zipWithIndex.collect { case (e, i) if !idxs.contains(i) => e }
+          (c, v, if (ca.filter != null) buildInternal(ca.filter, WHERE_CTX) else null)
+        }
+        else (null, null, null)
+      InsertConflictExpr(target, targetFilter, cols, vals, filter, ic.valuesAlias, colDefs)
+    }
+
     val (valExprs, idxs) = buildValues(vals)
     val filteredColExprs =
       if (idxs.isEmpty) colExprs
       else colExprs.zipWithIndex.collect { case (e, i) if !idxs.contains(i) => e }
     new InsertExpr(IdentExpr(table.ident), alias, filteredColExprs, valExprs,
-      returning.map(buildCols(_, ctx))
+      buildInsertConflict(insertConflict), returning.map(buildCols(_, ctx))
     )
   }
   private def buildUpdate(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp,
@@ -1262,10 +1315,10 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case Null => ConstExpr(Null)
         case NullUpdate => ConstExpr(NullUpdate)
         //insert
-        case i @ Insert(t, a, c, v, r, db) => parseCtx match {
+        case i @ Insert(t, a, c, v, r, db, cf) => parseCtx match {
           case ARR_CTX | COL_CTX | FUN_CTX => buildWithNew(db, _.buildInternal(i, DML_CTX))
           case QUERY_CTX if db.nonEmpty => buildWithNew(db, _.buildInternal(i, DML_CTX))
-          case _ => buildInsert(t, a, c, v, r, parseCtx)
+          case _ => buildInsert(t, a, c, v, r, cf, parseCtx)
         }
         //update
         case u @ Update(t, a, f, c, v, r, db) => parseCtx match {

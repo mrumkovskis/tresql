@@ -334,30 +334,64 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   def valuesSelect: MemParser[Exp] = (withQuery | queryWithCols) ~ rep(
     ("++" | "+" | "-" | "&&") ~ (withQuery | queryWithCols)) ^^ binOp named "values-select"
 
-  def insert: MemParser[Insert] =
-    (("+" ~> opt(ident <~ ":") ~ qualifiedIdent ~ opt(ident) ~ opt(columns) ~ opt(valuesSelect | values)) |
-    ((qualifiedIdent ~ opt(ident) ~ opt(columns) <~ "+") ~ values)) ~ opt(columns) ^^ {
-      case (db: Option[String@unchecked]) ~ (t: Ident) ~ a ~ Some(c) ~ None ~ maybeReturning if
-        c.cols.nonEmpty && c.cols.forall {
-          case Col(BinOp("=", Obj(_: Ident, _, _, _, _), _), _) => true
-          case _ => false
-        } =>
-        val (cols, vals) = c.cols.map {
-          case Col(BinOp("=", col, value), a) => (Col(col, a), value)
-          case x => sys.error(s"Knipis: $x")
-        }.unzip
+  private def isAssignmentCols(c: Cols) = c.cols.nonEmpty && c.cols.forall {
+    case Col(BinOp("=", Obj(_: Ident, _, _, _, _), _), _) => true
+    case _ => false
+  }
+  private def splitAssignmentCols(c: Cols): (List[Col], List[Exp]) =
+    c.cols.map {
+      case Col(BinOp("=", col, value), a) => (Col(col, a), value)
+      case x => sys.error(s"Knipis: $x")
+    }.unzip
+  private def fullInsert: MemParser[Insert] = "+" ~> opt(ident <~ ":") ~
+    qualifiedIdent ~ opt(ident) ~ opt(columns) ~ opt(valuesSelect | values) ~
+    opt(insertConflict) ~ opt(columns) ^^ {
+      case db ~ t ~ a ~ Some(c) ~ None ~ ic ~ maybeReturning if isAssignmentCols(c) =>
+        val (cols, vals) = splitAssignmentCols(c)
         // insert in form +table{col1 = val2, col2 = val2, ...}
-        Insert(t, a.orNull, cols, Values(List(Arr(vals))), maybeReturning, db)
-      case (db: Option[String@unchecked]) ~ (t: Ident) ~ a ~ c ~ (v: Option[Exp@unchecked]) ~ maybeReturning =>
+        Insert(t, a.orNull, cols, Values(List(Arr(vals))), maybeReturning, db, ic.orNull)
+      case db ~ t ~ a ~ c ~ v ~ ic ~ maybeReturning =>
         Insert(
           t, a.orNull, c.map(_.cols).getOrElse(Nil),
           v.getOrElse(Values(Nil)),
-          maybeReturning, db
+          maybeReturning, db, ic.orNull
         )
+    }
+  def insert: MemParser[Insert] =
+    fullInsert | ((qualifiedIdent ~ opt(ident) ~ opt(columns) <~ "+") ~ values ~ opt(columns)) ^^ {
       case (t: Ident) ~ a ~ c ~ (v: Values @unchecked) ~ maybeCols =>
         Insert(t, a.orNull, c.map(_.cols).getOrElse(Nil), v, maybeCols, None)
       case x => sys.error(s"Unexpected insert parse result: $x")
     } named "insert"
+  private def insertConflict: MemParser[InsertConflict] = {
+    def processFilter(f: Option[Arr]) = f.collect {
+      case x if x.elements.size == 1 => x
+      case x => sys.error(s"Invalid insert conflict target filter: $x")
+    }.orNull
+    def insertConflictTarget: MemParser[(String, List[TableColDef], InsertConflictTarget)] =
+      opt(alias) ~ opt("(" ~> exprList <~ ")") ~ opt(filter) ^^ {
+        case vd ~ t ~ tf =>
+          val target = InsertConflictTarget(t.map { case a: Arr => a.elements case e => List(e) }.getOrElse(Nil),
+            processFilter(tf))
+          vd.map(d => (d._1, d._2.getOrElse(Nil), target)).getOrElse((null, Nil, target))
+      } named "insert-conflict-target"
+    def insertConflictAction: MemParser[InsertConflictAction] =
+      "=" ~> opt(filter) ~ columns ~ opt(valuesSelect | array) ^^ {
+      case f ~ c ~ None =>
+        val (cols, vals) = splitAssignmentCols(c)
+        InsertConflictAction(cols, f.orNull, Arr(vals))
+      case f ~ c ~ Some(v) =>
+        InsertConflictAction(c.cols, f.orNull, v)
+
+    } named "insert-conflict-action"
+    opt("?" ~> insertConflictTarget) ~ opt(insertConflictAction) ^^ {
+      case None ~ None => null
+      case t ~ a =>
+        val (va, vc, target) = t.getOrElse((null, null, null))
+        def processTarget(t: InsertConflictTarget) = if (t == null) null else t
+        InsertConflict(a.orNull, processTarget(target), va, vc)
+    }
+  } named "insert-conflict"
 
   //UPDATE parsers
   // update table set col1 = val1, col2 = val2 where ...

@@ -171,6 +171,7 @@ package object dialects {
           new b.InsertExpr(i.table.asInstanceOf[b.IdentExpr], i.alias, i.cols, ivals
             .copy(tables = List(valstable.copy(
               table = b.BracesExpr(vals.copy(cols = colsExprWithCasts))))),
+            i.insertConflict.asInstanceOf[b.InsertConflictExpr],
             i.returning.asInstanceOf[Option[b.ColsExpr]]
           ).defaultSQL
         case _ => i.defaultSQL
