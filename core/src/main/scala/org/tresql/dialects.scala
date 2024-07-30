@@ -41,38 +41,28 @@ package object dialects {
         String.valueOf(f.params(1).asInstanceOf[QueryBuilder#ConstExpr].value))})"
   }
 
-  object HSQLRawDialect extends CoreTypes.Dialect {
-    def isDefinedAt(e: Expr) = {
-      val b = e.builder
-      e match {
-        case b.FunExpr("lower", _: List[_], false, None, None) => true
-        case b.FunExpr("translate", List(_, b.ConstExpr(from: String),
-          b.ConstExpr(to: String)), false, None, None) if from.length == to.length => true
-        case b.FunExpr("nextval", List(b.ConstExpr(_)), false, None, None) => true
-        case v: QueryBuilder#VarExpr if is_sql_array(v) => true
-        case c: QueryBuilder#CastExpr => true
-        case b.BinExpr("`~`", _, _) => true
-        case b.SelectExpr(List(b.Table(b.ConstExpr(ast.Null), _, _, _, _, _)), _, _, _, _, _, _, _, _, _) => true
-        case _ => false
-      }
-    }
-    def apply(e: Expr) = {
-      val b = e.builder
-      (e: @unchecked) match {
-        case b.FunExpr("lower", List(p), false, None, None) => "lcase(" + p.sql + ")"
-        case b.FunExpr("translate", List(col, b.ConstExpr(from: String),
-          b.ConstExpr(to: String)), false, None, None) if from.length == to.length =>
-          (from zip to).foldLeft(col.sql)((s, a) => "replace(" + s + ", '" + a._1 + "', '" + a._2 + "')")
-        case b.FunExpr("nextval", List(b.ConstExpr(seq)), false, None, None) => "next value for " + seq
-        case v: QueryBuilder#VarExpr if is_sql_array(v) =>
-          v.defaultSQL // register bind variable
-          s"array[${sql_arr_bind_vars(v())}]"
-        case c: QueryBuilder#CastExpr => s"cast(${c.exp.sql} as ${c.builder.env.to_sql_type("hsqldb", c.typ)})"
-        case b.BinExpr("`~`", lop, rop) => s"regexp_matches(${lop.sql}, ${rop.sql})"
-        case s @ b.SelectExpr(List(b.Table(b.ConstExpr(ast.Null), _, _, _, _, _)), _, _, _, _, _, _, _, _, _) =>
-          s.copy(tables = List(s.tables.head.copy(table = b.IdentExpr(List("(values(0))"))))).sql
-      }
-    }
+  val HSQLRawDialect: CoreTypes.Dialect = {
+    case f: QueryBuilder#FunExpr if f.name == "lower" && f.params.size == 1 => "lcase(" + f.params.head.sql + ")"
+    case f: QueryBuilder#FunExpr if f.name == "translate" && f.params.size == 3 =>
+      val b = f.builder
+      val List(col, b.ConstExpr(from: String), b.ConstExpr(to: String)) = f.params
+      (from zip to).foldLeft(col.sql)((s, a) => "replace(" + s + ", '" + a._1 + "', '" + a._2 + "')")
+    case f: QueryBuilder#FunExpr if f.name == "nextval" && f.params.size == 1 =>
+      val b = f.builder
+      val List(b.ConstExpr(seq: String)) = f.params
+      "next value for " + seq
+    case v: QueryBuilder#VarExpr if is_sql_array(v) =>
+      v.defaultSQL // register bind variable
+      s"array[${sql_arr_bind_vars(v())}]"
+    case c: QueryBuilder#CastExpr => s"cast(${c.exp.sql} as ${c.builder.env.to_sql_type("hsqldb", c.typ)})"
+    case b: QueryBuilder#BinExpr if b.op == "`~`" => s"regexp_matches(${b.lop.sql}, ${b.rop.sql})"
+    case s: QueryBuilder#SelectExpr if s.tables.size == 1 &&
+      s.tables.head.table.isInstanceOf[QueryBuilder#ConstExpr] &&
+      s.tables.head.table.asInstanceOf[QueryBuilder#ConstExpr].value.isInstanceOf[ast.Null] =>
+      val b = s.builder
+      s.asInstanceOf[b.SelectExpr]
+        .copy(tables = List(s.asInstanceOf[b.SelectExpr].tables.head
+          .copy(table = b.IdentExpr(List("(values(0))"))))).sql
   }
 
   object OracleRawDialect extends CoreTypes.Dialect {
