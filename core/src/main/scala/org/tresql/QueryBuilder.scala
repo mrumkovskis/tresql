@@ -638,10 +638,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       (if (cols == null) {
         "do nothing"
       } else {
-        println(s"COLS, VALS:!!!!!!!\n$cols\n$vals")
         "do update set " + (vals match {
           case ArrExpr(v) =>
-            println(s"VVVV: ($v)\n ${cols zip v}")
             (cols zip v map { v => v._1.sql + " = " + v._2.sql }).mkString(", ")
           case q: SelectExpr => cols.map(_.sql).mkString("(", ", ", ")") + " = " + "(" + q.sql + ")"
           case x => error("Knipis: " + x)
