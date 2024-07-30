@@ -63,6 +63,17 @@ package object dialects {
       s.asInstanceOf[b.SelectExpr]
         .copy(tables = List(s.asInstanceOf[b.SelectExpr].tables.head
           .copy(table = b.IdentExpr(List("(values(0))"))))).sql
+    case i: QueryBuilder#InsertExpr if i.insertConflict != null =>
+      val ic = i.insertConflict
+      val (a, vc) = (ic.valuesAlias, ic.valuesCols)
+      s"merge into ${i.table.sql} using (${i.vals.sql}) as $a${vc.sql} on ${
+        ic.targetFilter.sql} when matched then update set ${ic.vals match {
+        case a: QueryBuilder#ArrExpr =>
+          (ic.cols zip a.elements map { v => v._1.sql + " = " + v._2.sql }).mkString(", ")
+        case q: QueryBuilder#SelectExpr => ic.cols.map(_.sql).mkString("(", ", ", ")") + " = " + "(" + q.sql + ")"
+        case x => sys.error("Knipis: " + x)
+      }} when not matched then insert (${i.cols.map(_.sql).mkString(", ")}) values ${
+        vc.cols.map(c => s"$a.${c.sql}").mkString(", ")}"
   }
 
   object OracleRawDialect extends CoreTypes.Dialect {
