@@ -719,8 +719,8 @@ accounts.transaction[transaction.originator_id o]accounts.account; transaction[t
 
 // merge (upsert)
 +dept {deptno, dname, loc} [7777, 'conflict', 'confl-loc']? t(nr, n, l) [deptno = nr] = {dname, loc} [n, l] --> [[1]]
-+dept{deptno, dname, loc} [7777, 'conflict', 'confl-loc']? t(nr, n, l) [deptno = nr] = {loc} [:loc] --> loc='CL --> [[1]]
++dept{deptno, dname, loc} [7777, 'conflict', 'confl-loc']? t(nr, n, l) [deptno = t.nr] = {loc} [:loc] --> loc='CL --> [[1]]
 dept[dname = 'conflict'] {loc} --> [["CL"]]
-+dept{deptno, dname, loc} [7777, :cf, :loc]? t(nr, n, l) [deptno = nr] = {dname, loc} [n, l]  --> cf='C1;loc='New Loc --> [[1]]
++dept{deptno, dname, loc} [7777, :cf, :loc]? t(nr, n, l) [deptno = nr] = {dname, loc} [T.N, l]  --> cf='C1;loc='New Loc --> [[1]]
 dept[dname = 'C1'] {loc} --> [["New Loc"]]
 -dept[dname = 'C1'] --> [[1]]

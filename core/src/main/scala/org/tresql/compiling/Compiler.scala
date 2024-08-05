@@ -102,6 +102,30 @@ trait Compiler extends QueryParsers { thisCompiler =>
       }
     }
 
+    case class TranslatedScope(tableNames: List[String],
+                               tableMap: String => Option[String],
+                               colReverseMap: String => String => Option[String])(
+      md: TableMetadata, db: Option[String]) extends Scope {
+      private val tables = tableNames.flatMap { tn => tableMap(tn)
+        .flatMap(Compiler.this.table(Nil)(_)(md, db))
+        .map(t => t.copy(name = tn, cols = t.cols.flatMap(c => colReverseMap(tn)(c.name)
+          .map(cn => c.copy(name = cn)).toList))).toList
+      }
+      override def table(table: String): Option[Table] =
+        tables.find(_.name == table.toLowerCase)
+      override def column(col: String): Option[org.tresql.metadata.Col] = col.lastIndexOf(".") match {
+        case -1 => tableNames.flatMap(tn => column(s"$tn.${col.toLowerCase}").toList) match {
+          case List(c) => Some(c)
+          case Nil => None
+          case l => sys.error(s"Ambiguous column name.")
+        }
+        case i =>
+          for (t <- table(col.substring(0, i).toLowerCase); c <- t.colOption(col.substring(i + 1).toLowerCase))
+            yield c
+      }
+      override def isEqual(exp: SQLDefBase): Boolean = false
+    }
+
     implicit def expToScope(exp: SQLDefBase): Scope = exp match {
       case e: WithTableDef => new WithTableDefScope(e)
       case e: SelectDefBase => new SelectDefScope(e)
@@ -173,6 +197,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     object TablesCtx extends Ctx //from clause
     object ColsCtx extends Ctx //column clause
     object BodyCtx extends Ctx //where, group by, having, order, limit clauses
+    object InsConflCtx extends Ctx // on conflict do (upsert) clause
 
     case class BuildCtx(ctx: Ctx, db: Option[String])
 
@@ -244,7 +269,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         ), retType, p)
       }.getOrElse(error(s"Unknown function: ${f.name}"))
       case ftd: FunAsTable => FunAsTableDef(tr(ctx, ftd.fun).asInstanceOf[FunDef], ftd.cols, ftd.withOrdinality)
-      case c: ast.Col =>
+      case c: ast.Col if ctx.ctx != InsConflCtx => // types not relevant for insert conflict update cols
         val alias = if (c.alias != null) c.alias else c.col match {
           case Obj(Ident(name), _, _, _, _) => name.last //use last part of qualified ident as name
           case Cast(Obj(Ident(name), _, _, _, _), _) => name.last //use last part of qualified ident as name
@@ -342,8 +367,9 @@ trait Compiler extends QueryParsers { thisCompiler =>
         val vals = if (dml.vals != null) tr_with_c(nctx, BodyCtx, dml.vals) else null
         val retCols = dml.returning.map(buildCols(nctx, _))
         val dmlDef = dml match {
-          case _: Insert =>
-            InsertDef(cols, List(table), Insert(table = null, alias = null, cols = Nil, vals = vals, None, db))
+          case i: Insert =>
+            val ic = tr_with_c(nctx, InsConflCtx, i.insertConflict).asInstanceOf[InsertConflict]
+            InsertDef(cols, List(table), Insert(table = null, alias = null, cols = Nil, vals = vals, None, db, ic))
           case _: Update =>
             UpdateDef(cols, List(table), Update(
               table = null, alias = null, cols = Nil, filter = filter, vals = vals, returning = None, db = db))
@@ -553,7 +579,29 @@ trait Compiler extends QueryParsers { thisCompiler =>
         dml match {
           case ins: InsertDef =>
             dml.cols foreach namer(dmlColCtx) // dml columns must come from dml table
-            namer(ctx)(ins.exp) //do not change scope for insert value clause name resolving
+            namer(ctx)(ins.exp.vals) //do not change scope for insert value clause name resolving
+            val ic = ins.exp.insertConflict
+            if (ic != null) {
+              val tableName = if (ic.valuesAlias == null) "excluded" /*pg style name*/ else ic.valuesAlias
+              val tableMap = (tn: String) => if (tn == tableName) Option(dml.tableNames.head) else None
+              val colMap: String => String => Option[String] = {
+                val c = dml.cols.map(_.name)
+                val m =
+                  (c zip (if (ic.valuesCols.nonEmpty) ic.valuesCols.map(_.name) else c)).toMap
+                tn => if (tn == tableName) m.get else _ => None
+              }
+              val icScope = ExpToScope.TranslatedScope(List(tableName), tableMap, colMap)(
+                thisCtx.tableMetadata, thisCtx.db)
+              val icCtx = thisCtx.copy(colScopes = icScope :: thisCtx.colScopes)
+              val ict = ic.conflictTarget
+              if (ict != null) namer(icCtx)(ict.filter)
+              val ica = ic.conflictAction
+              if (ica != null) {
+                ica.cols foreach namer(dmlColCtx)
+                namer(icCtx)(ica.vals)
+                namer(icCtx)(ica.filter)
+              }
+            }
           case upd: UpdateDef => upd.exp.vals match {
             case vfsd: ValuesFromSelectDef =>
               namer(ctx)(vfsd) //vals clause
