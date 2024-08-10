@@ -54,7 +54,7 @@ package object dialects {
     case v: QueryBuilder#VarExpr if is_sql_array(v) =>
       v.defaultSQL // register bind variable
       s"array[${sql_arr_bind_vars(v())}]"
-    case c: QueryBuilder#CastExpr => s"cast(${c.exp.sql} as ${c.builder.env.to_sql_type("hsqldb", c.typ)})"
+    case c: QueryBuilder#CastExpr => s"cast(${c.exp.sql} as ${c.builder.env.metadata.to_sql_type("hsqldb", c.typ)})"
     case b: QueryBuilder#BinExpr if b.op == "`~`" => s"regexp_matches(${b.lop.sql}, ${b.rop.sql})"
     case s: QueryBuilder#SelectExpr if s.tables.size == 1 &&
       s.tables.head.table.isInstanceOf[QueryBuilder#ConstExpr] &&
