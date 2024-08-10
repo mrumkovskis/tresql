@@ -55,6 +55,7 @@ package object dialects {
       v.defaultSQL // register bind variable
       s"array[${sql_arr_bind_vars(v())}]"
     case c: QueryBuilder#CastExpr => s"cast(${c.exp.sql} as ${c.builder.env.metadata.to_sql_type("hsqldb", c.typ) match {
+      case "varchar array" => "longvarchar array" // size of varchar unknown and required by hsqldb - use longvarchar instead
       case "varchar" => "longvarchar" // size of varchar unknown and required by hsqldb - use longvarchar instead
       case x => x
     }})"
