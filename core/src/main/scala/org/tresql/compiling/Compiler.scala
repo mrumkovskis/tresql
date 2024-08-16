@@ -512,7 +512,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
                        tblScopes: List[Scope],
                        ctx: Ctx, isGrpOrd: Boolean,
                        withTableMetadata: Option[WithTableMetadata],
-                       db: Option[String]) {
+                       dbs: List[Option[String]]) {
       def tableMetadata: TableMetadata = withTableMetadata.getOrElse(EnvMetadata)
       def addTable(scope: Scope) = withTableMetadata
         .map { case WithTableMetadata(scopes) => WithTableMetadata(scope :: scopes)}
@@ -520,6 +520,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         .getOrElse(this)
       def withMetadata = withTableMetadata.map(_ => this)
         .getOrElse(this.copy(withTableMetadata = Some(WithTableMetadata(Nil))))
+      def db = dbs.headOption.flatten
     }
     def checkDefaultJoin(scopes: List[Scope], table1: TableDef, table2: TableDef, db: Option[String]) = {
       if (table1 != null) {
@@ -572,9 +573,9 @@ trait Compiler extends QueryParsers { thisCompiler =>
         namer(wtCtx)(wsd.exp)
         ctx
       case dml: DMLDefBase =>
-        val dmlTableCtx = Context(Nil, Nil, TableCtx, isGrpOrd = false, None, dml.db) // root scope
-        val dmlColCtx = Context(colScopes = List(dml), tblScopes = Nil, ColumnCtx, isGrpOrd = false, None, dml.db) // dml table scope
-        val thisCtx = ctx.copy(colScopes = dml :: ctx.colScopes, db = dml.db)
+        val dmlTableCtx = Context(Nil, Nil, TableCtx, isGrpOrd = false, None, List(dml.db)) // root scope
+        val dmlColCtx = Context(colScopes = List(dml), tblScopes = Nil, ColumnCtx, isGrpOrd = false, None, List(dml.db)) // dml table scope
+        val thisCtx = ctx.copy(colScopes = dml :: ctx.colScopes, dbs = dml.db :: ctx.dbs)
         dml.tables foreach (t => namer(dmlTableCtx)(t.exp.obj)) // dml table must come from root scope
         dml match {
           case ins: InsertDef =>
@@ -630,10 +631,10 @@ trait Compiler extends QueryParsers { thisCompiler =>
         //return old scope
         ctx
       case rdml: ReturningDMLDef =>
-        val tableCtx = Context(Nil, Nil, TableCtx, isGrpOrd = false, None, rdml.exp.db) // root scope
+        val tableCtx = Context(Nil, Nil, TableCtx, isGrpOrd = false, None, List(rdml.exp.db)) // root scope
         namer(tableCtx)(rdml.tables.head.exp.obj) //first table must come from root scope since it is modified
         rdml.tables.tail foreach (t => namer(ctx)(t.exp.obj))
-        val colCtx = ctx.copy(colScopes = List(rdml), db = rdml.exp.db)
+        val colCtx = ctx.copy(colScopes = List(rdml), dbs = List(rdml.exp.db))
         rdml.cols foreach namer(colCtx)
         namer(ctx)(rdml.exp)
         ctx
@@ -646,13 +647,17 @@ trait Compiler extends QueryParsers { thisCompiler =>
         ctx
       case Ident(ident) if ctx.ctx == ColumnCtx => //check column
         val cn = ident mkString "."
-        (if (ctx.isGrpOrd) declaredColumn(ctx.colScopes)(cn)(ctx.tableMetadata, ctx.db) else
-          column(ctx.colScopes)(cn)(ctx.tableMetadata, ctx.db))
-          .orElse(error(s"Unknown column: $cn"))
+        ctx.dbs.distinct.flatMap { db =>
+          (if (ctx.isGrpOrd) declaredColumn(ctx.colScopes)(cn)(ctx.tableMetadata, db) else
+            column(ctx.colScopes)(cn)(ctx.tableMetadata, db)).toList
+        } match {
+          case Nil => error(s"Unknown column: $cn")
+          case l =>
+        }
         ctx
-      case ChildDef(exp, db) => namer(ctx.copy(db = db))(exp)
+      case ChildDef(exp, db) => namer(ctx.copy(dbs = db :: ctx.dbs))(exp)
     })
-    namer(Context(Nil, Nil, ColumnCtx, isGrpOrd = false, None, None))(exp)
+    namer(Context(Nil, Nil, ColumnCtx, isGrpOrd = false, None, List(None)))(exp)
     exp
   }
 

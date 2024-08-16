@@ -294,6 +294,9 @@ emp[ename = 'BLAKE']{ ename, |contact_db:[id = emp.empno]contact{*} email} --> [
 emp[ename = 'BLAKE'], |contact_db:contact[name = 'John'] --> [[[[7698, "BLAKE", "MANAGER", 7839, "1981-05-01", 2850.00, null, 30]], [[7698, "John", "M", "1982-02-05", "john@tresql.org"]]]]
 |contact_db:contact[name = 'John']{*} --> [[7698, "John", "M", "1982-02-05", "john@tresql.org"]]
 |contact_db:contact[name = 'John']{email} --> [["john@tresql.org"]]
+|contact_db:contact c{name, |[c.id = e.empno]emp e{e.ename} ename}#(1) --> [["John", [["BLAKE"]]], ["Peter", [["KING"]]]]
+|contact_db:contact {name,  |[contact.id = e.empno]emp e{e.ename} ename}#(1) --> [["John", [["BLAKE"]]], ["Peter", [["KING"]]]]
+|contact_db:contact {name,  |[contact.id = empno]emp {ename} ename}#(1) --> [["John", [["BLAKE"]]], ["Peter", [["KING"]]]]
 
 //insert, update, delete into another database
 +contact_db:contact{id, name, sex, birth_date, email, +contact_db:notes{id, contact_id, note_date, note}[#notes, :#contact, current_time, 'Pick up the phone']}[#contact, 'Zia', 'F', '1988-07-31', 'zia@tresql.org'] --> [[1, [[null, [[1, 100001]]]], 100000]]
