@@ -647,13 +647,10 @@ trait Compiler extends QueryParsers { thisCompiler =>
         ctx
       case Ident(ident) if ctx.ctx == ColumnCtx => //check column
         val cn = ident mkString "."
-        ctx.dbs.distinct.flatMap { db =>
+        if (ctx.dbs.distinct.flatMap { db =>
           (if (ctx.isGrpOrd) declaredColumn(ctx.colScopes)(cn)(ctx.tableMetadata, db) else
             column(ctx.colScopes)(cn)(ctx.tableMetadata, db)).toList
-        } match {
-          case Nil => error(s"Unknown column: $cn")
-          case l =>
-        }
+        } isEmpty) error(s"Unknown column: $cn")
         ctx
       case ChildDef(exp, db) => namer(ctx.copy(dbs = db :: ctx.dbs))(exp)
     })
