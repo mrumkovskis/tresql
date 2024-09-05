@@ -71,7 +71,7 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
       .withMacros(macro1)
       .withLogger((msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg))
 
-    tresqlResources = res.withExtraResources(Map("emp_db" -> res, "contact_db" -> res1))
+    tresqlResources = res.withExtraResources(Map("emp_db" -> res, "contact_db" -> res1, "" -> res))
 
     List(("/db.sql", connection), ("/db1.sql", conn1)) foreach { case (db, c) =>
       //create test db script
@@ -176,7 +176,7 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     }
     println("\n-------------- TEST compiler ----------------\n")
     val compiler = new QueryCompiler(testRes.metadata,
-      Map("contact_db" -> child_metadata, "emp_db" -> testRes.metadata), testRes)
+      Map("contact_db" -> child_metadata, "emp_db" -> testRes.metadata, "" -> testRes.metadata), testRes)
     //set console compiler so it can be used from scala console
     ConsoleResources.compiler = compiler
     import ast.CompilerException
@@ -385,7 +385,7 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
       override def functionSignaturesResource: String = "/tresql-function-signatures-db1.txt"
     }
     val compiler = new QueryCompiler(testRes.metadata,
-      Map("contact_db" -> child_metadata, "emp_db" -> testRes.metadata), testRes)
+      Map("contact_db" -> child_metadata, "emp_db" -> testRes.metadata, "" -> testRes.metadata), testRes)
     testTresqls("/test.txt", (st, _, _, nr) => {
       def check(e: Exp) = {
         val ev = try Cbor.encode(e).toByteArray catch {

@@ -343,7 +343,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       case Col(BinOp("=", col, value), a) => (Col(col, a), value)
       case x => sys.error(s"Knipis: $x")
     }.unzip
-  private def fullInsert: MemParser[Insert] = "+" ~> opt(ident <~ ":") ~
+  private def optDb: MemParser[Option[String]] =
+    opt(opt(ident) <~ ":") ^^ (_.map(_.getOrElse(""))) named "opt-db"
+  private def fullInsert: MemParser[Insert] = "+" ~> optDb ~
     qualifiedIdent ~ opt(ident) ~ opt(columns) ~ opt(valuesSelect | values) ~
     opt(insertConflict) ~ opt(columns) ^^ {
       case db ~ t ~ a ~ Some(c) ~ None ~ ic ~ maybeReturning if isAssignmentCols(c) =>
@@ -396,7 +398,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   //UPDATE parsers
   // update table set col1 = val1, col2 = val2 where ...
   private def simpleUpdate: MemParser[Update] =
-    (("=" ~> opt(ident <~ ":") ~ qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) ~ opt(array)) |
+    (("=" ~> optDb ~ qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) ~ opt(array)) |
       ((qualifiedIdent ~ opt(ident) ~ opt(filter) ~ opt(columns) <~ "=") ~ array)) ~ opt(columns) ^^ {
         case (db: Option[String@unchecked]) ~ (t: Ident) ~ (a: Option[String@unchecked] ) ~ f ~ c ~ v ~ maybeCols =>
           Update(
@@ -419,7 +421,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
      } named "simple-update"
   //update table set (col1, col2) = (select col1, col2 from table 2 ...) where ...
   private def updateColsSelect: MemParser[Update] =
-    "=" ~> opt(ident <~ ":") ~ qualifiedIdent ~ opt(ident) ~ opt(filter) ~ columns ~ valuesSelect ~ opt(columns) ^^
+    "=" ~> optDb ~ qualifiedIdent ~ opt(ident) ~ opt(filter) ~ columns ~ valuesSelect ~ opt(columns) ^^
       {
         case (db: Option[String]) ~ (t: Ident) ~ (a: Option[String] @unchecked) ~ f ~ c ~ v ~ maybeCols =>
           Update(t, a orNull, f orNull, c.cols, v, maybeCols, db)
@@ -434,7 +436,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       }) named "update-cols-select"
   //update table set col1 = sel_col1, col2 = sel_col2 from (select sel_col1, sel_col2 from table2 ...) values_table where ....
   private def updateFromSelect: MemParser[Update] =
-    "=" ~> opt(ident <~ ":") ~ objs ~ opt(filter) ~ columns ~ opt(columns) ^? ({
+    "=" ~> optDb ~ objs ~ opt(filter) ~ columns ~ opt(columns) ^? ({
     case (db: Option[String]) ~  (tables @ Obj(updateTable @ Ident(_), alias, _, _, _) :: _) ~ f ~ c ~ maybeCols =>
       Update(
         updateTable,
@@ -478,7 +480,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
           )
         else null
     }
-    (("-" ~> opt(ident <~ ":") ~ objs ~ filter) | ((objs <~ "-") ~ filter)) ~ opt(columns) ^? ({
+    (("-" ~> optDb ~ objs ~ filter) | ((objs <~ "-") ~ filter)) ~ opt(columns) ^? ({
       case (db: Option[String@unchecked]) ~ (tables @ Obj(delTable: Ident, alias, _, _, _) :: _) ~ (f: Arr) ~
         (maybeCols: Option[Cols]) =>
         Delete(delTable, alias, f, valsFromSel(tables), maybeCols, db)
@@ -493,7 +495,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   //operation parsers
   //delete must be before alternative since it can start with - sign and
   //so it is not translated into minus expression!
-  def unaryExpr: MemParser[Exp] = delete | (opt(("|" ~ opt(ident <~ ":")) | "-" | "!" | "~") ~ operand) ^^ {
+  def unaryExpr: MemParser[Exp] = delete | (opt(("|" ~ optDb) | "-" | "!" | "~") ~ operand) ^^ {
     case None ~ e => e
     case Some(o: String) ~ (e: Exp) => UnOp(o, e)
     case Some(_ ~ (db: Option[String]@unchecked)) ~ (q: Exp) => ChildQuery(q, db)
