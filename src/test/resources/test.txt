@@ -299,6 +299,9 @@ emp[ename = 'BLAKE'], |contact_db:contact[name = 'John'] --> [[[[7698, "BLAKE", 
 |contact_db:contact {name,  |[contact.id = empno]emp {ename} ename}#(1) --> [["John", [["BLAKE"]]], ["Peter", [["KING"]]]]
 // empty database name
 |:emp[ename = 'SCOTT']{job} --> [["ANALYST"]]
++:dept {deptno = 0, dname = 'D', loc = 'L'} --> [[1]]
+=:dept [deptno = 0] {dname = 'X'} --> [[1]]
+-:dept [dname = 'X'] --> [[1]]
 
 //insert, update, delete into another database
 +contact_db:contact{id, name, sex, birth_date, email, +contact_db:notes{id, contact_id, note_date, note}[#notes, :#contact, current_time, 'Pick up the phone']}[#contact, 'Zia', 'F', '1988-07-31', 'zia@tresql.org'] --> [[1, [[null, [[1, 100001]]]], 100000]]
