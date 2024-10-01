@@ -31,7 +31,7 @@ ThisBuild / versionPolicyIntention := Compatibility.BinaryCompatible
 
 def coreDependencies(scalaVer: String) =
   Seq(
-    "org.scala-lang.modules" %% "scala-parser-combinators" % "2.3.0"
+    "org.scala-lang.modules" %% "scala-parser-combinators" % "2.4.0"
   ) ++ (if (scalaVer.startsWith("3")) Nil else Seq("org.scala-lang" % "scala-reflect" % scalaVer))
 
 javacOptions ++= Seq("-source", "11", "-target", "11", "-Xlint")
