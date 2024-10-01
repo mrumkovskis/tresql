@@ -34,12 +34,12 @@ def coreDependencies(scalaVer: String) =
     "org.scala-lang.modules" %% "scala-parser-combinators" % "2.3.0"
   ) ++ (if (scalaVer.startsWith("3")) Nil else Seq("org.scala-lang" % "scala-reflect" % scalaVer))
 
-javacOptions ++= Seq("-source", "1.8", "-target", "1.8", "-Xlint")
+javacOptions ++= Seq("-source", "11", "-target", "11", "-Xlint")
 initialize := {
   val _ = initialize.value
   val javaVersion = sys.props("java.specification.version")
-  if (javaVersion != "1.8")
-    sys.error("Java 1.8 is required for this project. Found " + javaVersion + " instead")
+  if (javaVersion != "11")
+    sys.error("Java 11 is required for this project. Found " + javaVersion + " instead")
 }
 
 lazy val core = (project in file("core"))
@@ -107,7 +107,7 @@ lazy val tresql = (project in file("."))
       }
       Seq(
         "org.scalatest" %% "scalatest"        % "3.2.18"  %  Test,
-        "org.hsqldb"     % "hsqldb"           % "2.7.2"   %  Test     classifier "jdk8",
+        "org.hsqldb"     % "hsqldb"           % "2.7.2"   %  Test,
         "io.bullet"     %% "borer-core"       % borerV    %  Test,
         "io.bullet"     %% "borer-derivation" % borerV    %  Test,
       )
