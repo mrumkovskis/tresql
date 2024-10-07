@@ -200,7 +200,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case c => error("column index in result expression must be greater than 0. Is: " + c)
       }
     }
-    def name = s"$nr($col)"
+    def name = s"^$nr.${col.tresql}"
     override def toString = s"$name = ${Try(this()).getOrElse("value not available")}"
   }
 
