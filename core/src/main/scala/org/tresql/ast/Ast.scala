@@ -67,7 +67,7 @@ case class IdRef(name: String) extends Exp {
   def tresql = ":#" + name
 }
 case class Res(rNr: Int, col: Exp) extends Exp {
-  def tresql = ":" + rNr + "(" + col.tresql + ")"
+  def tresql = "^" + rNr + "." + col.tresql
 }
 case class Cast(exp: Exp, typ: String) extends Exp {
   def tresql = exp.tresql + "::" +
