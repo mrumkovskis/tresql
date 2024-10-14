@@ -5,7 +5,7 @@ jobs:
     runs-on:  ${{ matrix.os }}
     strategy:
       matrix:
-        os:   [ubuntu-latest]  # TODO macos-latest, windows-latest
+        os:   [ubuntu-22.04]  # TODO macos-latest, windows-latest
         java: [11] #, 17, 21]
     services:
       postgres:
