@@ -6,151 +6,379 @@ abstract class CoreTypes {
   type RowConverter[T] = RowLike => T //is used in macro for selects to generate typed row objects
 
   //converters
-  type Converter[T] = (RowLike, Manifest[T]) => T
-  implicit def convAny(r: RowLike, m: Manifest[Any]): Any = r(0).asInstanceOf[Any]
-  implicit def convInt(r: RowLike, m: Manifest[Int]): Int = r.int(0)
-  implicit def convLong(r: RowLike, m: Manifest[Long]): Long = r.long(0)
-  implicit def convDouble(r: RowLike, m: Manifest[Double]): Double = r.double(0)
-  implicit def convBoolean(r: RowLike, m: Manifest[Boolean]): Boolean = r.boolean(0)
+  type Converter[T] = (RowLike, Int) => T
+  // do not make any converter implicit to avoid ambiguity
+  def convAny(r: RowLike, i: Int): Any = r(i).asInstanceOf[Any]
+  implicit def convInt(r: RowLike, i: Int): Int = r.int(i)
+  implicit def convLong(r: RowLike, i: Int): Long = r.long(i)
+  implicit def convDouble(r: RowLike, i: Int): Double = r.double(i)
+  implicit def convBoolean(r: RowLike, i: Int): Boolean = r.boolean(i)
 
-  implicit def convBigDecimal(r: RowLike, m: Manifest[BigDecimal]): BigDecimal = r.bigdecimal(0)
-  implicit def convString(r: RowLike, m: Manifest[String]): String = r.string(0)
-  implicit def convDate(r: RowLike, m: Manifest[java.util.Date]): java.util.Date = r.timestamp(0)
-  implicit def convSqlDate(r: RowLike, m: Manifest[java.sql.Date]): java.sql.Date = r.date(0)
-  implicit def convSqlTimestamp(r: RowLike, m: Manifest[java.sql.Timestamp]): java.sql.Timestamp = r.timestamp(0)
-  implicit def convSqlTime(r: RowLike, m: Manifest[java.sql.Time]): java.sql.Time = r.time(0)
+  implicit def convBigDecimal(r: RowLike, i: Int): BigDecimal = r.bigdecimal(i)
+  implicit def convBigInt(r: RowLike, i: Int): BigInt = r.bigint(i)
+  implicit def convString(r: RowLike, i: Int): String = r.string(i)
+  implicit def convSqlDate(r: RowLike, i: Int): java.sql.Date = r.date(i)
+  implicit def convSqlTimestamp(r: RowLike, i: Int): java.sql.Timestamp = r.timestamp(i)
+  implicit def convSqlTime(r: RowLike, i: Int): java.sql.Time = r.time(i)
 
-  implicit def convLocalDate(r: RowLike, m: Manifest[java.time.LocalDate]): java.time.LocalDate = Option(r.date(0)).map(_.toLocalDate).orNull
-  implicit def convLocalDatetime(r: RowLike, m: Manifest[java.time.LocalDateTime]): java.time.LocalDateTime = Option(r.timestamp(0)).map(_.toLocalDateTime).orNull
-  implicit def convLocalTime(r: RowLike, m: Manifest[java.time.LocalTime]): java.time.LocalTime = Option(r.time(0)).map(_.toLocalTime).orNull
-  implicit def convJInt(r: RowLike, m: Manifest[java.lang.Integer]): java.lang.Integer = r.jInt(0)
-  implicit def convJLong(r: RowLike, m: Manifest[java.lang.Long]): java.lang.Long = r.jLong(0)
-  implicit def convJDouble(r: RowLike, m: Manifest[java.lang.Double]): java.lang.Double = r.jDouble(0)
-  implicit def convJBigDecimal(r: RowLike, m: Manifest[java.math.BigDecimal]): java.math.BigDecimal = r.jBigDecimal(0)
-  implicit def convJBoolean(r: RowLike, m: Manifest[java.lang.Boolean]): java.lang.Boolean = r.jBoolean(0)
+  implicit def convLocalDate(r: RowLike, i: Int): java.time.LocalDate = Option(r.date(i)).map(_.toLocalDate).orNull
+  implicit def convLocalDatetime(r: RowLike, i: Int): java.time.LocalDateTime = Option(r.timestamp(i)).map(_.toLocalDateTime).orNull
+  implicit def convLocalTime(r: RowLike, i: Int): java.time.LocalTime = Option(r.time(i)).map(_.toLocalTime).orNull
+  implicit def convJInt(r: RowLike, i: Int): java.lang.Integer = r.jInt(i)
+  implicit def convJLong(r: RowLike, i: Int): java.lang.Long = r.jLong(i)
+  implicit def convJDouble(r: RowLike, i: Int): java.lang.Double = r.jDouble(i)
+  implicit def convJBigDecimal(r: RowLike, i: Int): java.math.BigDecimal = r.jBigDecimal(i)
+  implicit def convJBigInteger(r: RowLike, i: Int): java.math.BigInteger = r.jBigInteger(i)
+  implicit def convJBoolean(r: RowLike, i: Int): java.lang.Boolean = r.jBoolean(i)
 
-  implicit def convByteArray(r: RowLike, m: Manifest[Array[Byte]]): Array[Byte] = r.bytes(0)
-  implicit def convInputStream(r: RowLike, m: Manifest[java.io.InputStream]): java.io.InputStream = r.stream(0)
-  implicit def convReader(r: RowLike, m: Manifest[java.io.Reader]): java.io.Reader = r.reader(0)
-  implicit def convBlob(r: RowLike, m: Manifest[java.sql.Blob]): java.sql.Blob = r blob 0
-  implicit def convClob(r: RowLike, m: Manifest[java.sql.Clob]): java.sql.Clob = r clob 0
-  implicit def convArray(r: RowLike, m: Manifest[java.sql.Array]): java.sql.Array = r array 0
-  implicit def convUnit(r: RowLike, m: Manifest[Unit]): Unit = ()
-  //do not make Product conversion implicit since it spans also case classes
-  def convTuple[T <: Product](r: RowLike, m: Manifest[T]) = if (m.toString.startsWith("scala.Tuple"))
-    (m.typeArguments: @unchecked) match {
-      case m1 :: Nil => r.typed(0)(m1).asInstanceOf[T]
-      case m1 :: m2 :: Nil => (r.typed(0)(m1), r.typed(1)(m2)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6), r.typed(6)(m7)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6), r.typed(6)(m7), r.typed(7)(m8)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6), r.typed(6)(m7), r.typed(7)(m8), r.typed(8)(m9)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6), r.typed(6)(m7), r.typed(7)(m8), r.typed(8)(m9), r.typed(9)(m10)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6), r.typed(6)(m7), r.typed(7)(m8), r.typed(8)(m9), r.typed(9)(m10), r.typed(10)(m11)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6), r.typed(6)(m7), r.typed(7)(m8), r.typed(8)(m9), r.typed(9)(m10), r.typed(10)(m11), r.typed(11)(m12)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6), r.typed(6)(m7), r.typed(7)(m8), r.typed(8)(m9), r.typed(9)(m10), r.typed(10)(m11), r.typed(11)(m12), r.typed(12)(m13)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6), r.typed(6)(m7), r.typed(7)(m8), r.typed(8)(m9), r.typed(9)(m10), r.typed(10)(m11), r.typed(11)(m12), r.typed(12)(m13), r.typed(13)(m14)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6), r.typed(6)(m7), r.typed(7)(m8), r.typed(8)(m9), r.typed(9)(m10), r.typed(10)(m11), r.typed(11)(m12), r.typed(12)(m13), r.typed(13)(m14), r.typed(14)(m15)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6), r.typed(6)(m7), r.typed(7)(m8), r.typed(8)(m9), r.typed(9)(m10), r.typed(10)(m11), r.typed(11)(m12), r.typed(12)(m13), r.typed(13)(m14), r.typed(14)(m15), r.typed(15)(m16)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6), r.typed(6)(m7), r.typed(7)(m8), r.typed(8)(m9), r.typed(9)(m10), r.typed(10)(m11), r.typed(11)(m12), r.typed(12)(m13), r.typed(13)(m14), r.typed(14)(m15), r.typed(15)(m16), r.typed(16)(m17)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6), r.typed(6)(m7), r.typed(7)(m8), r.typed(8)(m9), r.typed(9)(m10), r.typed(10)(m11), r.typed(11)(m12), r.typed(12)(m13), r.typed(13)(m14), r.typed(14)(m15), r.typed(15)(m16), r.typed(16)(m17), r.typed(17)(m18)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6), r.typed(6)(m7), r.typed(7)(m8), r.typed(8)(m9), r.typed(9)(m10), r.typed(10)(m11), r.typed(11)(m12), r.typed(12)(m13), r.typed(13)(m14), r.typed(14)(m15), r.typed(15)(m16), r.typed(16)(m17), r.typed(17)(m18), r.typed(18)(m19)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: m20 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6), r.typed(6)(m7), r.typed(7)(m8), r.typed(8)(m9), r.typed(9)(m10), r.typed(10)(m11), r.typed(11)(m12), r.typed(12)(m13), r.typed(13)(m14), r.typed(14)(m15), r.typed(15)(m16), r.typed(16)(m17), r.typed(17)(m18), r.typed(18)(m19), r.typed(19)(m20)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: m20 :: m21 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6), r.typed(6)(m7), r.typed(7)(m8), r.typed(8)(m9), r.typed(9)(m10), r.typed(10)(m11), r.typed(11)(m12), r.typed(12)(m13), r.typed(13)(m14), r.typed(14)(m15), r.typed(15)(m16), r.typed(16)(m17), r.typed(17)(m18), r.typed(18)(m19), r.typed(19)(m20), r.typed(20)(m21)).asInstanceOf[T]
-      case m1 :: m2 :: m3 :: m4 :: m5 :: m6 :: m7 :: m8 :: m9 :: m10 :: m11 :: m12 :: m13 :: m14 :: m15 :: m16 :: m17 :: m18 :: m19 :: m20 :: m21 :: m22 :: Nil => (r.typed(0)(m1), r.typed(1)(m2), r.typed(2)(m3), r.typed(3)(m4), r.typed(4)(m5), r.typed(5)(m6), r.typed(6)(m7), r.typed(7)(m8), r.typed(8)(m9), r.typed(9)(m10), r.typed(10)(m11), r.typed(11)(m12), r.typed(12)(m13), r.typed(13)(m14), r.typed(14)(m15), r.typed(15)(m16), r.typed(16)(m17), r.typed(17)(m18), r.typed(18)(m19), r.typed(19)(m20), r.typed(20)(m21), r.typed(21)(m22)).asInstanceOf[T]
-    }
-  else sys.error("Cannot convert row to product of type: " + m)
+  implicit def convByteArray(r: RowLike, i: Int): Array[Byte] = r.bytes(i)
+  implicit def convInputStream(r: RowLike, i: Int): java.io.InputStream = r.stream(i)
+  implicit def convReader(r: RowLike, i: Int): java.io.Reader = r.reader(i)
+  implicit def convBlob(r: RowLike, i: Int): java.sql.Blob = r blob i
+  implicit def convClob(r: RowLike, i: Int): java.sql.Clob = r clob i
+  implicit def convArray(r: RowLike, i: Int): java.sql.Array = r array i
+  implicit def convUnit(r: RowLike, i: Int): Unit = ()
 
-  implicit def convTuple1[T <: Tuple1[_]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    r.typed(0)(a(0)).asInstanceOf[T]
+  implicit def convResult(r: RowLike, i: Int): Result[_ <: RowLike] = r.result(i)
+  implicit def convList[A: Converter](r: RowLike, i: Int): List[A] = {
+    val c = implicitly[Converter[A]]
+    r.result(i).map(c(_, 0)).toList
   }
-  implicit def convTuple2[T <: Tuple2[_, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1))).asInstanceOf[T]
+
+  implicit def convTuple2[A1: Converter, A2: Converter](r: RowLike, i: Int): (A1, A2) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    (c1(r, 0), c2(r, 1))
   }
-  implicit def convTuple3[T <: Tuple3[_, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2))).asInstanceOf[T]
+
+  implicit def convTuple3[A1: Converter, A2: Converter, A3: Converter](r: RowLike, i: Int): (A1, A2, A3) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    (c1(r, 0), c2(r, 1), c3(r, 2))
   }
-  implicit def convTuple4[T <: Tuple4[_, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3))).asInstanceOf[T]
+
+  implicit def convTuple4[A1: Converter, A2: Converter, A3: Converter, A4: Converter](r: RowLike, i: Int): (A1, A2, A3, A4) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3))
   }
-  implicit def convTuple5[T <: Tuple5[_, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4))).asInstanceOf[T]
+
+  implicit def convTuple5[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4))
   }
-  implicit def convTuple6[T <: Tuple6[_, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5))).asInstanceOf[T]
+
+  implicit def convTuple6[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5))
   }
-  implicit def convTuple7[T <: Tuple7[_, _, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6))).asInstanceOf[T]
+
+  implicit def convTuple7[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter, A7: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6, A7) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    val c7 = implicitly[Converter[A7]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5), c7(r, 6))
   }
-  implicit def convTuple8[T <: Tuple8[_, _, _, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6)), r.typed(7)(a(7))).asInstanceOf[T]
+
+  implicit def convTuple8[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter, A7: Converter, A8: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6, A7, A8) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    val c7 = implicitly[Converter[A7]]
+    val c8 = implicitly[Converter[A8]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5), c7(r, 6), c8(r, 7))
   }
-  implicit def convTuple9[T <: Tuple9[_, _, _, _, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6)), r.typed(7)(a(7)), r.typed(8)(a(8))).asInstanceOf[T]
+
+  implicit def convTuple9[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter, A7: Converter, A8: Converter, A9: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6, A7, A8, A9) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    val c7 = implicitly[Converter[A7]]
+    val c8 = implicitly[Converter[A8]]
+    val c9 = implicitly[Converter[A9]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5), c7(r, 6), c8(r, 7), c9(r, 8))
   }
-  implicit def convTuple10[T <: Tuple10[_, _, _, _, _, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6)), r.typed(7)(a(7)), r.typed(8)(a(8)), r.typed(9)(a(9))).asInstanceOf[T]
+
+  implicit def convTuple10[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter, A7: Converter, A8: Converter, A9: Converter, A10: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6, A7, A8, A9, A10) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    val c7 = implicitly[Converter[A7]]
+    val c8 = implicitly[Converter[A8]]
+    val c9 = implicitly[Converter[A9]]
+    val c10 = implicitly[Converter[A10]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5), c7(r, 6), c8(r, 7), c9(r, 8), c10(r, 9))
   }
-  implicit def convTuple11[T <: Tuple11[_, _, _, _, _, _, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6)), r.typed(7)(a(7)), r.typed(8)(a(8)), r.typed(9)(a(9)), r.typed(10)(a(10))).asInstanceOf[T]
+
+  implicit def convTuple11[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter, A7: Converter, A8: Converter, A9: Converter, A10: Converter, A11: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    val c7 = implicitly[Converter[A7]]
+    val c8 = implicitly[Converter[A8]]
+    val c9 = implicitly[Converter[A9]]
+    val c10 = implicitly[Converter[A10]]
+    val c11 = implicitly[Converter[A11]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5), c7(r, 6), c8(r, 7), c9(r, 8), c10(r, 9), c11(r, 10))
   }
-  implicit def convTuple12[T <: Tuple12[_, _, _, _, _, _, _, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6)), r.typed(7)(a(7)), r.typed(8)(a(8)), r.typed(9)(a(9)), r.typed(10)(a(10)), r.typed(11)(a(11))).asInstanceOf[T]
+
+  implicit def convTuple12[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter, A7: Converter, A8: Converter, A9: Converter, A10: Converter, A11: Converter, A12: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    val c7 = implicitly[Converter[A7]]
+    val c8 = implicitly[Converter[A8]]
+    val c9 = implicitly[Converter[A9]]
+    val c10 = implicitly[Converter[A10]]
+    val c11 = implicitly[Converter[A11]]
+    val c12 = implicitly[Converter[A12]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5), c7(r, 6), c8(r, 7), c9(r, 8), c10(r, 9), c11(r, 10), c12(r, 11))
   }
-  implicit def convTuple13[T <: Tuple13[_, _, _, _, _, _, _, _, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6)), r.typed(7)(a(7)), r.typed(8)(a(8)), r.typed(9)(a(9)), r.typed(10)(a(10)), r.typed(11)(a(11)), r.typed(12)(a(12))).asInstanceOf[T]
+
+  implicit def convTuple13[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter, A7: Converter, A8: Converter, A9: Converter, A10: Converter, A11: Converter, A12: Converter, A13: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    val c7 = implicitly[Converter[A7]]
+    val c8 = implicitly[Converter[A8]]
+    val c9 = implicitly[Converter[A9]]
+    val c10 = implicitly[Converter[A10]]
+    val c11 = implicitly[Converter[A11]]
+    val c12 = implicitly[Converter[A12]]
+    val c13 = implicitly[Converter[A13]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5), c7(r, 6), c8(r, 7), c9(r, 8), c10(r, 9), c11(r, 10), c12(r, 11), c13(r, 12))
   }
-  implicit def convTuple14[T <: Tuple14[_, _, _, _, _, _, _, _, _, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6)), r.typed(7)(a(7)), r.typed(8)(a(8)), r.typed(9)(a(9)), r.typed(10)(a(10)), r.typed(11)(a(11)), r.typed(12)(a(12)), r.typed(13)(a(13))).asInstanceOf[T]
+
+  implicit def convTuple14[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter, A7: Converter, A8: Converter, A9: Converter, A10: Converter, A11: Converter, A12: Converter, A13: Converter, A14: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    val c7 = implicitly[Converter[A7]]
+    val c8 = implicitly[Converter[A8]]
+    val c9 = implicitly[Converter[A9]]
+    val c10 = implicitly[Converter[A10]]
+    val c11 = implicitly[Converter[A11]]
+    val c12 = implicitly[Converter[A12]]
+    val c13 = implicitly[Converter[A13]]
+    val c14 = implicitly[Converter[A14]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5), c7(r, 6), c8(r, 7), c9(r, 8), c10(r, 9), c11(r, 10), c12(r, 11), c13(r, 12), c14(r, 13))
   }
-  implicit def convTuple15[T <: Tuple15[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6)), r.typed(7)(a(7)), r.typed(8)(a(8)), r.typed(9)(a(9)), r.typed(10)(a(10)), r.typed(11)(a(11)), r.typed(12)(a(12)), r.typed(13)(a(13)), r.typed(14)(a(14))).asInstanceOf[T]
+
+  implicit def convTuple15[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter, A7: Converter, A8: Converter, A9: Converter, A10: Converter, A11: Converter, A12: Converter, A13: Converter, A14: Converter, A15: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    val c7 = implicitly[Converter[A7]]
+    val c8 = implicitly[Converter[A8]]
+    val c9 = implicitly[Converter[A9]]
+    val c10 = implicitly[Converter[A10]]
+    val c11 = implicitly[Converter[A11]]
+    val c12 = implicitly[Converter[A12]]
+    val c13 = implicitly[Converter[A13]]
+    val c14 = implicitly[Converter[A14]]
+    val c15 = implicitly[Converter[A15]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5), c7(r, 6), c8(r, 7), c9(r, 8), c10(r, 9), c11(r, 10), c12(r, 11), c13(r, 12), c14(r, 13), c15(r, 14))
   }
-  implicit def convTuple16[T <: Tuple16[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6)), r.typed(7)(a(7)), r.typed(8)(a(8)), r.typed(9)(a(9)), r.typed(10)(a(10)), r.typed(11)(a(11)), r.typed(12)(a(12)), r.typed(13)(a(13)), r.typed(14)(a(14)), r.typed(15)(a(15))).asInstanceOf[T]
+
+  implicit def convTuple16[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter, A7: Converter, A8: Converter, A9: Converter, A10: Converter, A11: Converter, A12: Converter, A13: Converter, A14: Converter, A15: Converter, A16: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    val c7 = implicitly[Converter[A7]]
+    val c8 = implicitly[Converter[A8]]
+    val c9 = implicitly[Converter[A9]]
+    val c10 = implicitly[Converter[A10]]
+    val c11 = implicitly[Converter[A11]]
+    val c12 = implicitly[Converter[A12]]
+    val c13 = implicitly[Converter[A13]]
+    val c14 = implicitly[Converter[A14]]
+    val c15 = implicitly[Converter[A15]]
+    val c16 = implicitly[Converter[A16]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5), c7(r, 6), c8(r, 7), c9(r, 8), c10(r, 9), c11(r, 10), c12(r, 11), c13(r, 12), c14(r, 13), c15(r, 14), c16(r, 15))
   }
-  implicit def convTuple17[T <: Tuple17[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6)), r.typed(7)(a(7)), r.typed(8)(a(8)), r.typed(9)(a(9)), r.typed(10)(a(10)), r.typed(11)(a(11)), r.typed(12)(a(12)), r.typed(13)(a(13)), r.typed(14)(a(14)), r.typed(15)(a(15)), r.typed(16)(a(16))).asInstanceOf[T]
+
+  implicit def convTuple17[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter, A7: Converter, A8: Converter, A9: Converter, A10: Converter, A11: Converter, A12: Converter, A13: Converter, A14: Converter, A15: Converter, A16: Converter, A17: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    val c7 = implicitly[Converter[A7]]
+    val c8 = implicitly[Converter[A8]]
+    val c9 = implicitly[Converter[A9]]
+    val c10 = implicitly[Converter[A10]]
+    val c11 = implicitly[Converter[A11]]
+    val c12 = implicitly[Converter[A12]]
+    val c13 = implicitly[Converter[A13]]
+    val c14 = implicitly[Converter[A14]]
+    val c15 = implicitly[Converter[A15]]
+    val c16 = implicitly[Converter[A16]]
+    val c17 = implicitly[Converter[A17]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5), c7(r, 6), c8(r, 7), c9(r, 8), c10(r, 9), c11(r, 10), c12(r, 11), c13(r, 12), c14(r, 13), c15(r, 14), c16(r, 15), c17(r, 16))
   }
-  implicit def convTuple18[T <: Tuple18[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6)), r.typed(7)(a(7)), r.typed(8)(a(8)), r.typed(9)(a(9)), r.typed(10)(a(10)), r.typed(11)(a(11)), r.typed(12)(a(12)), r.typed(13)(a(13)), r.typed(14)(a(14)), r.typed(15)(a(15)), r.typed(16)(a(16)), r.typed(17)(a(17))).asInstanceOf[T]
+
+  implicit def convTuple18[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter, A7: Converter, A8: Converter, A9: Converter, A10: Converter, A11: Converter, A12: Converter, A13: Converter, A14: Converter, A15: Converter, A16: Converter, A17: Converter, A18: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    val c7 = implicitly[Converter[A7]]
+    val c8 = implicitly[Converter[A8]]
+    val c9 = implicitly[Converter[A9]]
+    val c10 = implicitly[Converter[A10]]
+    val c11 = implicitly[Converter[A11]]
+    val c12 = implicitly[Converter[A12]]
+    val c13 = implicitly[Converter[A13]]
+    val c14 = implicitly[Converter[A14]]
+    val c15 = implicitly[Converter[A15]]
+    val c16 = implicitly[Converter[A16]]
+    val c17 = implicitly[Converter[A17]]
+    val c18 = implicitly[Converter[A18]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5), c7(r, 6), c8(r, 7), c9(r, 8), c10(r, 9), c11(r, 10), c12(r, 11), c13(r, 12), c14(r, 13), c15(r, 14), c16(r, 15), c17(r, 16), c18(r, 17))
   }
-  implicit def convTuple19[T <: Tuple19[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6)), r.typed(7)(a(7)), r.typed(8)(a(8)), r.typed(9)(a(9)), r.typed(10)(a(10)), r.typed(11)(a(11)), r.typed(12)(a(12)), r.typed(13)(a(13)), r.typed(14)(a(14)), r.typed(15)(a(15)), r.typed(16)(a(16)), r.typed(17)(a(17)), r.typed(18)(a(18))).asInstanceOf[T]
+
+  implicit def convTuple19[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter, A7: Converter, A8: Converter, A9: Converter, A10: Converter, A11: Converter, A12: Converter, A13: Converter, A14: Converter, A15: Converter, A16: Converter, A17: Converter, A18: Converter, A19: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    val c7 = implicitly[Converter[A7]]
+    val c8 = implicitly[Converter[A8]]
+    val c9 = implicitly[Converter[A9]]
+    val c10 = implicitly[Converter[A10]]
+    val c11 = implicitly[Converter[A11]]
+    val c12 = implicitly[Converter[A12]]
+    val c13 = implicitly[Converter[A13]]
+    val c14 = implicitly[Converter[A14]]
+    val c15 = implicitly[Converter[A15]]
+    val c16 = implicitly[Converter[A16]]
+    val c17 = implicitly[Converter[A17]]
+    val c18 = implicitly[Converter[A18]]
+    val c19 = implicitly[Converter[A19]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5), c7(r, 6), c8(r, 7), c9(r, 8), c10(r, 9), c11(r, 10), c12(r, 11), c13(r, 12), c14(r, 13), c15(r, 14), c16(r, 15), c17(r, 16), c18(r, 17), c19(r, 18))
   }
-  implicit def convTuple20[T <: Tuple20[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6)), r.typed(7)(a(7)), r.typed(8)(a(8)), r.typed(9)(a(9)), r.typed(10)(a(10)), r.typed(11)(a(11)), r.typed(12)(a(12)), r.typed(13)(a(13)), r.typed(14)(a(14)), r.typed(15)(a(15)), r.typed(16)(a(16)), r.typed(17)(a(17)), r.typed(18)(a(18)), r.typed(19)(a(19))).asInstanceOf[T]
+
+  implicit def convTuple20[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter, A7: Converter, A8: Converter, A9: Converter, A10: Converter, A11: Converter, A12: Converter, A13: Converter, A14: Converter, A15: Converter, A16: Converter, A17: Converter, A18: Converter, A19: Converter, A20: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    val c7 = implicitly[Converter[A7]]
+    val c8 = implicitly[Converter[A8]]
+    val c9 = implicitly[Converter[A9]]
+    val c10 = implicitly[Converter[A10]]
+    val c11 = implicitly[Converter[A11]]
+    val c12 = implicitly[Converter[A12]]
+    val c13 = implicitly[Converter[A13]]
+    val c14 = implicitly[Converter[A14]]
+    val c15 = implicitly[Converter[A15]]
+    val c16 = implicitly[Converter[A16]]
+    val c17 = implicitly[Converter[A17]]
+    val c18 = implicitly[Converter[A18]]
+    val c19 = implicitly[Converter[A19]]
+    val c20 = implicitly[Converter[A20]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5), c7(r, 6), c8(r, 7), c9(r, 8), c10(r, 9), c11(r, 10), c12(r, 11), c13(r, 12), c14(r, 13), c15(r, 14), c16(r, 15), c17(r, 16), c18(r, 17), c19(r, 18), c20(r, 19))
   }
-  implicit def convTuple21[T <: Tuple21[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6)), r.typed(7)(a(7)), r.typed(8)(a(8)), r.typed(9)(a(9)), r.typed(10)(a(10)), r.typed(11)(a(11)), r.typed(12)(a(12)), r.typed(13)(a(13)), r.typed(14)(a(14)), r.typed(15)(a(15)), r.typed(16)(a(16)), r.typed(17)(a(17)), r.typed(18)(a(18)), r.typed(19)(a(19)), r.typed(20)(a(20))).asInstanceOf[T]
+
+  implicit def convTuple21[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter, A7: Converter, A8: Converter, A9: Converter, A10: Converter, A11: Converter, A12: Converter, A13: Converter, A14: Converter, A15: Converter, A16: Converter, A17: Converter, A18: Converter, A19: Converter, A20: Converter, A21: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    val c7 = implicitly[Converter[A7]]
+    val c8 = implicitly[Converter[A8]]
+    val c9 = implicitly[Converter[A9]]
+    val c10 = implicitly[Converter[A10]]
+    val c11 = implicitly[Converter[A11]]
+    val c12 = implicitly[Converter[A12]]
+    val c13 = implicitly[Converter[A13]]
+    val c14 = implicitly[Converter[A14]]
+    val c15 = implicitly[Converter[A15]]
+    val c16 = implicitly[Converter[A16]]
+    val c17 = implicitly[Converter[A17]]
+    val c18 = implicitly[Converter[A18]]
+    val c19 = implicitly[Converter[A19]]
+    val c20 = implicitly[Converter[A20]]
+    val c21 = implicitly[Converter[A21]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5), c7(r, 6), c8(r, 7), c9(r, 8), c10(r, 9), c11(r, 10), c12(r, 11), c13(r, 12), c14(r, 13), c15(r, 14), c16(r, 15), c17(r, 16), c18(r, 17), c19(r, 18), c20(r, 19), c21(r, 20))
   }
-  implicit def convTuple22[T <: Tuple22[_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _]](r: RowLike, m: Manifest[T]): T = {
-    val a = m.typeArguments
-    (r.typed(0)(a(0)), r.typed(1)(a(1)), r.typed(2)(a(2)), r.typed(3)(a(3)), r.typed(4)(a(4)), r.typed(5)(a(5)), r.typed(6)(a(6)), r.typed(7)(a(7)), r.typed(8)(a(8)), r.typed(9)(a(9)), r.typed(10)(a(10)), r.typed(11)(a(11)), r.typed(12)(a(12)), r.typed(13)(a(13)), r.typed(14)(a(14)), r.typed(15)(a(15)), r.typed(16)(a(16)), r.typed(17)(a(17)), r.typed(18)(a(18)), r.typed(19)(a(19)), r.typed(20)(a(20)), r.typed(21)(a(21))).asInstanceOf[T]
+
+  implicit def convTuple22[A1: Converter, A2: Converter, A3: Converter, A4: Converter, A5: Converter, A6: Converter, A7: Converter, A8: Converter, A9: Converter, A10: Converter, A11: Converter, A12: Converter, A13: Converter, A14: Converter, A15: Converter, A16: Converter, A17: Converter, A18: Converter, A19: Converter, A20: Converter, A21: Converter, A22: Converter](r: RowLike, i: Int): (A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15, A16, A17, A18, A19, A20, A21, A22) = {
+    val c1 = implicitly[Converter[A1]]
+    val c2 = implicitly[Converter[A2]]
+    val c3 = implicitly[Converter[A3]]
+    val c4 = implicitly[Converter[A4]]
+    val c5 = implicitly[Converter[A5]]
+    val c6 = implicitly[Converter[A6]]
+    val c7 = implicitly[Converter[A7]]
+    val c8 = implicitly[Converter[A8]]
+    val c9 = implicitly[Converter[A9]]
+    val c10 = implicitly[Converter[A10]]
+    val c11 = implicitly[Converter[A11]]
+    val c12 = implicitly[Converter[A12]]
+    val c13 = implicitly[Converter[A13]]
+    val c14 = implicitly[Converter[A14]]
+    val c15 = implicitly[Converter[A15]]
+    val c16 = implicitly[Converter[A16]]
+    val c17 = implicitly[Converter[A17]]
+    val c18 = implicitly[Converter[A18]]
+    val c19 = implicitly[Converter[A19]]
+    val c20 = implicitly[Converter[A20]]
+    val c21 = implicitly[Converter[A21]]
+    val c22 = implicitly[Converter[A22]]
+    (c1(r, 0), c2(r, 1), c3(r, 2), c4(r, 3), c5(r, 4), c6(r, 5), c7(r, 6), c8(r, 7), c9(r, 8), c10(r, 9), c11(r, 10), c12(r, 11), c13(r, 12), c14(r, 13), c15(r, 14), c16(r, 15), c17(r, 16), c18(r, 17), c19(r, 18), c20(r, 19), c21(r, 20), c22(r, 21))
   }
 }
 

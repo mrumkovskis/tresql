@@ -1,7 +1,7 @@
 package org.tresql
 
 import java.sql.ResultSet
-import CoreTypes.RowConverter
+import CoreTypes._
 
 import scala.collection.immutable.ListMap
 
@@ -132,7 +132,7 @@ trait SelectResult[T <: RowLike] extends Result[T] {
   }
   //fall back to rs.findColumn method in the case hidden column is referenced
   def apply(columnLabel: String) = colMap get columnLabel map (this(_)) getOrElse asAny(rs.findColumn(columnLabel))
-  def typed[T:Manifest](columnLabel: String): T = typed[T](colMap(columnLabel))
+  def typed[T: Converter](columnLabel: String): T = typed[T](colMap(columnLabel))
 
   def columnCount = if (_columnCount == -1) cols.length else _columnCount
   override def column(idx: Int) = cols(idx)
@@ -274,6 +274,8 @@ trait SelectResult[T <: RowLike] extends Result[T] {
     if (cols(columnIndex).idx != -1) rs.getArray(cols(columnIndex).idx)
     else children(columnIndex).asInstanceOf[java.sql.Array]
   }
+  override def result(columnIndex: Int): Result[T] = apply(columnIndex).asInstanceOf[Result[T]]
+  override def result(columnLabel: String): Result[T] = apply(columnLabel).asInstanceOf[Result[T]]
 
   private def asAny(pos: Int): Any = {
     import java.sql.Types._
@@ -315,8 +317,8 @@ class DynamicSelectResult private[tresql] (
     override def apply(idx: Int) = values(idx)
     override def column(idx: Int) = columns(idx)
     override def columnCount: Int = this_res.columnCount
-    override def typed[T: Manifest](idx: Int) = this(idx).asInstanceOf[T]
-    override def typed[T: Manifest](name: String) = typed[T](colMap(name))
+    override def typed[T: Converter](idx: Int) = this(idx).asInstanceOf[T]
+    override def typed[T: Converter](name: String) = typed[T](colMap(name))
   }
   override def toList = map(r => DynamicRowImpl(r.values.map {
     case r: DynamicSelectResult => r.toList
@@ -348,8 +350,8 @@ trait ArrayResult[T <: RowLike] extends Result[T] {
   def column(idx: Int): org.tresql.Column = cols(idx)
   override def columns = cols
   def columnCount: Int = values.size
-  override def typed[T: Manifest](idx: Int) = apply(idx).asInstanceOf[T]
-  override def typed[T: Manifest](name: String) = apply(name).asInstanceOf[T]
+  override def typed[T: Converter](idx: Int) = apply(idx).asInstanceOf[T]
+  override def typed[T: Converter](name: String) = apply(name).asInstanceOf[T]
 
   override def hashCode = values.hashCode
   override def equals(obj: Any) = {
@@ -369,7 +371,7 @@ trait CompiledRow extends RowLike with Typed {
   def column(idx: Int): org.tresql.Column = columns(idx)
   def apply(name: String): Any = ???
   def values: Seq[Any] = ???
-  def typed[T:Manifest](name: String) = ???
+  def typed[T:Converter](name: String) = ???
 }
 
 /**
@@ -413,7 +415,7 @@ case class SingleValueResult[T](value: T)
   override def columnCount = 1
   override def column(idx: Int) = col
   override def apply(idx: Int) = value
-  override def typed[T: Manifest](name: String) = value.asInstanceOf[T]
+  override def typed[T: Converter](name: String) = value.asInstanceOf[T]
   override def apply(name: String) = if (name == "value") value else sys.error("column not found: " + name)
   override def toString = s"SingleValueResult = $value"
 }
@@ -466,7 +468,7 @@ trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
   override def affectedRowCount: Int = count.getOrElse(0)
 
   // Members declared in org.tresql.Typed
-  override def typed[T: Manifest](name: String): T = ???
+  override def typed[T: Converter](name: String): T = ???
 
   /* Compatibility with previous tresql versions
   Can be following combinations:

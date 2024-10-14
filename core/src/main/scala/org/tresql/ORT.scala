@@ -69,7 +69,7 @@ trait ORT extends Query {
         case m: Map[String @unchecked, Any @unchecked] =>
           import CoreTypes._
           def id(res: Any) = res match {
-            case r: Result[_] => r.uniqueOption[Any].orNull
+            case r: Result[_] => r.uniqueOption[Any](CoreTypes.convAny).orNull
             case x => x
           }
           def res(r: Any): Any = r match {
@@ -176,7 +176,7 @@ trait ORT extends Query {
     import CoreTypes._
     override def apply(): Any = {
       idExpr() match {
-        case r: Result[_] => r.headOption[Any].orNull
+        case r: Result[_] => r.headOption[Any](CoreTypes.convAny).orNull
         case _ => null
       }
     }

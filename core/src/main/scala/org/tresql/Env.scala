@@ -139,7 +139,7 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
     import CoreTypes._
     //TODO perhaps built expressions can be used to improve performance?
     implicit val implres = this
-    val id = Query.unique[Any](implres.idExpr(seqName))
+    val id = Query.unique[Any](implres.idExpr(seqName))(CoreTypes.convAny, implres)
     ids(seqName) = id
     id
   }

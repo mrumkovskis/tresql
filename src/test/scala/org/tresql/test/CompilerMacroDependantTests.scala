@@ -16,6 +16,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
 
   override def api(implicit resources: Resources) = {
     println("\n---------------- Test API ----------------------\n")
+    import CoreTypes._
     assertResult(10)(Query.head[Int]("dept{deptno}#(deptno)"))
     assertResult(10)(Query.unique[Int]("dept[10]{deptno}#(deptno)"))
     assertResult(Some(10))(Query.headOption[Int]("dept{deptno}#(deptno)"))
@@ -146,7 +147,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       val r = tresql"dept[deptno = 10]{deptno}"
       r.hasNext
       r.next()
-      val (id1, id2) = (r.typed[Int]("deptno"), r.typed("deptno")(scala.reflect.ManifestFactory.Int))
+      val (id1, id2) = (r.typed[Int]("deptno"), r.typed("deptno")(CoreTypes.convInt))
       r.close
       (id1, id2)
     }
@@ -169,11 +170,9 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       (Query(st).list[Time].map(_.toString), Query(st).list[LocalTime].map(_.toString))
     }
 
-    implicit def convertRowLiketoPoha[T <: Poha](r: RowLike, m: Manifest[T]): T = m.toString match {
-      case s if s.contains("Car") => Car(r.i("nr"), r.s("name")).asInstanceOf[T]
-      case s if s.contains("Tyre") => Tyre(r.i("nr"), r.s("brand")).asInstanceOf[T]
-      case x => sys.error("Unable to convert to object of type: " + x)
-    }
+    implicit def convertRowLiketoCar(r: RowLike, i: Int): Car = Car(r.i("nr"), r.s("name"))
+    implicit def convertRowLiketoTyre(r: RowLike, i: Int): Tyre = Tyre(r.i("nr"), r.s("brand"))
+
     assertResult(List(Car(1111, "PORCHE"), Car(2222, "BMW"), Car(3333, "MERCEDES"),
         Car(4444, "VOLKSWAGEN")))(Query.list[Car]("car {nr, name} #(1)"))
     assertResult(List(Tyre(3333, "MICHELIN"), Tyre(3333, "NOKIAN")))(
@@ -2157,7 +2156,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
         .map(d => (d.dname, d.loc, d.emps.map(e => (e.ename, e.job)).toList)).toList
     }
     obj = Map("dept_id" -> 4321, "dname" -> "Fish", "loc" -> "Roja", "emps" ->
-      List(Map("emp_id" -> Query("emp[ename = 'Girts']{empno}").unique[Any], "ename" -> "Gatis", "job" -> "Fisher")))
+      List(Map("emp_id" -> Query("emp[ename = 'Girts']{empno}").unique[Any](CoreTypes.convAny), "ename" -> "Gatis", "job" -> "Fisher")))
     assertResult(List(("Fish", "Roja", List(("Gatis", "Fisher"))))) {
       ORT.save(view, obj)
       println(s"\nResult check:")
