@@ -85,7 +85,7 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
     val md = new JDBCMetadata {
       override def conn: Connection = connection
     }
-    tresqlResources = new Resources {}
+    tresqlResources = Resources()
       .withConn(connection)
       .withMetadata(md)
       .withDialect(dialects.PostgresqlDialect orElse dialects.VariableNameDialect)

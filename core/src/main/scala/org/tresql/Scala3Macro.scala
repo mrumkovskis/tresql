@@ -262,5 +262,5 @@ given Conversion[java.sql.ResultSet, Result[RowLike]] with
     val md = jdbcResult.getMetaData
     new DynamicSelectResult(jdbcResult,
       Vector((1 to md.getColumnCount map { i => Column(i, md.getColumnLabel(i), null) }): _*),
-      new Env(Map[String, Any](), new Resources {}, false), "<not available>", Nil
+      new Env(Map[String, Any](), Resources(), false), "<not available>", Nil
     )

@@ -43,7 +43,7 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
         } else super.to_sql_type(vendor, typeName)
       }
     }
-    val res = new Resources {}
+    val res = Resources()
       .withMetadata(md)
       .withConn(connection)
       .withDialect(hsqlDialect)
@@ -61,7 +61,7 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
       // TODO currently not supported in runtime since query parser uses only one macro resources obj not dependant on db
       override def macroResource: String = "/tresql-macros-db1.txt"
     }
-    val res1 = new Resources {}
+    val res1 = Resources()
       .withMetadata(md1)
       .withConn(conn1)
       .withDialect(hsqlDialect orElse {

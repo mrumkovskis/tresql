@@ -356,7 +356,7 @@ package object tresql extends CoreTypes {
     val md = jdbcResult.getMetaData
     new DynamicSelectResult(jdbcResult, Vector((1 to md.getColumnCount map {
       i => Column(i, md.getColumnLabel(i), null)
-    }): _*), new Env(Map[String, Any](), new Resources {}, false), "<not available>", Nil)
+    }): _*), new Env(Map[String, Any](), Resources(), false), "<not available>", Nil)
   }
 
   /** For scala 3 compatiblity, so that one can write import org.tresql.given */

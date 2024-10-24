@@ -320,6 +320,10 @@ trait ThreadLocalResources extends Resources {
   }
 }
 
+object Resources {
+  def apply() = new Resources {}
+}
+
 /** Resources and configuration for query execution like database connection, metadata, database dialect etc. */
 trait Resources extends MacroResources with CacheResources with Logging {
 
