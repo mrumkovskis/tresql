@@ -321,7 +321,7 @@ trait ThreadLocalResources extends Resources {
 }
 
 object Resources {
-  def apply() = new Resources {}
+  def apply(): Resources = new Resources {}
 }
 
 /** Resources and configuration for query execution like database connection, metadata, database dialect etc. */
