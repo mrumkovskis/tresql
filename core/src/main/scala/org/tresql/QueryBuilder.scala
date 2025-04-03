@@ -1442,9 +1442,9 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           case QUERY_CTX => buildArray(a)
           case ctx => buildArray(a, ctx)
         }
-        case Variable("?", _, o) =>
+        case Variable("?", _, o, _) =>
           this.bindIdx += 1; VarExpr(this.bindIdx.toString, Nil, o, allowArrBind = false)
-        case Variable(n, m, o) =>
+        case Variable(n, m, o, _) =>
           if (!env.reusableExpr && o && !(env.contains(n, m))) null else VarExpr(n, m, o, allowArrBind = false)
         case Id(seq) => IdExpr(seq)
         case IdRef(seq) => IdRefExpr(seq)

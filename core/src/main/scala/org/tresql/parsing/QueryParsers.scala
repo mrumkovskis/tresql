@@ -67,12 +67,13 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   } named "sql"
   def qualifiedIdent: MemParser[Ident] = rep1sep(ident, ".") ^^ Ident named "qualified-ident"
   def qualifiedIdentAll: MemParser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
-  def variable: MemParser[Variable] = ((":" ~> (
-      rep1sep(ident | stringLiteral | wholeNumber, ".") ~ opt("?"))) | "?") ^^ {
+  def variable: MemParser[Variable] = variableParser(true)
+  private def variableParser(acceptIdent: Boolean): MemParser[Variable] = ((":" ~> (
+    rep1sep((if (acceptIdent) ident | stringLiteral | wholeNumber else stringLiteral | wholeNumber), ".") ~ opt("?"))) | "?") ^^ {
     case "?" => Variable("?", Nil, opt = false)
     case ((i: String) :: (m: List[String @unchecked])) ~ o =>
-      Variable(i, m, o != None)
-  } named "variable"
+      Variable(i, m, o != None, !acceptIdent)
+  } named (if (acceptIdent) "variable" else "variable-no-ident")
   def id: MemParser[Id] = "#" ~> qualifiedIdent ~ opt(":" ~> ident) ^^ {
     case id ~ mayBeBindVar => Id(id.ident.mkString(".") + mayBeBindVar.map(":" + _).getOrElse(""))
   } named "id"
@@ -504,12 +505,12 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   //operation parsers
   //delete must be before alternative since it can start with - sign and
   //so it is not translated into minus expression!
-  def unaryExpr: MemParser[Exp] = delete | (opt(("|" ~ optDb) | "-" | "!" | "~") ~ operand) ^^ {
-    case None ~ e => e
-    case Some(o: String) ~ (e: Exp) => UnOp(o, e)
-    case Some(_ ~ (db: Option[String]@unchecked)) ~ (q: Exp) => ChildQuery(q, db)
-    case del: Exp => del
-  } named "unary-exp"
+  def unaryExpr: MemParser[Exp] = delete | ("|" ~> variableParser(false) ^^ { case op => ChildQuery(op, None) }) |
+    ((opt(("|" ~ optDb) | "-" | "!" | "~") ~ operand) ^^ {
+      case None ~ e => e
+      case Some(o: String) ~ (e: Exp) => UnOp(o, e)
+      case Some(_ ~ (db: Option[String]@unchecked)) ~ (q: Exp) => ChildQuery(q, db)
+    }) named "unary-exp"
   private def cast: MemParser[String] = ("::" ~> (ident | stringLiteral)) named "cast"
   def castExpr: MemParser[Exp] = unaryExpr ~ opt(cast) ^^ {
     case e ~ Some(t) => Cast(e, t)

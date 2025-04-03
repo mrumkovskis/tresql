@@ -171,7 +171,10 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
   override def conn: java.sql.Connection = db.map(get_res.extraResources(_).conn).getOrElse(get_res.conn)
   override def metadata = db.map(get_res.extraResources(_).metadata).getOrElse(get_res.metadata)
   /** for performance reasons dialect is val, so it does not need to be lifted on every call */
-  override val dialect: CoreTypes.Dialect = liftDialect(db.map(get_res.extraResources(_).dialect).getOrElse(get_res.dialect))
+  override val dialect: CoreTypes.Dialect =
+    liftDialect(db.map(n =>
+      get_res.extraResources.getOrElse(n, sys.error(s"Extra db resources '$n' not found")).dialect)
+      .getOrElse(get_res.dialect))
   /** for performance reasons toBindableValue is val, so it does not need to be lifted on every call */
   override val toBindableValue: PartialFunction[Any, Any] =
     liftToBindableValue(db.map(get_res.extraResources(_).toBindableValue).getOrElse(get_res.toBindableValue))

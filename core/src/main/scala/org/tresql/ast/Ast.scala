@@ -50,10 +50,10 @@ case class BooleanConst(value: Boolean) extends Const
 case class Ident(ident: List[String]) extends Exp {
   def tresql = ident.mkString(".")
 }
-case class Variable(variable: String, members: List[String] = Nil, opt: Boolean) extends Exp {
+case class Variable(variable: String, members: List[String] = Nil, opt: Boolean, useQuotes: Boolean = false) extends Exp {
   def tresql = if (variable == "?") "?" else {
     def var_str(v: String) =
-      (if (QueryParsers.simple_ident_regex.pattern.matcher(v).matches) v
+      (if (!useQuotes && QueryParsers.simple_ident_regex.pattern.matcher(v).matches) v
       else if (v contains "'") "\"" + v + "\""
       else "'" + v + "'")
     ":" + var_str(variable) +
