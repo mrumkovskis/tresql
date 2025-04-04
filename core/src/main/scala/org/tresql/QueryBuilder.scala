@@ -399,7 +399,10 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       }
       env.rowConverter(queryPos).map { conv =>
         new CompiledArrayResult(result, conv)
-      }.getOrElse(new DynamicArrayResult(result))
+      }.getOrElse(result match {
+        case List(s: DynamicSelectResult) => new DynamicArraySelectResult(s)
+        case _ => new DynamicArrayResult(result)
+      })
     }
     def defaultSQL = elements map { _.sql } mkString ("(", ", ", ")")
     override def toString = elements map { _.toString } mkString ("[", ", ", "]")

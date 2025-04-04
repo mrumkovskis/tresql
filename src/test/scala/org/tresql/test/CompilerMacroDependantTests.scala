@@ -516,6 +516,14 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       Query("{'name', |:'credentials'.'roles'.1}", Map("credentials" -> Map("roles" -> List("admin", "operator"))))
         .toListOfVectors
     }
+
+    // select as simple array
+    assertResult(List(1, 2, 3)) {
+      Query("[({1} + {2} + {3})#(1)]").elIterator.toSeq
+    }
+    assertResult(List(Vector("a", 1), Vector("b", 2), Vector("c", 3))) {
+      Query("[({'a', 1} + {'b', 2} + {'c', 3})#(1)]").elIterator.toSeq
+    }
   }
 
   override def ort(implicit resources: Resources) = {

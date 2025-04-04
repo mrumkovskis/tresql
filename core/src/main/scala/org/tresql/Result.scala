@@ -12,6 +12,7 @@ trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T]
 
   def toListOfVectors: List[Vector[Any]] = this.map(_.rowToVector).toList
   def toListOfMaps: List[Map[String, Any]] = this.map(_.toMap).toList
+  def elIterator: Iterator[Any] = this.map(_.toMap)
 
   /** Is implemented in {{{DMLResult}}} */
   def affectedRowCount: Int = ???
@@ -346,7 +347,7 @@ trait ArrayResult[T <: RowLike] extends Result[T] {
   def apply(name: String): Any = values(cols.indexWhere(_.name == name))
   def apply(idx: Int): Any = values(idx)
   def column(idx: Int): org.tresql.Column = cols(idx)
-  override def columns = cols
+  override def columns: Seq[Column] = cols
   def columnCount: Int = values.size
   override def typed[T: Manifest](idx: Int) = apply(idx).asInstanceOf[T]
   override def typed[T: Manifest](name: String) = apply(name).asInstanceOf[T]
@@ -356,7 +357,33 @@ trait ArrayResult[T <: RowLike] extends Result[T] {
     values.equals(obj)
   }
 
+  override def elIterator: Iterator[Any] = values.iterator.map {
+    case r: Result[_] => r.elIterator.toSeq
+    case x => x
+  }
   override def toString = values.mkString("ArrayResult(", ", ", ")")
+}
+
+class DynamicArraySelectResult(select: DynamicSelectResult)
+  extends ArrayResult[DynamicRow] with DynamicResult {
+  private [this] val cols = Vector(Column(0, null, null))
+  override def hasNext: Boolean = select.hasNext
+  override def next(): DynamicRow = {
+    select.next()
+    this
+  }
+  override def isLast: Boolean = select.isLast
+  override def columns: Seq[Column] = cols
+  override def columnCount: Int = 1
+  override def column(idx: Int): Column = columns(idx)
+  override def apply(idx: Int): Any =
+    if (idx == 0) select.rowToVector match {
+      case v if v.size == 1 => v(0)
+      case v => v
+    } else throw new ArrayIndexOutOfBoundsException(idx)
+  override def elIterator: Iterator[Any] = this.map(_(0))
+  override def close: Unit = select.close
+  override def closeWithDb: Unit = select.closeWithDb
 }
 
 class DynamicArrayResult(override val values: List[Any])
