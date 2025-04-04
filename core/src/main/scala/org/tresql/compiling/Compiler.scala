@@ -21,18 +21,19 @@ trait Compiler extends QueryParsers { thisCompiler =>
   }
 
   trait TableMetadata {
-    def tableOption(name: String)(db: Option[String]): Option[Table]
+    def tableOption(name: String)(db: Option[Db]): Option[Table]
   }
 
   object EnvMetadata extends TableMetadata {
-    override def tableOption(name: String)(database: Option[String]): Option[Table] =
+    override def tableOption(name: String)(database: Option[Db]): Option[Table] =
       database
-        .flatMap(db => extraMetadata.getOrElse(db, error(s"Unknown database: $db")).tableOption(name))
+        .filter(_.db != null)
+        .flatMap(db => extraMetadata.getOrElse(db.db, error(s"Unknown database: $db")).tableOption(name))
         .orElse(metadata.tableOption(name))
   }
 
   case class WithTableMetadata(scopes: List[Scope]) extends TableMetadata {
-    override def tableOption(name: String)(database: Option[String]): Option[Table] = {
+    override def tableOption(name: String)(database: Option[Db]): Option[Table] = {
       def to(lScopes: List[Scope]): Option[Table] = lScopes match {
         case Nil => EnvMetadata.tableOption(name)(database)
         case scope :: tail => scope.table(name).orElse(to(tail))
@@ -105,7 +106,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     case class TranslatedScope(tableNames: List[String],
                                tableMap: String => Option[String],
                                colReverseMap: String => String => Option[String])(
-      md: TableMetadata, db: Option[String]) extends Scope {
+      md: TableMetadata, db: Option[Db]) extends Scope {
       private val tables = tableNames.flatMap { tn => tableMap(tn)
         .flatMap(Compiler.this.table(Nil)(_)(md, db))
         .map(t => t.copy(name = tn, cols = t.cols.flatMap(c => colReverseMap(tn)(c.name)
@@ -137,7 +138,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
   //metadata
   /** Table of dml statement or table in from clause of any scope in the {{{scopes}}} list */
   def declaredTable(scopes: List[Scope])(tableName: String)(md: TableMetadata,
-                                                            db: Option[String]): Option[Table] = {
+                                                            db: Option[Db]): Option[Table] = {
     val tn = tableName.toLowerCase
     scopes match {
       case Nil => None
@@ -149,14 +150,14 @@ trait Compiler extends QueryParsers { thisCompiler =>
   }
   /** Table from metadata or defined in from clause or dml table of any scope in {{{scopes}}} list */
   def table(scopes: List[Scope])(tableName: String)(md: TableMetadata,
-                                                    db: Option[String]): Option[Table] =
+                                                    db: Option[Db]): Option[Table] =
     Option(tableName).flatMap { tn =>
       val table = tn.toLowerCase
       declaredTable(scopes)(table)(md, db) orElse md.tableOption(table)(db)
     }
   /** Column declared in any scope in {{{scopes}}} list */
   def column(scopes: List[Scope])(colName: String)(md: TableMetadata,
-                                                   db: Option[String]): Option[org.tresql.metadata.Col] = {
+                                                   db: Option[Db]): Option[org.tresql.metadata.Col] = {
     val col = colName.toLowerCase
     (scopes match {
       case Nil => None
@@ -180,14 +181,15 @@ trait Compiler extends QueryParsers { thisCompiler =>
   }
   /** Method is used to resolve column names in group by or order by clause, since they can reference columns by name from column clause. */
   def declaredColumn(scopes: List[Scope])(colName: String)(md: TableMetadata,
-                                                           db: Option[String]): Option[org.tresql.metadata.Col] = {
+                                                           db: Option[Db]): Option[org.tresql.metadata.Col] = {
     val col = colName.toLowerCase
     scopes.head.column(col) orElse column(scopes)(col)(md, db)
   }
-  def procedure(procedure: String)(database: Option[String]) =
+  def procedure(procedure: String)(database: Option[Db]) =
     database
+      .filter(_.db != null)
       .flatMap(db => extraMetadata
-        .getOrElse(db, error(s"Unknown database: $db"))
+        .getOrElse(db.db, error(s"Unknown database: $db"))
         .procedureOption(procedure))
       .orElse(metadata.procedureOption(procedure))
 
@@ -199,7 +201,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     object BodyCtx extends Ctx //where, group by, having, order, limit clauses
     object InsConflCtx extends Ctx // on conflict do (upsert) clause
 
-    case class BuildCtx(ctx: Ctx, db: Option[String])
+    case class BuildCtx(ctx: Ctx, db: Option[Db])
 
     //helper function
     def tr_with_c(bCtx: BuildCtx, ctx: Ctx, x: Exp): Exp = builder(bCtx.copy(ctx = ctx))(x)
@@ -417,7 +419,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     def createCol(col: String): ast.Col =
       phrase(column)(new scala.util.parsing.input.CharSequenceReader(col)).get
 
-    case class Ctx(scopes: List[Scope], db: Option[String])
+    case class Ctx(scopes: List[Scope], db: Option[Db])
 
     lazy val resolver: TransformerWithState[Ctx] = transformerWithState { ctx =>
       def resolveWithQuery[T <: SQLDefBase](withQuery: WithQuery): (T, List[WithTableDef]) = {
@@ -512,7 +514,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
                        tblScopes: List[Scope],
                        ctx: Ctx, isGrpOrd: Boolean,
                        withTableMetadata: Option[WithTableMetadata],
-                       dbs: List[Option[String]]) {
+                       dbs: List[Option[Db]]) {
       def tableMetadata: TableMetadata = withTableMetadata.getOrElse(EnvMetadata)
       def addTable(scope: Scope) = withTableMetadata
         .map { case WithTableMetadata(scopes) => WithTableMetadata(scope :: scopes)}
@@ -522,7 +524,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         .getOrElse(this.copy(withTableMetadata = Some(WithTableMetadata(Nil))))
       def db = dbs.headOption.flatten
     }
-    def checkDefaultJoin(scopes: List[Scope], table1: TableDef, table2: TableDef, db: Option[String]) = {
+    def checkDefaultJoin(scopes: List[Scope], table1: TableDef, table2: TableDef, db: Option[Db]) = {
       if (table1 != null) {
         for {
           t1 <- table(scopes)(table1.name)(EnvMetadata, db)
@@ -660,7 +662,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
   }
 
   def resolveColTypes(exp: Exp) = {
-    case class Ctx(scopes: List[Scope], db: Option[String], exprType: ExprType)
+    case class Ctx(scopes: List[Scope], db: Option[Db], exprType: ExprType)
 
     def value_to_ctx_with_type(value: Any) = {
       def expr_type(clazz: Class[_]) = {
@@ -732,7 +734,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
       case Cast(_, typ) => value_to_ctx_with_type(ExprType(typ))
       case PrimitiveDef(e, _) => typer(ctx)(e)
     })
-    case class ResolverCtx(scopes: List[Scope], db: Option[String])
+    case class ResolverCtx(scopes: List[Scope], db: Option[Db])
     lazy val type_resolver: TransformerWithState[ResolverCtx] = transformerWithState { ctx =>
       def resolveWithQuery[T <: SQLDefBase](withQuery: WithQuery): (T, List[WithTableDef]) = {
         val wtables = withQuery.withTables.foldLeft(List[WithTableDef]()) { (tables, table) =>

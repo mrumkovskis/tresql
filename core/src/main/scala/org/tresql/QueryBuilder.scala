@@ -1298,9 +1298,9 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       }
     }
 
-    def buildWithNew(db: Option[String], buildFunc: QueryBuilder => Expr) = {
+    def buildWithNew(db: Option[Db], buildFunc: QueryBuilder => Expr) = {
       val b = QueryBuilder.this.newInstance(
-        new Env(QueryBuilder.this, db, QueryBuilder.this.env.reusableExpr),
+        new Env(QueryBuilder.this, db.flatMap(d => Option(d.db)), QueryBuilder.this.env.reusableExpr),
         bindIdx, this.childrenCount)
       val ex = maybeTransformExpr(buildFunc(b), b.transformers)
       this.separateQueryFlag = true

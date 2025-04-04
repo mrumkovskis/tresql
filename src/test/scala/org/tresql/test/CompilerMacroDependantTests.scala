@@ -506,6 +506,16 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     assertResult("""start"'"end"""){
       Query(p.parseExp("""'start"''"end'""").tresql).unique[String]
     }
+
+    // variable as child query test
+    assertResult(List(Vector("name", "marco"))) {
+      Query("{'name', |:'credentials'.'username'}", Map("credentials" -> Map("username" -> "marco")))
+        .toListOfVectors
+    }
+    assertResult(List(Vector("name", "operator"))) {
+      Query("{'name', |:'credentials'.'roles'.1}", Map("credentials" -> Map("roles" -> List("admin", "operator"))))
+        .toListOfVectors
+    }
   }
 
   override def ort(implicit resources: Resources) = {

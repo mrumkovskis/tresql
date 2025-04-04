@@ -31,7 +31,7 @@ sealed trait DMLExp extends Exp {
   def filter: Arr
   def vals: Exp
   def returning: Option[Cols]
-  def db: Option[String]
+  def db: Option[Db]
 }
 
 sealed trait Const extends Exp {
@@ -76,8 +76,11 @@ case class Cast(exp: Exp, typ: String) extends Exp {
 case class UnOp(operation: String, operand: Exp) extends Exp {
   def tresql = operation + operand.tresql
 }
-case class ChildQuery(query: Exp, db: Option[String]) extends Exp {
-  def tresql = "|" + db.map(_ + ":").mkString + query.tresql
+case class ChildQuery(query: Exp, db: Option[Db]) extends Exp {
+  def tresql = "|" + db.map(_.tresql).mkString + query.tresql
+}
+case class Db(db: String = null) extends Exp {
+  def tresql = String.valueOf(db) + ":"
 }
 case class Fun(
                 name: String,
@@ -277,11 +280,11 @@ case class Insert(
   cols: List[Col],
   vals: Exp = null,
   returning: Option[Cols],
-  db: Option[String],
+  db: Option[Db],
   insertConflict: InsertConflict = null,
 ) extends DMLExp {
   override def filter = null
-  def tresql = "+" + db.map(_ + ":").mkString + table.tresql +
+  def tresql = "+" + db.map(_.tresql).mkString + table.tresql +
     Option(alias).map(" " + _).getOrElse("") +
     (if (cols.nonEmpty) cols.map(_.tresql).mkString("{", ",", "}") else "") +
     (if (vals != null) any2tresql(vals) else "") +
@@ -312,13 +315,13 @@ case class InsertConflictAction(cols: List[Col], filter: Exp = null, vals: Exp) 
     cols.map(_.tresql).mkString("{", ",", "}") + (if (vals == null) "" else " " + vals.tresql)
 }
 case class Update(table: Ident = null, alias: String = null, filter: Arr = null, cols: List[Col], vals: Exp = null,
-                  returning: Option[Cols], db: Option[String])
+                  returning: Option[Cols], db: Option[Db])
   extends DMLExp {
   def tresql = {
     val filterTresql = if (filter != null) filter.tresql else ""
     val colsTresql = if (cols.nonEmpty) cols.map(_.tresql).mkString("{", ",", "}") else ""
     val valsTresql = if (vals != null) any2tresql(vals) else ""
-    "=" + db.map(_ + ":").mkString + table.tresql + Option(alias).map(" " + _).getOrElse("") +
+    "=" + db.map(_.tresql).mkString + table.tresql + Option(alias).map(" " + _).getOrElse("") +
       (vals match {
         case _: ValuesFromSelect => valsTresql + filterTresql + colsTresql
         case _ => filterTresql + colsTresql + valsTresql
@@ -332,13 +335,13 @@ case class ValuesFromSelect(select: Query) extends Exp {
     else ""
 }
 case class Delete(table: Ident = null, alias: String = null, filter: Arr, using: Exp = null, returning: Option[Cols],
-                  db: Option[String])
+                  db: Option[Db])
   extends DMLExp {
   override def cols = null
   override def vals = using
   def tresql = {
     val tbl =
-      db.map(_ + ":").mkString + table.tresql + Option(alias).map(" " + _).getOrElse("") +
+      db.map(_.tresql).mkString + table.tresql + Option(alias).map(" " + _).getOrElse("") +
         (if (using == null) "" else using.tresql)
 
     "-" + tbl + filter.tresql + returning.map(_.tresql).getOrElse("")
@@ -415,7 +418,7 @@ object CompilerAst {
     override def tresql: String = Col(col, name).tresql
   }
 
-  case class ChildDef(exp: Exp, db: Option[String]) extends TypedExp {
+  case class ChildDef(exp: Exp, db: Option[Db]) extends TypedExp {
     val typ: ExprType = ExprType(this.getClass.getName)
   }
 
@@ -466,7 +469,7 @@ object CompilerAst {
 
   //is superclass of insert, update, delete
   sealed trait DMLDefBase extends SQLDefBase {
-    def db: Option[String]
+    def db: Option[Db]
   }
 
   //is superclass of select, union, intersect etc.
@@ -554,7 +557,7 @@ object CompilerAst {
                         tables: List[TableDef],
                         exp: Insert
                       ) extends DMLDefBase {
-    override def db: Option[String] = exp.db
+    override def db: Option[Db] = exp.db
 
     override def tresql = // FIXME alias lost
       exp.copy(table = Ident(List(tables.head.name)),
@@ -566,7 +569,7 @@ object CompilerAst {
                         tables: List[TableDef],
                         exp: Update
                       ) extends DMLDefBase {
-    override def db: Option[String] = exp.db
+    override def db: Option[Db] = exp.db
 
     override def tresql = // FIXME alias lost
       exp.copy(table = Ident(List(tables.head.name)),
@@ -579,7 +582,7 @@ object CompilerAst {
                       ) extends DMLDefBase {
     def cols = Nil
 
-    override def db: Option[String] = exp.db
+    override def db: Option[Db] = exp.db
 
     override def tresql = // FIXME alias lost
       exp.copy(table = Ident(List(tables.head.name))).tresql
@@ -605,7 +608,7 @@ object CompilerAst {
   sealed trait WithDMLQuery extends DMLDefBase with WithQuery {
     def exp: DMLDefBase
 
-    override def db: Option[String] = None
+    override def db: Option[Db] = None
   }
 
   case class WithSelectDef(

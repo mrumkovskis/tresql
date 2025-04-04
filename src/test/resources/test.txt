@@ -307,6 +307,8 @@ emp[ename = 'BLAKE'], |contact_db:contact[name = 'John'] --> [[[[7698, "BLAKE", 
 -:dept [dname = 'X'] --> [[1]]
 //bind variable as child query (cannot use ident syntax, must use string literal syntax)
 {'name', |:'roles'} --> roles=['a, 'b, 'c] --> [["name", ["a", "b", "c"]]]
+// null database name to support string constant as child query
+{'name', |null:'value'} --> [["name", "value"]]
 
 //insert, update, delete into another database
 +contact_db:contact{id, name, sex, birth_date, email, +contact_db:notes{id, contact_id, note_date, note}[#notes, :#contact, current_time, 'Pick up the phone']}[#contact, 'Zia', 'F', '1988-07-31', 'zia@tresql.org'] --> [[1, [[null, [[1, 100001]]]], 100000]]
