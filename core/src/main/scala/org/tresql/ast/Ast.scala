@@ -378,6 +378,31 @@ class CompilerException(message: String,
                         cause: Exception = null
                        ) extends Exception(message, cause)
 
+object Ast {
+  def isSingleQueryArray(a: Exp) :Boolean = a match {
+    case Arr(List(q)) if maybeQuery(q) => true
+    case _ => false
+  }
+  def isTablelessQuery(q: Exp): Boolean = q match {
+    case Query(List(Obj(Null, _, _, _, _)), _, _, _, _, _, _) => true
+    case _ => false
+  }
+  def maybeQuery(q: Exp): Boolean = {
+    def maybeBinOpQuery(e: Exp): Boolean = e match {
+      case b: BinOp =>
+        val (left, rest) = BinOp.flattenBinOp(b)
+        maybeQuery(left) & rest.forall { case (_, o) => maybeQuery(o.exp) }
+      case _ => false
+    }
+    q match {
+      case _: Query | _: DMLExp | _: With | _: Obj => true
+      case Braces(e) => maybeQuery(e)
+      case b: BinOp => maybeBinOpQuery(b)
+      case _ => false
+    }
+  }
+}
+
 object CompilerAst {
 
   protected def error(msg: String, cause: Exception = null) = throw new CompilerException(msg, cause = cause)

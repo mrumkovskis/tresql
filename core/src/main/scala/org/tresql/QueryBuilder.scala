@@ -1339,7 +1339,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
           case _ => buildDelete(t, a, f, u, r, parseCtx)
         }
         //recursive child query
-        case ChildQuery(join: Arr, db) =>
+        case ChildQuery(join: Arr, db) if !Ast.isSingleQueryArray(join) =>
           if (recursiveQueryExp != null) {
             val e = RecursiveExpr({
               val t = recursiveQueryExp.tables
@@ -1354,7 +1354,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
             this.separateQueryFlag = true
             this.childrenCount += 1
             e
-        } else null
+          } else null
         //child query
         case ChildQuery(q, db) => buildWithNew(db, _.buildInternal(q, QUERY_CTX))
         case t: Obj => parseCtx match {

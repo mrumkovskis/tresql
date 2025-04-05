@@ -386,8 +386,10 @@ class DynamicArraySelectResult(select: DynamicSelectResult)
       case v => v
     } else throw new ArrayIndexOutOfBoundsException(idx)
   override def elIterator: Iterator[Any] = this.map(_(0))
+  override def values: Seq[Any] = elIterator.toSeq
   override def close: Unit = select.close
   override def closeWithDb: Unit = select.closeWithDb
+  override def toString: String = s"${getClass.getName}@$hashCode"
 }
 
 class DynamicArrayResult(override val values: List[Any])
@@ -658,6 +660,7 @@ trait RowLike extends Typed with AutoCloseable {
   /** name {{{toVector}}} is defined in {{{trait TranversableOnce}}} */
   def rowToVector: Vector[Any] = {
     def anyToVal(v: Any): Any = v match {
+      case r: DynamicArraySelectResult => r.elIterator.toSeq
       case r: Result[_] => r.toListOfVectors
       case i: Iterable[_] => (i map anyToVal).toVector
       case p: Product => (p.productIterator map anyToVal).toVector

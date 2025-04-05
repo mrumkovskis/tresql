@@ -100,7 +100,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
      * insert, delete, update parsers must be applied before query parser
      * result parser must be applied before variable parser */
   def operand: MemParser[Exp] = (const | ALL | withQuery | function  | sql | insert | update | result |
-    variable | query | id | idref  | array) named "operand"
+    variable | query | id | idref | array) named "operand"
   /* function(<#> <arglist> <order by>). Maybe used in from clause so filter is not confused with join syntax.  */
   def functionWithoutFilter: MemParser[Fun] = (qualifiedIdent /* name */ <~ "(") ~
     opt("#") /* distinct */ ~ repsep(expr, ",") /* arglist */ ~
@@ -148,7 +148,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   def filters: MemParser[Filters] = rep(filter) ^^ Filters named "filters"
   /** objContent is meant to be table, column or division operation operand */
   private def objContent: MemParser[Exp] =
-    (const | functionWithoutFilter | result | variable | qualifiedIdent | sql | braces) named "obj-content"
+    (functionWithoutFilter | result | variable | qualifiedIdent | sql | braces) named "obj-content"
   private def alias: MemParser[(String, Option[List[TableColDef]], Boolean)] =
     ident ~ opt("(" ~> opt("#") ~ rep1sep(ident ~ opt(cast), ",") <~ ")") ^^ {
       case id ~ Some(mbOrd ~ colDefs) =>
