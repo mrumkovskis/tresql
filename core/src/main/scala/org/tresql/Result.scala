@@ -275,6 +275,10 @@ trait SelectResult[T <: RowLike] extends Result[T] {
     if (cols(columnIndex).idx != -1) rs.getArray(cols(columnIndex).idx)
     else children(columnIndex).asInstanceOf[java.sql.Array]
   }
+  override def result(columnIndex: Int): Result[_ <: RowLike] = {
+    if (cols(columnIndex).idx != -1) sys.error(s"Cannot not extract tresql result from jdbc, must be child query")
+    else children(columnIndex).asInstanceOf[org.tresql.Result[_ <: RowLike]]
+  }
 
   private def asAny(pos: Int): Any = {
     import java.sql.Types._
@@ -644,6 +648,7 @@ trait RowLike extends Typed with AutoCloseable {
   /** Converts row to map preserving column sequence.
    *  null value column names make as _idx, where idx is number over null value columns */
   def toMap: Map[String, Any] = (0 until columnCount).map(i => column(i).name -> (this(i) match {
+    case r: DynamicArraySelectResult => r.elIterator.toSeq
     case r: Result[_] => r.toListOfMaps
     case x => x
   })).foldLeft(ListMap[String, Any]() -> 1) { case ((r, i), c@(n, v)) =>
