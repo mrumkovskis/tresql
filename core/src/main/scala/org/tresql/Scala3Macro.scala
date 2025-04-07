@@ -129,12 +129,7 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
             case '[t] => TypeRepr.of[Result[t & RowLike]].simplified
           ColRes(colName, ct, conv(idx, ct.typeSymbol.name), convs)
         case ArrRes(typ, convs, colConv) =>
-          val c =
-            '{
-              ${conv(idx, typ.typeSymbol.name)}.asInstanceOf[RowConverter[RowLike]]
-                .andThen($colConv)
-            }
-          ColRes(colName, typ, c, convs)
+          ColRes(colName, typ, colConv, convs)
         case DMLRes(typ) =>
           ColRes(colName, typ, conv(idx, typ.typeSymbol.name), Nil)
         case x => report.errorAndAbort(s"Unexpected type: $x")
@@ -166,11 +161,7 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
             case '[ct] => rt.asType match
               case '[bt] => TypeRepr.of[*:[ct, bt & Tuple]] // do no use AppliedType since it does not work well
           (resType, cr :: rc)
-    val conv: RowConv = '{
-      ( ${ quoted.Expr(arr.pos) },
-        identity[RowLike] _
-      )
-    }
+    val conv: RowConv = '{(${ quoted.Expr(arr.pos) }, identity[RowLike] _)}
     val convs = crs.foldLeft(List(conv))(_ ::: _.nestedRowConvs)
     val colConv = '{
       (row: RowLike) =>
