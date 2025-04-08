@@ -22,6 +22,14 @@ class Record(data: ListMap[String, Any]) extends CompiledRow with Selectable:
   def columnCount: Int = data.size
   val columns: Seq[Column] = data.map((n, _) => Column(-1, n, null)).toList
 
+private sealed trait Ex
+private case class ColEx(col: String, typ: String | Ex, idx: Int) extends Ex
+private case class QueryEx(cols: List[ColEx], pos: List[Int], isArr: Boolean) extends Ex
+private case object DMLEx extends Ex
+private case class PrimitiveEx(typ: String) extends Ex
+
+private val SimpleAliasRegex = """"(?U)(\p{javaJavaIdentifierStart}\p{javaJavaIdentifierPart}*)"""".r
+
 private def tresqlMacro(tresql: quoted.Expr[StringContext])(
   pars: quoted.Expr[Seq[Any]])(resources: quoted.Expr[Resources])(using Quotes) =
   import quotes.reflect.*
@@ -71,12 +79,6 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
     parts.head + parts.tail.zipWithIndex.map {case (s, i) => s":_$i$s" }.mkString
   info(s"Compiling: $tresqlString")
 
-  sealed trait Ex
-  case class ColEx(col: String, typ: String | Ex, idx: Int) extends Ex
-  case class QueryEx(cols: List[ColEx], pos: List[Int], isArr: Boolean) extends Ex
-  case object DMLEx extends Ex
-  case class PrimitiveEx(typ: String) extends Ex
-
   type ColConv      = quoted.Expr[RowConverter[Any]]
   type RowConv      = quoted.Expr[(List[Int], RowConverter[RowLike])]
   type ResultConv   = quoted.Expr[Result[_] => Any]
@@ -109,29 +111,29 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
     case null => QueryRes(TypeRepr.of[RowLike], Nil)
 
   def colRes(col: ColEx): ColRes =
-    def conv(i: Int, tn: String) =
+    def colConv(i: Int, tn: String) =
       val scalaType = compiler.metadata.to_scala_type(tn)
       '{ (row: RowLike) => row.typed(${ quoted.Expr(i) }, ${ quoted.Expr(scalaType) }) }
 
     val ColEx(colName, colType, idx) = col
     colType match
       case tn: String =>
-        ColRes(colName, typeRepr(tn), conv(idx, tn), Nil)
+        ColRes(colName, typeRepr(tn), colConv(idx, tn), Nil)
       case PrimitiveEx(tn: String) =>
-        val colConv = '{
-          ${ conv(idx, "org.tresql.Result") }.asInstanceOf[RowConverter[Result[_]]]
+        val conv = '{
+          ${ colConv(idx, "org.tresql.Result") }.asInstanceOf[RowConverter[Result[_]]]
             .andThen(${ resultConv(tn) })
         }
-        ColRes(colName, typeRepr(tn), colConv, Nil)
-      case md => res(md.asInstanceOf[Ex]) match
+        ColRes(colName, typeRepr(tn), conv, Nil)
+      case md: Ex => res(md) match
         case QueryRes(typ, convs) =>
           val ct = typ.asType match
             case '[t] => TypeRepr.of[Result[t & RowLike]].simplified
-          ColRes(colName, ct, conv(idx, ct.typeSymbol.name), convs)
-        case ArrRes(typ, convs, colConv) =>
-          ColRes(colName, typ, colConv, convs)
+          ColRes(colName, ct, colConv(idx, ct.typeSymbol.name), convs)
+        case ArrRes(typ, convs, conv) =>
+          ColRes(colName, typ, '{${colConv(idx, typ.typeSymbol.name)}.asInstanceOf[RowConverter[RowLike]].andThen($conv)}, convs)
         case DMLRes(typ) =>
-          ColRes(colName, typ, conv(idx, typ.typeSymbol.name), Nil)
+          ColRes(colName, typ, colConv(idx, typ.typeSymbol.name), Nil)
         case x => report.errorAndAbort(s"Unexpected type: $x")
 
   def rowRes(query: QueryEx): QueryRes =
@@ -142,39 +144,51 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
           (Refinement(rt, cr.name, cr.typ), cr :: rc)
     val conv: RowConv = '{
       ( ${ quoted.Expr(query.pos) },
-        (row: RowLike) => new Record(ListMap[String, Any](
-          ${
-            Varargs(crs.reverse.map { cr => '{ ${ quoted.Expr(cr.name) } -> ${ cr.conv } (row) } })
-          }: _*)
-        )
+        (row: RowLike) => new Record(ListMap[String, Any](${
+          Varargs(crs.reverse.map { cr => '{ ${ quoted.Expr(cr.name) } -> ${ cr.conv } (row) } })
+        }: _*))
       )
     }
     val convs = crs.foldLeft(List(conv))(_ ::: _.nestedRowConvs)
     QueryRes(qt, convs)
 
-  def arrRes(arr: QueryEx): ArrRes =
-    val (at, crs) =
-      (arr.cols.reverse.foldLeft((TypeRepr.of[EmptyTuple], List[ColRes]())):
-        case ((rt, rc), col) =>
-          val cr = colRes(col)
-          val resType = cr.typ.asType match
-            case '[ct] => rt.asType match
-              case '[bt] => TypeRepr.of[*:[ct, bt & Tuple]] // do no use AppliedType since it does not work well
-          (resType, cr :: rc)) match
-            case (rt, cs@List(_)) => rt.asType match { case '[*:[t, EmptyTuple.type]] => (TypeRepr.of[t], cs) }
-            case x => x
-    val conv: RowConv = '{(${ quoted.Expr(arr.pos) }, identity[RowLike] _)}
-    val convs = crs.foldLeft(List(conv))(_ ::: _.nestedRowConvs)
-    val colConv = '{
-      (row: RowLike) =>
-        ${
-          if crs.size == 1 then '{${ crs.head.conv } (row)}
-          else crs.foldLeft[quoted.Expr[Tuple]](quoted.Expr(EmptyTuple)):
-            (res, cr) => '{ $res :* ${ cr.conv } (row) }
-        }
-    }
-    ArrRes(at.simplified, convs, colConv)
+  def arrRes(arr: QueryEx): ArrRes = arr match
+    case QueryEx(List(ColEx(_, q@QueryEx(_, _, false), _)), _, true) =>
+      val ar = arrRes(q)
+      val typ = ar.typ.asType match { case '[t] => TypeRepr.of[Iterator[t]] }
+      val conv: RowConv = '{(
+        ${ quoted.Expr(arr.pos) },
+        (row: RowLike) => row(0).asInstanceOf[RowLike],
+      )}
+      val colConv = '{
+        (row: RowLike) => row(0).asInstanceOf[Iterator[RowLike]].map(r => ${ar.arrConv}(r))
+      }
+      ArrRes(typ, conv :: ar.convs, colConv)
+    case _ =>
+      val (at, crs) =
+        (arr.cols.reverse.foldLeft((TypeRepr.of[EmptyTuple], List[ColRes]())):
+          case ((rt, rc), col) =>
+            val cr = colRes(col)
+            val resType = cr.typ.asType match
+              case '[ct] => rt.asType match
+                case '[bt] => TypeRepr.of[*:[ct, bt & Tuple]] // do no use AppliedType since it does not work well
+            (resType, cr :: rc)) match
+              case (rt, cs@List(_)) => rt.asType match { case '[*:[t, EmptyTuple.type]] => (TypeRepr.of[t], cs) }
+              case x => x
+      val conv: RowConv = '{(${ quoted.Expr(arr.pos) }, identity[RowLike] _)}
+      val convs = crs.foldLeft(List(conv))(_ ::: _.nestedRowConvs)
+      val colConv = '{
+        (row: RowLike) =>
+          ${
+            if crs.size == 1 then '{${ crs.head.conv } (row)}
+            else crs.foldLeft[quoted.Expr[Tuple]](quoted.Expr(EmptyTuple)):
+              (res, cr) => '{ $res :* ${ cr.conv } (row) }
+          }
+      }
+      ArrRes(at.simplified, convs, colConv)
 
+  def normalizedName(name: String) = if (name.startsWith("\""))
+    SimpleAliasRegex.unapplySeq(name).map(_.head).getOrElse(name) else name
   case class Ctx(ex: Ex, path: List[Int], colIdx: Int, childIdx: Int)
   lazy val exGenerator: compiler.Traverser[Ctx] = compiler.traverser(ctx => {
     case _: DMLDefBase => ctx.copy(ex = DMLEx)
@@ -195,7 +209,7 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
         case p: PrimitiveDef =>
           (ctx, exGenerator(ctx)(exp).ex)
         case _ => (ctx, tn)
-      nctx.copy(ex = ColEx(name, ex, ctx.colIdx))
+      nctx.copy(ex = ColEx(normalizedName(name), ex, ctx.colIdx))
     case ChildDef(exp, _) =>
       val nctx = ctx.copy(path = ctx.childIdx :: ctx.path, colIdx = 0, childIdx = 0)
       ctx.copy(ex = exGenerator(nctx)(exp).ex)

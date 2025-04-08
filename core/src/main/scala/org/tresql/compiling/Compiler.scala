@@ -329,7 +329,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
         val nctx = ctx.copy(db = db)
         val exp = q match {
           //recursive expression
-          case a: Arr => RecursiveDef(tr_with_c(nctx, BodyCtx, a))
+          case a: Arr if !Ast.isSingleQueryArray(a) => RecursiveDef(tr_with_c(nctx, BodyCtx, a))
           //ordinary child
           case _ => tr_with_c(nctx, QueryCtx, q)
         }

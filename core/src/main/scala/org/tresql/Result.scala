@@ -556,6 +556,7 @@ class InsertResult(
 
 class Column(val idx: Int, val name: String, private[tresql] val expr: Expr) {
   def isResult: Boolean = expr != null
+  override def toString: String = s"Column(idx = $idx, name = $name, child_expr = $expr)"
 }
 object Column {
   def apply(idx: Int, name: String, expr: Expr) =
@@ -652,6 +653,7 @@ trait RowLike extends Typed with AutoCloseable {
   def toMap: Map[String, Any] = (0 until columnCount).map(i => column(i).name -> (this(i) match {
     case r: DynamicArraySelectResult => r.elIterator.toSeq
     case r: Result[_] => r.toListOfMaps
+    case i: Iterator[_] => i.toSeq
     case x => x
   })).foldLeft(ListMap[String, Any]() -> 1) { case ((r, i), c@(n, v)) =>
     // use ListMap to preserve column sequence
@@ -663,6 +665,7 @@ trait RowLike extends Typed with AutoCloseable {
       case r: DynamicArraySelectResult => r.elIterator.toSeq
       case r: Result[_] => r.toListOfVectors
       case i: Iterable[_] => (i map anyToVal).toVector
+      case i: Iterator[_] => (i map anyToVal).toVector
       case p: Product => (p.productIterator map anyToVal).toVector
       case x => x
     }

@@ -81,6 +81,7 @@ package object tresql extends CoreTypes {
   }
 
   private object Macros {
+    private val SimpleAliasRegex = """"(?U)(\p{javaJavaIdentifierStart}\p{javaJavaIdentifierPart}*)"""".r
     import scala.language.reflectiveCalls //supress warnings that class Ctx is defined in function resultClassTree and later returned
     import scala.language.existentials //supress warnings that class Ctx is defined in function resultClassTree and later returned
     def impl(c: Context)(params: c.Expr[Any]*)(resources: c.Expr[Resources]): c.Expr[Result[RowLike]] = {
@@ -105,6 +106,9 @@ package object tresql extends CoreTypes {
         case ce: CompilerException => c.abort(c.enclosingPosition, ce.getMessage)
       }
 
+      def normalizedName(name: String) = if (name.startsWith("\""))
+        SimpleAliasRegex.unapplySeq(name).map(_.head).getOrElse(name) else name
+
       case class Ctx(
                       //class name which extends RowLike
                       className: String,
@@ -118,9 +122,10 @@ package object tresql extends CoreTypes {
                       resultConverter: Option[(String, c.Tree)] //function in form (functionName -> CompiledResult[_] -> T)
                     )
       def resultClassTree(exp: Exp): Ctx = {
-        def uniqueName(prefix: String, names: Set[String]) = if (names(prefix)) {
-          prefix + Stream.from(1).filterNot(i => names(prefix + i)).head
-        } else prefix
+        def uniqueName(prefix: String, names: Set[String]) = {
+          val n = normalizedName(prefix)
+          if (names(n)) n + Stream.from(1).filterNot(i => names(n + i)).head else n
+        }
         def typeNameFromManifest(m: ExprType) = {
           //FIXME bizzare way of getting qualified type name, did not find another way...
           val scalaType = compiler.metadata.to_scala_type(m.toString)
