@@ -154,19 +154,22 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
 
   def arrRes(arr: QueryEx): ArrRes =
     val (at, crs) =
-      arr.cols.reverse.foldLeft((TypeRepr.of[EmptyTuple], List[ColRes]())):
+      (arr.cols.reverse.foldLeft((TypeRepr.of[EmptyTuple], List[ColRes]())):
         case ((rt, rc), col) =>
           val cr = colRes(col)
           val resType = cr.typ.asType match
             case '[ct] => rt.asType match
               case '[bt] => TypeRepr.of[*:[ct, bt & Tuple]] // do no use AppliedType since it does not work well
-          (resType, cr :: rc)
+          (resType, cr :: rc)) match
+            case (rt, cs@List(_)) => rt.asType match { case '[*:[t, EmptyTuple.type]] => (TypeRepr.of[t], cs) }
+            case x => x
     val conv: RowConv = '{(${ quoted.Expr(arr.pos) }, identity[RowLike] _)}
     val convs = crs.foldLeft(List(conv))(_ ::: _.nestedRowConvs)
     val colConv = '{
       (row: RowLike) =>
         ${
-          crs.foldLeft[quoted.Expr[Tuple]](quoted.Expr(EmptyTuple)):
+          if crs.size == 1 then '{${ crs.head.conv } (row)}
+          else crs.foldLeft[quoted.Expr[Tuple]](quoted.Expr(EmptyTuple)):
             (res, cr) => '{ $res :* ${ cr.conv } (row) }
         }
     }

@@ -2765,5 +2765,12 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       val l: List[String] = tresql"{(case(1 = 1, 'yes', 'no')) r}".map(_.r).toList
       l
     }
+    //array as tuple, single element array as single value
+    assertResult((1, 2, 3)) {
+      tresql"[1,2,3]"
+    }
+    assertResult("abc") {
+      tresql"['abc']"
+    }
   }
 }
