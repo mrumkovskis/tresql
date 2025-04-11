@@ -4,7 +4,7 @@ abstract class CoreTypes {
   type Dialect = PartialFunction[Expr, String]
 
   type RowConverter[T] = RowLike => T //is used in macro for selects to generate typed row objects
-
+  type ResultConverter[T] = Result[RowLike] => T
   //converters
   type Converter[T] = (RowLike, Manifest[T]) => T
   implicit def convAny(r: RowLike, m: Manifest[Any]): Any = r(0).asInstanceOf[Any]

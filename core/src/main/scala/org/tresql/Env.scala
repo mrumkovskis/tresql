@@ -1,7 +1,7 @@
 package org.tresql
 
 import sys._
-import CoreTypes.RowConverter
+import CoreTypes.ResultConverter
 import org.tresql.metadata.TypeMapper
 import org.tresql.resources.{MacrosLoader, TresqlMacro, TresqlMacros}
 import parsing.QueryParsers
@@ -45,7 +45,7 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
   private var _rowCount = 0
   //used in macro to convert result at certain query depth and child position to macro generated object
   //converter map is set from macro and are stored in level Env object i.e. provider is None
-  private var _rowConverters: Option[Map[List[Int], RowConverter[_ <: RowLike]]] = None
+  private var _resultConverters: Option[Map[List[Int], ResultConverter[_]]] = None
 
   def apply(name: String): Any = get(name).map {
     case e: Expr => e()
@@ -158,12 +158,12 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
     provider.map(_.env.rowCount = rc).getOrElse (this._rowCount = rc)
   }
 
-  private[tresql] def rowConverter(queryPos: List[Int]): Option[RowConverter[_ <: RowLike]] =
-    rowConverters.flatMap(_.get(queryPos))
-  private[tresql] def rowConverters: Option[Map[List[Int], RowConverter[_ <: RowLike]]] =
-    provider.flatMap(_.env.rowConverters) orElse _rowConverters
-  private[tresql] def rowConverters_=(rc: Map[List[Int], RowConverter[_ <: RowLike]]): Unit = {
-    provider.map(_.env.rowConverters = rc).getOrElse (this._rowConverters = Option(rc))
+  private[tresql] def resultConverter(queryPos: List[Int]): Option[ResultConverter[_]] =
+    resultConverters.flatMap(_.get(queryPos))
+  private[tresql] def resultConverters: Option[Map[List[Int], ResultConverter[_]]] =
+    provider.flatMap(_.env.resultConverters) orElse _resultConverters
+  private[tresql] def resultConverters_=(rc: Map[List[Int], ResultConverter[_]]): Unit = {
+    provider.map(_.env.resultConverters = rc).getOrElse (this._resultConverters = Option(rc))
   }
 
   //resources methods

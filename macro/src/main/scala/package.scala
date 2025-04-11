@@ -39,14 +39,19 @@ package object tresql extends CoreTypes {
         org.tresql.Column(-1, "emps", null)
       )
     }
-    //RowConverter definition
-    object Dept extends RowConverter[Dept] {
-      def apply(row: RowLike): Dept = {
-        val obj = new Dept
-        obj.deptno = row.typed[java.lang.Integer](0)
-        obj.dname = row.typed[java.lang.String](1)
-        obj.emps = row.typed[org.tresql.CompiledResult[Emp]](2)
-        obj
+    //ResultConverter definition
+    object Dept extends ResultConverter[Result[Dept]] {
+      def apply(result: Result[RowLike]): Result[Dept] = {
+        new CompiledResult(
+          result,
+          (row: RowLike) => {
+            val obj = new Dept
+            obj.deptno = row.typed[java.lang.Integer](0)
+            obj.dname = row.typed[java.lang.String](1)
+            obj.emps = row.typed[org.tresql.CompiledResult[Emp]](2)
+            obj
+          }
+        )
       }
     }
     class Emp extends CompiledRow {
@@ -65,13 +70,18 @@ package object tresql extends CoreTypes {
         org.tresql.Column(-1, "hiredate", null)
       )
     }
-    object Emp extends RowConverter[Emp] {
-      def apply(row: RowLike): Emp = {
-        val obj = new Emp
-        obj.empno = row.typed[java.lang.Integer](0)
-        obj.ename = row.typed[java.lang.String](1)
-        obj.hiredate = row.typed[java.sql.Date](2)
-        obj
+    object Emp extends ResultConverter[CompiledResult[Emp]] {
+      def apply(result: Result[RowLike]): Result[Emp] = {
+        new CompiledResult(
+          result,
+          (row: RowLike) => {
+            val obj = new Emp
+            obj.empno = row.typed[java.lang.Integer](0)
+            obj.ename = row.typed[java.lang.String](1)
+            obj.hiredate = row.typed[java.sql.Date](2)
+            obj
+          }
+        )
       }
     }
   }}}
@@ -84,9 +94,9 @@ package object tresql extends CoreTypes {
     private val SimpleAliasRegex = """"(?U)(\p{javaJavaIdentifierStart}\p{javaJavaIdentifierPart}*)"""".r
     import scala.language.reflectiveCalls //supress warnings that class Ctx is defined in function resultClassTree and later returned
     import scala.language.existentials //supress warnings that class Ctx is defined in function resultClassTree and later returned
-    def impl(c: Context)(params: c.Expr[Any]*)(resources: c.Expr[Resources]): c.Expr[Result[RowLike]] = {
+    def impl(c: Context)(params: c.Expr[Any]*)(resources: c.Expr[Resources]): c.Expr[Any] = {
       import c.universe._
-      import CoreTypes.RowConverter
+      import CoreTypes.ResultConverter
       val (macroSettings, verbose) = settings
       def info(msg: Any) = if (verbose) c.info(c.enclosingPosition, String.valueOf(msg), false)
       info(s"Macro compiler settings:\n$macroSettings")
@@ -116,7 +126,7 @@ package object tresql extends CoreTypes {
                       path: List[Int], // QueryBuilder.queryPos
                       colIdx: Int, //column idx - used in converter
                       childIdx: Int, //child select index - used to get converter from env
-                      convRegister: List[c.Tree], //Map of converters for Env in form of List[Int] -> RowConveter[_]
+                      convRegister: List[c.Tree], //Map of converters for Env in form of List[Int] -> ResultConveter[_]
                       colNames: Set[String], //field names (stored in order to avoid duplicates)
                       colType: Tree, //filled by ColDef, may be used in result converter
                       resultConverter: Option[(String, c.Tree)] //function in form (functionName -> CompiledResult[_] -> T)
@@ -140,11 +150,11 @@ package object tresql extends CoreTypes {
             val funName = TermName(name)
             val typeName = typeNameFromManifest(pd.typ)
             val conv =
-              q"""
-                 def $funName(res: org.tresql.Result[_]): $typeName = {
-                    res.head[$typeName]
-                 }
-               """
+              q"""def $funName(res: Any): $typeName = res match {
+                    case r: org.tresql.Result[_] => r.head[$typeName]
+                    case _ => res.asInstanceOf[$typeName]
+                  }
+              """
             ctx.copy(convRegister =
               q"(${ctx.path}, identity[RowLike] _)" :: ctx.convRegister,
               resultConverter = Some(name, conv))
@@ -183,9 +193,8 @@ package object tresql extends CoreTypes {
                   ct.convRegister,
                   ct.colNames,
                   ct.colType :: colCt.colTypes,
-                  resultConv
-                    .map { _ => ct.resultConverter.getOrElse((null, null)) :: colCt.resultConvs }
-                    .getOrElse(Nil)
+                  if (resultConv.isDefined) ct.resultConverter.getOrElse((null, null)) :: colCt.resultConvs
+                  else Nil
                 )
               }
             val (fieldDefs, fieldConvs, fieldTerms, children) = colsCtx.colTrees
@@ -199,22 +208,31 @@ package object tresql extends CoreTypes {
             val colDefs = fieldTerms.map { cn => q"org.tresql.Column(-1, ${cn.toString}, null)" }
             val typeName = TypeName(className)
             val classDef = q"""
-              class $typeName extends org.tresql.CompiledRow {
+              class $typeName extends org.tresql.RowLike {
                 ..$fieldDefs
                 override def apply(idx: Int) = idx match {
                   case ..$colsByIdx
                 }
                 override def columnCount = ${colsByIdx.size}
                 override val columns = Vector(..$colDefs)
+                def column(idx: Int): org.tresql.Column = columns(idx)
+                def apply(name: String): Any = ???
+                def values: Seq[Any] = ???
+                def typed[T:Manifest](name: String) = ???
               }
             """
             val converterName = TermName(className)
             val converterDef = q"""
-              object $converterName extends org.tresql.CoreTypes.RowConverter[$typeName] {
-                def apply(row: org.tresql.RowLike): $typeName = {
-                  val obj = new $typeName
-                  ..$fieldConvs
-                  obj
+              object $converterName extends (Result[RowLike] => Any) { //org.tresql.CoreTypes.ResultConverter[_] {
+                def apply(result: org.tresql.Result[org.tresql.RowLike]): org.tresql.Result[$typeName] = {
+                  new org.tresql.CompiledResult(
+                    result,
+                    (row: org.tresql.RowLike) => {
+                      val obj = new $typeName
+                      ..$fieldConvs
+                      obj
+                    }
+                  )
                 }
               }
             """
@@ -303,9 +321,10 @@ package object tresql extends CoreTypes {
         var optionalVars = Set[Int]()
         val query = new Query {
           override def converters =
-            Map[List[Int], RowConverter[_ <: RowLike]](..$convRegister)
+            Map[List[Int], ResultConverter[_]](..$convRegister)
         }
-        def result = query.compiledResult[$classType](
+
+        def result = (query.compiledResult(
           StringContext.processEscapes(${parts.head}) +
           List[String](..${parts.tail})
             .map(StringContext.processEscapes)
@@ -316,7 +335,10 @@ package object tresql extends CoreTypes {
               .zipWithIndex
               .filterNot { case (param, idx) => param == null && (optionalVars contains idx) }
               .map { case (param, idx) => ("_" + idx) -> param }.toMap
-        )($res)
+        )($res) match {
+          case r: org.tresql.Result[_] => r
+          case r => org.tresql.SingleValueResult(r)
+        }).asInstanceOf[org.tresql.Result[$classType]]
         ${ resultConv
              .map {case (n, _) => q"${TermName(n)}(result)"}
              .getOrElse(q"result")

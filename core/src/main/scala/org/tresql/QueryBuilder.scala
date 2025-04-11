@@ -155,6 +155,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       else (seqName.substring(0, idx), Option(seqName.substring(idx + 1)))
     }
     override def apply() = idFromEnv(true) getOrElse env.nextId(seq)
+
     private[tresql] def idFromEnv(updateCurrId: Boolean) = for {
       key <- bind_var if env.containsNearest(key) && env(key) != null
     } yield {
@@ -378,13 +379,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   case class RecursiveExpr(exp: ast.Query) extends BaseExpr {
     //take this from childrenCount, since it RecursiveExpr is not built with new builder
     private val initChildIdx = QueryBuilder.this.childrenCount
-    private val rowConverter = env.rowConverter(QueryBuilder.this.queryPos)
     if (queryPos.size >= env.recursiveStackDepth)
       error(s"Recursive execution stack depth ${queryPos.size} exceeded, check for loops in data or increase {{{Resources#recursiveStackDepth}}} setting.")
     val qBuilder = QueryBuilder.this.newInstance(new Env(QueryBuilder.this, env.db, env.reusableExpr),
       0, initChildIdx)
     qBuilder.recursiveQueryExp = recursiveQueryExp
-    //TODO pass rowConverter to built SelectExpr!
     lazy val expr: Expr = qBuilder.buildInternal(exp, QUERY_CTX)
     override def apply() = expr()
     def defaultSQL = expr sql
@@ -392,14 +391,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
 
   case class ArrExpr(elements: List[Expr]) extends BaseExpr {
     override def apply() = {
-      val result = elements map {
-        case e: ConstExpr => wrapExprInSelect(e)()
-        case e: VarExpr => wrapExprInSelect(e)()
-        case e => e()
-      }
-      env.rowConverter(queryPos).map { conv =>
-        new CompiledArrayResult(result, conv)
-      }.getOrElse(result match {
+      val result = elements.map(_())
+      env.resultConverter(queryPos).map { _(new DynamicArrayResult(result)) }.getOrElse(result match {
         case List(s: DynamicSelectResult) => new DynamicArraySelectResult(s)
         case _ => new DynamicArrayResult(result)
       })

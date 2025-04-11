@@ -1,7 +1,7 @@
 package org.tresql
 
 import java.sql.{CallableStatement, PreparedStatement, ResultSet, SQLException}
-import CoreTypes.RowConverter
+import CoreTypes.ResultConverter
 import org.tresql.ast.Exp
 import org.tresql.metadata.TypeMapper
 
@@ -10,24 +10,24 @@ import scala.annotation.tailrec
 trait Query extends QueryBuilder with TypedQuery {
 
   def apply(expr: String, params: Any*)(implicit resources: Resources): DynamicResult =
-    exec(expr, normalizePars(params: _*), resources).asInstanceOf[DynamicResult]
+    exec(expr, normalizePars(params: _*), resources, true).asInstanceOf[DynamicResult]
 
-  def compiledResult[T <: RowLike](expr: String, params: Any*)(
-    implicit resources: Resources): Result[T] =
-    exec(expr, normalizePars(params: _*), resources).asInstanceOf[Result[T]]
+  private[tresql] def compiledResult(expr: String, params: Any*)(implicit resources: Resources): Any =
+    exec(expr, normalizePars(params: _*), resources, false)
 
-  private[tresql] def converters: Map[List[Int], RowConverter[_ <: RowLike]] = null
+  private[tresql] def converters: Map[List[Int], ResultConverter[_]] = null
 
   private def exec(
     expr: String,
     params: Map[String, Any],
-    resources: Resources
-  ): Result[_ <: RowLike] = {
+    resources: Resources,
+    wrapIntoResult: Boolean,
+  ) = {
     val builtExpr = build(expr, params, false)(resources)
     if (builtExpr == null) SingleValueResult(null) else {
       builtExpr() match {
         case r: Result[_] => r
-        case x  => SingleValueResult(x)
+        case x => if (wrapIntoResult) SingleValueResult(x) else x
       }
     }
   }
@@ -63,7 +63,7 @@ trait Query extends QueryBuilder with TypedQuery {
     idx: Int,
     chIdx: Int
   ) = {
-    if (converters != null) e.rowConverters = converters
+    if (converters != null) e.resultConverters = converters
     val qpos = chIdx :: queryPos
     new Query {
       override def env = e
@@ -77,16 +77,11 @@ trait Query extends QueryBuilder with TypedQuery {
     case l => l.zipWithIndex.map { case (v, k) => (k + 1).toString -> v }.toMap
   }
 
-  private[tresql] def sel(sql: String, cols: QueryBuilder#ColsExpr): Result[_ <: RowLike] = try {
+  private[tresql] def sel(sql: String, cols: QueryBuilder#ColsExpr): Any = try {
     val (rs, columns, visibleColCount) = sel_result(sql, cols)
-    val result = env.rowConverter(queryPos).map { conv =>
-      new CompiledSelectResult(rs, columns, env, sql,registeredBindVariables,
-        env.maxResultSize, visibleColCount, conv)
-    }.getOrElse {
-      new DynamicSelectResult(rs, columns, env, sql, registeredBindVariables, env.maxResultSize, visibleColCount)
-    }
-    env.result = result
-    result
+    val sr = new DynamicSelectResult(rs, columns, env, sql, registeredBindVariables, env.maxResultSize, visibleColCount)
+    env.result = sr
+    env.resultConverter(queryPos).map(_(sr)).getOrElse(sr)
   } catch {
     case ex: SQLException =>
       throw new TresqlException(sql, bindVarsValues(registeredBindVariables), ex)
@@ -141,36 +136,24 @@ trait Query extends QueryBuilder with TypedQuery {
       throw new TresqlException(sql, bindVarsValues(registeredBindVariables), ex)
   }
 
-  private[tresql] def call(sql: String): Result[RowLike] = try {
+  private[tresql] def call(sql: String): Any = try {
     val st = statement(sql, env, true).asInstanceOf[CallableStatement]
-    var result: Result[RowLike] = null
+    var result: Any = null
     var outs: List[Any] = null
     try {
       if (st.execute) {
         val rs = st.getResultSet
         val md = rs.getMetaData
-        val res = env.rowConverter(queryPos).map { conv =>
-          new CompiledSelectResult(
-            rs,
-            Vector(1 to md.getColumnCount map { i => Column(i, md.getColumnLabel(i), null) }: _*),
-            env,
-            sql,
-            registeredBindVariables,
-            env.maxResultSize,
-            -1,
-            conv)
-        }.getOrElse {
-          new DynamicSelectResult(
-            rs,
-            Vector(1 to md.getColumnCount map { i => Column(i, md.getColumnLabel(i), null) }: _*),
-            env,
-            sql,
-            registeredBindVariables,
-            env.maxResultSize
-          )
-        }
-        env.result = res
-        result = res
+        val sr = new DynamicSelectResult(
+          rs,
+          Vector(1 to md.getColumnCount map { i => Column(i, md.getColumnLabel(i), null) }: _*),
+          env,
+          sql,
+          registeredBindVariables,
+          env.maxResultSize
+        )
+        env.result = sr
+        result = env.resultConverter(queryPos).map(_(sr)).getOrElse(sr)
       }
       outs = registeredBindVariables map (_()) collect { case x: OutPar =>
         val p = x.asInstanceOf[OutPar]
@@ -203,9 +186,10 @@ trait Query extends QueryBuilder with TypedQuery {
       env.statement = null
     }
     if (outs.isEmpty) result
-    else env.rowConverter(queryPos).map { conv =>
-      new CompiledArrayResult(if (result== null) outs else result :: outs, conv)
-    }.getOrElse(new DynamicArrayResult(if (result== null) outs else result :: outs))
+    else {
+      val sr = new DynamicArrayResult(if (result== null) outs else result :: outs)
+      env.resultConverter(queryPos).map(_(sr)).getOrElse(sr)
+    }
   } catch {
     case ex: SQLException =>
       throw new TresqlException(sql, bindVarsValues(registeredBindVariables), ex)

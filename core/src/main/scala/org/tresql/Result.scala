@@ -2,9 +2,15 @@ package org.tresql
 
 import java.sql.ResultSet
 import CoreTypes.RowConverter
+import org.tresql
 
 import scala.collection.immutable.ListMap
 
+/** Super trait of tresql results.
+ * NOTE: Methods take(n: Int) and takeWhile(cond: T => Boolean) does not close underlying result resources
+ *       (due to the fact that original iterator is not completely consumed).
+ *       Original result set must be closed explicitly after resulting iterator is processed.
+ * */
 trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T] {
 
   def columns: Seq[Column] = 0 until columnCount map column
@@ -42,26 +48,26 @@ trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T]
 
   /**
    * Returns first row from result or throws {{{NoSuchElementException}}}
-   * NOTE:  This method does not closes underlying result set.
+   * NOTE:  This method does not closes underlying result resources.
    *        {{{RowLike.close}}} must be called explicitly.
    * */
   def head: T = headOption.getOrElse(throw new NoSuchElementException("No rows in result"))
   /**
    * Returns first row from result as an Option
-   * NOTE:  This method does not closes underlying result set.
+   * NOTE:  This method does not closes underlying result resources.
    *        {{{RowLike.close}}} must be called explicitly.
    * */
   def headOption: Option[T] = if (hasNext) Option(next()) else None
   /**
    * Returns first row from result or throws {{{NoSuchElementException}}} if no row found
    * or {{{TooManyRowsException}}} if more than one row found.
-   * NOTE:  This method does not closes underlying result set.
+   * NOTE:  This method does not closes underlying result resources.
    *        {{{RowLike.close}}} must be called explicitly.
    * */
   def unique: T = uniqueOption.getOrElse(throw new NoSuchElementException("No rows in result"))
   /**
    * Returns first row from result as an Option or throws {{{TooManyRowsException}}} if more than one row found.
-   * NOTE:  This method does not closes underlying result set.
+   * NOTE:  This method does not closes underlying result resources.
    *        {{{RowLike.close}}} must be called explicitly.
    * */
   def uniqueOption: Option[T] =
@@ -74,7 +80,7 @@ trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T]
   def isLast: Boolean
 
   /** needs to be overriden since super class implementation calls hasNext method */
-  override def toString = getClass.toString + ":" + columns.mkString(",")
+  override def toString = getClass.toString + columns.mkString("(", ",", ")")
 }
 
 trait DynamicResult extends Result[DynamicRow] with DynamicRow
@@ -395,52 +401,38 @@ class DynamicArraySelectResult(select: DynamicSelectResult)
 class DynamicArrayResult(override val values: List[Any])
   extends ArrayResult[DynamicArrayResult] with DynamicResult
 
-/**
-  {{{CompiledRow}}} is used as superclass for parameter type of {{{CompiledResult[T]}}}
-*/
-trait CompiledRow extends RowLike with Typed {
-  def column(idx: Int): org.tresql.Column = columns(idx)
-  def apply(name: String): Any = ???
-  def values: Seq[Any] = ???
-  def typed[T:Manifest](name: String) = ???
-}
-
-/**
-  {{{CompiledResult}}} is retured from {{{Query.apply[T]}}} method.
-  Is used from tresql interpolator macro
-*/
-trait CompiledResult[T <: RowLike] extends Result[T] {
-
-  //better not call super class to list since it creates other subclasses of RowLike
-  override def toList: List[T] = foldLeft(List[T]()) {(l, e) => e :: l}.reverse
-
-  /**
-   * Calls {{{super.head}} and closes this result. This is done because {{{CompiledResult}}} is not expected
-   * to return {{{RowLike}}} backed by jdbc cursor.
-   * */
+/** Converts inner result RowLike elements to type T.
+ * head..., unique... methods closes underlying result. */
+class CompiledResult[T <: RowLike](
+   innerRes: Result[RowLike],
+   converter: RowConverter[T],
+ ) extends Result[T] {
+  override def hasNext: Boolean = innerRes.hasNext
+  override def next(): T = converter(innerRes.next())
+  override def isLast: Boolean = innerRes.isLast
+  override def columns: Seq[Column] = innerRes.columns
+  override def values: Seq[Any] = innerRes.values
+  override def toListOfVectors: List[Vector[Any]] = innerRes.toListOfVectors
+  override def toListOfMaps: List[Map[String, Any]] = innerRes.toListOfMaps
+  override def elIterator: Iterator[Any] = innerRes.elIterator
+  override def affectedRowCount: Int = innerRes.affectedRowCount
+  override def execute: Unit = innerRes.execute
+  override def closeWithDb: Unit = innerRes.closeWithDb
   override def head: T = try super.head finally close
-  /**
-   * Calls {{{super.headOption}}} and closes this result. This is done because {{{CompiledResult}}} is not expected
-   * to return {{{RowLike}}} backed by jdbc cursor.
-   * */
   override def headOption: Option[T] = try super.headOption finally close
-  /**
-   * Calls {{{super.unique}} and closes this result. This is done because {{{CompiledResult}}} is not expected
-   * to return {{{RowLike}}} backed by jdbc cursor.
-   * */
   override def unique: T = try super.unique finally close
-  /**
-   * Calls {{{super.uniqueOption}} and closes this result. This is done because {{{CompiledResult}}} is not expected
-   * to return {{{RowLike}}} backed by jdbc cursor.
-   * */
   override def uniqueOption: Option[T] = try super.uniqueOption finally close
+  def apply(idx: Int): Any = innerRes(idx)
+  def apply(name: String): Any = innerRes(name)
+  def column(idx: Int): Column = innerRes.column(idx)
+  def columnCount: Int = innerRes.columnCount
+  override def typed(columnIndex: Int, manifestName: String): Any = innerRes.typed(columnIndex, manifestName)
+  def typed[T: Manifest](name: String): T = innerRes.typed[T](name)
+  override def close: Unit = innerRes.close
 }
 
-case class SingleValueResult[T](value: T)
-  extends CompiledResult[SingleValueResult[T]]
-  with ArrayResult[SingleValueResult[T]]
-  with DynamicResult
-{
+case class SingleValueResult[T](value: T) extends ArrayResult[SingleValueResult[T]]
+  with DynamicResult {
   val col = Column(0, "value", null)
   override def next() = this
   override def columnCount = 1
@@ -451,32 +443,7 @@ case class SingleValueResult[T](value: T)
   override def toString = s"SingleValueResult = $value"
 }
 
-class CompiledSelectResult[T <: RowLike] private[tresql] (
-  private[tresql] val rs: ResultSet,
-  private[tresql] val cols: Vector[Column],
-  private[tresql] val env: Env,
-  private[tresql] val sql: String,
-  private[tresql] val bindVariables: List[Expr],
-  override private[tresql] val maxSize: Int = 0,
-  override private[tresql] val _columnCount: Int = -1,
-  private[tresql] val converter: RowConverter[T]
-) extends SelectResult[T] with CompiledResult[T] {
-
-  override def next(): T = {
-    converter(super.next())
-  }
-}
-
-class CompiledArrayResult[T <: RowLike] private[tresql](
-  override val values: List[Any], converter: RowConverter[T])
-  extends ArrayResult[T] with CompiledResult[T] {
-
-  override def next(): T = {
-    converter(super.next())
-  }
-}
-
-trait DMLResult extends CompiledResult[DMLResult] with ArrayResult[DMLResult]
+trait DMLResult extends ArrayResult[DMLResult]
   with DynamicResult {
   def count: Option[Int]
   def children: List[(String, Any)]

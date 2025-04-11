@@ -2772,6 +2772,11 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     assertResult("abc") {
       tresql"['abc']"
     }
+    assertResult((List(1, 2), List(3))) {
+      tresql"[{1 a} ++ {2}, {3 b}]" match {
+        case (a, b) => a.map(_.a).toList -> b.map(_.b).toList
+      }
+    }
     // Properties returns 2.13 for scala 3. :(
     //scala.util.Properties.versionNumberString.startsWith("3")
     val isScala3 = try { Class.forName("scala.Selectable"); true } catch { case ex: ClassNotFoundException => false }
