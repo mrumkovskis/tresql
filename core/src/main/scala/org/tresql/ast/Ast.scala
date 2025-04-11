@@ -118,6 +118,7 @@ object BinOp {
   val STANDART_BIN_OPS = Set("<=", ">=", "<", ">", "!=", "=", "~", "!~", "in", "!in",
     "++", "+",  "-", "&&", "||", "*", "/", "&", "|")
   val OPTIONAL_OPERAND_BIN_OPS = Set("++", "+",  "-", "&&", "||", "*", "/", "&", "|")
+  val QUERY_BIN_OPS = Set("++", "+",  "-", "&&")
   val ARR_BIND_OPS = Set("in", "!in")
 
 //  def flatten_recursive(e: Exp): (Exp, List[(String, Exp)]) = e match {
@@ -379,19 +380,15 @@ class CompilerException(message: String,
                        ) extends Exception(message, cause)
 
 object Ast {
-  def isSingleQueryArray(a: Exp) :Boolean = a match {
+  def isSingleQueryArray(a: Exp): Boolean = a match {
     case Arr(List(q)) if maybeQuery(q) => true
-    case _ => false
-  }
-  def isTablelessQuery(q: Exp): Boolean = q match {
-    case Query(List(Obj(Null, _, _, _, _)), _, _, _, _, _, _) => true
     case _ => false
   }
   def maybeQuery(q: Exp): Boolean = {
     def maybeBinOpQuery(e: Exp): Boolean = e match {
       case b: BinOp =>
         val (left, rest) = BinOp.flattenBinOp(b)
-        maybeQuery(left) & rest.forall { case (_, o) => maybeQuery(o.exp) }
+        maybeQuery(left) & rest.forall { case (op, o) => BinOp.QUERY_BIN_OPS(op) && maybeQuery(o.exp) }
       case _ => false
     }
     q match {
@@ -400,6 +397,10 @@ object Ast {
       case b: BinOp => maybeBinOpQuery(b)
       case _ => false
     }
+  }
+  def isTablelessQuery(q: Exp): Boolean = q match {
+    case Query(List(Obj(Null, _, _, _, _)), _, _, _, _, _, _) => true
+    case _ => false
   }
 }
 
