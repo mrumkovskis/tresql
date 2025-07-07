@@ -16,8 +16,9 @@ lazy val commonSettings = Seq(
   scalacOptions ++= (if (scalaVersion.value.startsWith("3")) Seq("-explain") else Nil),
   publishTo := {
     val nexus = "https://oss.sonatype.org/"
+    val centralSnapshots = "https://central.sonatype.com/repository/maven-snapshots/"
     if (version.value.trim.endsWith("SNAPSHOT"))
-      Some("snapshots" at nexus + "content/repositories/snapshots")
+      Some("central-snapshots" at centralSnapshots)
     else
       Some("releases" at nexus + "service/local/staging/deploy/maven2")
     },
