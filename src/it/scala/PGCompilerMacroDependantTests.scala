@@ -248,6 +248,23 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
       // do not choose scores because java.math.BigDecimal cannot be compared with Int
       tresql"results[id = 49] {names, scores}".map(r => r.names.getArray.asInstanceOf[Array[_]].toList).toList.head
     }
+    assertResult {
+      val res = List(Map("number" -> "00001111", "balance" -> 20.00,
+        "transactions" -> List(Map("amount" -> 3.00), Map("amount" -> 5.00))))
+      (res, res, res)
+    } {
+      tresql"""+accounts.account{id = nextval('accounts.seq_acc'), number = '00001111', balance = 20, empno = (emp[ename = 'SCOTT'] {empno})}"""
+      tresql"""+accounts.account{id = nextval('accounts.seq_acc'), number = '11112222', balance = 10, empno = (emp[ename = 'BLAKE'] {empno})}"""
+      tresql"""+accounts.transaction {id = nextval('accounts.seq_acc'), originator_id = (accounts.account[number = '00001111']{id}), beneficiary_id = (accounts.account[number = '11112222']{id}), amount = 3, tr_date = '2025-07-29'}"""
+      tresql"""+accounts.transaction {id = nextval('accounts.seq_acc'), originator_id = (accounts.account[number = '00001111']{id}), beneficiary_id = (accounts.account[number = '11112222']{id}), amount = 5, tr_date = '2025-07-29'}"""
+      val r1 = tresql"""accounts.account[number = '00001111']{number, balance, |[t.originator_id]accounts.transaction t{amount}#(id) transactions}"""
+        .toListOfMaps
+      val r2 = tresql"""accounts.account[number = '00001111']{number, balance, |[t.originator_id = accounts.account.id]accounts.transaction t{amount}#(id) transactions}"""
+        .toListOfMaps
+      val r3 = tresql"""accounts.account[number = '00001111']{number, balance, |[t.originator_id = (accounts.account a[a.number = accounts.account.number]{a.id})]accounts.transaction t{amount}#(id) transactions}"""
+        .toListOfMaps
+      (r1, r2, r3)
+    }
   }
 
   override def ort(implicit resources: Resources) = {

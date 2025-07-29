@@ -82,11 +82,19 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   //built by child builder
   private var joinsWithChildren: Set[(String, List[String])] = Set()
   lazy val joinsWithChildrenColExprs = for {
-    tc <- this.joinsWithChildren
-    c <- tc._2
-  } yield ColExpr(IdentExpr(List(tc._1, c)), tc._1 + "_" + c + "_", Some(false), hidden = true)
+    (t, cs) <- this.joinsWithChildren
+    c <- cs
+  } yield {
+    ColExpr(
+      IdentExpr(List(t, c)),
+      qualifiedNameToAlias(t) + "_" + c + "_",
+      Some(false), hidden = true,
+    )
+  }
 
   private[tresql] var transformers: List[PartialFunction[Expr, Expr]] = Nil
+
+  private def qualifiedNameToAlias(name: String) = name.replace('.', '_')
 
   /*****************************************************************************
   ****************** methods to be implemented or overriden ********************
@@ -847,11 +855,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       List(ref) -> env.table(refTable).key.cols -> findAliasByName(refTable)
         .getOrElse(error("Unable to find relationship between table " + childTable +
           ", reference column: " + ref + " and tables: " + this.tableDefs))
-    } orElse (this.findJoin(childTable)).map(t=> ((t._1._1.cols, t._1._2.cols) -> t._2)) match {
+    } orElse this.findJoin(childTable).map(t => (t._1._1.cols, t._1._2.cols) -> t._2) match {
       case None => None
       case Some(((k1: List[String], k2: List[String]), t)) =>
         this.joinsWithChildren += (t -> k2)
-        Some(k1 -> k2.map(t + "_" + _ + "_"))
+        Some(k1 -> k2.map(qualifiedNameToAlias(t) + "_" + _ + "_"))
     }
   //default or fk shortcut join with parent
   private def joinWithParent(childTable: String, refCol: Option[String] = None) = env.provider.flatMap {
@@ -863,7 +871,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     ancestorTableCol: String): Option[ResExpr] = {
     if (!this.tableDefs.exists(_.alias == ancestorTableAlias))
       joinWithAncestor(ancestorTableAlias, ancestorTableCol, 1)
-        .map(ResExpr(_, Ident(List(ancestorTableAlias + "_" + ancestorTableCol + "_"))))
+        .map(ResExpr(_, Ident(List(qualifiedNameToAlias(ancestorTableAlias) + "_" + ancestorTableCol + "_"))))
     else None
   }
 
@@ -1144,7 +1152,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
             //transform ancestor reference: replace IdentExpr referencing parent queries with ResExpr
             case tb @ Table(_, _, TableJoin(false, e, _, _), _, _, _) if e != null =>
               Some(transform(e, {
-                case ie @ IdentExpr(List(tab, col)) =>
+                case ie @ IdentExpr(id1 :: id2 :: rest) =>
+                  val (tab, col) = if (rest.isEmpty) (id1, id2) else (s"$id1.$id2", rest.mkString("."))
                   joinWithAncestor(tab, col).getOrElse(ie)
               }))
             case x => error(s"Cannot join with parent, unrecognized table: $x")

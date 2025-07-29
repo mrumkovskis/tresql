@@ -52,6 +52,8 @@ CREATE TABLE ONEK
   string4     name
 );
      -- PART2 BASED ON HSQL TEST SUITE --
+DROP SCHEMA IF EXISTS ACCOUNTS CASCADE
+//
 DROP TABLE IF EXISTS DUMMY, SALGRADE, TYRES_USAGE, TYRES, CAR_IMAGE, CAR_USAGE, CAR, DEPT_EQUIPMENT, ADDRESS, DEPT_SUB_ADDR, DEPT_ADDR, EMP, DEPT, WORK, RESULTS;
 //
 CREATE TABLE WORK
@@ -227,3 +229,21 @@ create table if not exists log(
   client_id varchar(256),
   primary key (id)
 );
+
+create schema accounts
+    CREATE SEQUENCE seq_acc START WITH 10000
+    create table account(id integer not null,
+        number varchar(20) not null, balance decimal(7, 2) not null, empno integer)
+    create table transaction(id integer not null,
+        originator_id integer not null, beneficiary_id integer not null,
+        amount decimal(7, 2) not null, tr_date date not null)
+//
+alter table accounts.account add primary key (id)
+//
+alter table accounts.account add constraint emp_ref foreign key (empno) references public.emp(empno)
+//
+alter table accounts.transaction add primary key (id)
+//
+alter table accounts.transaction add constraint originator_ref foreign key (originator_id) references accounts.account(id)
+//
+alter table accounts.transaction add constraint beneficiary_ref foreign key (beneficiary_id) references accounts.account(id)
