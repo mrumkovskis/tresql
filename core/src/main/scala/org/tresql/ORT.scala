@@ -371,7 +371,7 @@ trait ORT extends Query {
           case Nil => None //no ref to parent
         }
       }
-      val saveTo = tables.head
+      val saveTo = tables.headOption.getOrElse(error(s"Cannot save data, no table(s) found."))
       md.tableOption(saveTo.table) //no parent no ref to parent
         .filter(_ => parent == null)
         .map((_, saveTo, null))

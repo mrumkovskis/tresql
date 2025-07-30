@@ -1443,6 +1443,18 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     obj = Map("empno" -> 7839)
     intercept[TresqlException](ORT.insert("car_usage", obj))
 
+    assertResult("Cannot save data, no table(s) found.")(
+      intercept[RuntimeException] {
+        import OrtMetadata._
+        ORT.insert(
+          View(saveTo = Nil, filters = None, alias = null,
+            properties = Seq(Property("name", TresqlValue(":name"), false, true, true)),
+            db = null),
+          Map("name" -> "aaa")
+        )
+      }.getMessage
+    )
+
     ortKeyTests
     ortOnExtraDatabase
     ortPkName_ne_BindVarName
