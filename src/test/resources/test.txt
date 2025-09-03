@@ -454,6 +454,16 @@ dept{deptno}#(deptno)@(:o? :l?) --> o=3 --> [[40]]
 dept{deptno}#(deptno)@(:o? :l?) --> l=1 --> [[10]]
 dummy[dummy in (dummy[dummy = :dummy?]{dummy} ++ dummy[dummy = 1]{dummy})] --> []
 
+//is_defined, is_missing macro
+is_defined(:x) --> [[false]]
+is_missing(:x) --> [[true]]
+is_defined(:x) --> x=1 --> [[true]]
+is_missing(:x) --> x=1 --> [[false]]
+dept[is_defined(:x) & loc = 'NEW YORK']{dname}#(1) --> []
+dept[is_missing(:x) & loc = 'NEW YORK']{dname}#(1) --> [["ACCOUNTING"]]
+dept[is_defined(:x) & loc = 'NEW YORK']{dname}#(1) --> x=1 --> [["ACCOUNTING"]]
+dept[is_missing(:x) & loc = 'NEW YORK']{dname}#(1) --> x=1 --> []
+
 //where clause
 emp[(ename = :ename) & (job = :job) & (mgr = (emp[ename = :mgr]{empno})) & (sal = :sal) & (deptno = (dept[dname = :dname]{deptno})) & (:hiredate = hiredate)] {comm}#(:sort::integer) --> ename='MARTIN; job='SALESMAN;mgr='BLAKE;sal=1250;dname='SALES;hiredate='1981-09-28;sort=1 --> [[1400.00]]
 emp[ename = :ename & job = :job & mgr = (emp[ename = :mgr]{empno}) & sal = :sal & deptno = (dept[dname = :dname]{deptno}) & :hiredate = hiredate] {comm}#(:sort::integer) --> hiredate='1981-09-28;sort=1;dname='SALES;sal=1250;mgr='BLAKE;job='SALESMAN;ename='MARTIN --> [[1400.00]]

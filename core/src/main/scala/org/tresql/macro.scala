@@ -26,6 +26,9 @@ class Macros {
     case _ => e
   }
 
+  def is_defined(b: QueryBuilder, v: Expr): Expr =
+    if_defined_or_else(b, v, b.ConstExpr(true), b.ConstExpr(false))
+
   def if_defined_or_else(b: QueryBuilder, v: Expr, e1: Expr, e2: Expr): Expr =
     Option(if_defined(b, v, e1)).getOrElse(e2)
 
@@ -34,6 +37,9 @@ class Macros {
     case null => e
     case _ => null
   }
+
+  def is_missing(b: QueryBuilder, v: Expr): Expr =
+    Option(if_missing(b, v, b.ConstExpr(true))).getOrElse(b.ConstExpr(false))
 
   def if_all_defined(b: QueryBuilder, e: Expr*): Expr = {
     if (e.size < 2) sys.error("if_all_defined macro must have at least two arguments")
