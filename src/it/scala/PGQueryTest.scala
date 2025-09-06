@@ -11,7 +11,8 @@ import org.tresql.metadata.JDBCMetadata
 import scala.util.control.NonFatal
 import sys._
 
-/** To run from console {{{new org.tresql.test.PGQueryTest().execute(configMap = ConfigMap("docker" -> "postgres", "remove" -> "false"))}}},
+/** To run from console: {{{it/Test/console}}} and then
+ * {{{new org.tresql.test.PGQueryTest().execute(configMap = ConfigMap("docker" -> "postgres", "remove" -> "false"))}}},
   * to run from sbt - {{{it/testOnly * -- -oD -Ddocker=<docker image name> [-Dport=<posgtres host port>] [-Dwait_after_startup_millis=<wait time after postgres docker start until connection port is bound>] [-Dremove=<true|false - whether to stop docker after test are run, useful in console mode>]}}},
   * example
   * 1. specific postgres version - {{{it/testOnly * -- -oD -Ddocker=postgres:10.2}}}

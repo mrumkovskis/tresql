@@ -87,7 +87,7 @@ lazy val it = (project in file("src/it"))
     ),
     Test / scalaSource := baseDirectory.value / "scala",
     Test / resourceDirectory := baseDirectory.value / "resources",
-    // IntegrationTest / console / initialCommands := "import org.tresql._; import org.scalatest._; import org.tresql.test.ITConsoleResources._",
+    Test / console / initialCommands := "import org.tresql._; import org.scalatest._; import org.tresql.test.ITConsoleResources._",
   )
 
 lazy val tresql = (project in file("."))
