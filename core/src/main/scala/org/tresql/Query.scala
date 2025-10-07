@@ -351,7 +351,8 @@ trait Query extends QueryBuilder with TypedQuery {
     val lf: ((String, Any)) => Any = Option(env.bindVarLogFilter)
       .map(_ orElse { case (_, v) => v }: PartialFunction[(String, Any), Any]).getOrElse(_._2)
     bindVars.flatMap {
-      case v: VarExpr => List(v.fullName -> lf((v.fullName, v())))
+      case v: VarExpr =>
+        List(v.fullName -> lf((v.fullName, if (env.contains(v.name, v.members)) v() else None)))
       case r: ResExpr => List(r.name -> r())
       case id: IdExpr => List(s"#${id.seqName}" -> id.peek)
       case ir: IdRefExpr => List(s":#${ir.seqName}" -> ir.peek)
