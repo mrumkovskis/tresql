@@ -402,6 +402,17 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     })
   }
 
+  test("bind method") {
+    val conn = tresqlResources.conn
+    assertResult(List(Map("JOB" -> "ANALYST"))) {
+      val st = conn.prepareStatement("select job from emp where ename = ?")
+      Query.bind(st, List("SCOTT"))
+      import org.tresql.given
+      val r: Result[_] = st.executeQuery()
+      r.toListOfMaps
+    }
+  }
+
   test("cache") {
     Option(tresqlResources.cache) foreach(c => println(s"\nCache size: ${c.size}\n"))
   }

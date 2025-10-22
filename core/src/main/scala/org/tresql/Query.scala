@@ -221,7 +221,22 @@ trait Query extends QueryBuilder with TypedQuery {
     st
   }
 
-  private def bindVars(st: PreparedStatement, bindVariables: List[(Boolean, Any)]) = {
+  /**
+   * Binds variables to JDBC PreparedStatement
+   * @param st              prepared statement
+   * @param variables       bind values
+   * @param res             optional resources (may help bind values)
+   */
+  def bind(st: PreparedStatement, variables: List[Any], res: Resources = new Resources {}): Unit = {
+    val q = new Query {
+      override def env = new Env(Map[String, Any](), res, false)
+      override private[tresql] def queryPos = Nil
+      override private[tresql] def bindIdx = 0
+    }
+    q.bindVars(st, variables.map(false -> _))
+  }
+
+  private def bindVars(st: PreparedStatement, bindVariables: List[(Boolean, Any)]): Unit = {
     var idx = 1
     def bindVar(allowArrBind: Boolean, p: Any): Unit = {
       try p match {
