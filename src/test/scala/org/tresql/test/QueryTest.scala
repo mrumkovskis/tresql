@@ -408,8 +408,7 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
       val st = conn.prepareStatement("select job from emp where ename = ?")
       Query.bind(st, List("SCOTT"))
       import org.tresql.given
-      val r: Result[_] = st.executeQuery()
-      r.toListOfMaps
+      st.executeQuery().toListOfMaps
     }
   }
 
