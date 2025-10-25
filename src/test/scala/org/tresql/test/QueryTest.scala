@@ -268,6 +268,7 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     intercept[CompilerException](compiler.compile("dept [dname = 'RESEARCH'] {dname, if_defined(:x, macro_interpolator_test(:x, 2))}"))
     intercept[CompilerException](compiler.compile("e(*){emp{ename}}, d(*) {dept{dname}}"))
     assert(intercept[CompilerException](compiler.compile("dept{dname, |emp e/account.account a{a.account} emps}")).getMessage.contains("account.account"))
+    assert(intercept[CompilerException](compiler.compile("emp e; e / account.account a")).getMessage contains "account.account")
 
     //parser errors on macro functions with distinct or agreggate capabilities
     intercept[CompilerException](compiler.compile("macro_interpolator_test1(# 1, 2)"))

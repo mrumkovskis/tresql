@@ -18,6 +18,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
     def table(table: String): Option[Table]
     def column(col: String): Option[org.tresql.metadata.Col] = None
     def isEqual(exp: SQLDefBase): Boolean
+    override def toString: String = tableNames.mkString("Tables[", ",", "]")
   }
 
   trait TableMetadata {
@@ -451,13 +452,13 @@ trait Compiler extends QueryParsers { thisCompiler =>
           case ColDef(_, All, _) => sql.tables.flatMap { td =>
             table(ctx.scopes)(td.name)(EnvMetadata, ctx.db).map(_.cols.map { c =>
               ColDef(c.name, createCol(s"${td.name}.${c.name}").col, c.colType)
-            }).getOrElse(error(s"Cannot find table: ${td.name}\nScopes:\n${ctx.scopes}"))
+            }).getOrElse(error(s"Unable to resolve column asterisk - *. Cannot find table: ${td.tresql}, scopes:${ctx.scopes.mkString("(", ",", ")")}"))
           }
           case ColDef(_, IdentAll(Ident(ident)), _) =>
             val alias = ident mkString "."
             table(ctx.scopes)(alias)(EnvMetadata, ctx.db)
               .map(_.cols.map { c => ColDef(c.name, createCol(s"$alias.${c.name}").col, c.colType) })
-              .getOrElse(error(s"Cannot find table: $alias"))
+              .getOrElse(error(s"Cannot find table or resolve alias: $alias. Unable to resolve column asterisk - *"))
           case ColDef(n, e, t) => List(ColDef(n, resolver(ctx)(e), t))
         }
       }
