@@ -230,7 +230,7 @@ trait ORT extends Query {
 
   def delete(name: String, id: Any, filter: String = null, filterParams: Map[String, Any] = null)
             (implicit resources: Resources): DeleteResult = {
-    val OrtMetadata.Patterns.prop(db, tableName, _, alias, _) = name
+    val OrtMetadata.Patterns.prop(db, tableName, _, alias, _) = name: @unchecked
     val md = tresqlMetadata(db)
     val delete =
       (for {
@@ -307,7 +307,7 @@ trait ORT extends Query {
   }
 
   def deleteTresql(name: String, key: Seq[String], filter: String)(implicit resources: Resources): String = {
-    val OrtMetadata.Patterns.prop(db, tableName, _, alias, _) = name
+    val OrtMetadata.Patterns.prop(db, tableName, _, alias, _) = name: @unchecked
     s"-${tableWithDb(db, tableName, alias)}[${
       key.map(c => c + " = :" + c).mkString(" & ")}${if (filter == null) "" else s" & ($filter)"}]"
   }
@@ -1012,7 +1012,7 @@ object OrtMetadata {
           }
         }
       }
-      val OrtMetadata.Patterns.prop(db, tables, options, alias, filterStr) = name
+      val OrtMetadata.Patterns.prop(db, tables, options, alias, filterStr) = name: @unchecked
       //insert update delete option
       val (i, u, d) = Option(options).map (_ =>
         (options contains "+", options contains "=", options contains "-")
@@ -1033,8 +1033,8 @@ object OrtMetadata {
     }
     def resolver_tresql(property: String, resolverExp: String) = {
       import ast._
-      val OrtMetadata.Patterns.resolverProp(prop) = property
-      val OrtMetadata.Patterns.resolverExp(col, exp) = resolverExp
+      val OrtMetadata.Patterns.resolverProp(prop) = property: @unchecked
+      val OrtMetadata.Patterns.resolverExp(col, exp) = resolverExp: @unchecked
       val parser = new QueryParser(resources, resources.cache)
       OrtMetadata.Property(col, TresqlValue(
         parser.transformer {

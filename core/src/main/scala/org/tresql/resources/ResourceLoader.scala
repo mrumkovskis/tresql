@@ -39,11 +39,11 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
   protected def tryParseSignature(signature: String) = {
     var repeatedPars = false
     def parseParType(t: String) = {
-      val ParTypeDefRegex(pt, isRepeated) = t
+      val ParTypeDefRegex(pt, isRepeated) = t: @unchecked
       (pt, isRepeated.nonEmpty)
     }
     def parseRetType(t: String) = {
-      val RetTypeDefRegex(ref, pt) = t
+      val RetTypeDefRegex(ref, pt) = t: @unchecked
       (ref.nonEmpty, pt)
     }
     def createPar[T](pn: String, pt: ExprType) = Par(pn, null, pt)
@@ -349,7 +349,7 @@ trait ResourceLoader {
             new BufferedSource(in).mkString.split(SeparatorPattern).toIndexedSeq
               .flatMap { token =>
                 if (IncludePattern.pattern.matcher(token).matches) {
-                  val IncludePattern(nr) = token
+                  val IncludePattern(nr) = token: @unchecked
                   l(nr)(loaded + r).getOrElse(Nil)
                 } else {
                   List(token)

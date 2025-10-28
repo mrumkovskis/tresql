@@ -46,11 +46,11 @@ package object dialects {
     case f: QueryBuilder#FunExpr if f.name == "lower" && f.params.size == 1 => "lcase(" + f.params.head.sql + ")"
     case f: QueryBuilder#FunExpr if f.name == "translate" && f.params.size == 3 =>
       val b = f.builder
-      val List(col, b.ConstExpr(from: String), b.ConstExpr(to: String)) = f.params
+      val List(col, b.ConstExpr(from: String), b.ConstExpr(to: String)) = f.params: @unchecked
       (from zip to).foldLeft(col.sql)((s, a) => "replace(" + s + ", '" + a._1 + "', '" + a._2 + "')")
     case f: QueryBuilder#FunExpr if f.name == "nextval" && f.params.size == 1 =>
       val b = f.builder
-      val List(b.ConstExpr(seq: String)) = f.params
+      val List(b.ConstExpr(seq: String)) = f.params: @unchecked
       "next value for " + seq
     case c: QueryBuilder#CastExpr => s"cast(${c.exp.sql} as ${c.builder.env.metadata.to_sql_type("hsqldb", c.typ) match {
       case "varchar array" => "longvarchar array" // size of varchar unknown and required by hsqldb - use longvarchar instead
