@@ -61,9 +61,15 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
       case Nil => v
       case n :: rest => v flatMap {
         case m: Map[String@unchecked, _] => tr(rest, m.get(n))
-        case s: Seq[_] => tr(rest, Try(n.toInt).flatMap(i => Try(s(i))).toOption)
+        case s: Seq[_] => tr(rest, Try(n.toInt).flatMap(i => Try(s(i)))
+          .recover { case _ if n == "length" || n == "size" => s.size }
+          .toOption
+        )
         case p: Product => tr(rest,
-          Try(n.toInt).flatMap(v => Try(p.productElement(v - 1))).toOption)
+          Try(n.toInt).flatMap(v => Try(p.productElement(v - 1)))
+            .recover { case _ if n == "length" || n == "size" => p.productArity }
+            .toOption
+        )
         case null => Some(null)
         case x => None
       }

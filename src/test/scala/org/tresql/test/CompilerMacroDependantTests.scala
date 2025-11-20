@@ -383,8 +383,8 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       Query("(dept{dname} + {null})[case(:dept.2.name? = null, dname = null, dname = :dept.2.name?)]{dname}#(null 1)", Map("dept" -> (1 -> null))).toListOfVectors)
     assertResult(List(Vector(null), Vector("ACCOUNTING"), Vector("LAW"), Vector("OPERATIONS"), Vector("RESEARCH"), Vector("SALES")))(
       Query("(dept{dname} + {null})[case(:dept.2.name? = null, dname = null, dname = :dept.2.name?)]{dname}#(null 1)", Map("dept" -> (1 -> "a"))).toListOfVectors)
-    assertResult(List(Map("name" -> "Sales Riga")))(
-      Query("{:dept.0.name || ' ' || :dept.0.loc name}",
+    assertResult(List(Map("name" -> "Sales Riga", "size" -> "1", "length" -> "1")))(
+      Query("{:dept.0.name || ' ' || :dept.0.loc name, :dept.size size, :dept.length length}",
         Map("dept" -> Vector(Map("name" -> "Sales", "loc" -> "Riga")))).toListOfMaps)
     assertResult(List(Map("name" -> "Sales, Riga")))(
       Query("dept(# name, loc) { {:dept.0.name, :dept.0.loc} } dept { name || ', ' || loc name}#(1)",
