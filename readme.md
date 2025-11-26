@@ -1,7 +1,7 @@
 tresql [![Latest version](https://index.scala-lang.org/mrumkovskis/tresql/tresql/latest.svg)](https://index.scala-lang.org/mrumkovskis/tresql/tresql)![Build Status](https://github.com/mrumkovskis/tresql/actions/workflows/ci.yaml/badge.svg)
 ====
 
-[TreSQL (Tree SQL)](Query/wiki/language-guide) is a query language built on top of SQL that can select data into hierarchical [JSON](http://en.wikipedia.org/wiki/JSON) objects. This allows to select data for complex input form using one simple query, without any additional server-side programming. TreSQL has very compact notation and provides many powerful shortcuts. It aims to provide complete functionality of SQL for query and data manipulation purposes. In a web application or a client-server application, it can fullfill all the database querying needs for the client. It's Scala API is much more concise than JDBC and can be used for all database requests.
+[tresql (tree sql)](docs/language-guide.md) is a query language built on top of SQL that can select data into hierarchical [JSON](http://en.wikipedia.org/wiki/JSON) objects. This allows to select data for complex input form using one simple query, without any additional server-side programming. TreSQL has very compact notation and provides many powerful shortcuts. It aims to provide complete functionality of SQL for query and data manipulation purposes. In a web application or a client-server application, it can fullfill all the database querying needs for the client. It's Scala API is much more concise than JDBC and can be used for all database requests.
 
 <b>With TreSQL, we provide: </b>  
 1. Query and data manipulation language with SQL functionality  
@@ -123,5 +123,5 @@ Therefore, :1(1) substitutes deptno value from first select as deptno value in s
 Further reading
 ---------------
 
-[Compiling and installing](Query/wiki/Installation)  
-[TreSQL language guide](Query/wiki/language-guide)
+[Compiling and installing](docs/installation.md)  
+[TreSQL language guide](docs/language-guide.md)
