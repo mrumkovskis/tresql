@@ -96,7 +96,7 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
       .withLogger((msg, _, topic) => if (topic != LogTopic.sql_with_params) println (msg))
     //create test db script
     new scala.io.BufferedSource(getClass.getResourceAsStream("/pgdb.sql")).mkString.split("//").foreach {
-      sql => val st = connection.createStatement; tresqlResources.log("Creating database:\n" + sql); st.execute(sql); st.close
+      sql => Query(s"`$sql`")(tresqlResources)
     }
     //set resources for console
     ITConsoleResources.resources = tresqlResources
@@ -104,7 +104,7 @@ class PGQueryTest extends AnyFunSuite with BeforeAndAfterAllConfigMap {
 
   override def afterAll(configMap: ConfigMap) = {
     if (configMap.contains("docker") &&
-      !configMap.get("remove").filter(_ == "false").isDefined) {
+      !configMap.get("remove").contains("false")) {
       val DockerCmd = "docker stop tresql-it-tests"
       print(s"Stopping tresql test docker postgres container...")
       val process = Runtime.getRuntime.exec(DockerCmd)

@@ -757,7 +757,8 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
 
   //sql helper expressions to enable advanced syntax. these expression are expected to be
   //create with the help of macros
-  case class SQLExpr(sqlSnippet: String, bindVars: List[VarExpr]) extends PrimitiveExpr {
+  case class SQLExpr(sqlSnippet: String, bindVars: List[VarExpr]) extends BaseExpr {
+    override def apply(): Any = new UpdateResult(Option(update(sqlSnippet)))
     def defaultSQL = {
       bindVars foreach(_.sql)
       sqlSnippet

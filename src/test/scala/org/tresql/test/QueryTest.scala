@@ -74,11 +74,11 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
 
     tresqlResources = res.withExtraResources(Map("emp_db" -> res, "contact_db" -> res1, "" -> res))
 
-    List(("/db.sql", connection), ("/db1.sql", conn1)) foreach { case (db, c) =>
+    List(("/db.sql", res), ("/db1.sql", res1)) foreach { case (db, r) =>
       //create test db script
       tresqlResources.log(s"Creating database from file ($db)")
       new scala.io.BufferedSource(getClass.getResourceAsStream(db)).mkString.split("//").foreach {
-        sql => val st = c.createStatement; tresqlResources.log(sql); st.execute(sql); st.close
+        sql => Query(s"`$sql`")(r)
       }
     }
     //set resources for console
