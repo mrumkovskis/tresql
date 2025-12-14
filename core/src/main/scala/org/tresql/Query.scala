@@ -78,57 +78,65 @@ trait Query extends QueryBuilder with TypedQuery {
   }
 
   private[tresql] def sel(sql: String, cols: QueryBuilder#ColsExpr): Any = try {
-    val (rs, columns, visibleColCount) = sel_result(sql, cols)
-    val sr = new DynamicSelectResult(rs, columns, env, sql, registeredBindVariables, env.maxResultSize, visibleColCount)
-    env.result = sr
-    env.resultConverter(queryPos).map(_(sr)).getOrElse(sr)
+    val st = statement(sql, env)
+    val rs = st.executeQuery
+    sel_result(rs, sql, cols)
   } catch {
     case ex: SQLException =>
       throw new TresqlException(sql, bindVarsValues(registeredBindVariables), ex)
   }
 
-  private[this] def sel_result(sql: String, cols: QueryBuilder#ColsExpr):
-    (ResultSet, Vector[Column], Int) = { //jdbc result, columns, visible column count
-    val st = statement(sql, env)
-    var i = 0
-    val rs = st.executeQuery
-    val md = rs.getMetaData
-    var visibleColCount = -1
-    def jdbcRcols = (1 to md.getColumnCount).foldLeft(List[Column]()) {
+  private [this] def sel_result(rs: ResultSet, sql: String, cols: QueryBuilder#ColsExpr) = {
+    def result_md: (Vector[Column], Int) = { //columns, visible column count
+      var i = 0
+      val md = rs.getMetaData
+      var visibleColCount = -1
+
+      def jdbcRcols = (1 to md.getColumnCount).foldLeft(List[Column]()) {
         (l, j) => i += 1; Column(i, md.getColumnLabel(j), null) :: l
       } reverse
-    def rcol(c: QueryBuilder#ColExpr) = if (c.separateQuery) Column(-1, c.name, c.col) else {
-      i += 1; Column(i, c.name, null)
+
+      def rcol(c: QueryBuilder#ColExpr) = if (c.separateQuery) Column(-1, c.name, c.col) else {
+        i += 1;
+        Column(i, c.name, null)
+      }
+
+      def rcols = if (cols.hasHidden) {
+        val res = cols.cols.zipWithIndex.foldLeft((List[Column](), Map[Expr, Int](), 0)) {
+          (r, c) =>
+            (rcol(c._1) :: r._1,
+              if (c._1.hidden) r._2 + (c._1.col -> c._2) else r._2,
+              if (!c._1.hidden) r._3 + 1 else r._3)
+        }
+        env.updateExprs(res._2)
+        (res._1.reverse, res._3)
+      } else (cols.cols map rcol, -1)
+
+      val columns =
+        if (cols.hasAll) Vector(cols.cols.flatMap { c =>
+          if (c.col.isInstanceOf[QueryBuilder#AllExpr]) jdbcRcols else List(rcol(c))
+        }: _*)
+        else if (cols.hasIdentAll) Vector(jdbcRcols ++ (cols.cols.filter(_.separateQuery) map rcol): _*)
+        else rcols match {
+          case (c, -1) => Vector(c: _*)
+          case (c, s) =>
+            visibleColCount = s
+            Vector(c: _*)
+        }
+      (columns, visibleColCount)
     }
-    def rcols = if (cols.hasHidden) {
-      val res = cols.cols.zipWithIndex.foldLeft((List[Column](), Map[Expr, Int](), 0)) {
-        (r, c) => (rcol(c._1) :: r._1,
-            if (c._1.hidden) r._2 + (c._1.col -> c._2) else r._2,
-            if (!c._1.hidden) r._3 + 1 else r._3)
-      }
-      env.updateExprs(res._2)
-      (res._1.reverse, res._3)
-    } else (cols.cols map rcol, -1)
-    val columns =
-      if (cols.hasAll) Vector(cols.cols.flatMap { c =>
-        if (c.col.isInstanceOf[QueryBuilder#AllExpr]) jdbcRcols else List(rcol(c))
-      }: _*)
-      else if (cols.hasIdentAll) Vector(jdbcRcols ++ (cols.cols.filter(_.separateQuery) map rcol) :_*)
-      else rcols match {
-        case (c, -1) => Vector(c: _*)
-        case (c, s) =>
-          visibleColCount = s
-          Vector(c: _*)
-      }
-    (rs, columns, visibleColCount)
+    val (res_cols, visibleColCount) = result_md
+    val sr = new DynamicSelectResult(rs, res_cols, env, sql, registeredBindVariables, env.maxResultSize, visibleColCount)
+    env.result = sr
+    env.resultConverter(queryPos).map(_(sr)).getOrElse(sr)
   }
 
   private[tresql] def update(sql: String) = try {
     val st = statement(sql, env)
-    try {
-      st.executeUpdate
-    } finally if (!env.reusableExpr) {
-      st.close
+    val isSelect = st.execute
+    if (isSelect) sel_result(st.getResultSet, sql, ColsExpr(List(ColExpr(AllExpr(), null)), true, false, false))
+    else try st.getUpdateCount finally if (!env.reusableExpr) {
+      st.close()
       env.statement = null
     }
   } catch {

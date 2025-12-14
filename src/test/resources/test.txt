@@ -554,7 +554,7 @@ dept/emp[dept.deptno = 10][mgr = null]{dname, ename}#(1, 2) --> [["ACCOUNTING", 
 //hierarchical query in from clause select //FIXME: does not return child query result!
 (dept{deptno, |emp{ename}})[deptno = 10] --> [[10]]
 
-//macro test
+//sql macro test
 {sql("date '2012-02-29' + 1 month")} --> [["2012-03-29"]]
 {`date '2012-02-29' + 1 month`} --> [["2012-03-29"]]
 []`unnest(sequence_array(10, 12, 1))` a(x) [x = 10] { a.x } --> [[10]]
@@ -569,6 +569,7 @@ sql_concat(`update dummy set dummy = :dummy + 1 `, ` where dummy = :dummy`) --> 
 //sql_concat(=dummy{dummy}[:dummy], `where dummy = :dummy`) --> dummy=100 --> [[1]] // FIXME does no work - update dummy bind variable is registered in another builder like separate query
 sql_concat(`delete from dummy where dummy = 101`) --> [[1]]
 sql_concat(null_macros(), dummy{1}, null_macros()) --> [[1]]
+`select dname from dept order by 1` --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
 dept[deptno in if_defined(:name, emp[ename ~~ :name? || '%']{deptno})]{dname}#(1) --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
 dept[deptno in if_defined("KING", emp[ename ~~ 'KING']{deptno})]{dname}#(1) --> [["ACCOUNTING"]]
 dept[deptno in if_defined(:name?, emp[ename ~~ :name? || '%']{deptno})]{dname}#(1) --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]

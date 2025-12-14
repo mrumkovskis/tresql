@@ -708,17 +708,18 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     override def apply() =
       returning
         .map(sel(sql, _)) //in the case of returning clause execute statement as select
-        .getOrElse {
-          val r = update(sql)
-          //execute children only if this expression has affected some rows
-          if (r > 0)
-            if (childUpdates.isEmpty) new DeleteResult(Some(r))
-            else executeChildUpdates match {
-              case x if x.isEmpty => new DeleteResult(Some(r))
-              case x => new DeleteResult(Some(r), x)
-            }
-          else new DeleteResult(Some(r))
-        }
+        .getOrElse (update(sql) match {
+          case rc: Int =>
+            //execute children only if this expression has affected some rows
+            if (rc > 0)
+              if (childUpdates.isEmpty) new DeleteResult(Some (rc))
+              else executeChildUpdates match {
+                case x if x.isEmpty => new DeleteResult(Some(rc))
+                case x => new DeleteResult(Some(rc), x)
+              }
+            else new DeleteResult(Some(rc))
+          case res => res
+        })
     protected def _sql = "delete from " + table.sql + (if (alias == null) "" else " " + alias) +
       (if (using == null) "" else {
         val usql = using.sql
@@ -758,7 +759,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
   //sql helper expressions to enable advanced syntax. these expression are expected to be
   //create with the help of macros
   case class SQLExpr(sqlSnippet: String, bindVars: List[VarExpr]) extends BaseExpr {
-    override def apply(): Any = new UpdateResult(Option(update(sqlSnippet)))
+    override def apply(): Any = update(sqlSnippet)
     def defaultSQL = {
       bindVars foreach(_.sql)
       sqlSnippet
@@ -778,8 +779,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case expr :: tail => findSQL(expr).orElse(findSQLInSeq(tail))
       }
     val cols = findSQL(this).getOrElse(ColsExpr(List(ColExpr(AllExpr(), null)), true, false, false))
-    override def apply() = if (sql.trim.startsWith("insert") || sql.trim.startsWith("update") ||
-      sql.trim.startsWith("delete")) update(sql) else sel(sql, cols)
+    override def apply() = update(sql)
     def defaultSQL = expr.filter(_ != null).map(_.sql) mkString ""
   }
 
