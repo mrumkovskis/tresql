@@ -6,7 +6,7 @@ jobs:
     strategy:
       matrix:
         os:   [ubuntu-22.04]  # TODO macos-latest, windows-latest
-        java: [11] #, 17, 21]
+        java: [25]
     services:
       postgres:
         image: postgres:latest
@@ -27,4 +27,4 @@ jobs:
         java-version: ${{ matrix.java }}
         distribution: 'adopt'
     - name: Compile and test
-      run:  sbt -J-Xmx8G clean update +compile +test +it/test
+      run:  ./mill _.test + _.it

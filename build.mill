@@ -1,0 +1,84 @@
+//| mill-version: 1.1.0
+//| mill-jvm-version: temurin:25
+package build
+
+import mill.*, scalalib.*
+
+val scalaVersions = Seq("3.3.7", "2.13.17")
+
+object `package` extends Cross[TresqlModule](scalaVersions)
+
+trait TresqlModule extends CrossScalaModule, ProjectBaseModule { outer =>
+
+  object core extends ProjectBaseModule {
+    def scalaVersion = crossScalaVersion
+    def scala3sources = Task.Sources("src-3")
+    def sources =
+      if (crossScalaVersion startsWith "3") Task { super.sources() ++ scala3sources() }
+      else super.sources
+    object test extends ScalaTests, TestModule.ScalaTest
+  }
+  object `macro` extends ProjectBaseModule {
+    def scalaVersion = crossScalaVersion
+    def moduleDeps = Seq(core)
+  }
+
+  def moduleDeps = if (crossScalaVersion.startsWith("2")) Seq(`macro`) else Seq(core)
+
+  object test extends ProjectBaseTests {
+    def moduleDeps = outer.moduleDeps ++ Seq(core.test)
+  }
+
+  object it extends ProjectBaseTests {
+    def mvnDeps = super.mvnDeps() ++ Seq(mvn"org.postgresql:postgresql:42.7.8")
+    def moduleDeps = outer.moduleDeps ++ Seq(core.test, test)
+  }
+}
+
+
+
+trait ProjectBaseModule extends ScalaModule {
+
+  def jvmVersion = "temurin:11"
+
+  def mvnDeps = Seq(mvn"org.scala-lang.modules::scala-parser-combinators:2.4.0") ++ (
+    if (scalaVersion().startsWith("2")) Seq(mvn"org.scala-lang:scala-reflect:2.13.17")
+    else Nil
+  )
+
+  def compileResources = Task.Sources("resources")
+
+  def scalacOptions = Seq(
+    "-deprecation",
+    "-feature",
+    "-unchecked",
+    "-language:dynamics",
+    "-language:postfixOps",
+    "-language:implicitConversions",
+    "-language:reflectiveCalls",
+    "-language:existentials"
+  ) ++
+    (scalaVersion() match {
+      case "3.3.7" => Seq("-explain")
+      case _       => Seq()
+    })
+
+  trait ProjectBaseTests extends ScalaTests, TestModule.ScalaTest { self =>
+
+    def mvnDeps = Task {
+      def borerV = self.scalaVersion() match {
+        case v if v startsWith "2.13" => "1.8.0"
+        case v if v startsWith "3"    => "1.16.2"
+      }
+      Seq(
+        mvn"org.scalatest::scalatest:3.2.19",
+        mvn"org.hsqldb:hsqldb:2.7.4",
+        mvn"io.bullet::borer-core:$borerV",
+        mvn"io.bullet::borer-derivation:$borerV",
+      )
+    }
+
+    def compileResources = Task.Sources("resources")
+    def testParallelism = true
+  }
+}

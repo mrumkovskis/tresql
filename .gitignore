@@ -39,3 +39,6 @@ tmp/
 .bloop/
 project/metals.sbt
 project/project/metals.sbt
+
+.DS_Store
+out/

@@ -107,25 +107,25 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     }
     assertResult(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)", 10, "ACC%"))
     assertResult(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)",
-        Map("1" -> 10, "2" -> "ACC%")))
+      Map("1" -> 10, "2" -> "ACC%")))
     assertResult(None)(Query.headOption[Int]("dept[?]", -1))
     //dynamic tests
     assertResult(1900)(Query("salgrade[1] {hisal, losal}").foldLeft(0)((x, r) => x +
-        r.i.hisal + r.i.losal))
+      r.i.hisal + r.i.losal))
     assertResult(1900)(Query("salgrade[1] {hisal, losal}").foldLeft(0L)((x, r) => x +
-        r.l.hisal + r.l.losal))
+      r.l.hisal + r.l.losal))
     assertResult(1900.00)(Query("salgrade[1] {hisal, losal}").foldLeft(0D)((x, r) => x +
-        r.dbl.hisal + r.dbl.losal))
+      r.dbl.hisal + r.dbl.losal))
     assertResult(1900)(Query("salgrade[1] {hisal, losal}").foldLeft(BigDecimal(0))((x, r) => x +
-        r.bd.hisal + r.bd.losal))
+      r.bd.hisal + r.bd.losal))
     assertResult("KING PRESIDENT")(Query("emp[7839] {ename, job}").foldLeft("")((x, r) =>
-        r.s.ename + " " + r.s.job))
+      r.s.ename + " " + r.s.job))
     assertResult("1982-12-09")(Query("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) =>
-        r.d.hiredate.toString))
+      r.d.hiredate.toString))
     assertResult("1982-12-09 00:00:00.0")(Query("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) =>
-        r.t.hiredate.toString))
+      r.t.hiredate.toString))
     assertResult("KING PRESIDENT")(Query("emp[7839] {ename, job}").foldLeft("")((_, r) =>
-        r.s.ename + " " + r.s.job))
+      r.s.ename + " " + r.s.job))
     //typed tests
     assertResult(("MILLER", BigDecimal(2300.35)))(Query.head[(String, BigDecimal)]("emp[hiredate = '1982-01-23']{ename, sal}"))
     assertResult(List(("CLARK", "ACCOUNTING", 2450.00), ("KING", "ACCOUNTING", 5000.00),
@@ -136,12 +136,12 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     }
     assertResult(List("ACCOUNTING", "OPERATIONS", "RESEARCH", "SALES"))(Query.list[String]("dept{dname}#(1)"))
     assertResult(List((10,"ACCOUNTING",List((7782,"CLARK",List()), (7839,"KING",List((Date.valueOf("2012-06-06"),3),
-        (Date.valueOf("2012-06-07"),4))), (7934, "MILLER", List())),List("PORCHE"))))(
-            Query.list[Int, String, List[(Int, String, List[(Date, Int)])], List[String]] {
-      "dept[10]{deptno, dname, |emp[deptno = :1(deptno)]{empno, ename, |[empno]work{wdate, hours}#(1,2) work}#(1) emps," +
-      " |car[deptnr = :1(deptno)]{name}#(1) cars}"})
+      (Date.valueOf("2012-06-07"),4))), (7934, "MILLER", List())),List("PORCHE"))))(
+      Query.list[Int, String, List[(Int, String, List[(Date, Int)])], List[String]] {
+        "dept[10]{deptno, dname, |emp[deptno = :1(deptno)]{empno, ename, |[empno]work{wdate, hours}#(1,2) work}#(1) emps," +
+          " |car[deptnr = :1(deptno)]{name}#(1) cars}"})
     assertResult(List((10, "ACCOUNTING"), (20, "RESEARCH")))(
-        Query.list[Int, String]("dept[deptno = ? | deptno = ?]#(1)", 10, 20))
+      Query.list[Int, String]("dept[deptno = ? | deptno = ?]#(1)", 10, 20))
     assertResult((10, 10)) {
       val r = tresql"dept[deptno = 10]{deptno}"
       r.hasNext
@@ -179,9 +179,9 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       case x => sys.error("Unable to convert to object of type: " + x)
     }
     assertResult(List(Car(1111, "PORCHE"), Car(2222, "BMW"), Car(3333, "MERCEDES"),
-        Car(4444, "VOLKSWAGEN")))(Query.list[Car]("car {nr, name} #(1)"))
+      Car(4444, "VOLKSWAGEN")))(Query.list[Car]("car {nr, name} #(1)"))
     assertResult(List(Tyre(3333, "MICHELIN"), Tyre(3333, "NOKIAN")))(
-        Query.list[Tyre]("tyres {carnr nr, brand} #(1, 2)"))
+      Query.list[Tyre]("tyres {carnr nr, brand} #(1, 2)"))
     //column alias test
     assertResult(List(("ACCOUNTING,CLARK", -2450.00), ("ACCOUNTING,KING", -5000.00), ("ACCOUNTING,MILLER", -2300.35))) {
       Query("emp/dept[10] {dname || ',' || ename name, -sal salary}#(1)") map (r=> (r.name, r.dbl.salary)) toList
@@ -194,7 +194,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     }
 
     assertResult(List(Map("dname" -> "ACCOUNTING", "emps" -> List(Map("ename" -> "CLARK"),
-        Map("ename" -> "KING"), Map("ename" -> "MILLER"))))) {
+      Map("ename" -> "KING"), Map("ename" -> "MILLER"))))) {
       Query.toListOfMaps("dept[10]{dname, |emp{ename}#(1) emps}")
     }
 
@@ -215,10 +215,10 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     }
     //array, stream, reader, blob, clob test
     assertResult(List(Vector(2)))(Query("car_image{carnr, image} + [?, ?], [?, ?]", 1111,
-        new java.io.ByteArrayInputStream(scala.Array[Byte](1, 4, 127, -128, 57)), 2222,
-        scala.Array[Byte](0, 32, 100, 99)).toListOfVectors)
+      new java.io.ByteArrayInputStream(scala.Array[Byte](1, 4, 127, -128, 57)), 2222,
+      scala.Array[Byte](0, 32, 100, 99)).toListOfVectors)
     assertResult(List(1, 4, 127, -128, 57))(
-        Query("car_image[carnr = ?] {image}", 1111).flatMap(_.b.image).toList)
+      Query("car_image[carnr = ?] {image}", 1111).flatMap(_.b.image).toList)
     assertResult(List[Byte](0, 32, 100, 99)) {
       val res = Query("car_image[carnr = ?] {image}", 2222).map(_.bs(0)).toList(0)
       val bytes = new scala.Array[Byte](4)
@@ -245,12 +245,12 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     }
     assertResult(List(Vector(1))) {
       Query("+dept_addr", 10, new java.io.StringReader("Strelnieku str."),
-          new java.io.StringReader("LV-1010"), null).toListOfVectors
+        new java.io.StringReader("LV-1010"), null).toListOfVectors
     }
     assertResult(List(Vector(1)))(Query("car_image[carnr = ?]{image} = [?]", 2222,
-        new java.io.ByteArrayInputStream(scala.Array[Byte](1, 2, 3, 4, 5, 6, 7))).toListOfVectors)
+      new java.io.ByteArrayInputStream(scala.Array[Byte](1, 2, 3, 4, 5, 6, 7))).toListOfVectors)
     assertResult(List(1, 2, 3, 4, 5, 6, 7))(
-        Query("car_image[carnr = ?] {image}", 2222).flatMap(_.b("image")).toList)
+      Query("car_image[carnr = ?] {image}", 2222).flatMap(_.b("image")).toList)
     //array binding
     assertResult(List(10, 20, 30))(Query.list[Int]("dept[deptno in ?]{deptno}#(1)", List(30, 20, 10)))
     assertResult(List(10, 20, 30))(Query.list[Int]("dept[deptno in ?]{deptno}#(1)", scala.Array(30, 20, 10)))
@@ -258,9 +258,9 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     assertResult(new InsertResult(Some(1), children = List(("emps", List(new InsertResult(Some(1)), new InsertResult(Some(1))))), id = Some(50))) {
       Query("""dept{deptno, dname, loc, +emp {empno, ename, deptno}[:empno, :ename, :#dept] emps} +
         [#dept:dept_id, :dname, :loc]""",
-      Map("dept_id" -> 50, "dname" -> "LAW", "loc" -> "DALLAS",
-        "emps" -> List(Map("empno" -> 1111, "ename" -> "SMITH"),
-          Map("empno" -> 2222, "ename" -> "LEWIS"))))
+        Map("dept_id" -> 50, "dname" -> "LAW", "loc" -> "DALLAS",
+          "emps" -> List(Map("empno" -> 1111, "ename" -> "SMITH"),
+            Map("empno" -> 2222, "ename" -> "LEWIS"))))
     }
     assertResult(new UpdateResult(Some(1), children = List((null, new DeleteResult(Some(2))),
       ("emps", List(new InsertResult(Some(1)), new InsertResult(Some(1)))))))(Query(
@@ -283,7 +283,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
 
     //tresql string interpolation tests
     assertResult("CLARK, KING, MILLER")(tresql"dept[10] {dname, |emp {ename}#(1) emps}"
-        .head.emps.map(_.ename).mkString(", "))
+      .head.emps.map(_.ename).mkString(", "))
     assertResult((List(Vector(0), Vector(10)),List(Vector(0)))){
       val (a, b) = ("acc%", -1)
       val r = tresql"/(dept[dname ~~ $a]{deptno} + dummy) a#(1), salgrade[$b] {grade} + dummy"
@@ -305,7 +305,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     assertResult((10, "ACCOUNTING",(7782, "CLARK", "1981-06-09")))(
       tresql"dept{deptno, dname, |emp{empno, ename, hiredate}#(1) emps}#(1)"
         .head match {case d => (d.deptno, d.dname, d.emps
-          .head match {case e => (e.empno, e.ename, String.valueOf(e.hiredate))})})
+        .head match {case e => (e.empno, e.ename, String.valueOf(e.hiredate))})})
     assertResult(Map("deptno" -> 10, "dname" -> "ACCOUNTING", "loc" -> "NEW YORK"))(
       tresql"dept".head.toMap)
     assertResult((10, "ACCOUNTING"))(tresql"dept{deptno, dname}#(1)".head[Int, String])
@@ -399,7 +399,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       tresql"macro_interpolator_test4(dept, dname)"(using resources
         .withMacros(Some(org.tresql.test.Macros))).map(_.dname).toList)
     assertResult(List(0))(tresql"dummy{dummy}@(1)"(using resources
-        .withMacros(None)).map(_.dummy).toList)
+      .withMacros(None)).map(_.dummy).toList)
     assertResult(List(0))(tresql"dummy{dummy}@(1)"(using resources
       .withMacros(null)).map(_.dummy).toList)
     intercept[Exception](tresql"dummy{dummy}@(1)"(using resources
@@ -536,32 +536,32 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     var obj: Map[String, Any] = Map("deptno" -> null, "dname" -> "LAW2", "loc" -> "DALLAS",
       "calculated_field"->333, "another_calculated_field"->"A",
       "emp" -> scala.Array(Map("empno" -> null, "ename" -> "SMITH", "deptno" -> null,
-          "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")),
-          "work:empno"->List(Map("wdate"-> java.time.LocalDate.of(2012, 7, 9), "empno"->null, "hours"->8, "empno_mgr"->null),
-              Map("wdate"->java.time.LocalDate.of(2012, 7, 10), "empno"->null, "hours"->8, "empno_mgr"->null))),
+        "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")),
+        "work:empno"->List(Map("wdate"-> java.time.LocalDate.of(2012, 7, 9), "empno"->null, "hours"->8, "empno_mgr"->null),
+          Map("wdate"->java.time.LocalDate.of(2012, 7, 10), "empno"->null, "hours"->8, "empno_mgr"->null))),
         Map("empno" -> null, "ename" -> "LEWIS", "deptno" -> null,
-            "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")),
-            "work:empno"->List(Map("wdate"->java.sql.Date.valueOf("2012-7-9"), "empno"->null, "hours"->8, "empno_mgr"->null)))))
+          "deptno_name" -> List(Map("name" -> "20, RESEARCH (DALLAS)")),
+          "work:empno"->List(Map("wdate"->java.sql.Date.valueOf("2012-7-9"), "empno"->null, "hours"->8, "empno_mgr"->null)))))
     assertResult(new InsertResult(Some(1), children = List(("emp",
       List(new InsertResult(count = Some(1), children = List(("work:empno",
         List(new InsertResult(count = Some(1)), new InsertResult(count = Some(1))))), id = Some(10005)),
         new InsertResult(count = Some(1), children =
           List(("work:empno", List(new InsertResult(count = Some(1))))), id = Some(10006))))), id = Some(10004)))(
-        ORT.insert("dept", obj))
+      ORT.insert("dept", obj))
     intercept[Exception](ORT.insert("no_table", obj))
 
     //insert with set parent id and do not insert existing tables with no link to parent
     //(work under dept)
     obj = Map("deptno" -> 50, "dname" -> "LAW3", "loc" -> "FLORIDA",
-        "emp" -> List(Map("empno" -> null, "ename" -> "BROWN", "deptno" -> null),
-          Map("empno" -> null, "ename" -> "CHRIS", "deptno" -> null)),
-        "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))
+      "emp" -> List(Map("empno" -> null, "ename" -> "BROWN", "deptno" -> null),
+        Map("empno" -> null, "ename" -> "CHRIS", "deptno" -> null)),
+      "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null)))
     assertResult(new InsertResult(count = Some(1), children =
       List(("emp", List(new InsertResult(count = Some(1), id = Some(10007)),
         new InsertResult(count = Some(1), id = Some(10008))))), id = Some(50)))(ORT.insert("dept", obj))
 
     obj = Map("dname" -> "FOOTBALL", "loc" -> "MIAMI",
-        "emp" -> List(Map("ename" -> "BROWN"), Map("ename" -> "CHRIS")))
+      "emp" -> List(Map("ename" -> "BROWN"), Map("ename" -> "CHRIS")))
     assertResult( new InsertResult(count = Some(1), children =
       List(("emp", List(new InsertResult(count = Some(1), id = Some(10010)),
         new InsertResult(count = Some(1), id = Some(10011))))), id = Some(10009)))(ORT.insert("dept", obj))
@@ -571,24 +571,24 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
 
     //Ambiguous references to table: emp. Refs: List(Ref(List(empno)), Ref(List(empno_mgr)))
     obj = Map("emp" -> Map("empno" -> null, "ename" -> "BROWN", "deptno" -> null,
-            "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null))))
+      "work"->List(Map("wdate"->"2012-7-9", "empno"->null, "hours"->8, "empno_mgr"->null))))
     intercept[Exception](ORT.insert("emp", obj))
 
     //child foreign key is also its primary key
     obj = Map("deptno" -> 60, "dname" -> "POLAR", "loc" -> "ALASKA",
-              "dept_addr" -> List(Map("addr" -> "Halibut")))
+      "dept_addr" -> List(Map("addr" -> "Halibut")))
     assertResult(new InsertResult(count = Some(1), children =
       List(("dept_addr", List(new InsertResult(count = Some(1), id = Some(60))))), id = Some(60)))(
       ORT.insert("dept", obj))
     //child foreign key is also its primary key
     obj = Map("dname" -> "BEACH", "loc" -> "HAWAII",
-              "dept_addr" -> List(Map("deptnr" -> 1, "addr" -> "Honolulu", "zip_code" -> "1010")))
+      "dept_addr" -> List(Map("deptnr" -> 1, "addr" -> "Honolulu", "zip_code" -> "1010")))
     assertResult(new InsertResult(count = Some(1), children =
       List(("dept_addr",
         List(new InsertResult(count = Some(1), id = Some(10013))))), id = Some(10013)))(ORT.insert("dept", obj))
 
     obj = Map("deptno" -> null, "dname" -> "DRUGS",
-              "car" -> List(Map("nr" -> "UUU", "name" -> "BEATLE")))
+      "car" -> List(Map("nr" -> "UUU", "name" -> "BEATLE")))
     assertResult(new InsertResult(count = Some(1), children =
       List(("car", List(new InsertResult(count = Some(1), id = Some("UUU"))))),
       id = Some(10014)))(ORT.insert("dept", obj))
@@ -604,18 +604,18 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     println("\n--- UPDATE ---\n")
 
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
-        "emp"->List(
-            Map("empno"->null, "ename"->"ANNA", "mgr"->7788, "mgr_name"->null,
-              "work:empno"->List(Map("wdate"->java.sql.Date.valueOf("2012-7-9"), "hours"->8, "empno_mgr"->7839),
-                                 Map("wdate"->java.sql.Date.valueOf("2012-7-10"), "hours"->10, "empno_mgr"->7839))),
-            Map("empno"->null, "ename"->"MARY", "mgr"->7566, "mgr_name"->null,
-              "work:empno" -> List())),
-        "calculated_children"->List(Map("x"->5)), "deptno"->40,
-        //this will not be inserted since work has no relation to dept
-        "work"->List(
-            Map("wdate"->java.sql.Date.valueOf("2012-7-9"), "empno"->7788, "hours"->8, "empno_mgr"->7839),
-            Map("wdate"->java.sql.Date.valueOf("2012-7-10"), "empno"->7788, "hours"->8, "empno_mgr"->7839)),
-        "car" -> List(Map("nr" -> "EEE", "name" -> "BEATLE"), Map("nr" -> "III", "name" -> "FIAT")))
+      "emp"->List(
+        Map("empno"->null, "ename"->"ANNA", "mgr"->7788, "mgr_name"->null,
+          "work:empno"->List(Map("wdate"->java.sql.Date.valueOf("2012-7-9"), "hours"->8, "empno_mgr"->7839),
+            Map("wdate"->java.sql.Date.valueOf("2012-7-10"), "hours"->10, "empno_mgr"->7839))),
+        Map("empno"->null, "ename"->"MARY", "mgr"->7566, "mgr_name"->null,
+          "work:empno" -> List())),
+      "calculated_children"->List(Map("x"->5)), "deptno"->40,
+      //this will not be inserted since work has no relation to dept
+      "work"->List(
+        Map("wdate"->java.sql.Date.valueOf("2012-7-9"), "empno"->7788, "hours"->8, "empno_mgr"->7839),
+        Map("wdate"->java.sql.Date.valueOf("2012-7-10"), "empno"->7788, "hours"->8, "empno_mgr"->7839)),
+      "car" -> List(Map("nr" -> "EEE", "name" -> "BEATLE"), Map("nr" -> "III", "name" -> "FIAT")))
     assertResult(new UpdateResult(count = Some(1),
       children = List((null, new DeleteResult(count = Some(0))),
         ("emp", List(new InsertResult(count = Some(1), children =
@@ -626,10 +626,10 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
           new InsertResult(count = Some(1), id = Some("III")))))))(ORT.update("dept", obj))
 
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
-        "work:empno"->List(
-          Map("wdate"->java.sql.Date.valueOf("2012-7-9"), "empno"->7788, "hours"->8, "empno_mgr"->7839),
-          Map("wdate"->java.sql.Date.valueOf("2012-7-10"), "empno"->7788, "hours"->8, "empno_mgr"->7839)),
-        "calculated_children"->List(Map("x"->5)), "deptno"->40)
+      "work:empno"->List(
+        Map("wdate"->java.sql.Date.valueOf("2012-7-9"), "empno"->7788, "hours"->8, "empno_mgr"->7839),
+        Map("wdate"->java.sql.Date.valueOf("2012-7-10"), "empno"->7788, "hours"->8, "empno_mgr"->7839)),
+      "calculated_children"->List(Map("x"->5)), "deptno"->40)
     assertResult(new UpdateResult(count = Some(1), children =
       List((null, new DeleteResult(count = Some(2))),
         ("work:empno", List(new InsertResult(count = Some(1)),
@@ -637,20 +637,20 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
 
     //no child record is updated since no relation is found with car
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
-        "calculated_children"->List(Map("x"->5)), "deptno"->40,
-        "car"-> List(Map("nr" -> "AAA", "name"-> "GAZ", "deptno" -> 15)))
+      "calculated_children"->List(Map("x"->5)), "deptno"->40,
+      "car"-> List(Map("nr" -> "AAA", "name"-> "GAZ", "deptno" -> 15)))
     assertResult(new UpdateResult(count = Some(1)))(ORT.update("emp", obj))
 
     //ambiguous relation is found with work
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
-        "work"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
-              Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
-        "calculated_children"->List(Map("x"->5)), "deptno"->40)
+      "work"->List(Map("wdate"->"2012-7-9", "empno"->7788, "hours"->8, "empno_mgr"->7839),
+        Map("wdate"->"2012-7-10", "empno"->7788, "hours"->8, "empno_mgr"->7839)),
+      "calculated_children"->List(Map("x"->5)), "deptno"->40)
     intercept[Exception](ORT.update("emp", obj))
 
     //child foreign key is also its primary key (one to one relation)
     obj = Map("deptno" -> 60, "dname" -> "POLAR BEAR", "loc" -> "ALASKA",
-              "dept_addr" -> List(Map("addr" -> "Halibut", "zip_code" -> "1010")))
+      "dept_addr" -> List(Map("addr" -> "Halibut", "zip_code" -> "1010")))
     assertResult(new UpdateResult(count = Some(1), children =
       List(("dept_addr", List(new UpdateResult(count = Some(1)))))))(ORT.update("dept", obj))
 
@@ -662,7 +662,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
 
     //update only children (no first level table column updates)
     obj = Map("nr" -> "4444", "tyres" -> List(Map("brand" -> "GOOD YEAR", "season" -> "S"),
-        Map("brand" -> "PIRELLI", "season" -> "W")))
+      Map("brand" -> "PIRELLI", "season" -> "W")))
     assertResult(new UpdateResult(None, children =
       List((null, new DeleteResult(count = Some(0))),
         ("tyres", List(new InsertResult(count = Some(1), id = Some(10017)),
@@ -675,12 +675,12 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
 
     //update three level, for the first second level object it's third level is empty
     obj = Map("deptno" -> 10013, "emp" -> List(
-        Map("ename" -> "ELKHADY",
-            "work:empno" -> List()),
-        Map("ename" -> "GUNTER",
-            "work:empno" -> List(
-            Map("wdate" -> java.sql.Date.valueOf("2014-08-27"), "hours" -> 8),
-            Map("wdate" -> java.sql.Date.valueOf("2014-08-28"), "hours" -> 8)))))
+      Map("ename" -> "ELKHADY",
+        "work:empno" -> List()),
+      Map("ename" -> "GUNTER",
+        "work:empno" -> List(
+          Map("wdate" -> java.sql.Date.valueOf("2014-08-27"), "hours" -> 8),
+          Map("wdate" -> java.sql.Date.valueOf("2014-08-28"), "hours" -> 8)))))
     assertResult(new UpdateResult(None, children =
       List((null, new DeleteResult(count = Some(0))),
         ("emp", List(new InsertResult(count = Some(1), children =
@@ -689,10 +689,10 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
             new InsertResult(count = Some(1))))), id = Some(10020)))))))(ORT.update("dept", obj))
     //delete third level children
     obj = Map("deptno" -> 10013, "emp" -> List(
-        Map("ename" -> "ELKHADY",
-            "work:empno" -> List()),
-        Map("ename" -> "GUNTER",
-            "work:empno" -> List())))
+      Map("ename" -> "ELKHADY",
+        "work:empno" -> List()),
+      Map("ename" -> "GUNTER",
+        "work:empno" -> List())))
     assertResult(new UpdateResult(None, children = List((null, new DeleteResult(count = Some(2))),
       ("emp", List(new InsertResult(count = Some(1), children =
         List(("work:empno", List())), id = Some(10021)),
@@ -709,18 +709,18 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     obj = Map("dname" -> "SALES", "loc" -> "WASHINGTON", "calculated_field" -> 222,
       "emp[+-=]" -> List(
         Map("empno" -> 7499, "ename" -> "ALLEN SMITH", "job" -> "SALESMAN", "mgr" -> 7698,
-            "mgr_name" -> null, "deptno" -> 30),
+          "mgr_name" -> null, "deptno" -> 30),
         Map("empno" -> 7654, "ename" -> "MARTIN BLAKE", "job" -> "SALESMAN", "mgr" -> 7698,
-            "mgr_name" -> null, "deptno" -> 30),
+          "mgr_name" -> null, "deptno" -> 30),
         Map("empno" -> null, "ename" -> "DEISE ROSE", "job" -> "SALESGIRL", "mgr" -> 7698,
-            "mgr_name" -> null, "deptno" -> 30),
+          "mgr_name" -> null, "deptno" -> 30),
         Map("empno" -> 7698, "ename" -> "BLAKE", "job" -> "SALESMAN", "mgr" -> 7839,
-            "mgr_name" -> null, "deptno" -> 30)),
+          "mgr_name" -> null, "deptno" -> 30)),
       "calculated_children" -> List(Map("x" -> 5)), "deptno" -> 30)
-      assertResult(new UpdateResult(count = Some(1), children =
-        List((null, new DeleteResult(count = Some(3))), ("emp[+-=]", List(new UpdateResult(count = Some(1)),
-          new UpdateResult(count = Some(1)), new InsertResult(count = Some(1), id = Some(10023)),
-          new UpdateResult(count = Some(1)))))))(ORT.update("dept", obj))
+    assertResult(new UpdateResult(count = Some(1), children =
+      List((null, new DeleteResult(count = Some(3))), ("emp[+-=]", List(new UpdateResult(count = Some(1)),
+        new UpdateResult(count = Some(1)), new InsertResult(count = Some(1), id = Some(10023)),
+        new UpdateResult(count = Some(1)))))))(ORT.update("dept", obj))
 
     obj = Map("empno" -> 7788, "ename"->"SCOTT", "mgr"-> 7839,
       "work:empno[+-=]" -> List(
@@ -733,16 +733,16 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
           new InsertResult(count = Some(1)))))))(ORT.update("emp", obj))
 
     obj = Map("dname"->"DEVELOPMENT", "loc"->"DETROIT", "calculated_field"-> 222,
-        "emp[+-=]"->List(
-          Map("empno"->null, "ename"->"AMY", "mgr"->7788, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
-            "work:empno[+-=]"->List(
-              Map("wdate"->java.sql.Date.valueOf("2012-7-12"), "empno"->null, "hours"->5, "empno_mgr"->7839),
-              Map("wdate"->java.sql.Date.valueOf("2012-7-13"), "empno"->null, "hours"->2, "empno_mgr"->7839))),
-          Map("empno"->null, "ename"->"LENE", "mgr"->7566, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
-            "work:empno[+-=]"->List(
-              Map("wdate"->java.sql.Date.valueOf("2012-7-14"), "empno"->null, "hours"->5, "empno_mgr"->7839),
-              Map("wdate"->java.sql.Date.valueOf("2012-7-15"), "empno"->null, "hours"->2, "empno_mgr"->7839)))),
-        "calculated_children"->List(Map("x"->5)), "deptno"->40)
+      "emp[+-=]"->List(
+        Map("empno"->null, "ename"->"AMY", "mgr"->7788, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
+          "work:empno[+-=]"->List(
+            Map("wdate"->java.sql.Date.valueOf("2012-7-12"), "empno"->null, "hours"->5, "empno_mgr"->7839),
+            Map("wdate"->java.sql.Date.valueOf("2012-7-13"), "empno"->null, "hours"->2, "empno_mgr"->7839))),
+        Map("empno"->null, "ename"->"LENE", "mgr"->7566, "job"-> "SUPERVIS", "mgr_name"->null, "deptno"->40,
+          "work:empno[+-=]"->List(
+            Map("wdate"->java.sql.Date.valueOf("2012-7-14"), "empno"->null, "hours"->5, "empno_mgr"->7839),
+            Map("wdate"->java.sql.Date.valueOf("2012-7-15"), "empno"->null, "hours"->2, "empno_mgr"->7839)))),
+      "calculated_children"->List(Map("x"->5)), "deptno"->40)
     assertResult(new UpdateResult(count = Some(1), children =
       List((null, new DeleteResult(count = Some(2))),
         ("emp[+-=]", List(new InsertResult(count = Some(1), children =
@@ -751,11 +751,11 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
           new InsertResult(count = Some(1), children =
             List(("work:empno[+-=]", List(new InsertResult(count = Some(1)),
               new InsertResult(count = Some(1))))), id = Some(10025)))))))(
-        ORT.update("dept", obj))
+      ORT.update("dept", obj))
 
     obj = Map("empno"->7788, "ename"->"SCOTT", "mgr"-> 7839,
-        "work:empno[+-=]"->List(),
-        "calculated_children"->List(Map("x"->5)), "deptno"->20)
+      "work:empno[+-=]"->List(),
+      "calculated_children"->List(Map("x"->5)), "deptno"->20)
     assertResult(new UpdateResult(count = Some(1), children =
       List((null,new DeleteResult(count = Some(2))), ("work:empno[+-=]", List()))))(ORT.update("emp", obj))
 
@@ -771,8 +771,8 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       List((null, new UpdateResult(count = Some(1))))))(ORT.updateMultiple(obj, "dept", "dept_addr")())
 
     assertResult(List(Map(
-        "dname" -> "SPORTS", "loc" -> "Brisbane",
-        "addr" -> List(Map("addr" -> "Roma st. 150", "zip_code" -> "4000"))))) {
+      "dname" -> "SPORTS", "loc" -> "Brisbane",
+      "addr" -> List(Map("addr" -> "Roma st. 150", "zip_code" -> "4000"))))) {
       tresql"dept[dname = 'SPORTS'] {dname, loc, |dept_addr {addr, zip_code} addr}".toListOfMaps
     }
 
@@ -785,9 +785,9 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
 
     //insert, update one to one relationship (pk of the extended table is fk for the base table) with children for the extended table
     obj = Map("dname" -> "PANDA BREEDING",
-        "dept_addr" -> List(Map("addr" -> "Chengdu", "zip_code" -> "2000",
-            "dept_sub_addr" -> List(Map("addr" -> "Jinli str. 10", "zip_code" -> "CN-1234"),
-                Map("addr" -> "Jinjiang District", "zip_code" -> "CN-1234")))))
+      "dept_addr" -> List(Map("addr" -> "Chengdu", "zip_code" -> "2000",
+        "dept_sub_addr" -> List(Map("addr" -> "Jinli str. 10", "zip_code" -> "CN-1234"),
+          Map("addr" -> "Jinjiang District", "zip_code" -> "CN-1234")))))
     assertResult(new InsertResult(count = Some(1), children =
       List(("dept_addr", List(new InsertResult(count = Some(1), children =
         List(("dept_sub_addr", List(new InsertResult(count = Some(1)),
@@ -835,7 +835,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     }
     //one to one relationship with lookup for extended table
     obj = Map("dname" -> "MARKETING", "addr" -> "Valkas str. 1",
-        "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Riga"))
+      "zip_code" -> "LV-1010", "addr_nr" -> Map("addr" -> "Riga"))
     assertResult(new InsertResult(count = Some(1), children =
       List((null, List(10033,
         new InsertResult(count = Some(1), id = Some(10032))))),
@@ -886,7 +886,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     }
 
     obj = Map("dname" -> "DIG", "emp" -> List(Map("ename" -> "O'Jay",
-        "work:empno" -> List(Map("wdate" -> java.sql.Date.valueOf("2010-05-01"), "hours" -> 7)))), "addr" -> "Tvaika 1")
+      "work:empno" -> List(Map("wdate" -> java.sql.Date.valueOf("2010-05-01"), "hours" -> 7)))), "addr" -> "Tvaika 1")
     assertResult( new InsertResult(count = Some(1), children =
       List(
         ("emp", List(new InsertResult(count = Some(1), children =
@@ -910,7 +910,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       (null,new UpdateResult(count = Some(1)))))) { ORT.updateMultiple(obj, "dept", "car", "tyres")() }
 
     obj = Map("deptno" -> 10039, "dname" -> "STOCK", "name" -> "Nissan Patrol",
-        "tyres" -> List(Map("brand" -> "CONTINENTAL", "season" -> "W")))
+      "tyres" -> List(Map("brand" -> "CONTINENTAL", "season" -> "W")))
     assertResult(new UpdateResult(count = Some(1), children = List(
       (null,new UpdateResult(count = Some(1), children = List(
         (null,new DeleteResult(count = Some(1))),
@@ -919,7 +919,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     }
 
     obj = Map("dname" -> "NEW STOCK", "name" -> "Audi Q7",
-        "tyres" -> List(Map("brand" -> "NOKIAN", "season" -> "S")))
+      "tyres" -> List(Map("brand" -> "NOKIAN", "season" -> "S")))
     assertResult(new InsertResult(count = Some(1), children = List(
       (null,new InsertResult(count = Some(1), children = List(
         ("tyres", List(new InsertResult(count = Some(1), id = Some(10042))))),
@@ -1004,17 +1004,17 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
               "tyres_usage[+=]" -> List(
                 Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-09-25"),
                 Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-10-01"))))
-       ),
-       Map("name" -> "TATA",
+        ),
+        Map("name" -> "TATA",
           "tyres[+=]" -> List(
-           Map("brand" -> "METRO TYRE", "season" -> "S",
-             "tyres_usage[+=]" -> List(
-               Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-04-25"),
-               Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-05-01"))),
-           Map("brand" -> "GRL", "season" -> "W",
-             "tyres_usage[+=]" -> List(
-               Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-09-25"),
-               Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-10-01")))))))
+            Map("brand" -> "METRO TYRE", "season" -> "S",
+              "tyres_usage[+=]" -> List(
+                Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-04-25"),
+                Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-05-01"))),
+            Map("brand" -> "GRL", "season" -> "W",
+              "tyres_usage[+=]" -> List(
+                Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-09-25"),
+                Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-10-01")))))))
     assertResult(new InsertResult(count = Some(1), children = List(
       ("car[+=]", List(new InsertResult(count = Some(1), children = List(
         ("tyres[+=]", List(new InsertResult(count = Some(1), children = List(
@@ -1045,27 +1045,27 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
                 Map("carnr->" -> "carnr=:#car", "date_from" -> "2016-10-01"))))),
         Map("nr" -> 10060, "name" -> "TATA MOTORS",
           "tyres[+=]" -> List(
-           Map("nr" -> 10061, "brand" -> "METRO TYRE", "season" -> "S",
-             "tyres_usage[+=]" -> List(
-               Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-04-25"),
-               Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-05-01"))),
-           Map("nr" -> 10062, "brand" -> "GRL", "season" -> "W",
-             "tyres_usage[+=]" -> List(
-               Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-09-25"),
-               Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-10-01")))))))
-      assertResult(new UpdateResult(count = Some(1), children = List(
-        ("car[+=]", List(new UpdateResult(count = Some(1), children = List(
+            Map("nr" -> 10061, "brand" -> "METRO TYRE", "season" -> "S",
+              "tyres_usage[+=]" -> List(
+                Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-04-25"),
+                Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-05-01"))),
+            Map("nr" -> 10062, "brand" -> "GRL", "season" -> "W",
+              "tyres_usage[+=]" -> List(
+                Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-09-25"),
+                Map("carnr->" -> "carnr=:#car", "date_from" -> "2015-10-01")))))))
+    assertResult(new UpdateResult(count = Some(1), children = List(
+      ("car[+=]", List(new UpdateResult(count = Some(1), children = List(
+        ("tyres[+=]", List(new UpdateResult(count = Some(1), children = List(
+          ("tyres_usage[+=]", List(new InsertResult(count = Some(1)))))),
+          new InsertResult(count = Some(1), children = List(
+            ("tyres_usage[+=]", List(new InsertResult(count = Some(1)),
+              new InsertResult(count = Some(1))))), id = Some(10063)))))),
+        new UpdateResult(count = Some(1), children = List(
           ("tyres[+=]", List(new UpdateResult(count = Some(1), children = List(
-            ("tyres_usage[+=]", List(new InsertResult(count = Some(1)))))),
-            new InsertResult(count = Some(1), children = List(
-              ("tyres_usage[+=]", List(new InsertResult(count = Some(1)),
-                new InsertResult(count = Some(1))))), id = Some(10063)))))),
-          new UpdateResult(count = Some(1), children = List(
-            ("tyres[+=]", List(new UpdateResult(count = Some(1), children = List(
-              ("tyres_usage[+=]", List(new InsertResult(count = Some(1)),
-                new InsertResult(count = Some(1)))))), new UpdateResult(count = Some(1), children = List(
-              ("tyres_usage[+=]", List(new InsertResult(count = Some(1)),
-                new InsertResult(count = Some(1)))))))))))))))(ORT.update("dept", obj))
+            ("tyres_usage[+=]", List(new InsertResult(count = Some(1)),
+              new InsertResult(count = Some(1)))))), new UpdateResult(count = Some(1), children = List(
+            ("tyres_usage[+=]", List(new InsertResult(count = Some(1)),
+              new InsertResult(count = Some(1)))))))))))))))(ORT.update("dept", obj))
 
     obj = Map("deptno" -> 10056, "car[+-=]" -> List(
       Map("nr" -> 10060, "tyres[+-=]" -> List(
@@ -1127,7 +1127,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       new UpdateResult(None, List((null, new DeleteResult(Some(1))), "tyres[+-=]" -> List(
         new InsertResult(Some(1), Nil, Some(10066)),
         new InsertResult(Some(1), Nil, Some(10067)))))))))(
-    ORT.update("dept", obj))
+      ORT.update("dept", obj))
 
     println("\n-------- SAVE - extended cases - multiple children --------\n")
 
@@ -1203,7 +1203,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
 
     obj = Map("dname" -> "Temp", "addr" -> "Field", "zip_code" -> "none", "dept_sub_addr" ->
       List(Map("addr" -> "Hill", "zip_code" -> "----"),
-           Map("addr" -> "Pot", "zip_code" -> "----")
+        Map("addr" -> "Pot", "zip_code" -> "----")
       )
     )
     assertResult(new InsertResult(Some(1),
@@ -1215,7 +1215,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
 
     obj = Map("dname" -> "Temp", "addr" -> "Field", "zip_code" -> "none", "dept_sub_addr" ->
       List(Map("addr" -> "Hill", "zip_code" -> "----"),
-           Map("addr" -> "Pot", "zip_code" -> "----")
+        Map("addr" -> "Pot", "zip_code" -> "----")
       ), "filter_condition" -> false
     )
     assertResult(new InsertResult(Some(0), Nil, Some(10076)))(
@@ -1223,9 +1223,9 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
 
     obj = Map("dname" -> "Temp1", "addr" -> "Field1", "zip_code" -> "none",
       "dept_sub_addr dsa|dsa.addr = null,:filter_condition = true,dsa.addr = null" ->
-      List(Map("addr" -> "Hill", "zip_code" -> "----"),
-           Map("addr" -> "Pot", "zip_code" -> "----")
-      ), "filter_condition" -> false
+        List(Map("addr" -> "Hill", "zip_code" -> "----"),
+          Map("addr" -> "Pot", "zip_code" -> "----")
+        ), "filter_condition" -> false
     )
     assertResult(new InsertResult(Some(1),
       List((null, new InsertResult(
@@ -1237,11 +1237,11 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
 
     obj = Map("deptno" -> 10077, "dname" -> "Temp2", "addr" -> "Field2", "zip_code" -> "----",
       "dept_sub_addr[+-=]|:filter_condition = true,:filter_condition = true,:filter_condition = true" ->
-      List(Map("addr" -> "Hill", "zip_code" -> "----"),
-           Map("addr" -> "Pot", "zip_code" -> "----")
-      ),
+        List(Map("addr" -> "Hill", "zip_code" -> "----"),
+          Map("addr" -> "Pot", "zip_code" -> "----")
+        ),
       "emp[+-=] e|e.ename = null,e.ename = null,e.ename = null" ->
-      List(Map("ename" -> "X"), Map("empno" -> 7369, "ename" -> "Y")),
+        List(Map("ename" -> "X"), Map("empno" -> 7369, "ename" -> "Y")),
       "filter_condition" -> false
     )
     assertResult(
@@ -1265,9 +1265,9 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     //should not delete dept_sub_addr children
     obj = Map("deptno" -> 10075, "addr" -> "Field alone",
       "dept_sub_addr[+-=] dsa|dsa.addr = null,dsa.addr = null,dsa.addr = null" ->
-      List(Map("addr" -> "Hill", "zip_code" -> "----"),
-           Map("addr" -> "Pot", "zip_code" -> "----")
-      )
+        List(Map("addr" -> "Hill", "zip_code" -> "----"),
+          Map("addr" -> "Pot", "zip_code" -> "----")
+        )
     )
     assertResult(new UpdateResult(
       None,
@@ -1286,9 +1286,9 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     //should delete dept_sub_addr children
     obj = Map("deptno" -> 10075, "addr" -> "Field alone",
       "dept_sub_addr[+-=] dsa|dsa.addr = null, null, dsa.addr = null" ->
-      List(Map("addr" -> "Hill", "zip_code" -> "----"),
-           Map("addr" -> "Pot", "zip_code" -> "----")
-      )
+        List(Map("addr" -> "Hill", "zip_code" -> "----"),
+          Map("addr" -> "Pot", "zip_code" -> "----")
+        )
     )
     assertResult(new UpdateResult(
       None,
@@ -1644,7 +1644,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
               Property("ename",TresqlValue(":ename"), false,true,true),
               Property("job",TresqlValue(":job"),false,true,true)),null
           ),
-        SaveOptions(true,true,false)), false,true,true)), null), obj)
+            SaveOptions(true,true,false)), false,true,true)), null), obj)
       println(s"\nResult check:")
       tresql"dept[dname = 'ADVERTISING'] { |emp {ename, job}#(ename) e}".map(_.e.map(e => e.ename -> e.job).toList).toList
     }
@@ -1686,7 +1686,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
                 Property("ename", TresqlValue(":ename"), false, true, true),
                 Property("job", TresqlValue(":job"), false, true, true)), null
             ),
-            SaveOptions(true, true, true)), false, true, true)), null), obj)
+              SaveOptions(true, true, true)), false, true, true)), null), obj)
       println(s"\nResult check:")
       tresql"dept[dname = 'ADVERTISING'] { |emp {ename, job}#(ename) e}".map(_.e.map(e => e.ename -> e.job).toList).toList
     }
@@ -1723,8 +1723,8 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       ORT.insert(View(
         List(SaveTo("dept",Set(),List())), None, null, List(
           Property("deptno", KeyValue(":id", TresqlValue(":id"), None), false,true,false),
-      Property("dname", TresqlValue(":name"), false,true,true)
-      ),null), obj)
+          Property("dname", TresqlValue(":name"), false,true,true)
+        ),null), obj)
       println(s"\nResult check:")
       tresql"dept[dname = 'Zero']{deptno}".head[Long]
     }
@@ -1827,9 +1827,9 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     }
 
     obj = Map("nr"-> "C1", "car_name" -> "Citroen", "usage" -> List(
-        Map("empno" -> tresql"emp[ename = 'Lara']{empno}".head[Long]),
-        Map("empno" -> tresql"emp[ename = 'Paul']{empno}".head[Long])
-      )
+      Map("empno" -> tresql"emp[ename = 'Lara']{empno}".head[Long]),
+      Map("empno" -> tresql"emp[ename = 'Paul']{empno}".head[Long])
+    )
     )
     def car_with_usage_view = {
       import OrtMetadata._
@@ -2603,118 +2603,118 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
   }
 
   override def compilerMacro(implicit resources: Resources) = {
-      println("\n-------------- TEST compiler macro ----------------\n")
+    println("\n-------------- TEST compiler macro ----------------\n")
 
-      // for scala 2/3 compatibility (Unit != EmptyTuple) convert result to string
-      assertResult("()")(tresql"".toString)
+    // for scala 2/3 compatibility (Unit != EmptyTuple) convert result to string
+    assertResult("()")(tresql"".toString)
 
-      assertResult(("ACCOUNTING",
+    assertResult(("ACCOUNTING",
       List(("CLARK",List()), ("KING",List(3, 4)), ("Lara",List()), ("Nicky",List()))))(
-          tresql"dept{dname, |emp {ename, |[empno]work {hours}#(1)}#(1)}#(1)"
-           .map(d => d.dname -> d._2
-              .map(e => e.ename -> e._2
-                .map(w => w.hours).toList).toList).toList.head)
+      tresql"dept{dname, |emp {ename, |[empno]work {hours}#(1)}#(1)}#(1)"
+        .map(d => d.dname -> d._2
+          .map(e => e.ename -> e._2
+            .map(w => w.hours).toList).toList).toList.head)
 
-      assertResult("A B")(tresql"{concat('A', ' ', 'B')}".head._1)
+    assertResult("A B")(tresql"{concat('A', ' ', 'B')}".head._1)
 
-      assertResult(15)(tresql"{inc_val_5(10)}".head._1)
+    assertResult(15)(tresql"{inc_val_5(10)}".head._1)
 
-      assertResult((new InsertResult(count = Some(1)),
-        new UpdateResult(count = Some(1)), new DeleteResult(count = Some(1))))(
-        tresql"dummy + [10], dummy[dummy = 10] = [11], dummy - [dummy = 11]"
-      )
+    assertResult((new InsertResult(count = Some(1)),
+      new UpdateResult(count = Some(1)), new DeleteResult(count = Some(1))))(
+      tresql"dummy + [10], dummy[dummy = 10] = [11], dummy - [dummy = 11]"
+    )
 
-      //braces test
-      assertResult(List(0, 0, 2, 2))(tresql"((dummy)d2 ++ ((dummy)d1)d3)d4#(1)".map(_.dummy).toList)
+    //braces test
+    assertResult(List(0, 0, 2, 2))(tresql"((dummy)d2 ++ ((dummy)d1)d3)d4#(1)".map(_.dummy).toList)
 
-      assertResult(Vector("AMY", "DEVELOPMENT", 2))(
-        tresql"work w[empno]emp/dept{ename, dname, hours}#(1, 2, 3)".toListOfVectors.head)
+    assertResult(Vector("AMY", "DEVELOPMENT", 2))(
+      tresql"work w[empno]emp/dept{ename, dname, hours}#(1, 2, 3)".toListOfVectors.head)
 
-      assertResult(13)(tresql"work w[empno]emp/dept{count(*) cnt}".head.cnt)
+    assertResult(13)(tresql"work w[empno]emp/dept{count(*) cnt}".head.cnt)
 
-      assertResult(2)(tresql"(dummy ++ dummy){count(# dummy)}".head._1)
+    assertResult(2)(tresql"(dummy ++ dummy){count(# dummy)}".head._1)
 
-      assertResult((("A B", 15)))(tresql"{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}" match {
-        case (x, y) => (x.head.concat, y.head.inc)
-      })
+    assertResult((("A B", 15)))(tresql"{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}" match {
+      case (x, y) => (x.head.concat, y.head.inc)
+    })
 
-      assertResult((("A B", 15)))(tresql"[{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}]" match {
-        case (x, y) => (x.head.concat, y.head.inc)
-      })
+    assertResult((("A B", 15)))(tresql"[{concat('A', ' ', 'B') concat}, {inc_val_5(10) inc}]" match {
+      case (x, y) => (x.head.concat, y.head.inc)
+    })
 
-      assertResult((java.sql.Date.valueOf("1980-12-17"), java.sql.Date.valueOf("2021-05-05"),
-        850.00, 5000.00))(
-          tresql"emp{min(hiredate) minh, max(hiredate) maxh, min(sal) mins, max(sal) maxs}".map { r =>
-            import r._
-            (minh, maxh, mins, maxs)
-          }.toList.head)
+    assertResult((java.sql.Date.valueOf("1980-12-17"), java.sql.Date.valueOf("2021-05-05"),
+      850.00, 5000.00))(
+      tresql"emp{min(hiredate) minh, max(hiredate) maxh, min(sal) mins, max(sal) maxs}".map { r =>
+        import r._
+        (minh, maxh, mins, maxs)
+      }.toList.head)
 
-      assertResult((("ACCOUNTING", "CLARK, KING, Lara, Nicky")))(
-        tresql"dept {dname, |emp{ename}#(1) emps}#(1)"
-          .map {d => d.dname -> d.emps.map(_.ename).mkString(", ")}.toList.head
-      )
+    assertResult((("ACCOUNTING", "CLARK, KING, Lara, Nicky")))(
+      tresql"dept {dname, |emp{ename}#(1) emps}#(1)"
+        .map {d => d.dname -> d.emps.map(_.ename).mkString(", ")}.toList.head
+    )
 
-      //resources with params
-      {
-        val dn = "acc"
-        val params = Map("ename" -> "cl%")
-        assertResult(List(Vector("ACCOUNTING", "CLARK")))(
-          tresql"emp/dept[dname ~~ $dn || '%' & ename ~~ :ename]{dname, ename}#(1, 2)"(using
-            resources.withParams(params)).toListOfVectors)
-      }
+    //resources with params
+    {
+      val dn = "acc"
+      val params = Map("ename" -> "cl%")
+      assertResult(List(Vector("ACCOUNTING", "CLARK")))(
+        tresql"emp/dept[dname ~~ $dn || '%' & ename ~~ :ename]{dname, ename}#(1, 2)"(using
+          resources.withParams(params)).toListOfVectors)
+    }
 
-      //column type checking
-      {
-        val prefix = "Dept: "
-        assertResult("ACCOUNTING")(tresql"dept{$prefix || dname}#(1)".head._1.substring(6))
-        assertResult("ACCOUNTING")(tresql"dept{dname || $prefix}#(1)".head._1.substring(0, 10))
-      }
+    //column type checking
+    {
+      val prefix = "Dept: "
+      assertResult("ACCOUNTING")(tresql"dept{$prefix || dname}#(1)".head._1.substring(6))
+      assertResult("ACCOUNTING")(tresql"dept{dname || $prefix}#(1)".head._1.substring(0, 10))
+    }
 
-      //function calls
-      assertResult(12)(tresql"inc_val_5(7)")
-      assertResult((10, "ACCOUNTING", "NEW YORK"))(
-        tresql"sql_concat(sql('select * from dept where deptno = 10'))".head[Int, String, String])
+    //function calls
+    assertResult(12)(tresql"inc_val_5(7)")
+    assertResult((10, "ACCOUNTING", "NEW YORK"))(
+      tresql"sql_concat(sql('select * from dept where deptno = 10'))".head[Int, String, String])
 
-      //recursive queries
-      assertResult((7839, "KING", -1, null, 1))(
-        tresql"""kings_descendants(nr, name, mgrnr, mgrname, level) {
+    //recursive queries
+    assertResult((7839, "KING", -1, null, 1))(
+      tresql"""kings_descendants(nr, name, mgrnr, mgrname, level) {
             emp [ename ~~ 'kin%']{empno, ename, -1, null, 1} +
             emp[emp.mgr = kings_descendants.nr]kings_descendants;emp/emp mgr{
               emp.empno, emp.ename, emp.mgr, mgr.ename, level + 1}
           } kings_descendants{ nr, name, mgrnr, mgrname, level}#(level, mgrnr, nr)""".map(h =>
-          (h.nr, h.name, h.mgrnr, h.mgrname, h.level)).toList.head)
-        assertResult((7566, "JONES", 7839, "KING", 2))(
-          tresql"""kings_descendants(nr, name, mgrnr, mgrname, level) {
+        (h.nr, h.name, h.mgrnr, h.mgrname, h.level)).toList.head)
+    assertResult((7566, "JONES", 7839, "KING", 2))(
+      tresql"""kings_descendants(nr, name, mgrnr, mgrname, level) {
               emp [ename ~~ 'kin%']{empno, ename, -1, null, 1} +
               emp[emp.mgr = kings_descendants.nr]kings_descendants;emp/emp mgr{
                 emp.empno, emp.ename, emp.mgr, mgr.ename, level + 1}
             } kings_descendants{ nr, name, mgrnr, mgrname, level}#(level, mgrnr, nr)""".map(h =>
-            (h.nr, h.name, h.mgrnr, h.mgrname, h.level)).toList.tail.head)
-      assertResult((10, "ACCOUNTING"))(tresql"""dept[deptno in (emps(enr, mgr, dnr) {
+        (h.nr, h.name, h.mgrnr, h.mgrname, h.level)).toList.tail.head)
+    assertResult((10, "ACCOUNTING"))(tresql"""dept[deptno in (emps(enr, mgr, dnr) {
           emp[ename ~~ 'kin%']{empno, mgr, deptno} + emps[enr = emp.mgr]emp {empno, emp.mgr, deptno}
         } emps{dnr})]{deptno, dname}#(1)""".map(h => (h.deptno, h.dname)).toList.head)
-      assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} + t[t.empno = e.mgr]emp e{e.empno}}
+    assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} + t[t.empno = e.mgr]emp e{e.empno}}
         t{empno}#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
+    assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
         t[t.empno = e.mgr]emp e{e.empno}} t#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
+    assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
         t[t.empno = e.mgr]emp e{e.empno}} t {*}#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
+    assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
         t[t.empno = e.mgr]emp e{e.empno}} t {t.*}#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
+    assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
         t[t.empno = e.mgr]emp e{e.empno}} t a#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
+    assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
         t[t.empno = e.mgr]emp e{e.empno}} t a{*}#(1)""".map(_.empno).toList.head)
-      assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
+    assertResult(7369)(tresql"""t(empno) {emp[ename ~~ 'kin%']{empno} +
         t[t.empno = e.mgr]emp e{e.empno}} t a{a.*}#(1)""".map(_.empno).toList.head)
 
-      //type resolving when column contains select with from clause select
-      assertResult(("KING", "ACCOUNTING"))(tresql"""emp[ename ~~ 'kin%'] {
+    //type resolving when column contains select with from clause select
+    assertResult(("KING", "ACCOUNTING"))(tresql"""emp[ename ~~ 'kin%'] {
         ename, ((dept[emp.deptno = dept.deptno]{dname}) {dname}) dname}"""
-        .map(r => r.ename -> r.dname).toList.head)
+      .map(r => r.ename -> r.dname).toList.head)
 
-      assertResult(List(3, 9))(tresql"dummy{dummy nr, dummy + 1 nr1, dummy + 2 nr2}"
-        .map(r => r.nr + r.nr1 + r.nr2).toList.sorted)
+    assertResult(List(3, 9))(tresql"dummy{dummy nr, dummy + 1 nr1, dummy + 2 nr2}"
+      .map(r => r.nr + r.nr1 + r.nr2).toList.sorted)
 
     //expressions without select
     assertResult(2.34)(tresql"round(2.33555, 2)")
@@ -2759,7 +2759,7 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
             d.emps.map(e => e.ename.toLowerCase -> e.work.map(_.hours - 1).toList).toList,
             d.cars.map(c => c.name.toLowerCase -> c.tyres.map(_.brand.toLowerCase).toList).toList
           )
-      }.toList
+        }.toList
     }
     //builder macro invocation in column clause, must return Any type
     assertResult(List("ACCOUNTING")) {
