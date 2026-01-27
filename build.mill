@@ -4,26 +4,21 @@ package build
 
 import mill.*, scalalib.*
 
-val scalaVersions = Seq("3.3.7", "2.13.17")
+val scalaVersions = Seq("2.12.20", "2.13.17", "3.3.7")
 
 object `package` extends Cross[TresqlModule](scalaVersions)
 
-trait TresqlModule extends CrossScalaModule, ProjectBaseModule { outer =>
+trait TresqlModule extends ProjectBaseModule { outer =>
 
-  object core extends ProjectBaseModule {
-    def scalaVersion = crossScalaVersion
-    def scala3sources = Task.Sources("src-3")
-    def sources =
-      if (crossScalaVersion startsWith "3") Task { super.sources() ++ scala3sources() }
-      else super.sources
+  object core extends Cross[ProjectBaseModule](scalaVersions) {
     object test extends ScalaTests, TestModule.ScalaTest
   }
-  object `macro` extends ProjectBaseModule {
+  object `macro` extends ScalaModule {
     def scalaVersion = crossScalaVersion
-    def moduleDeps = Seq(core)
+    def moduleDeps = Seq(core(crossScalaVersion))
   }
 
-  def moduleDeps = if (crossScalaVersion.startsWith("2")) Seq(`macro`) else Seq(core)
+  def moduleDeps = if (crossScalaVersion.startsWith("2")) Seq(`macro`) else Seq(core(crossScalaVersion))
 
   object test extends ProjectBaseTests {
     def moduleDeps = outer.moduleDeps ++ Seq(core.test)
@@ -37,7 +32,7 @@ trait TresqlModule extends CrossScalaModule, ProjectBaseModule { outer =>
 
 
 
-trait ProjectBaseModule extends ScalaModule {
+trait ProjectBaseModule extends CrossScalaModule {
 
   def jvmVersion = "temurin:11"
 
@@ -59,7 +54,7 @@ trait ProjectBaseModule extends ScalaModule {
     "-language:existentials"
   ) ++
     (scalaVersion() match {
-      case "3.3.7" => Seq("-explain")
+      case v if v startsWith "3" => Seq("-explain")
       case _       => Seq()
     })
 
@@ -67,6 +62,7 @@ trait ProjectBaseModule extends ScalaModule {
 
     def mvnDeps = Task {
       def borerV = self.scalaVersion() match {
+        case v if v startsWith "2.12" => "1.7.2"
         case v if v startsWith "2.13" => "1.8.0"
         case v if v startsWith "3"    => "1.16.2"
       }
