@@ -8,7 +8,7 @@ val scalaVersions = Seq("2.12.20", "2.13.17", "3.3.7")
 
 object `package` extends Cross[TresqlModule](scalaVersions)
 
-trait TresqlModule extends ProjectBaseModule { outer =>
+trait TresqlModule extends ProjectBaseModule {
 
   object core extends Cross[ProjectBaseModule](scalaVersions) {
     object test extends ScalaTests, TestModule.ScalaTest
@@ -21,16 +21,14 @@ trait TresqlModule extends ProjectBaseModule { outer =>
   def moduleDeps = if (crossScalaVersion.startsWith("2")) Seq(`macro`) else Seq(core(crossScalaVersion))
 
   object test extends ProjectBaseTests {
-    def moduleDeps = outer.moduleDeps ++ Seq(core.test)
+    def moduleDeps = Seq(core.test)
   }
 
   object it extends ProjectBaseTests {
-    def mvnDeps = super.mvnDeps() ++ Seq(mvn"org.postgresql:postgresql:42.7.8")
-    def moduleDeps = outer.moduleDeps ++ Seq(core.test, test)
+    def mvnDeps = Seq(mvn"org.postgresql:postgresql:42.7.8")
+    def moduleDeps = Seq(core.test, test /*needs access to test/resources folder for tresql compilation*/)
   }
 }
-
-
 
 trait ProjectBaseModule extends CrossScalaModule {
 
