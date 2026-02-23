@@ -44,6 +44,7 @@ package object dialects {
 
   val HSQLRawDialect: CoreTypes.Dialect = {
     case f: QueryBuilder#FunExpr if f.name == "lower" && f.params.size == 1 => "lcase(" + f.params.head.sql + ")"
+    case f: QueryBuilder#FunExpr if f.name == "seconds_to_interval" && f.params.size == 1 => s"interval ${f.params.head.sql} second"
     case f: QueryBuilder#FunExpr if f.name == "translate" && f.params.size == 3 =>
       val b = f.builder
       val List(col, b.ConstExpr(from: String), b.ConstExpr(to: String)) = f.params: @unchecked
@@ -102,6 +103,7 @@ package object dialects {
         case b.ConstExpr(false) => "1 = 0"
         case b.TableColDefsExpr(_) => ""
         case b.FunExpr("optimizer_hint", List(b.ConstExpr(s: String)), false, None, None) => s
+        case f: QueryBuilder#FunExpr if f.name == "seconds_to_interval" && f.params.size == 1 => s"interval '${f.params.head.sql}' second"
         case b.BinExpr("-", lop, rop) =>
           lop.sql + (if (e.exprType.getSimpleName == "SelectExpr") " minus " else " - ") + rop.sql
         case e: QueryBuilder#SelectExpr if e.limit != null || e.offset != null =>
@@ -147,6 +149,7 @@ package object dialects {
         if (g.size == 2) s"when ${g(0).sql} then ${g(1).sql}"
         else s"else ${g(0).sql}"
       }.mkString(s"case ${f.params(0).sql} ", " ", " end")
+    case f: QueryBuilder#FunExpr if f.name == "seconds_to_interval" && f.params.size == 1 => s"interval '${f.params.head.sql} seconds'"
     case i: QueryBuilder#InsertExpr =>
       //pg insert as select needs column cast if bind variables are from 'from' clause select
       val b = i.builder

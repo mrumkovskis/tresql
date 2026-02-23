@@ -59,6 +59,7 @@ replace(v::string, from::string, to::string)::string
 right(s::string, n::int)::string
 round(d::double)::int
 round(d::double, i::int)::double
+seconds_to_interval(n::int)::any
 substring(s::string, n::int)::string
 substring(s::string, n::int, nn::int)::string
 to_char(n::long,      format::string)::string
