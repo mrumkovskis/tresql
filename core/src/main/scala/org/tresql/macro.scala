@@ -32,6 +32,10 @@ class Macros {
   def if_defined_or_else(b: QueryBuilder, v: Expr, e1: Expr, e2: Expr): Expr =
     Option(if_defined(b, v, e1)).getOrElse(e2)
 
+  def or_else(b: QueryBuilder, v: Expr, e: Expr): Expr = if_defined_or_else(b, v, v, e)
+
+  def or_null(b: QueryBuilder, v: Expr): Expr = or_else(b, v, b.ConstExpr(null))
+
   def if_missing(b: QueryBuilder, v: Expr, e: Expr): Expr = v match {
     case ve: QueryBuilder#VarExpr => if (containsVar(b, ve)) null else e
     case null => e
