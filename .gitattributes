@@ -1,1 +1,1 @@
-build.sbt diff
+build.mill diff

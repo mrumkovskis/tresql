@@ -26,5 +26,13 @@ jobs:
       with:
         java-version: ${{ matrix.java }}
         distribution: 'adopt'
-    - name: Compile and test
-      run:  sbt -J-Xmx8G clean update +compile +test +it/test
+    - name: Setup Mill
+      run: |
+        curl -L https://repo1.maven.org/maven2/com/lihaoyi/mill-dist/$(cat .mill-version)/mill-dist-$(cat .mill-version)-mill.sh -o mill
+        chmod +x mill
+    - name: Compile
+      run:  ./mill __.compile
+    - name: Test
+      run:  ./mill 'tresql[_].test'
+    - name: Integration test
+      run:  ./mill 'it[_].test'

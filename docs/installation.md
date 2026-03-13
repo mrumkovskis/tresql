@@ -4,12 +4,14 @@ Installing and usage
 ### Dependency in your project
 To use tresql, add the module to your project
 
-For sbt project add to your build.sbt file - `libraryDependencies += "org.tresql" %% "tresql" % "9.3.2"`
+For Mill project add to your build.mill file - `def mvnDeps = Seq(mvn"org.tresql::tresql:13.2.0")`
 
-### Try tresql using sbt console with test database
+For sbt project add to your build.sbt file - `libraryDependencies += "org.tresql" %% "tresql" % "13.2.0"`
+
+### Try tresql using Mill console with test database
 
 1. Clone tresql project from github `git clone https://github.com/mrumkovskis/tresql.git && cd tresql`
-2. Start sbt `sbt test:console`
+2. Start console `./mill -i tresql[3.3.7].test.console`
 3. Run tests to create in memory [hsqldb](http://hsqldb.org) database with test data `run (new test.QueryTest)`
 4. Try your tresql statements like `tresql"dept[dname = 'RESEARCH']".toListOfMaps`
 5. Database structure see [db.sql](/src/test/resources/db.sql)
@@ -18,7 +20,7 @@ For sbt project add to your build.sbt file - `libraryDependencies += "org.tresql
 _Prerequisite - you need docker to be installed on your system._
 
 1. Clone tresql project from github `git clone https://github.com/mrumkovskis/tresql.git && cd tresql`
-2. Start sbt `sbt it:console`
+2. Start console `./mill -i it[3.3.7].test.console`
 3. Run tests to create postgresql (https://www.postgresql.org) database with test data
    `new org.tresql.test.PGQueryTest().execute(configMap = ConfigMap("docker" -> "postgres:10.2", "remove" -> "false"))`.
    Parameter `"remove" -> false` prevents docker from dropping postgres container after tests are executed.

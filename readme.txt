@@ -1,7 +1,7 @@
 Test console with hsqldb env
 ============================
 
-sbt test:console
+./mill -i tresql[3.3.7].test.console
 run { new test.QueryTest }
 
 Query("emp")
