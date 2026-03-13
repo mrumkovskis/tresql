@@ -9,7 +9,6 @@ bin/
 .idea/
 .cache
 .worksheet/
-lib/
 jetty-env.xml
 *.iml
 

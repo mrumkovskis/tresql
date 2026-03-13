@@ -16,6 +16,11 @@ trait TresqlModule extends ProjectBaseModule {
   object `macro` extends ScalaModule {
     def scalaVersion = crossScalaVersion
     def moduleDeps = Seq(core(crossScalaVersion))
+    // Scala 2 only — macro uses whitebox macros not available in Scala 3
+    override def allSourceFiles = Task {
+      if (crossScalaVersion.startsWith("3")) Seq.empty[PathRef]
+      else super.allSourceFiles()
+    }
   }
 
   def moduleDeps = if (crossScalaVersion.startsWith("2")) Seq(`macro`) else Seq(core(crossScalaVersion))
@@ -57,6 +62,15 @@ trait ProjectBaseModule extends CrossScalaModule {
     })
 
   trait ProjectBaseTests extends ScalaTests, TestModule.ScalaTest { self =>
+
+    // Workaround: borer's Encoder/Decoder have Scala 3 inline methods referencing
+    // io.bullet.borer.internal as a JVM type, but no such class file exists.
+    // Mill's test discovery reflects on all classes and triggers NoClassDefFoundError.
+    // A dummy class on the runtime classpath satisfies the JVM reflection.
+    def borerWorkaround = Task.Source(moduleDir / os.up / "lib")
+    override def runClasspath = Task {
+      super.runClasspath() ++ Seq(borerWorkaround())
+    }
 
     def mvnDeps = Task {
       def borerV = self.scalaVersion() match {
