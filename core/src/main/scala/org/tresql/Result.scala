@@ -620,6 +620,7 @@ trait RowLike extends Typed with AutoCloseable {
   def toMap: Map[String, Any] = (0 until columnCount).map(i => column(i).name -> (this(i) match {
     case r: DynamicArraySelectResult => r.elIterator.toSeq
     case r: Result[_] => r.toListOfMaps
+    case a: java.sql.Array => a.getArray
     case i: Iterator[_] => i.toSeq
     case x => x
   })).foldLeft(ListMap[String, Any]() -> 1) { case ((r, i), c@(n, v)) =>
@@ -631,6 +632,7 @@ trait RowLike extends Typed with AutoCloseable {
     def anyToVal(v: Any): Any = v match {
       case r: DynamicArraySelectResult => r.elIterator.toSeq
       case r: Result[_] => r.toListOfVectors
+      case a: java.sql.Array => a.getArray
       case i: Iterable[_] => (i map anyToVal).toVector
       case i: Iterator[_] => (i map anyToVal).toVector
       case p: Product => (p.productIterator map anyToVal).toVector

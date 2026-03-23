@@ -468,7 +468,6 @@ object TresqlResultBorerElementTranscoder {
       case t: java.sql.Timestamp => StringElem(t.toString.substring(0, 19))
       case d: java.sql.Date => StringElem(d.toString)
       case null => NullElem
-      case a: java.sql.Array => anyToElement(a.getArray)
       case x => StringElem(x.toString)
     }
     anyToElement(r.toListOfVectors)
