@@ -241,13 +241,17 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
         Query("results{names}").head[java.sql.Array].getArray.asInstanceOf[Array[_]].toList.head)
     }
     assertResult(List("x", "y")) {
-      Query("=results [id = 49] { names = :a::'text[]', scores = :b::'decimal[]'}")(
-        implicitly[Resources].withParams(Map("a" -> Array("x", "y"),
-          "b" -> Array[java.lang.Integer/*must be castable to Array[Object] for java.sql.Array binding*/](1,2,3)))
-      )
+      Query("=results [id = 49] { names = :a::'text[]', scores = :b::'decimal[]'}", Map("a" -> Array("x", "y"),
+        "b" -> Array[java.lang.Integer/*must be castable to Array[Object] for java.sql.Array binding*/](1,2,3)))
       // do not choose scores because java.math.BigDecimal cannot be compared with Int
       tresql"results[id = 49] {names, scores}".map(r => r.names.getArray.asInstanceOf[Array[_]].toList).toList.head
     }
+    assertResult(List("x", "y")) {
+      Query("results[names::'string[]' `@>` to_jarray(:a::'string[]') & scores::'int[]' `@>` to_jarray(:b::'int[]')] {names, scores} #(id)",
+        Map("a" -> List("x"), "b" -> 1))
+        .map(r => r.array("names").getArray.asInstanceOf[Array[_]].toList).toList.head
+    }
+
     assertResult {
       val res = List(Map("number" -> "00001111", "balance" -> 20.00,
         "transactions" -> List(Map("amount" -> 3.00), Map("amount" -> 5.00))))

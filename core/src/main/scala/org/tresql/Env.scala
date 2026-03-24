@@ -65,6 +65,10 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
           .recover { case _ if n == "length" || n == "size" => s.size }
           .toOption
         )
+        case a: Array[_] => tr(rest, Try(n.toInt).flatMap(i => Try(a(i)))
+          .recover { case _ if n == "length" || n == "size" => a.length }
+          .toOption
+        )
         case p: Product => tr(rest,
           Try(n.toInt).flatMap(v => Try(p.productElement(v - 1)))
             .recover { case _ if n == "length" || n == "size" => p.productArity }
@@ -90,6 +94,9 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
         case s: Seq[_] => Try(n.toInt)
           .flatMap(i => Try(tr(rest, s(i))))
           .getOrElse(false)
+        case a: Array[_] => Try(n.toInt)
+          .flatMap(i => Try(tr(rest, a(i))))
+          .getOrElse(false)
         case p: Product => Try(n.toInt)
           .flatMap(v => Try(p.productElement(v - 1)))
           .map(tr(rest, _))
@@ -109,6 +116,23 @@ private [tresql] class Env(_provider: EnvProvider, resources: Resources, val db:
 
   private[tresql] def update(name: String, value: Any): Unit = {
     vars.map(_(name) = value) orElse provider.map(_.env(name) = value)
+  }
+
+  private[tresql] def update(name: String, path: List[String], value: Any): Unit = {
+    if (path == null | path.isEmpty) update(name, value)
+    else {
+      def updateVal(v: Any, p: List[String]): Any = p match {
+        case Nil => value
+        case n :: rest => v match {
+          case m: Map[String@unchecked, _] => m.updated(n, updateVal(m(n), rest))
+          case s: Seq[_] =>
+            val idx = n.toInt
+            s.updated(idx, updateVal(s(idx), rest))
+          case x => sys.error(s"Unable to update variable: '${p.mkString(".")}' in $x")
+        }
+      }
+      update(updateVal(this(name), path).asInstanceOf[Map[String, Any]])
+    }
   }
 
   private[tresql] def update(vars: Map[String, Any]): Unit = {

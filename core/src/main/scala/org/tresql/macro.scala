@@ -93,6 +93,32 @@ class Macros {
     else null
   }
 
+  def to_jarray(b: QueryBuilder, expr: Expr): Expr = {
+    def jarray(value: Any, name: String, path: List[String], typ: String): Unit = {
+      def javaType = {
+        val i = typ.indexOf('[')
+        val t = if (i == -1) typ else typ.substring(0, i)
+        Class.forName(b.env.to_scala_type(t))
+      }
+      value match {
+        case a: Array[_] =>
+        case s: Seq[_]  =>
+          val arr = java.lang.reflect.Array.newInstance(javaType, s.length)
+          s.zipWithIndex.foreach { case (v, i) => java.lang.reflect.Array.set(arr, i, v) }
+          b.env.update(name, path, arr)
+        case v =>
+          val arr = java.lang.reflect.Array.newInstance(javaType, 1)
+          java.lang.reflect.Array.set(arr, 0, v)
+          b.env.update(name, path, arr)
+      }
+    }
+    expr match {
+      case b.CastExpr(v: b.VarExpr, typ) => jarray(b.env(v.name, v.members), v.name, v.members, typ)
+      case x => sys.error(s"cannot create java.sql.Array from '$x'. Expected variable expression with cast, like ':var_name::int[]'")
+    }
+    expr
+  }
+
   def sql_concat(b: QueryBuilder, exprs: Expr*): Expr =
     b.SQLConcatExpr(exprs: _*)
 
