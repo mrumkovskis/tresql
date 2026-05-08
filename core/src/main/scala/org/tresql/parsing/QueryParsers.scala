@@ -102,12 +102,12 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   def operand: MemParser[Exp] = (const | ALL | withQuery | function  | sql | insert | update | result |
     variable | query | id | idref | array) named "operand"
   /* function(<#> <arglist> <order by>). Maybe used in from clause so filter is not confused with join syntax.  */
-  def functionWithoutFilter: MemParser[Fun] = (qualifiedIdent /* name */ <~ "(") ~
+  def functionWithoutFilter: MemParser[Exp] = (qualifiedIdent /* name */ <~ "(") ~
     opt("#") /* distinct */ ~ repsep(expr, ",") /* arglist */ ~
     ")" ~ opt(order) /* aggregate order */ ^^ {
     case Ident(n) ~ d ~ p ~ _ ~ o =>
       Fun(n.mkString("."), p, d.isDefined, o, None)
-  }  named "fun-without-filter"
+  } ^^ mayBeCallMacro named "fun-without-filter"
   /* function(<#> <arglist> <order by>)<[filter]> */
   def function: MemParser[Exp] = (qualifiedIdent /* name */ <~ "(") ~
     opt("#") /* distinct */ ~ repsep(expr, ",") /* arglist */ ~
@@ -117,21 +117,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   }, {
     case _ ~ _ ~ _ ~ _ ~ _ ~ f => s"Aggregate function filter must contain only one elements, instead of ${
       f.map(_.elements.size).getOrElse(0)}"
-  }) ^^ { f =>
-    if (isMacro(f.name)) {
-      if (f.distinct || f.aggregateOrder.nonEmpty || f.aggregateWhere.nonEmpty) {
-        sys.error(s"Macro '${f.name}' invocation error. " +
-          s"Neither distinct nor order by nor filter clause can be used in macro invocation.")
-      } else {
-        macros.invokeMacro(f.name, QueryParsers.this, f.parameters) match {
-          case TransformerExp(t) =>
-            transformers ::= t
-            f
-          case e => e
-        }
-      }
-    } else f
-  } named "function"
+  }) ^^ mayBeCallMacro named "function"
   def array: MemParser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ Arr named "array"
 
   //query parsers
@@ -558,6 +544,22 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     case q: Query =>
       q.copy(tables = q.tables.updated(0, transformHeadJoin(join)(q.tables.head).asInstanceOf[Obj]))
     case o: Obj => o.copy(join = join) //set join to parent
+  }
+
+  protected def mayBeCallMacro(f: Fun): Exp = {
+    if (isMacro(f.name)) {
+      if (f.distinct || f.aggregateOrder.nonEmpty || f.aggregateWhere.nonEmpty) {
+        sys.error(s"Macro '${f.name}' invocation error. " +
+          s"Neither distinct nor order by nor filter clause can be used in macro invocation.")
+      } else {
+        macros.invokeMacro(f.name, QueryParsers.this, f.parameters) match {
+          case TransformerExp(t) =>
+            transformers ::= t
+            f
+          case e => e
+        }
+      }
+    } else f
   }
 
   protected def isMacro(name: String): Boolean = macros != null && macros.isMacroDefined(name) &&
