@@ -26,8 +26,8 @@ object FunctionSignatures {
 }
 
 class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
-  protected val ResourceFile        = "/tresql-function-signatures.txt"
-  protected val DefaultResourceFile = "/tresql-default-function-signatures.txt"
+  protected val ResourceFile        = "tresql-function-signatures.txt"
+  protected val DefaultResourceFile = "tresql-default-function-signatures.txt"
 
   private val ParTypeDefRegex = """(\w*)(\*?)""".r
   private val RetTypeDefRegex = """(\$?)(\w+)""".r
@@ -174,8 +174,8 @@ object TresqlMacros {
 }
 
 class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(typeMapper) {
-  override protected val ResourceFile        = "/tresql-macros.txt"
-  override protected val DefaultResourceFile = "/tresql-default-macros.txt"
+  override protected val ResourceFile        = "tresql-macros.txt"
+  override protected val DefaultResourceFile = "tresql-default-macros.txt"
 
   private case class MacroBody(parts: Seq[MacroBodyPart], suffix: String)
   private case class MacroBodyPart(prefix: String, parIdx: Int)
@@ -333,13 +333,13 @@ trait ResourceLoader {
   private val IncludePattern   = """include\s+(.+)""".r
   protected def ResourceFile: String
   protected def DefaultResourceFile: String
-  protected def getResourceAsStream(r: String): InputStream = getClass.getResourceAsStream(r)
+  protected def classLoader: ClassLoader = getClass.getClassLoader
 
   def load(res: String): Option[Seq[String]] = {
     def l(r: String)(loaded: Set[String]): Option[Seq[String]] = {
       if (loaded(r)) None
       else {
-        val in = getResourceAsStream(r)
+        val in = classLoader.getResourceAsStream(r)
         if (in == null) {
           if (loaded.isEmpty) None
           else sys.error(s"Resource not found: $r (referenced from ${loaded mkString " or "})")

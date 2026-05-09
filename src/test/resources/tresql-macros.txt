@@ -1,1 +1,1 @@
-include /tresql-test-macros.txt
+include tresql-test-macros.txt

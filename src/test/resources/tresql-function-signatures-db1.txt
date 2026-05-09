@@ -1,4 +1,4 @@
-include /tresql-function-signatures.txt
+include tresql-function-signatures.txt
 
 //hsqldb
 instr(where::string, what::string)::int

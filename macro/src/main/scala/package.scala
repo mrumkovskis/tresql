@@ -351,11 +351,11 @@ package object tresql extends CoreTypes {
            """
       c.Expr(tree)
     }
-    val macroPropertiesResourceName = "/tresql-scala-macro.properties"
+    val macroPropertiesResourceName = "tresql-scala-macro.properties"
     val verboseProp = "tresql.scala.macro.verbose"
     def settings: (Map[String, String], Boolean) = {
       val p = new Properties()
-      val macroPropertiesStream = getClass.getResourceAsStream(macroPropertiesResourceName)
+      val macroPropertiesStream = getClass.getClassLoader.getResourceAsStream(macroPropertiesResourceName)
       if (macroPropertiesStream == null)
         sys.error(s"Macro properties resource not found: $macroPropertiesResourceName")
       p.load(macroPropertiesStream)

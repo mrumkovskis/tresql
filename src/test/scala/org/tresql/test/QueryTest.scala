@@ -55,11 +55,11 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     val conn1 = DriverManager.getConnection("jdbc:hsqldb:mem:db1")
     val md1 = new JDBCMetadata {
       override def conn = conn1
-      override def macroSignaturesResource: String = "/tresql-macros-db1.txt"
+      override def macroSignaturesResource: String = "tresql-macros-db1.txt"
     }
     val macro1 = new MacroResourcesImpl(Macros1, md1) {
       // TODO currently not supported in runtime since query parser uses only one macro resources obj not dependant on db
-      override def macroResource: String = "/tresql-macros-db1.txt"
+      override def macroResource: String = "tresql-macros-db1.txt"
     }
     val res1 = Resources()
       .withMetadata(md1)
@@ -173,7 +173,7 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     val child_metadata = new JDBCMetadata {
       override def conn: Connection = testRes.extraResources("contact_db").conn
       override def macrosClass: Class[_] = classOf[org.tresql.test.Macros1]
-      override def functionSignaturesResource: String = "/tresql-function-signatures-db1.txt"
+      override def functionSignaturesResource: String = "tresql-function-signatures-db1.txt"
     }
     println("\n-------------- TEST compiler ----------------\n")
     val compiler = new QueryCompiler(testRes.metadata,
@@ -388,7 +388,7 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     val child_metadata = new JDBCMetadata {
       override def conn: Connection = testRes.extraResources("contact_db").conn
       override def macrosClass: Class[_] = classOf[org.tresql.test.Macros1]
-      override def functionSignaturesResource: String = "/tresql-function-signatures-db1.txt"
+      override def functionSignaturesResource: String = "tresql-function-signatures-db1.txt"
     }
     val compiler = new QueryCompiler(testRes.metadata,
       Map("contact_db" -> child_metadata, "emp_db" -> testRes.metadata, "" -> testRes.metadata), testRes)

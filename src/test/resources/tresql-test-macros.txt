@@ -1,4 +1,4 @@
-include /tresql-default-macros.txt
+include tresql-default-macros.txt
 
 in_twice(expr, in) = $expr in ($in, $in)
 macro_interpolator_test1(e1, e2) = ($e1 + $e2)

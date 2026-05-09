@@ -40,12 +40,12 @@ private def tresqlMacro(tresql: quoted.Expr[StringContext])(
   import quotes.reflect.*
 
   def initCompiler =
-    val macroPropertiesResourceName = "/tresql-scala-macro.properties"
+    val macroPropertiesResourceName = "tresql-scala-macro.properties"
     val verboseProp = "tresql.scala.macro.verbose"
     val MetadataFactoryProp = "metadata_factory_class"
     def settings: (Map[String, String], Boolean) =
       val p = new Properties()
-      val macroPropertiesStream = classOf[Record].getResourceAsStream(macroPropertiesResourceName)
+      val macroPropertiesStream = classOf[Record].getClassLoader.getResourceAsStream(macroPropertiesResourceName)
       if (macroPropertiesStream == null)
         sys.error(s"Macro properties resource not found: $macroPropertiesResourceName")
       p.load(macroPropertiesStream)

@@ -1,4 +1,4 @@
-include /tresql-default-function-signatures.txt
+include tresql-default-function-signatures.txt
 
 inc_val_5(int::int)::int
 dummy()::any

@@ -463,9 +463,12 @@ trait MacroResources {
   def invokeBuilderDeferredMacro(name: String, builder: QueryBuilder, args: List[Exp]): Expr
 }
 
-class MacroResourcesImpl(scalaMacros: Any, typeMapper: TypeMapper) extends MacroResources {
+class MacroResourcesImpl(scalaMacros: Any, typeMapper: TypeMapper, classLoader: ClassLoader) extends MacroResources {
+  def this(scalaMacros: Any, typeMapper: TypeMapper) = this(scalaMacros, typeMapper, null)
   private val macros = {
-    val ml = new MacrosLoader(typeMapper)
+    val ml = if (classLoader == null) new MacrosLoader(typeMapper) else new MacrosLoader(typeMapper) {
+      override protected def classLoader: ClassLoader = MacroResourcesImpl.this.classLoader
+    }
     val tm =
       if (macroResource == null) ml.loadTresqlMacros(ml.load())
       else ml.loadTresqlMacros(ml.load(macroResource).getOrElse(ml.load()))
