@@ -8,6 +8,7 @@ import org.tresql.parsing.QueryParsers
 
 import java.io.InputStream
 import java.lang.reflect.{Method, ParameterizedType}
+import scala.annotation.tailrec
 import scala.io.BufferedSource
 import scala.reflect.ManifestFactory
 import scala.util.Try
@@ -36,7 +37,7 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
     override val reserved: Set[String] = Set()
   }
 
-  protected def tryParseSignature(signature: String) = {
+  protected def tryParseSignature(signature: String): Try[Procedure] = {
     var repeatedPars = false
     def parseParType(t: String) = {
       val ParTypeDefRegex(pt, isRepeated) = t: @unchecked
@@ -85,7 +86,7 @@ class FunctionSignaturesLoader(typeMapper: TypeMapper) extends ResourceLoader {
       }
   }
 
-  protected def parseErr(signatureDef: String) =
+  protected def parseErr(signatureDef: String): Nothing =
     sys.error(s"Error in function signature definition '$signatureDef'. " +
       s"Format - <funname>(<param_name>[::type], ...)")
 
@@ -197,7 +198,7 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
         .toString()
       env.parseExp(res)
     }
-    override def toString() = s"Signature - $signature, body - $body"
+    override def toString = s"Signature - $signature, body - $body"
   }
   private case class TresqlScalaMacro[A, B](signature: Procedure, method: Method, invocationTarget: Any)
     extends TresqlMacro[A, B] {
@@ -224,7 +225,7 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
     }
   }
 
-  override protected def parseErr(macroDef: String) =
+  override protected def parseErr(macroDef: String): Nothing =
     sys.error(s"Error in macro definition '$macroDef'. " +
       s"Macro def format - <macro function signature> = <macro body>")
 
@@ -264,22 +265,29 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
     }
   }
 
+  private def updateMacrosSet[A, B](
+    map: Map[String, Seq[TresqlMacro[A, B]]],
+    name: String,
+    macr: TresqlMacro[A, B],
+  ) = {
+    map.get(name)
+      .map { ml => map + (name -> (ml :+ macr)) }
+      .getOrElse(map + (name -> Seq(macr)))
+  }
+
   def loadTresqlMacros(macros: Seq[String]): TresqlMacros = {
     val parserMacros =
       macros.collect {
         case m if isMacroDef(m) => parseMacro(m)
       }.foldLeft(Map[String, Seq[TresqlMacro[QueryParsers, Exp]]]()) { (res, m) =>
         val n = m.signature.name
-        res.get(n)
-          .map { ml =>
-            res + (n -> (ml :+ m))
-          }.getOrElse(res + (n -> Seq(m)))
+        updateMacrosSet(res, n, m)
       }
     TresqlMacros(parserMacros = parserMacros, builderMacros = Map(), builderDeferredMacros = Map())
   }
 
   def loadTresqlScalaMacros(obj: Any): TresqlMacros = {
-    def macroMethods(mobj: Any): TresqlMacros = mobj match {
+    @tailrec def macroMethods(mobj: Any): TresqlMacros = mobj match {
       case null => TresqlMacros.empty
       case Some(o) => macroMethods(o)
       case None => macroMethods(null)
@@ -293,7 +301,7 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
           classOf[QueryBuilder].isAssignableFrom(m.getParameterTypes()(0)) &&
             classOf[Expr].isAssignableFrom(m.getReturnType)
         def hasAllExpPars(m: java.lang.reflect.Method) =
-          m.getParameterTypes.size > 1 && m.getParameterTypes.tail.forall(p => classOf[Exp].isAssignableFrom(p))
+          m.getParameterTypes.length > 1 && m.getParameterTypes.tail.forall(p => classOf[Exp].isAssignableFrom(p))
         val macros = x.getClass.getMethods.collect {
           case m if isMacro(m) => m
         }.foldLeft(TresqlMacros.empty) { (res, m) =>
@@ -301,10 +309,7 @@ class MacrosLoader(typeMapper: TypeMapper) extends FunctionSignaturesLoader(type
             val sign = parseSignature(m)
             val macr = TresqlScalaMacro[A, B](sign, m, mobj)
             val n = sign.name
-            map.get(n)
-              .map { ml =>
-                map + (n -> (ml :+ macr))
-              }.getOrElse(map + (n -> Seq(macr)))
+            updateMacrosSet(map, n, macr)
           }
           if (isBuilderMacro(m))
             if (hasAllExpPars(m)) res.copy(builderDeferredMacros = app(res.builderDeferredMacros))
