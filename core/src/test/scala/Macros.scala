@@ -1,7 +1,8 @@
 package org.tresql.test
 
 import org.tresql._
-import org.tresql.ast.{Arr, Col, Cols, Exp, Filters, Fun, IntConst, Join, Null, Obj, TransformerExp, With, WithTable, Query => PQuery}
+import org.tresql.parsing._
+import org.tresql.ast.{Arr, Col, Cols, Exp, Filters, Fun, IntConst, Ident, Join, Null, Obj, TransformerExp, With, WithTable, Query => PQuery}
 
 class Macros extends org.tresql.Macros {
   import macro_._
@@ -99,6 +100,10 @@ class Macros extends org.tresql.Macros {
         }
     }
     b.TransformerExpr(transformer)
+  }
+
+  def not_with_table(p: QueryParsers, o: Obj) = o match {
+    case Obj(id: Ident, _, _, _, _) => id
   }
 }
 
