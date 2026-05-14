@@ -318,10 +318,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     ((ident <~ "(") ~ opt("#") ~ (ALL | repsep(ident, ",")) <~ (")" ~ "{")) ~ (expr <~ "}") ^^ {
       case name ~ distinct ~ (cols: List[String@unchecked]) ~ exp => WithTable(name, cols, distinct.isEmpty, exp)
       case name ~ distinct ~ All ~ exp => WithTable(name, Nil, distinct.isEmpty, exp)
-    } ^? (
-      { case wt if !isMacro(wt.name) => wt },
-      { case x => s"not with table definition but macro" }
-    ) named "with-table"
+    } named "with-table"
   def withQuery: MemParser[With] = opt(join) ~ rep1sep(withTable, ",") ~ opt(expr) ^^ {
     case optJoin ~ wts ~ None =>
       val q = Obj(Ident(List(wts.last.name)), null, null, null) // select * from <last cursor>
