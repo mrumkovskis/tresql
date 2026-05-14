@@ -282,6 +282,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
           case None => (null, null)
         }
         Query(t match {
+          case List(Obj(Null, _, _, _, _)) => List(Obj(Null, null, null, null)) // make ensure all object fields are null if null table comes from macro
           case tables: List[Obj @unchecked] => tables
           case Null => List(Obj(Null, null, null, null))
         }, f, cg._1, cg._2, o.orNull, l.map(_._1) orNull, l.map(_._2) orNull)
@@ -319,11 +320,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       case name ~ distinct ~ (cols: List[String@unchecked]) ~ exp => WithTable(name, cols, distinct.isEmpty, exp)
       case name ~ distinct ~ All ~ exp => WithTable(name, Nil, distinct.isEmpty, exp)
     } named "with-table"
-  def withQuery: MemParser[With] = opt(join) ~ rep1sep(withTable, ",") ~ opt(expr) ^^ {
-    case optJoin ~ wts ~ None =>
-      val q = Obj(Ident(List(wts.last.name)), null, null, null) // select * from <last cursor>
-      With(wts, optJoin.map(transformHeadJoin(_)(q)).getOrElse(q))
-    case optJoin ~ wts ~ Some(q) => With(wts, optJoin.map(transformHeadJoin(_)(q)).getOrElse(q))
+  def withQuery: MemParser[With] = opt(join) ~ rep1sep(withTable, ",") ~ expr ^^ {
+    case optJoin ~ wts ~ q => With(wts, optJoin.map(transformHeadJoin(_)(q)).getOrElse(q))
   } named "with-query"
 
   def values: MemParser[Values] = rep1sep(array, ",") ^^ Values named "values"
