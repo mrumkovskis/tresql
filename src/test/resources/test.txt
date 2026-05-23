@@ -326,6 +326,9 @@ emp[ename = 'BLAKE'], |contact_db:contact[name = 'John'] --> [[[[7698, "BLAKE", 
 |contact_db:contact { format_tuple_b(name, sex) v } #(1) --> [["(John, M)"], ["(Peter, M)"], ["(Zia, F)"]]
 |contact_db:contact { '(' || concat_ws(', ', name, sex) || ')' } #(1) --> [["(John, M)"], ["(Peter, M)"], ["(Zia, F)"]]
 
+// default join of tables from specific database
+|contact_db:contact c/notes n{name, note, note_date}#(1,2,3) --> [["John", null, null], ["Peter", null, null], ["Zia", null, null]]
+
 //union
 dept[?]{deptno} ++ emp[?]{empno} ++ salgrade[?]{grade} --> 10;7839;1 --> [[10], [7839], [1]]
 (dept{deptno} + salgrade{grade})#(~1 null) --> [[40], [30], [20], [10], [5], [4], [3], [2], [1]]
