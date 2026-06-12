@@ -106,7 +106,7 @@ lazy val tresql = (project in file("."))
         case v if v startsWith "3"    => "1.16.2"
       }
       Seq(
-        "org.scalatest" %% "scalatest"        % "3.2.19"  %  Test,
+        "org.scalatest" %% "scalatest"        % "3.2.20"  %  Test,
         "org.hsqldb"     % "hsqldb"           % "2.7.4"   %  Test,
         "io.bullet"     %% "borer-core"       % borerV    %  Test,
         "io.bullet"     %% "borer-derivation" % borerV    %  Test,
