@@ -584,6 +584,24 @@ dept[deptno in if_all_missing(:name, :job, emp[ename ~~ :name? || '%' & job = :j
 dept[in_twice(deptno, 10)] --> [[10, "ACCOUNTING", "NEW YORK"]]
 dept[in_twice(deptno, :deptno)] --> deptno = 10 -->[[10, "ACCOUNTING", "NEW YORK"]]
 
+//if_nonempty macro
+dept[if_nonempty(:name, dname = :name)]{dname}#(1) --> name='ACCOUNTING --> [["ACCOUNTING"]]
+dept[if_nonempty(:name, dname = :name)]{dname}#(1) --> name=' --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
+dept[if_nonempty(:name, dname = :name)]{dname}#(1) --> name=[] --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
+dept[if_nonempty(:name, dname = :name)]{dname}#(1) --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
+dept[if_defined(:name, dname = :name)]{dname}#(1) --> name=' --> []
+dept[deptno in if_nonempty(:name, emp[ename ~~ :name? || '%']{deptno})]{dname}#(1) --> name='sc --> [["RESEARCH"]]
+dept[deptno in if_nonempty(:name, emp[ename ~~ :name? || '%']{deptno})]{dname}#(1) --> name=' --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
+dept[deptno in if_defined(:name, emp[ename ~~ :name? || '%']{deptno})]{dname}#(1) --> name=' --> [["ACCOUNTING"], ["RESEARCH"], ["SALES"]]
+
+//split_to_array macro
+emp[empno = any(split_to_array(:ids)::'int[]')]{empno, ename}#(empno) --> ids='7839, 7782 --> [[7782, "CLARK"], [7839, "KING"]]
+emp[empno = any(split_to_array(:ids)::'int[]')]{empno, ename}#(empno) --> ids='7839,7782 --> [[7782, "CLARK"], [7839, "KING"]]
+dept[deptno = any(split_to_array(:ids)::'int[]')]{deptno, dname}#(deptno) --> ids='10, 20, 30 --> [[10, "ACCOUNTING"], [20, "RESEARCH"], [30, "SALES"]]
+dept[deptno = any(if_nonempty(:ids, split_to_array(:ids)::'int[]'))]{deptno}#(1) --> ids='10, 20 --> [[10], [20]]
+dept[deptno = any(if_nonempty(:ids, split_to_array(:ids)::'int[]'))]{deptno}#(1) --> ids=' --> [[10], [20], [30], [40]]
+dept[deptno = any(if_nonempty(:ids, split_to_array(:ids)::'int[]'))]{deptno}#(1) --> [[10], [20], [30], [40]]
+
 //macro interpolator test
 {macro_interpolator_test1(1, 2)} --> [[3]]
 dummy {macro_interpolator_test1((dept{count(*)}) + 0, (emp{count(*)}) + 0)} --> [[19]]

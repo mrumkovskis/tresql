@@ -32,6 +32,8 @@ group_concat(what::'*')::string
 //postgres group_concat replacement is string_agg
 string_agg(expr::'*')::any
 
+all(arr::any)::any
+any(arr::any)::any
 array(arr::'any*')::any
 array_length(arr::any, dim::int)::int
 cast(value::any)::any

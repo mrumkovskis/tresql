@@ -20,6 +20,16 @@ class Macros {
     if (v.members != null && v.members.nonEmpty) b.env.contains(v.name, v.members)
     else b.env contains v.name
 
+  private def splitToArray(s: String): Array[String] =
+    if (s == null) null else if (s.isEmpty) Array.empty[String] else s.split("\\s*,\\s*")
+
+  private def isEmptyValue(value: Any): Boolean = value match {
+    case null | "" => true
+    case arr: Array[_] => arr.isEmpty
+    case seq: Seq[_] => seq.isEmpty
+    case _ => false
+  }
+
   def if_defined(b: QueryBuilder, v: Expr, e: Expr): Expr = v match {
     case ve: QueryBuilder#VarExpr => if (containsVar(b, ve)) e else null
     case null => null
@@ -31,6 +41,11 @@ class Macros {
 
   def if_defined_or_else(b: QueryBuilder, v: Expr, e1: Expr, e2: Expr): Expr =
     Option(if_defined(b, v, e1)).getOrElse(e2)
+
+  def if_nonempty(b: QueryBuilder, v: Expr, e: Expr): Expr = v match {
+    case v: QueryBuilder#VarExpr if containsVar(b, v) && !isEmptyValue(b.env(v.name, v.members)) => e
+    case _ => null
+  }
 
   def or_else(b: QueryBuilder, v: Expr, e: Expr): Expr = if_defined_or_else(b, v, v, e)
 
@@ -91,6 +106,20 @@ class Macros {
       case _ => false
     }) expr
     else null
+  }
+
+  def split_to_array(b: QueryBuilder, v: Expr): Expr = v match {
+    case v: QueryBuilder#VarExpr if !containsVar(b, v) => v
+    case v: QueryBuilder#VarExpr =>
+      v() match {
+        case null  => v
+        case s: String =>
+          if (!s.isEmpty) b.env.update(v.name, v.members, splitToArray(s))
+          v
+        case x => sys.error(s"split_to_array: expected string, got '$x' (${x.getClass})")
+      }
+    case null => null
+    case _ => sys.error(s"split_to_array: expected variable expression, got '$v'")
   }
 
   def to_jarray(b: QueryBuilder, expr: Expr): Expr = {

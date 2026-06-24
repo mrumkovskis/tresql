@@ -459,6 +459,26 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     assertResult("n")(Query("if_defined_or_else(:a.x, 'y', 'n')", Map("a" -> 1)).head(0))
     assertResult("y")(Query("if_defined_or_else(:a.x, 'y', 'n')", Map("a" -> Map("x" -> 2))).head(0))
 
+    //if_nonempty macro test
+    assertResult(List("ACCOUNTING"))(
+      Query("dept[if_nonempty(:name, dname = :name)]{dname}#(1)", Map("name" -> "ACCOUNTING")).map(_.dname).toList)
+    val allDepts = Query("dept{dname}#(1)").map(_.dname).toList
+    assertResult(allDepts)(
+      Query("dept[if_nonempty(:name, dname = :name)]{dname}#(1)", Map("name" -> "")).map(_.dname).toList)
+    assertResult(allDepts)(
+      Query("dept[if_nonempty(:name, dname = :name)]{dname}#(1)", Map("name" -> List())).map(_.dname).toList)
+    assertResult(List())(
+      Query("dept[if_defined(:name, dname = :name)]{dname}#(1)", Map("name" -> "")).map(_.dname).toList)
+
+    //split_to_array macro test
+    assertResult(List(7782, 7839))(
+      Query("emp[empno in split_to_array(:ids)]{empno}#(empno)", Map("ids" -> "7839, 7782")).map(_.empno).toList)
+    assertResult(List(10, 20))(
+      Query("dept[deptno in if_nonempty(:ids, split_to_array(:ids))]{deptno}#(1)", Map("ids" -> "10, 20")).map(_.deptno).toList)
+    val allDeptnos = Query.list[Int]("dept{deptno}#(1)").sorted
+    assertResult(allDeptnos)(
+      Query.list[Int]("dept[deptno in if_nonempty(:ids, split_to_array(:ids))]{deptno}#(1)", Map("ids" -> "")).sorted)
+
     //test column sequence
     val rowColOrderTest = (0 to 10 map (_ + 'a'.toInt) map (_.toChar.toString)).reverse.zipWithIndex
     assertResult(List(rowColOrderTest)) {
