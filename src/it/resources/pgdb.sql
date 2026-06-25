@@ -66,8 +66,6 @@ COMMENT ON TABLE work IS 'work';
 //
 COMMENT ON COLUMN work.wdate IS 'work date';
 //
-COMMENT ON DATABASE postgres IS 'Development Test Database';
-//
 CREATE TABLE EMP
  (EMPNO INTEGER NOT NULL,
   ENAME VARCHAR(50),
