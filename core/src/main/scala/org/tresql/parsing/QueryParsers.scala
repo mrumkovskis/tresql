@@ -35,7 +35,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   //besides standart whitespace symbols consider as a whitespace also comments in form /* comment */ and //comment
   override val whiteSpace = """([\h\v]*+(/\*(.|[\h\v])*?\*/)?(//.*+(\n|$))?)+"""r
 
-  override def stringLiteral: MemParser[String] = ("""("(?:[^"]|"")*+")|('(?:[^']|'')*+')""".r) ^^ {
+  override def stringLiteral: MemParser[String] = """("(?:[^"]|"")*+")|('(?:[^']|'')*+')""".r ^^ {
     case s =>
       val doubleQuotes = s.startsWith("\"")
       val s1 = s.substring(1, s.length - 1)
@@ -59,7 +59,6 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     case b: Boolean => BooleanConst(b)
     case bd: BigDecimal => BigDecimalConst(bd)
     case s: String => StringConst(s)
-    case i: Int => IntConst(i)
     case x => sys.error(s"Unexpected const value: '$x'. Expected `String` or `Boolean` or `BigDecimal` or `Int`")
   } named "const"
   def sql: MemParser[Fun] = "`" ~> ("[^`]+"r) <~ "`" ^^ { sql_str =>
@@ -69,7 +68,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   def qualifiedIdentAll: MemParser[IdentAll] = qualifiedIdent <~ ".*" ^^ IdentAll named "ident-all"
   def variable: MemParser[Variable] = variableParser(true)
   private def variableParser(acceptIdent: Boolean): MemParser[Variable] = ((":" ~> (
-    rep1sep((if (acceptIdent) ident | stringLiteral | wholeNumber else stringLiteral | wholeNumber), ".") ~ opt("?"))) | "?") ^^ {
+    rep1sep(if (acceptIdent) ident | stringLiteral | wholeNumber else stringLiteral | wholeNumber, ".") ~ opt("?"))) | "?") ^^ {
     case "?" => Variable("?", Nil, opt = false)
     case ((i: String) :: (m: List[String @unchecked])) ~ o =>
       Variable(i, m, o != None, !acceptIdent)
@@ -508,7 +507,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
         case lop ~ ((o ~ rop) :: Nil) =>
           if (BinOp.STANDART_BIN_OPS contains o) BinOp(o, lop, rop)
           else Fun("bin_op_function", List(StringConst(o), lop, rop), false, None, None) // non standart op
-        case lop ~ List((o1 ~ mop), (o2 ~ rop)) => TerOp(lop, o1, mop, o2, rop)
+        case lop ~ List(o1 ~ mop, o2 ~ rop) => TerOp(lop, o1, mop, o2, rop)
       },
       {
         case lop ~ x => "Ternary comparison operation is allowed, however, here " + (x.size + 1) +
@@ -577,16 +576,16 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   private class SubSequence(s: CharSequence, start: Int, val length: Int) extends CharSequence {
     def this(s: CharSequence, start: Int) = this(s, start, s.length - start)
 
-    def charAt(i: Int) =
+    def charAt(i: Int): Char =
       if (i >= 0 && i < length) s.charAt(start + i) else throw new IndexOutOfBoundsException(s"index: $i, length: $length")
 
-    def subSequence(_start: Int, _end: Int) = {
+    def subSequence(_start: Int, _end: Int): SubSequence = {
       if (_start < 0 || _end < 0 || _end > length || _start > _end)
         throw new IndexOutOfBoundsException(s"start: ${_start}, end: ${_end}, length: $length")
 
       new SubSequence(s, start + _start, _end - _start)
     }
 
-    override def toString = s.subSequence(start, start + length).toString
+    override def toString: String = s.subSequence(start, start + length).toString
   }
 }

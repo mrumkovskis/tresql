@@ -15,6 +15,6 @@ class QueryParser(override protected val macros: MacroResources = null, cache: C
   def transformTresql(tresql: String, transformer: Transformer): String =
     this.transformer(transformer)(parseExp(tresql)) tresql
 
-  def extractVariables(exp: String) =
+  def extractVariables(exp: String): Seq[ast.Variable] =
     traverser(variableExtractor)(Nil)(parseExp(exp)).reverse
 }
