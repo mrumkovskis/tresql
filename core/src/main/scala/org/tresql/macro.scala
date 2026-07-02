@@ -47,6 +47,12 @@ class Macros {
     case _ => null
   }
 
+  def if_empty(b: QueryBuilder, v: Expr, e: Expr): Expr = if_empty_or_else(b, v, e, null)
+  def if_empty_or_else(b: QueryBuilder, v: Expr, e1: Expr, e2: Expr): Expr = v match {
+    case v: QueryBuilder#VarExpr if !containsVar(b, v) || isEmptyValue(b.env(v.name, v.members)) => e1
+    case _ => e2
+  }
+
   def or_else(b: QueryBuilder, v: Expr, e: Expr): Expr = if_defined_or_else(b, v, v, e)
 
   def or_null(b: QueryBuilder, v: Expr): Expr = or_else(b, v, b.ConstExpr(null))

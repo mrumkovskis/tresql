@@ -113,7 +113,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
     opt("#") /* distinct */ ~ repsep(expr, ",") /* arglist */ ~
     ")" ~ opt(order) /* aggregate order */ ~ opt(filter) /* aggregate filter */ ^?({
     case Ident(n) ~ d ~ p ~ _ ~ o ~ f if f.map(_.elements.size).getOrElse(0) <= 1 =>
-      Fun(n.mkString("."), p, d.isDefined, o, f.flatMap(_.elements.lift(0)))
+      Fun(n.mkString("."), p, d.isDefined, o, f.flatMap(_.elements.headOption))
   }, {
     case _ ~ _ ~ _ ~ _ ~ _ ~ f => s"Aggregate function filter must contain only one elements, instead of ${
       f.map(_.elements.size).getOrElse(0)}"
@@ -149,13 +149,13 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       def processAlias(coldefs: Option[List[TableColDef]], ord: Boolean) = {
         o match {
           case f: Fun => FunAsTable(f, coldefs, ord)
-          case x if coldefs == None => x
+          case x if coldefs.isEmpty => x
           case x => sys.error(s"Table definition is allowed only after function. Instead found: ${x.tresql}")
         }
       }
       Obj(processAlias(alias._2, alias._3), alias._1, join.orNull,
         rightoj.map(x => "r") orElse (leftoj orElse leftoj1).map(j => if(j == "?") "l" else "i") orNull,
-        (leftoj orElse leftoj1).exists(_ == "?"))
+        (leftoj orElse leftoj1).contains("?"))
     case join ~ rightoj ~ o ~ None => Obj(o, null, join orNull, rightoj.map(x => "r") orNull)
   } named "obj"
   def objWithJoin: MemParser[Obj] = obj ^? ({

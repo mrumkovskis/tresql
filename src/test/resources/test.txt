@@ -621,6 +621,17 @@ dept[deptno in if_nonempty(:name, emp[ename ~~ :name? || '%']{deptno})]{dname}#(
 dept[deptno in if_nonempty(:name, emp[ename ~~ :name? || '%']{deptno})]{dname}#(1) --> name=' --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
 dept[deptno in if_defined(:name, emp[ename ~~ :name? || '%']{deptno})]{dname}#(1) --> name=' --> [["ACCOUNTING"], ["RESEARCH"], ["SALES"]]
 
+//if_empty macro
+dept[if_empty(:name, dname = 'ACCOUNTING')]{dname}#(1) --> name=' --> [["ACCOUNTING"]]
+dept[if_empty(:name, dname = 'ACCOUNTING')]{dname}#(1) --> name=[] --> [["ACCOUNTING"]]
+dept[if_empty(:name, dname = 'ACCOUNTING')]{dname}#(1) --> [["ACCOUNTING"]]
+dept[if_empty(:name, dname = 'ACCOUNTING')]{dname}#(1) --> name='SALES --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
+dept[deptno in if_empty(:name, emp[job = 'PRESIDENT']{deptno})]{dname}#(1) --> name=' --> [["ACCOUNTING"]]
+dept[deptno in if_empty(:name, emp[job = 'PRESIDENT']{deptno})]{dname}#(1) --> name='sc --> [["ACCOUNTING"], ["OPERATIONS"], ["RESEARCH"], ["SALES"]]
+dept[if_empty_or_else(:name, dname = 'ACCOUNTING', dname = :name)]{dname}#(1) --> name=' --> [["ACCOUNTING"]]
+dept[if_empty_or_else(:name, dname = 'ACCOUNTING', dname = :name)]{dname}#(1) --> name='SALES --> [["SALES"]]
+dept[if_empty_or_else(:name, dname = 'ACCOUNTING', dname = :name)]{dname}#(1) --> [["ACCOUNTING"]]
+
 //split_to_array macro
 emp[empno in split_to_array(:ids)]{empno, ename}#(empno) --> ids='7839, 7782 --> [[7782, "CLARK"], [7839, "KING"]]
 emp[empno in split_to_array(:ids)]{empno, ename}#(empno) --> ids='7839,7782 --> [[7782, "CLARK"], [7839, "KING"]]
