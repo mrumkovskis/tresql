@@ -1,5 +1,7 @@
 package org.tresql
 
+import scala.collection.immutable.Seq
+
 class QueryParser(override protected val macros: MacroResources = null, cache: Cache = null)
   extends parsing.QueryParsers with parsing.ExpTransformer {
 
