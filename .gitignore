@@ -9,7 +9,6 @@ bin/
 .idea/
 .cache
 .worksheet/
-lib/
 jetty-env.xml
 *.iml
 
@@ -23,6 +22,10 @@ setenv*
 .history
 bin/*.jar
 .bsp/
+
+# mill
+out/
+mill
 
 # db
 lift_proto*

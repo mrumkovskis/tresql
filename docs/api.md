@@ -42,7 +42,7 @@ but is also a class definition with two fields `dname: String` and `loc: String`
 tresql"dept {dname, loc}".map(r => r.dname -> r.loc).toList: List[(String, String)]
 ```
 
-Scala compiler tresql macro settings for tresql project (see [build.sbt](/build.sbt)):
+Scala compiler tresql macro settings for tresql project (see [build.mill](/build.mill)):
 
 ```scala
   scalacOptions += 

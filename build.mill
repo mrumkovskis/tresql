@@ -1,0 +1,190 @@
+package build
+
+import mill._, scalalib._, publish._
+
+val scalaVersions = Seq("3.3.7", "2.13.18", "2.12.21")
+
+trait TresqlScalaModule extends CrossSbtModule {
+
+  def scalacOptions = {
+    val base = Seq(
+      "-deprecation", "-feature", "-unchecked",
+      "-language:dynamics",
+      "-language:postfixOps",
+      "-language:implicitConversions",
+      "-language:reflectiveCalls",
+      "-language:existentials",
+    )
+    if (crossScalaVersion.startsWith("3")) base ++ Seq("-explain") else base
+  }
+
+  def javacOptions = Seq("-source", "11", "-target", "11", "-Xlint")
+}
+
+object core extends Cross[CoreModule](scalaVersions)
+trait CoreModule extends TresqlScalaModule {
+
+  // Core resources needed at compile time by downstream macros
+  def compileResources = Task.Sources("src/main/resources")
+
+  def mvnDeps = {
+    val base = Seq(mvn"org.scala-lang.modules::scala-parser-combinators:2.4.0")
+    if (crossScalaVersion.startsWith("3")) base
+    else base ++ Seq(mvn"org.scala-lang:scala-reflect:${crossScalaVersion}")
+  }
+
+  override def allSourceFiles = Task {
+    val all = super.allSourceFiles()
+    if (crossScalaVersion.startsWith("3")) all
+    else all.filter(f => !f.path.last.startsWith("Scala3"))
+  }
+
+  object test extends CrossSbtTests with TestModule.ScalaTest {
+    def mvnDeps = Seq(mvn"org.scalatest::scalatest:3.2.19")
+  }
+}
+
+object macros extends Cross[MacrosModule](scalaVersions)
+trait MacrosModule extends TresqlScalaModule {
+  override def moduleDir = super.moduleDir / os.up / "macro"
+
+  def moduleDeps = Seq(core(crossScalaVersion))
+
+  override def allSourceFiles = Task {
+    if (crossScalaVersion.startsWith("3")) Seq.empty[PathRef]
+    else super.allSourceFiles()
+  }
+}
+
+object tresql extends Cross[TresqlModule](scalaVersions)
+trait TresqlModule extends TresqlScalaModule with PublishModule {
+  // Point moduleDir to root so CrossSbtModule finds tests at src/test/scala
+  override def moduleDir = super.moduleDir / os.up
+
+  def publishVersion = "13.2.0"
+
+  def pomSettings = PomSettings(
+    description = "tresql",
+    organization = "org.tresql",
+    url = "https://github.com/mrumkovskis/tresql",
+    licenses = Seq(License.MIT),
+    versionControl = VersionControl.github("mrumkovskis", "tresql"),
+    developers = Seq(
+      Developer("mrumkovskis", "Martins Rumkovskis", "https://github.com/mrumkovskis/"),
+      Developer("guntiso", "Guntis Ozols", "https://github.com/guntiso/"),
+    )
+  )
+
+  def compileModuleDeps = Seq(core(crossScalaVersion), macros(crossScalaVersion))
+
+  // No own main sources — the root project has no src/main/scala
+  def sources = Task.Sources()
+
+  def mvnDeps = {
+    val base = Seq(mvn"org.scala-lang.modules::scala-parser-combinators:2.4.0")
+    if (crossScalaVersion.startsWith("3")) base
+    else base ++ Seq(mvn"org.scala-lang:scala-reflect:${crossScalaVersion}")
+  }
+
+  // Merge classes from core and macros into the tresql JAR
+  override def localClasspath = Task {
+    super.localClasspath() ++
+      core(crossScalaVersion).localClasspath() ++
+      macros(crossScalaVersion).localClasspath()
+  }
+
+  object test extends CrossSbtTests with TestModule.ScalaTest {
+    def moduleDeps = super.moduleDeps ++ Seq(
+      core(crossScalaVersion).test,
+      macros(crossScalaVersion),
+    )
+
+    // Workaround for Scala 3 inline method reference issue in borer:
+    // borer's Encoder/Decoder classes reference io.bullet.borer.internal as a type
+    // (Scala 3 inline synthetic), which doesn't exist as a class file.
+    // Provide a dummy class to satisfy JVM reflection during test discovery.
+    // Add dummy io.bullet.borer.internal class only to runtime classpath
+    // (not compile) to satisfy JVM reflection during Mill test discovery
+    def borerWorkaround = Task.Source("lib")
+    override def runClasspath = Task {
+      super.runClasspath() ++ Seq(borerWorkaround())
+    }
+
+    // Manually specify test classes to avoid classpath scanning issues with borer Scala 3
+    def discoveredTestClasses = Task {
+      Seq(
+        "org.tresql.test.QueryTest",
+        "org.tresql.test.CompilerMacroDependantTests",
+        "org.tresql.test.TresqlJavaApiTest",
+      )
+    }
+
+    // Macro needs HSQLDB on compile classpath to validate queries at compile time
+    def compileIvyDeps = Seq(mvn"org.hsqldb:hsqldb:2.7.4")
+
+    // Input: test resources dir for macro properties
+    def testResourceDir = Task.Source("src/test/resources")
+
+    // Compile-time resources: copy all test resources + fix paths in macro properties
+    def compileResources = Task {
+      val resDir = testResourceDir().path
+      // Copy all test resource files to compile dest
+      os.list(resDir).foreach { f =>
+        if (f.last == "tresql-scala-macro.properties") {
+          val props = os.read(f)
+          val fixed = props
+            .replace("db_create_script                = src/test/resources/db.sql",
+                     s"db_create_script                = ${resDir / "db.sql"}")
+            .replace("db_create_script.contact_db     = src/test/resources/db1.sql",
+                     s"db_create_script.contact_db     = ${resDir / "db1.sql"}")
+          os.write(Task.dest / f.last, fixed)
+        } else if (os.isFile(f)) {
+          os.copy(f, Task.dest / f.last)
+        }
+      }
+      Seq(PathRef(Task.dest))
+    }
+
+    def mvnDeps = {
+      val borerV = crossScalaVersion match {
+        case v if v.startsWith("2.12") => "1.7.2"
+        case v if v.startsWith("2.13") => "1.8.0"
+        case v if v.startsWith("3")    => "1.16.2"
+      }
+      Seq(
+        mvn"org.scalatest::scalatest:3.2.19",
+        mvn"org.hsqldb:hsqldb:2.7.4",
+        mvn"io.bullet::borer-core:${borerV}",
+        mvn"io.bullet::borer-derivation:${borerV}",
+      )
+    }
+  }
+}
+
+object it extends Cross[ItModule](scalaVersions)
+trait ItModule extends TresqlScalaModule {
+  override def moduleDir = super.moduleDir / os.up / "src" / "it"
+
+  def moduleDeps = Seq(tresql(crossScalaVersion))
+
+  // No own compile sources
+  def sources = Task.Sources()
+
+  object test extends CrossSbtTests with TestModule.ScalaTest {
+    def moduleDeps = super.moduleDeps ++ Seq(tresql(crossScalaVersion).test)
+
+    // Same borer workaround as tresql test module
+    override def runClasspath = Task {
+      super.runClasspath() ++ Seq(tresql(crossScalaVersion).test.borerWorkaround())
+    }
+
+    // IT tests use non-standard layout: sources in <moduleDir>/scala/ not src/test/scala
+    def sources = Task.Sources("scala")
+    def resources = Task.Sources("resources")
+
+    def mvnDeps = Seq(
+      mvn"org.scalatest::scalatest:3.2.19",
+      mvn"org.postgresql:postgresql:42.7.10",
+    )
+  }
+}
