@@ -552,6 +552,22 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     assertResult(List(Map("N" -> "a", "V" -> 1), Map("N" -> "b", "V" -> 2), Map("N" -> "c", "V" -> 3))) {
       Query("[({'a' n, 1 v} + {'b', 2} + {'c', 3})#(1)]").elIterator.toSeq
     }
+    assertResult(List(Vector(Vector("a", 1)), Vector(Vector("b", 2)))) {
+      Query("[({'a' n, 1 v} + {'b', 2})#(1)]").toListOfVectors
+    }
+    // row view traversal with typed access
+    assertResult(List(("a", 1), ("b", 2))) {
+      Query("[({'a' n, 1 v} + {'b', 2}){n, v}#(1)]").map(_(0) match {
+        case r: RowLike if !r.isInstanceOf[Result[_]] => (r.string("n"), r.int(1))
+        case x => x
+      }).toList
+    }
+    assertResult(List(Map("n" -> "head", "v" -> List(0, 0)))) {
+      Query("[{'head' n, |[(dummy@(1)) ++ (dummy@(1))] 'v'}]").map(_(0) match {
+        case r: DynamicRow => Map("n" -> r.n, "v" -> r.result("v").map(_(0)).toList)
+        case x => x
+      }).toList
+    }
     assertResult(List(Map("name" -> "gunza", "roles" -> List("admin", "guest"))) ) {
       Query("{'gunza' name, |[({'admin'} + {'guest'})#(1)] 'roles'}").toListOfMaps
     }

@@ -20,6 +20,12 @@ trait Result[+T <: RowLike] extends Iterator[T] with RowLike with TypedResult[T]
   def toListOfMaps: List[Map[String, Any]] = this.map(_.toMap).toList
   def elIterator: Iterator[Any] = this.map(_.toMap)
 
+  private[this] lazy val _rowView = new RowView(this)
+  /** Current row as a {{{RowLike}}} which, unlike this result, is not a {{{Result}}}.
+   * Can be used to distinguish rows from nested results when traversing result from outside.
+   * NOTE: View is not a snapshot, it reflects current row and is valid until {{{next()}}} is called. */
+  def rowView: DynamicRow = _rowView
+
   /** Is implemented in {{{DMLResult}}} */
   def affectedRowCount: Int = ???
 
@@ -388,9 +394,9 @@ class DynamicArraySelectResult(select: DynamicSelectResult)
   override def column(idx: Int): Column = columns(idx)
   override def apply(idx: Int): Any = {
     if (idx != 0) throw new ArrayIndexOutOfBoundsException(idx)
-    if (select.columnCount == 1) select.colValue(0) else select.toMap
+    if (select.columnCount == 1) select(0) else select.rowView
   }
-  override def elIterator: Iterator[Any] = this.map(_(0))
+  override def elIterator: Iterator[Any] = this.map(_.colValue(0))
   override def values: Seq[Any] = elIterator.toSeq
   override def close: Unit = select.close
   override def closeWithDb: Unit = select.closeWithDb
@@ -618,6 +624,7 @@ trait RowLike extends Typed with AutoCloseable {
   private[tresql] def colValue(idx: Int): Any = this(idx) match {
     case r: DynamicArraySelectResult => r.elIterator.toSeq
     case r: Result[_] => r.toListOfMaps
+    case r: RowLike => r.toMap
     case a: java.sql.Array => a.getArray
     case i: Iterator[_] => i.toSeq
     case x => x
@@ -635,6 +642,7 @@ trait RowLike extends Typed with AutoCloseable {
     def anyToVal(v: Any): Any = v match {
       case r: DynamicArraySelectResult => r.elIterator.toSeq
       case r: Result[_] => r.toListOfVectors
+      case r: RowLike => r.rowToVector
       case a: java.sql.Array => a.getArray
       case i: Iterable[_] => (i map anyToVal).toVector
       case i: Iterator[_] => (i map anyToVal).toVector
@@ -655,6 +663,19 @@ trait RowLike extends Typed with AutoCloseable {
   def values: Seq[Any]
   /** Close underlying database resources related to this result. Default implementation does nothing. */
   def close: Unit = {}
+}
+
+/** View of current row of underlying row. Is valid until underlying result {{{next()}}} method is called. */
+class RowView private[tresql] (row: RowLike) extends DynamicRow {
+  def apply(idx: Int): Any = row(idx)
+  def apply(name: String): Any = row(name)
+  def column(idx: Int): Column = row.column(idx)
+  def columnCount: Int = row.columnCount
+  def columns: Seq[Column] = row.columns
+  def values: Seq[Any] = row.values
+  override def typed(columnIndex: Int, manifestName: String): Any = row.typed(columnIndex, manifestName)
+  def typed[T: Manifest](name: String): T = row.typed[T](name)
+  override def toString: String = values.mkString("RowView(", ", ", ")")
 }
 
 trait DynamicRow extends RowLike with Dynamic {
