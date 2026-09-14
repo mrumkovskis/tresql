@@ -497,6 +497,14 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
       (tresql"results{scores}".map(_.scores.getArray.asInstanceOf[Array[_]].toList).toList,
         Query("results{names}").head[java.sql.Array].getArray.asInstanceOf[Array[_]].toList)
     }
+    //sql array in array select result must be unwrapped to java array, not left as jdbc array
+    assertResult(List(List(4))) {
+      Query("[results{scores}]").elIterator.map(_.asInstanceOf[Array[_]].toList).toList
+    }
+    assertResult(List(List("D"))) {
+      Query("[results{id, names}]").elIterator.map(
+        _.asInstanceOf[Map[String, Any]]("names").asInstanceOf[Array[_]].toList).toList
+    }
 
     //stack overflow test for long bin exps
     assertResult(1) {
@@ -541,11 +549,24 @@ class CompilerMacroDependantTests extends AnyFunSuite with CompilerMacroDependan
     assertResult(List(1, 2, 3)) {
       Query("[({1} + {2} + {3})#(1)]").elIterator.toSeq
     }
-    assertResult(List(Vector("a", 1), Vector("b", 2), Vector("c", 3))) {
-      Query("[({'a', 1} + {'b', 2} + {'c', 3})#(1)]").elIterator.toSeq
+    assertResult(List(Map("N" -> "a", "V" -> 1), Map("N" -> "b", "V" -> 2), Map("N" -> "c", "V" -> 3))) {
+      Query("[({'a' n, 1 v} + {'b', 2} + {'c', 3})#(1)]").elIterator.toSeq
     }
     assertResult(List(Map("name" -> "gunza", "roles" -> List("admin", "guest"))) ) {
       Query("{'gunza' name, |[({'admin'} + {'guest'})#(1)] 'roles'}").toListOfMaps
+    }
+    assertResult(List(Map("n" -> "head", "v" -> List(0, 0, 0)))) {
+      Query("[{'head' n, |[dummy ++ dummy ++ dummy] 'v'}]").elIterator.toSeq
+    }
+    assertResult(List(Map("n" -> "head", "v" -> List(0, 0)))) {
+      Query("[{'head' n, |[(dummy@(1)) ++ (dummy@(1))] 'v'}]").elIterator.toSeq
+    }
+    assertResult(List(
+      List(Map("name" -> "gunza", "roles" -> List("admin", "guest"))),
+      List(Map("name" -> "matthew", "languages" -> List("de", "es", "it"))),
+    )) {
+      Query("[[{'gunza' name, |[({'admin'} + {'guest'})#(1)] 'roles'}], [{'matthew' name, |[l(lang) {{'es'} + {'it'} + {'de'}} l#(1)] 'languages'}]]")
+        .elIterator.toSeq
     }
   }
 

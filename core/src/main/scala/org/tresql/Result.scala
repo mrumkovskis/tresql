@@ -386,11 +386,10 @@ class DynamicArraySelectResult(select: DynamicSelectResult)
   override def columns: Seq[Column] = cols
   override def columnCount: Int = 1
   override def column(idx: Int): Column = columns(idx)
-  override def apply(idx: Int): Any =
-    if (idx == 0) select.rowToVector match {
-      case v if v.size == 1 => v(0)
-      case v => v
-    } else throw new ArrayIndexOutOfBoundsException(idx)
+  override def apply(idx: Int): Any = {
+    if (idx != 0) throw new ArrayIndexOutOfBoundsException(idx)
+    if (select.columnCount == 1) select.colValue(0) else select.toMap
+  }
   override def elIterator: Iterator[Any] = this.map(_(0))
   override def values: Seq[Any] = elIterator.toSeq
   override def close: Unit = select.close
@@ -615,18 +614,22 @@ trait RowLike extends Typed with AutoCloseable {
   def array(name: String) = typed[java.sql.Array](name)
   def listOfRows(idx: Int): List[this.type] = this(idx).asInstanceOf[List[this.type]]
   def listOfRows(name: String) = this(name).asInstanceOf[List[this.type]]
-  /** Converts row to map preserving column sequence.
-   *  null value column names make as _idx, where idx is number over null value columns */
-  def toMap: Map[String, Any] = (0 until columnCount).map(i => column(i).name -> (this(i) match {
+  /** Column value with nested results, arrays and iterators converted to scala collections */
+  private[tresql] def colValue(idx: Int): Any = this(idx) match {
     case r: DynamicArraySelectResult => r.elIterator.toSeq
     case r: Result[_] => r.toListOfMaps
     case a: java.sql.Array => a.getArray
     case i: Iterator[_] => i.toSeq
     case x => x
-  })).foldLeft(ListMap[String, Any]() -> 1) { case ((r, i), c@(n, v)) =>
-    // use ListMap to preserve column sequence
-    if (n == null) (r + (s"_$i" -> v), i + 1) else (r + c, i)
-  }._1
+  }
+  /** Converts row to map preserving column sequence.
+   *  null value column names make as _idx, where idx is number over null value columns */
+  def toMap: Map[String, Any] = (0 until columnCount)
+    .map(i => column(i).name -> colValue(i))
+    .foldLeft(ListMap[String, Any]() -> 1) { case ((r, i), c@(n, v)) =>
+      // use ListMap to preserve column sequence
+      if (n == null) (r + (s"_$i" -> v), i + 1) else (r + c, i)
+    }._1
   /** name {{{toVector}}} is defined in {{{trait TranversableOnce}}} */
   def rowToVector: Vector[Any] = {
     def anyToVal(v: Any): Any = v match {
