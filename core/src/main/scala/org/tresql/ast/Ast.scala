@@ -402,6 +402,22 @@ object Ast {
     case Query(List(Obj(Null, _, _, _, _)), _, _, _, _, _, _) => true
     case _ => false
   }
+
+  def toAlias(exp: Exp): String = {
+    val MaxLen = 30
+    def quote(s: String) = "\"" + s.take(MaxLen).replace("\"", "\"\"") + "\""
+    def strToAlias(str: String) =
+      str.replaceAll("[^\\p{L}\\p{N}]+", "_").replaceAll("^_|_$", "").take(MaxLen)
+    exp match {
+      case Ident(id) => id.last
+      case StringConst(v) => if (v.isEmpty) "\"_\"" else quote(v)
+      case c: Const => quote(c.value.toString)
+      case Null => quote("null")
+      case e =>
+        val a = strToAlias(e.tresql)
+        if (a.isEmpty || a.head.isDigit) quote(if (a.isEmpty) "_" else a) else a
+    }
+  }
 }
 
 object CompilerAst {

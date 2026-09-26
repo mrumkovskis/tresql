@@ -163,6 +163,33 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     })
   }
 
+  test("toAlias") {
+    import ast._
+    val parser = new QueryParser(tresqlResources, tresqlResources.cache)
+    def alias(tresql: String) = Ast.toAlias(parser.parseExp(tresql))
+    //identifiers
+    assertResult("ename")(Ast.toAlias(Ident(List("ename"))))
+    assertResult("ename")(Ast.toAlias(Ident(List("emp", "ename"))))
+    //constants
+    assertResult("\"abc\"")(Ast.toAlias(StringConst("abc")))
+    assertResult("\"it's\"")(Ast.toAlias(StringConst("it's")))
+    assertResult("\"a\"\"b\"")(Ast.toAlias(StringConst("a\"b")))
+    assertResult("\"_\"")(Ast.toAlias(StringConst("")))
+    assertResult("\"" + "x" * 30 + "\"")(Ast.toAlias(StringConst("x" * 40)))
+    assertResult("\"" + "x" * 29 + "\"\"\"")(Ast.toAlias(StringConst("x" * 29 + "\"yz")))
+    assertResult("\"1\"")(Ast.toAlias(IntConst(1)))
+    assertResult("\"2.5\"")(Ast.toAlias(BigDecimalConst(BigDecimal("2.5"))))
+    assertResult("\"true\"")(Ast.toAlias(BooleanConst(true)))
+    assertResult("\"null\"")(Ast.toAlias(Null))
+    //expressions
+    assertResult("sum_sal")(alias("sum(sal)"))
+    assertResult("sum_ābols")(alias("sum(ābols)"))
+    assertResult("a1_a2")(alias("a1 + a2"))
+    assertResult("\"1_a\"")(alias("1 + a"))
+    assertResult("\"_\"")(alias("?"))
+    assertResult("a" * 20 + "_" + "a" * 9)(alias("a" * 20 + " + " + "a" * 20))
+  }
+
   test("compiler") {
     val testRes = tresqlResources.withMetadata(
       new metadata.JDBCMetadata {
