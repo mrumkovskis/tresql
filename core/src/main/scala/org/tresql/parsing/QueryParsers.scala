@@ -11,17 +11,24 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
 
   protected def macros: MacroResources = null
 
-  def parseExp(exp: String): Exp = {
-    phrase(exprList)(new scala.util.parsing.input.CharSequenceReader(exp)) match {
-      case Success(r, _) => maybeTransform(r, transformers) match {
+  def parseExp(exp: String): Exp = parseExp(exp, exprList)
+
+  def parseExp(exp: String, parser: Parser[Exp]): Exp = {
+    //transformers are collected from macros during this parse only, restore for nested parseExp calls
+    val outerTransformers = transformers.get
+    transformers.set(Nil)
+    try phrase(parser)(new scala.util.parsing.input.CharSequenceReader(exp)) match {
+      case Success(r, _) => maybeTransform(r, transformers.get) match {
         case _: TransformerExp => sys.error("Parsing error - cannot return TransformerExp!")
         case e => e
       }
       case x => sys.error(x.toString)
-    }
+    } finally transformers.set(outerTransformers)
   }
 
-  private var transformers: List[Transformer] = Nil
+  private val transformers = new ThreadLocal[List[Transformer]] {
+    override def initialValue: List[Transformer] = Nil
+  }
 
   val reserved = Set("in", "null", "false", "true")
 
@@ -133,43 +140,53 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   def filters: MemParser[Filters] = rep(filter) ^^ Filters named "filters"
   /** objContent is meant to be table, column or division operation operand */
   private def objContent: MemParser[Exp] =
-    (functionWithoutFilter | result | variable | qualifiedIdent | sql | braces) named "obj-content"
+    (functionWithoutFilter | qualifiedIdent | sql | braces) named "obj-content"
   private def alias: MemParser[(String, Option[List[TableColDef]], Boolean)] =
     ident ~ opt("(" ~> opt("#") ~ rep1sep(ident ~ opt(cast), ",") <~ ")") ^^ {
       case id ~ Some(mbOrd ~ colDefs) =>
         (id, Some(colDefs.map { case cn ~ typ => TableColDef(cn, typ) }), mbOrd.isDefined)
       case id ~ None => (id, None, false)
     } named "alias"
-  def obj: MemParser[Obj] = opt(join) ~ opt("?") ~ objContent ~
-    opt(opt("?" | "!") ~ alias ~ opt("?" | "!")) ^^ {
-    case _ ~ Some(_) ~ _ ~ Some(Some(_) ~ _ ~ _ | _ ~ _ ~ Some(_)) =>
-      sys.error("Cannot be right and left join at the same time")
-    case join ~ rightoj ~ o ~ Some(leftoj ~ alias ~ leftoj1) =>
-      def processAlias(coldefs: Option[List[TableColDef]], ord: Boolean) = {
-        o match {
-          case f: Fun => FunAsTable(f, coldefs, ord)
-          case x if coldefs.isEmpty => x
-          case x => sys.error(s"Table definition is allowed only after function. Instead found: ${x.tresql}")
-        }
+  def obj: MemParser[Obj] = {
+    def optAlOj =
+      opt(
+        (("?" | ("!" <~ not("""[<>=!~%$]""".r | "in") /* lookahead not to lose !=, !~, !in etc. */))
+          <~ not(ident) /* lookahead not to consume what later cannot be parsed */) |
+        (alias ~ opt("?" | "!"))
+      ) ^^ {
+        case j@Some(s: String) => (None, j)
+        case Some((al: (String, Option[List[TableColDef]], Boolean)) ~ (j: Option[_])) => (Some(al), j)
+        case _ => (None, None)
       }
-      Obj(processAlias(alias._2, alias._3), alias._1, join.orNull,
-        rightoj.map(x => "r") orElse (leftoj orElse leftoj1).map(j => if(j == "?") "l" else "i") orNull,
-        (leftoj orElse leftoj1).contains("?"))
-    case join ~ rightoj ~ o ~ None => Obj(o, null, join orNull, rightoj.map(x => "r") orNull)
-  } named "obj"
+    opt(join) ~ opt("?") ~ objContent ~ optAlOj ^^ {
+      case _ ~ rj ~ _ ~ Tuple2(_, lj) if rj.nonEmpty && lj.nonEmpty =>
+        sys.error("Cannot be right and left join at the same time")
+      case join ~ rightoj ~ o ~ Tuple2(Some(alias), leftoj) =>
+        def processAlias(coldefs: Option[List[TableColDef]], ord: Boolean) = {
+          o match {
+            case f: Fun => FunAsTable(f, coldefs, ord)
+            case x if coldefs.isEmpty => x
+            case x => sys.error(s"Table definition is allowed only after function. Instead found: ${x.tresql}")
+          }
+        }
+        Obj(processAlias(alias._2, alias._3), alias._1, join.orNull,
+          rightoj.map(x => "r") orElse leftoj.map(j => if(j == "?") "l" else "i") orNull,
+          leftoj.contains("?"))
+      case join ~ rightoj ~ o ~ Tuple2(None, leftoj) =>
+        Obj(o, null, join orNull,
+          leftoj.map(j => if (j == "?") "l" else "i").orElse(rightoj.map(_ => "r")) orNull,
+          leftoj.contains("?"))
+    } named "obj"
+  }
   def objWithJoin: MemParser[Obj] = obj ^? ({
     case obj if obj.join != null => obj
   } , {
-    case obj => s"no join condition found on object: ${obj.tresql}"
+    obj => s"no join condition found on object: ${obj.tresql}"
   }) named "obj-with-join"
-  def objs: MemParser[List[Obj]] = obj ~ rep(objWithJoin ~ opt("?" | "!")) ^^ {
+  def objs: MemParser[List[Obj]] = obj ~ rep(objWithJoin) ^^ {
     case o ~ l =>
       var prev: Obj = null
-      val res = (o :: l.map {
-        case o ~ Some(oj) if "r" == o.outerJoin => sys.error("Cannot be right and left join at the same time")
-        case o ~ Some(oj) => o.copy(outerJoin = if (oj == "?") "l" else "i", nullable = oj == "?")
-        case o ~ None => o
-      }).flatMap { thisObj =>
+      val res = (o :: l).flatMap { thisObj =>
         val (prevObj, prevAlias) = (prev, if (prev == null) null else prev.alias)
         prev = thisObj
         //process foreign key shortcut join
@@ -265,8 +282,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
         }
       }
     } named "offset-limit"
-  def query: MemParser[Exp] = ((objs | NULL) ~ filters ~ opt(columns ~ opt(group)) ~ opt(order) ~
-    opt(offsetLimit) | (columns ~ filters)) ^^ {
+  def query: MemParser[Exp] =
+    ((objs | NULL) ~ filters ~ opt(columns ~ opt(group)) ~ opt(order) ~
+      opt(offsetLimit) | (columns ~ filters)) ^^ {
       case Null ~ Filters(Nil) ~ None ~ None ~ None => Null //null literal
       case List(t) ~ Filters(Nil) ~ None ~ None ~ None => t match {
         case Obj(b: Braces, null, j, null, _) =>
@@ -551,7 +569,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       } else {
         macros.invokeMacro(f.name, QueryParsers.this, f.parameters) match {
           case TransformerExp(t) =>
-            transformers ::= t
+            transformers.set(t :: transformers.get)
             f
           case e => e
         }

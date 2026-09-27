@@ -220,8 +220,7 @@ case class Obj(obj: Exp, alias: String = null, join: Join = null, outerJoin: Str
   extends Exp {
   def tresql = {
     (if (join != null) join.tresql else "") + (if (outerJoin == "r") "?" else "") +
-      obj.tresql + (if (outerJoin == "l") "?" else if (outerJoin == "i") "!" else "") +
-      (obj match {
+      obj.tresql + (obj match {
         case FunAsTable(_, cols, ord) =>
           " " + alias +
             cols
@@ -229,7 +228,7 @@ case class Obj(obj: Exp, alias: String = null, join: Join = null, outerJoin: Str
                 .mkString(if (ord) "(# " else "(", ", ", ")"))
               .getOrElse("")
         case _ => if (alias == null) "" else " " + alias
-      })
+      }) + (if (outerJoin == "l") "?" else if (outerJoin == "i") "!" else "")
   }
 }
 case class Col(col: Exp, alias: String = null) extends Exp {

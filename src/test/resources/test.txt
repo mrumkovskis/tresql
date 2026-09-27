@@ -103,9 +103,9 @@ tyres t/tyres_usage u {t.nr, u.carnr, date_from}#(1,2,3) --> [[1, "3333", "2014-
 emp/car[2222]{ename, name}#(1,2) --> [["ADAMS", "BMW"], ["FORD", "BMW"], ["JONES", "BMW"], ["SCOTT", "BMW"], ["SMITH", "BMW"]]
 
 //default join with additional expression
-dept d/[job = 'PRESIDENT']emp? e {dname, ename}#(1, 2 null) --> [["ACCOUNTING", "KING"], ["OPERATIONS", null], ["RESEARCH", null], ["SALES", null]]
-dept d[job = 'PRESIDENT']/emp? e {dname, ename}#(1, 2 null) --> [["ACCOUNTING", "KING"], ["OPERATIONS", null], ["RESEARCH", null], ["SALES", null]]
-dept d/emp? e [job = 'PRESIDENT']{dname, ename}#(1, 2) --> [["ACCOUNTING", "KING"]]
+dept d/[job = 'PRESIDENT']emp e? {dname, ename}#(1, 2 null) --> [["ACCOUNTING", "KING"], ["OPERATIONS", null], ["RESEARCH", null], ["SALES", null]]
+dept d[job = 'PRESIDENT']/emp e? {dname, ename}#(1, 2 null) --> [["ACCOUNTING", "KING"], ["OPERATIONS", null], ["RESEARCH", null], ["SALES", null]]
+dept d/emp e? [job = 'PRESIDENT']{dname, ename}#(1, 2) --> [["ACCOUNTING", "KING"]]
 emp[?]/dept[dname != null]{ename, dname} --> 7369 --> [["SMITH", "RESEARCH"]]
 emp/[?]dept[dname != null]{ename, dname} --> 7369 --> [["SMITH", "RESEARCH"]]
 emp[?]/dept[?]{ename, dname} --> 7369; 40 --> []
@@ -125,7 +125,9 @@ emp[emp.empno = w.empno]work w;emp/dept [ename = 'SCOTT']{hours, ename, dname} #
 work w[w.empno e, w.empno_mgr m]emp;e/dept d;m/dept md {e.ename, d.dname, hours, m.ename, md.dname} #(1,2,3) --> [["KING", "ACCOUNTING", 3, null, null], ["KING", "ACCOUNTING", 4, null, null], ["SCOTT", "RESEARCH", 5, "JONES", "RESEARCH"], ["SCOTT", "RESEARCH", 8, "CLARK", "ACCOUNTING"]]
 
 //left outer join
-dept d/emp? e[e.deptno != null]#{d.deptno}#(d.deptno) --> [[10], [20], [30]]
+dept d/emp e?[e.deptno != null]#{d.deptno}#(d.deptno) --> [[10], [20], [30]]
+//left outer join without alias makes next default joined table left joined
+dept d/[job = 'PRESIDENT']emp?/dept d2 {d.dname, d2.dname}#(1, 2 null) --> [["ACCOUNTING", "ACCOUNTING"], ["OPERATIONS", null], ["RESEARCH", null], ["SALES", null]]
 
 //right outer join
 emp e/?dept d[e.deptno != null]#{d.deptno}#(d.deptno) --> [[10], [20], [30]]
@@ -406,10 +408,9 @@ dept/emp[dname in ("OPERATIONS", "SALES")]{dname, ename}#(~1,2) --> [["SALES", "
 dept/emp[empno = null]{dname}#(1) --> [["OPERATIONS"]]
 dept/emp![empno = null] --> []
 dept/emp e![empno = null] --> []
-dept/emp! e[empno = null] --> []
 emp m[m.mgr]emp e {m.ename, e.ename}#(1,2) --> [["ADAMS", "SCOTT"], ["ALLEN", "BLAKE"], ["BLAKE", "KING"], ["CLARK", "KING"], ["FORD", "JONES"], ["JAMES", "BLAKE"], ["JONES", "KING"], ["KING", null], ["MARTIN", "BLAKE"], ["MILLER", "CLARK"], ["SCOTT", "JONES"], ["SMITH", "FORD"], ["TURNER", "BLAKE"], ["WARD", "BLAKE"]]
 emp m[m.mgr]emp e! {m.ename, e.ename} --> [["SMITH", "FORD"], ["ALLEN", "BLAKE"], ["WARD", "BLAKE"], ["JONES", "KING"], ["MARTIN", "BLAKE"], ["BLAKE", "KING"], ["CLARK", "KING"], ["SCOTT", "JONES"], ["TURNER", "BLAKE"], ["ADAMS", "SCOTT"], ["JAMES", "BLAKE"], ["FORD", "JONES"], ["MILLER", "CLARK"]]
-work[empno e!, empno_mgr! m]emp;e/dept d;m/dept md{hours, e.ename, d.dname, m.ename, md.dname}#(1,2,3) --> [[5, "SCOTT", "RESEARCH", "JONES", "RESEARCH"], [8, "SCOTT", "RESEARCH", "CLARK", "ACCOUNTING"]]
+work[empno e!, empno_mgr m!]emp;e/dept d;m/dept md{hours, e.ename, d.dname, m.ename, md.dname}#(1,2,3) --> [[5, "SCOTT", "RESEARCH", "JONES", "RESEARCH"], [8, "SCOTT", "RESEARCH", "CLARK", "ACCOUNTING"]]
 
 //hierarchical recursive query
 emp[mgr = null]{empno, ename, |[^1.empno = mgr]}#(1) --> [[7839, "KING", [[7566, "JONES", [[7788, "SCOTT", [[7876, "ADAMS", []]]], [7902, "FORD", [[7369, "SMITH", []]]]]], [7698, "BLAKE", [[7499, "ALLEN", []], [7521, "WARD", []], [7654, "MARTIN", []], [7844, "TURNER", []], [7900, "JAMES", []]]], [7782, "CLARK", [[7934, "MILLER", []]]]]]]
@@ -641,6 +642,7 @@ dept[deptno in if_nonempty(:ids, split_to_array(:ids))]{deptno}#(1) --> [[10], [
 [build_values_cursor(:data)]int_values{sum(cast(value, 'integer')) s, avg(cast(value, 'integer')) a} --> data=[1,2,3] --> [[6, 2]]
 summary(#s, a) { int_values{sum(cast(value, 'integer')) s, avg(cast(value, 'integer')) a} } [build_values_cursor(:data)]summary --> data=[1,2,3,4] --> [[10, 2]]
 summary(#s, a) { int_values{sum(cast(value, 'integer')) s, avg(cast(value, 'integer')) a} } [build_values_cursor(:data)]summary { s + :s, a + :a } --> data=[1,2,3,4];s=2;a=3 --> [[12, 5]]
+[build_values_cursor(:data)]int_values[in_twice(cast(value, 'integer'), 2)]{sum(cast(value, 'integer')) s} --> data=[1,2,3] --> [[2]]
 
 //macro interpolator test
 {macro_interpolator_test1(1, 2)} --> [[3]]

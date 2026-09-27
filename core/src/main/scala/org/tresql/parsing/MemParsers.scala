@@ -19,10 +19,11 @@ trait MemParsers extends scala.util.parsing.combinator.Parsers {
     val phrp = super.phrase(p)
     new Parser[T] {
       def apply(in: Input) = {
-        try {
-          intermediateResults.get.clear()
-          phrp(in)
-        } finally intermediateResults.get.clear()
+        //each phrase (possibly nested, e.g. macro_ interpolator) gets its own memo, outer memo is restored
+        val outer = intermediateResults.get
+        intermediateResults.set(scala.collection.mutable.HashMap())
+        try phrp(in)
+        finally intermediateResults.set(outer)
       }
     }
   }

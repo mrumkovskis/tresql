@@ -1,3 +1,27 @@
+--- tresql 14.0 (unreleased) ---
+1. Syntax changes (breaking)
+
+  1) outer join mark "?" (left join) or "!" (inner join) must be placed after table alias.
+     If table has no alias, mark is placed after table name as before.
+
+     Example:
+
+       old: dept d/emp? e {dname, ename}
+       new: dept d/emp e? {dname, ename}
+
+       old: work[empno e!, empno_mgr! m]emp
+       new: work[empno e!, empno_mgr m!]emp
+
+       unchanged: dept/emp?[ename != null]{dept.deptno}, dept/emp!
+
+  2) variable (:x) and result (^1.x, :1(x)) are no longer accepted as table in from clause.
+     Previously such expression produced invalid sql.
+
+2. Bug fixes
+
+  1) nested parsing (e.g. from macro interpolator) no longer clears outer parser memo
+     and macro transformers.
+
 --- 2015.09.04 tresql 6.0 ---
 1. Syntax changes and improvements
 

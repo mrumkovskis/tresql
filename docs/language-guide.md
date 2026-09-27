@@ -235,7 +235,7 @@ select ename, job, dname from emp join dept on emp.deptno = dept.deptno
 
 #### Outer join.
 
-Left outer join is denoted by question mark "?" after table name being joined:
+Left outer join is denoted by question mark "?" after table alias (or after table name if there is no alias) being joined:
 
 `emp e [e.deptno = d.deptno] dept d[e.mgr = e2.mgr] emp e2? { e.ename, e.job, d.dname, e2.ename manager }`
 
@@ -265,7 +265,7 @@ select e.ename, d.dname from emp e join dept d on e.deptno = d.deptno
 
 You can also add additional condition to join shortcut syntax:
 
-`dept d/[job = 'PRESIDENT']emp? e {dname, ename}`
+`dept d/[job = 'PRESIDENT']emp e? {dname, ename}`
 
 ```sql
 select dname, ename from dept d left join emp e on d.deptno = e.deptno and job = 'PRESIDENT'
@@ -301,7 +301,7 @@ where m.ename is not null
 #### Implicit left join, explicit inner join on shortcut syntax
 
 If join column for the left table is primary key or nullable foreign key
-shortcut syntax joins are translated to sql as left joins. If inner join is required put ! mark after table name or alias. 
+shortcut syntax joins are translated to sql as left joins. If inner join is required put ! mark after table alias (or after table name if there is no alias). 
 
 Implicit outer join:
 
@@ -329,7 +329,7 @@ Explicit inner join:
 select * from dept join emp on dept.deptno = emp.deptno
 ```
 
-`work[empno e!, empno_mgr! m]emp`
+`work[empno e!, empno_mgr m!]emp`
 
 ```sql
 select * from work join emp e on empno = e.empno join emp m on empno_mgr = m.empno
