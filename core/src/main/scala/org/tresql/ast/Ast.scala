@@ -201,23 +201,23 @@ object BinOp {
     fromChain[Exp](chain, (op, lop, rop) => BinOp(op, lop, rop))
 
   def withLowestPrecedence(op: String, exp: Exp): Exp = {
-    def rg(exp: Exp): Exp = exp match {
-      case BinOp(o, l, r) if o == op => BinOp(o, rg(l),rg(r))
+    def regroup(exp: Exp): Exp = exp match {
+      case BinOp(o, l, r) if o == op => BinOp(o, regroup(l),regroup(r))
       case BinOp(o, l, r) =>
-        val (nl, nr) = (rg(l), rg(r))
+        val (nl, nr) = (regroup(l), regroup(r))
         nl match {
           case BinOp(ol, ll, rl) if ol == op => nr match {
-            case BinOp(or, lr, rr) if or == op => BinOp(ol, ll, BinOp(or, rg(BinOp(o, rl, lr)), rr))
-            case _ => BinOp(ol, ll, rg(BinOp(o, rl, nr)))
+            case BinOp(or, lr, rr) if or == op => BinOp(ol, ll, BinOp(or, regroup(BinOp(o, rl, lr)), rr))
+            case _ => BinOp(ol, ll, regroup(BinOp(o, rl, nr)))
           }
           case _ => nr match {
-            case BinOp(or, lr, rr) if or == op => BinOp(or, rg(BinOp(o, nl, lr)), rr)
+            case BinOp(or, lr, rr) if or == op => BinOp(or, regroup(BinOp(o, nl, lr)), rr)
             case _ => BinOp(o, nl, nr)
           }
         }
       case e => e
     }
-    rg(exp)
+    regroup(exp)
   }
 
   def splitBinOp(op: String, binOp: Exp): List[Exp] = {
