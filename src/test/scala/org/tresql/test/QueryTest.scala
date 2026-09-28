@@ -190,6 +190,56 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     assertResult("a" * 20 + "_" + "a" * 9)(alias("a" * 20 + " + " + "a" * 20))
   }
 
+  test("BinOp withLowestPrecedence, splitBinOp") {
+    import ast._
+    val parser = new QueryParser(tresqlResources, tresqlResources.cache)
+    def p(tresql: String) = parser.parseExp(tresql)
+    def i(name: String) = Ident(List(name))
+    def and(l: Exp, r: Exp) = BinOp("&", l, r)
+    def or(l: Exp, r: Exp) = BinOp("|", l, r)
+    def eq(l: Exp, r: Exp) = BinOp("=", l, r)
+    def lowest(exp: Exp) = BinOp.withLowestPrecedence("&", exp)
+    def split(tresql: String) = BinOp.splitBinOp("&", p(tresql))
+
+    //withLowestPrecedence
+    //non binary expression is left as is
+    assertResult(i("a"))(lowest(i("a")))
+    //expression without op is left as is
+    assertResult(or(or(i("a"), i("b")), i("c")))(lowest(or(or(i("a"), i("b")), i("c"))))
+    //expression where op is already lowest is left as is
+    assertResult(and(or(i("a"), i("b")), eq(i("c"), i("d"))))(lowest(and(or(i("a"), i("b")), eq(i("c"), i("d")))))
+    //op in left operand: (a & b) | c -> a & (b | c)
+    assertResult(and(i("a"), or(i("b"), i("c"))))(lowest(or(and(i("a"), i("b")), i("c"))))
+    //op in right operand: a | (b & c) -> (a | b) & c
+    assertResult(and(or(i("a"), i("b")), i("c")))(lowest(or(i("a"), and(i("b"), i("c")))))
+    //op in both operands: (a & b) | (c & d) -> a & ((b | c) & d)
+    assertResult(and(i("a"), and(or(i("b"), i("c")), i("d"))))(
+      lowest(or(and(i("a"), i("b")), and(i("c"), i("d")))))
+    //op nested deeper: ((a & b) = c) | d -> a & ((b = c) | d)
+    assertResult(and(i("a"), or(eq(i("b"), i("c")), i("d"))))(lowest(or(eq(and(i("a"), i("b")), i("c")), i("d"))))
+    //braces are not rearranged
+    assertResult(or(Braces(and(i("a"), i("b"))), i("c")))(lowest(or(Braces(and(i("a"), i("b"))), i("c"))))
+    //parsed expression, '&' and '|' have equal precedence and are left associative:
+    //((a = 1 | b = 2) & c = 3) | d = 4 -> (a = 1 | b = 2) & (c = 3 | d = 4)
+    assertResult(and(p("a = 1 | b = 2"), p("c = 3 | d = 4")))(lowest(p("a = 1 | b = 2 & c = 3 | d = 4")))
+
+    //splitBinOp
+    assertResult(List(i("a")))(BinOp.splitBinOp("&", i("a")))
+    assertResult(List(p("a = 1")))(split("a = 1"))
+    assertResult(List(p("a = 1"), p("b > 2"), p("c ~ 'x%'")))(split("a = 1 & b > 2 & c ~ 'x%'"))
+    assertResult(List(p("a = 1 | b = 2"), p("c = 3")))(split("a = 1 | b = 2 & c = 3"))
+    assertResult(List(p("a = 1"), p("b = 2 | c = 3")))(split("a = 1 & b = 2 | c = 3"))
+    assertResult(List(p("a = 1"), p("b = 2 | c = 3"), p("d = 4")))(split("a = 1 & b = 2 | c = 3 & d = 4"))
+    assertResult(List(p("a = 1 | b = 2"), p("c = 3 | d = 4")))(split("a = 1 | b = 2 & c = 3 | d = 4"))
+    assertResult(List(p("(a = 1 & b = 2) | c = 3"), p("d = 4")))(split("(a = 1 & b = 2) | c = 3 & d = 4"))
+    assertResult(List(p("(a = 1 & b = 2)")))(split("(a = 1 & b = 2)"))
+    assertResult(List(i("a"), or(i("b"), i("c")), i("d")))(
+      BinOp.splitBinOp("&", or(and(i("a"), i("b")), and(i("c"), i("d")))))
+    //other operator
+    assertResult(List(and(i("a"), i("b")), and(i("c"), i("d"))))(
+      BinOp.splitBinOp("|", or(and(i("a"), i("b")), and(i("c"), i("d")))))
+  }
+
   test("compiler") {
     val testRes = tresqlResources.withMetadata(
       new metadata.JDBCMetadata {
