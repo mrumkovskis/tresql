@@ -13,6 +13,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
 
   protected def error(msg: String, cause: Exception = null) = throw new CompilerException(msg, cause = cause)
 
+
   trait Scope {
     def tableNames: List[String]
     def table(table: String): Option[Table]
@@ -366,7 +367,7 @@ trait Compiler extends QueryParsers { thisCompiler =>
             case c => tr_with_c(nctx, QueryCtx, c) //child expression
           }.asInstanceOf[List[ColDef]]
           else Nil
-        val filter = if (dml.filter != null) tr_with_c(nctx, BodyCtx, dml.filter).asInstanceOf[Arr] else null
+        val filter = if (dml.filter != null) tr_with_c(nctx, BodyCtx, dml.filter) else null
         val vals = if (dml.vals != null) tr_with_c(nctx, BodyCtx, dml.vals) else null
         val retCols = dml.returning.map(buildCols(nctx, _))
         val dmlDef = dml match {

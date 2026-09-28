@@ -65,23 +65,23 @@ public class TresqlJavaApiTest {
         }
 
         println("");
-        for (Row r : Query.select("dept[60]{deptno, dname}", resources)) {
+        for (Row r : Query.select("dept[deptno = 60]{deptno, dname}", resources)) {
             println("" + r.i(0) + ": " + r.s(1));
         }
-        Query.execute("dept[60]{dname} = ['POLAR FOX']", resources);
-        for (Row r : Query.select("dept[60]{deptno, dname}", resources)) {
+        Query.execute("dept[deptno = 60]{dname} = ['POLAR FOX']", resources);
+        for (Row r : Query.select("dept[deptno = 60]{deptno, dname}", resources)) {
             println("" + r.i("deptno") + ": " + r.s("dname"));
         }
 
         println("");
-        for (Row r : Query.select("dept[60]{deptno, dname}", resources)) {
+        for (Row r : Query.select("dept[deptno = 60]{deptno, dname}", resources)) {
             java.util.Map<String, Object> map = r.toMap();
             println("toMap() - " + map.get("deptno") + ": "
                     + map.get("dname"));
         }
 
         println("");
-        Result res = Query.select("dept[60]{deptno, dname}", resources);
+        Result res = Query.select("dept[deptno = 60]{deptno, dname}", resources);
         println("columns(0).name, index: " + res.column(0).name + ", "
                 + res.column(0).index);
         println("columns(1).name, index: " + res.columns().get(1).name + ", "

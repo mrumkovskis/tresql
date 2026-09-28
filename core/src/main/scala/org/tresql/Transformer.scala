@@ -42,9 +42,9 @@ trait Transformer { this: Query =>
       case UnExpr(o, op) => UnExpr(o, cf(op))
       case CastExpr(e, t) => CastExpr(cf(e), t)
       case u: UpdateExpr => new UpdateExpr(cf(u.table).asInstanceOf[IdentExpr], u.alias,
-        u.filter map cf, u.cols map cf, cf(u.vals), (u.returning map cf).asInstanceOf[Option[ColsExpr]])
+        cf(u.filter), u.cols map cf, cf(u.vals), (u.returning map cf).asInstanceOf[Option[ColsExpr]])
       case d: DeleteExpr => //put delete at the end since it is superclass of insert and update
-        DeleteExpr(cf(d.table).asInstanceOf[IdentExpr], d.alias, d.filter map cf, cf(d.using),
+        DeleteExpr(cf(d.table).asInstanceOf[IdentExpr], d.alias, cf(d.filter), cf(d.using),
           (d.returning map cf).asInstanceOf[Option[ColsExpr]])
       case ValuesExpr(vals) => ValuesExpr(vals map cf)
       case vfs: ValuesFromSelectExpr => vfs.copy(select = cf(vfs.select).asInstanceOf[SelectExpr])

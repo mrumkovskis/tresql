@@ -478,16 +478,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         case TableJoin(true, null, _, dj) => defaultJoin(dj)
         //default join with additional expression
         case TableJoin(true, j: Expr, _, dj) =>
-          defaultJoin(dj) + " and " + (j match {
-          //primary key equals search
-          case _: ConstExpr | _: VarExpr | _: ResExpr => joinTable.aliasOrName + "." +
-            env.table(joinTable.name).key.cols(0) + " = " + j.sql
-          //primary key in search
-          case ArrExpr(l) => joinTable.aliasOrName + "." +
-            env.table(joinTable.name).key.cols(0) + (l map (_.sql) mkString (" in(", ", ", ")"))
-          //normal join expression
-          case e => (if (e.exprType == classOf[SelectExpr]) "exists " else "") + e.sql
-        })
+          defaultJoin(dj) + " and " + (if (j.exprType == classOf[SelectExpr]) "exists " else "") + j.sql
         case x => error(s"Unrecognized join condition: $x")
       }
     }
@@ -668,7 +659,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       case _ => ""
     }
   }
-  class UpdateExpr(table: IdentExpr, alias: String, filter: List[Expr],
+  class UpdateExpr(table: IdentExpr, alias: String, filter: Expr,
       val cols: List[Expr], val vals: Expr, returning: Option[ColsExpr])
     extends DeleteExpr(table, alias, filter, null, returning) {
     override def apply() = {
@@ -676,7 +667,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         //execute only child updates since this one does not have any column
         case Nil =>
           //execute any BaseVarExpr in filter to give chance to update currId for corresponding children IdRefExpr have values
-          if (filter != null) filter foreach (transform (_, {case id: BaseVarExpr => id(); id}))
+          if (filter != null) transform(filter, {case id: BaseVarExpr => id(); id})
           new UpdateResult(children = executeChildUpdates)
         case _ => super.apply() match { case r: DMLResult => new UpdateResult(r) case r => r }
       }
@@ -702,7 +693,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         }
       } + returningSql
   }
-  case class DeleteExpr(table: IdentExpr, alias: String, filter: List[Expr],
+  case class DeleteExpr(table: IdentExpr, alias: String, filter: Expr,
                         using: Expr, returning: Option[ColsExpr])
     extends BaseExpr {
     override def apply() =
@@ -725,7 +716,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         val usql = using.sql
         if (usql.isEmpty) "" else " using " + usql
       }) + {
-        val filterSql = if (filter == null  || filter.isEmpty) null else where
+        val filterSql = if (filter == null) null else where
         val joinWithDeleteTableSql = using match {
           case u: ValuesFromSelectExpr => u.joinToBaseTableSql
           case _ => None
@@ -737,15 +728,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
         }
       } + returningSql
     override def defaultSQL = _sql
-    def where = filter match {
-      case (c @ ConstExpr(x)) :: Nil => Option(alias).getOrElse(table.sql) + "." +
-        env.table(table.sql).key.cols(0) + " = " + c.sql
-      case (v: VarExpr) :: Nil => Option(alias).getOrElse(table.sql) + "." +
-        env.table(table.sql).key.cols.head + " = " + v.sql
-      case f :: Nil => (if (f.exprType == classOf[SelectExpr]) "exists " else "") + f.sql
-      case l => Option(alias).getOrElse(table.sql) + "." + env.table(table.sql).key.cols(0) + " in(" +
-        (l map { _.sql }).mkString(",") + ")"
-    }
+    def where = (if (filter.exprType == classOf[SelectExpr]) "exists " else "") + filter.sql
     def returningSql =
       returning.map(rc => s" returning ${rc.sql}").getOrElse("")
   }
@@ -1005,10 +988,10 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       buildInsertConflict(insertConflict), returning.map(buildCols(_, ctx))
     )
   }
-  private def buildUpdate(table: Ident, alias: String, filter: Arr, cols: List[Col], vals: Exp,
+  private def buildUpdate(table: Ident, alias: String, filter: Exp, cols: List[Col], vals: Exp,
                           returning: Option[Cols], ctx: Ctx) = {
     //exprs must be built in order of tresql clauses according to sequence of parameters to preserve builder state
-    val filterExpr = if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null
+    val filterExpr = buildDmlFilter(filter)
     val colExprs = cols match {
       //get column clause from metadata
       case Nil => this.table(table).cols.map(c => IdentExpr(List(c.name)))
@@ -1042,19 +1025,29 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     val filteredColsExprs =
       if (idxs.isEmpty) colExprs
       else colExprs.zipWithIndex.collect { case (e, i) if !idxs.contains(i) => e }
+    // update without columns executes only child updates, empty filter is allowed
+    if (filteredColsExprs.nonEmpty) checkDmlFilterNotEliminated(filter, filterExpr)
     new UpdateExpr(IdentExpr(table.ident), alias, filterExpr, filteredColsExprs, valExprs,
       returning.map(buildCols(_, ctx))
     )
   }
 
-  private def buildDelete(table: Ident, alias: String, filter: Arr, `using`: Exp, returning: Option[Cols],
+  private def buildDelete(table: Ident, alias: String, filter: Exp, `using`: Exp, returning: Option[Cols],
                           ctx: Ctx) = {
-    DeleteExpr(IdentExpr(table.ident), alias,
-      if (filter != null) filter.elements map { buildInternal(_, WHERE_CTX) } else null,
+    val filterExpr = buildDmlFilter(filter)
+    checkDmlFilterNotEliminated(filter, filterExpr)
+    DeleteExpr(IdentExpr(table.ident), alias, filterExpr,
       buildInternal(`using`, VALUES_CTX),
       returning.map(buildCols(_, ctx))
     )
   }
+
+  private def buildDmlFilter(filter: Exp): Expr =
+    if (filter == null) null else buildInternal(filter, WHERE_CTX)
+  /** Prevents update, delete of all rows if filter is eliminated, i.e. consists of absent optional variables */
+  private def checkDmlFilterNotEliminated(filter: Exp, filterExpr: Expr): Unit =
+    if (filter != null && filterExpr == null)
+      error(s"Filter [${filter.tresql}] is empty (optional variables absent), statement would affect all rows")
 
   private def table(t: Ident) = env.table(t.ident.mkString("."))
 
@@ -1111,7 +1104,7 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
     def buildSelect(q: ast.Query, ctx: Ctx) = {
       val tablesAndAliases = buildTables(q.tables)
       if (ctx == QUERY_CTX && this.tableDefs == Nil) this.tableDefs = defs(tablesAndAliases._1)
-      val filter = if (q.filter == null) null else buildFilter(tablesAndAliases._1.last, q.filter.filters)
+      val filter = if (q.filter == null) null else buildFilter(q.filter.filters)
       val cols = buildCols(q.cols, ctx)
       val distinct =
         if (q.cols != null) buildInternal(q.cols.distinct, COL_CTX).asInstanceOf[DistinctExpr] else null
@@ -1232,22 +1225,11 @@ trait QueryBuilder extends EnvProvider with org.tresql.Transformer with Typer { 
       case Obj(b @ Braces(_), _, _, _, _) => buildInternal(b, parseCtx)
       case o => error("unsupported expression at this place: " + o)
     }
-    def buildFilter(pkTable: Table, filterList: List[Arr]): Expr = {
-      def transformExpr: PartialFunction[Expr, Expr] = {
-        case ArrExpr(List(b @ ConstExpr(true | false))) => b
-        case a @ ArrExpr(List(_: ConstExpr | _: VarExpr | _: ResExpr)) => BinExpr("=",
-          IdentExpr(List(pkTable.aliasOrName, env.tableOption(pkTable.name)
-            .getOrElse(error("Table not found in primary key search: " + pkTable.name))
-            .key.cols.head)), a.elements.head)
-        case a: ArrExpr if a.elements.size > 1 => InExpr(IdentExpr(List(pkTable.aliasOrName,
-          env.table(pkTable.name).key.cols.head)), a.elements, false)
-        case ArrExpr(List(f)) => f
-        case null => null
-      }
+    def buildFilter(filterList: List[Exp]): Expr = {
       filterList match {
-        case f :: Nil => transformExpr(buildInternal(f, WHERE_CTX))
+        case f :: Nil => buildInternal(f, WHERE_CTX)
         case l =>
-          val bfl: List[Expr] = l.map(f => transformExpr(buildInternal(f, WHERE_CTX)) match {
+          val bfl: List[Expr] = l.map(f => buildInternal(f, WHERE_CTX) match {
             case null => null case b: BracesExpr => b case e => BracesExpr(e)
           })
           if (bfl.nonEmpty) {

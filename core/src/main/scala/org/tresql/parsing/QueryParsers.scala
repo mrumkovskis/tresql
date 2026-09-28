@@ -117,13 +117,9 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   /* function(<#> <arglist> <order by>)<[filter]> */
   def function: MemParser[Exp] = (qualifiedIdent /* name */ <~ "(") ~
     opt("#") /* distinct */ ~ repsep(expr, ",") /* arglist */ ~
-    ")" ~ opt(order) /* aggregate order */ ~ opt(filter) /* aggregate filter */ ^?({
-    case Ident(n) ~ d ~ p ~ _ ~ o ~ f if f.map(_.elements.size).getOrElse(0) <= 1 =>
-      Fun(n.mkString("."), p, d.isDefined, o, f.flatMap(_.elements.headOption))
-  }, {
-    case _ ~ _ ~ _ ~ _ ~ _ ~ f => s"Aggregate function filter must contain only one elements, instead of ${
-      f.map(_.elements.size).getOrElse(0)}"
-  }) ^^ mayBeCallMacro named "function"
+    ")" ~ opt(order) /* aggregate order */ ~ opt(filter) /* aggregate filter */ ^^ {
+    case Ident(n) ~ d ~ p ~ _ ~ o ~ f => Fun(n.mkString("."), p, d.isDefined, o, f)
+  } ^^ mayBeCallMacro named "function"
   def array: MemParser[Arr] = "[" ~> repsep(expr, ",") <~ "]" ^^ Arr named "array"
 
   //query parsers
@@ -136,7 +132,7 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       case None ~ "/" => DefaultJoin
       case a: Exp => Join(default = false, a, noJoin = false)
     } named "join"
-  def filter: MemParser[Arr] = array named "filter"
+  def filter: MemParser[Exp] = "[" ~> expr <~ "]" named "filter"
   def filters: MemParser[Filters] = rep(filter) ^^ Filters named "filters"
   /** objContent is meant to be table, column or division operation operand */
   private def objContent: MemParser[Exp] =
@@ -377,15 +373,11 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
       case x => sys.error(s"Unexpected insert parse result: $x")
     } named "insert"
   private def insertConflict: MemParser[InsertConflict] = {
-    def processFilter(f: Option[Arr]) = f.collect {
-      case x if x.elements.size == 1 => x
-      case x => sys.error(s"Invalid insert conflict target filter: $x")
-    }.orNull
     def insertConflictTarget: MemParser[(String, List[TableColDef], InsertConflictTarget)] =
       opt(alias) ~ opt("(" ~> exprList <~ ")") ~ opt(filter) ^^ {
         case vd ~ t ~ tf =>
           val target = InsertConflictTarget(t.map { case a: Arr => a.elements case e => List(e) }.getOrElse(Nil),
-            processFilter(tf))
+            tf.orNull)
           vd.map(d => (d._1, d._2.getOrElse(Nil), target)).getOrElse((null, Nil, target))
       } named "insert-conflict-target"
     def insertConflictAction: MemParser[InsertConflictAction] =
@@ -479,6 +471,8 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
   //END UPDATE parsers
 
   def delete: MemParser[Delete] = {
+    //empty filter deletes all rows and is represented as null
+    def deleteFilter: MemParser[Exp] = ("[" ~ "]" ^^ (_ => null: Exp)) | filter
     def valsFromSel(tables: Any) = tables match {
       case t: List[Obj@unchecked] =>
         if (t.tail.nonEmpty)
@@ -491,11 +485,11 @@ trait QueryParsers extends JavaTokenParsers with MemParsers with ExpTransformer 
           )
         else null
     }
-    (("-" ~> optDb ~ objs ~ filter) | ((objs <~ "-") ~ filter)) ~ opt(columns) ^? ({
-      case (db: Option[Db@unchecked]) ~ (tables @ Obj(delTable: Ident, alias, _, _, _) :: _) ~ (f: Arr) ~
+    (("-" ~> optDb ~ objs ~ deleteFilter) | ((objs <~ "-") ~ deleteFilter)) ~ opt(columns) ^? ({
+      case (db: Option[Db@unchecked]) ~ (tables @ Obj(delTable: Ident, alias, _, _, _) :: _) ~ f ~
         (maybeCols: Option[Cols]) =>
         Delete(delTable, alias, f, valsFromSel(tables), maybeCols, db)
-      case (tables @ Obj(delTable: Ident, alias, _, _, _) :: _) ~ (f: Arr) ~ (maybeCols: Option[Cols]) =>
+      case (tables @ Obj(delTable: Ident, alias, _, _, _) :: _) ~ f ~ (maybeCols: Option[Cols]) =>
         Delete(delTable, alias, f, valsFromSel(tables), maybeCols, None)
     }, {
       case (objs: List[Obj@unchecked]) ~ _ ~ _ => "Delete tables clause must as the first element have " +

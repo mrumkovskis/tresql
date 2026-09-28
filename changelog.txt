@@ -17,7 +17,47 @@
   2) variable (:x) and result (^1.x, :1(x)) are no longer accepted as table in from clause.
      Previously such expression produced invalid sql.
 
-2. Bug fixes
+  3) primary key search shortcut is removed from table filter and default join expression since
+     it is ambiguous with boolean expression. Applies to select, update and delete filters and
+     default join expression (/[...] and [...]/).
+     Filter and join expression is always single boolean expression, use explicit primary key
+     comparison instead. Filter of several expressions (dept[10, 20]) is a parse error.
+     Filter or join expression consisting of constant or variable is treated as boolean expression,
+     so non boolean value (dept[10], dept[?] with bind value 10) is rejected by database.
+
+     Example:
+
+       old: dept[10] {dname}          new: dept[deptno = 10] {dname}
+       old: dept[10, 20] {dname}      new: dept[deptno in (10, 20)] {dname}
+       old: dept[?] {dname}           new: dept[deptno = ?] {dname}
+       old: dept[:id?] {dname}        new: dept[deptno = :id?] {dname}
+       old: =emp[?] {ename} [?]       new: =emp[empno = ?] {ename} [?]
+       old: salgrade - [?]            new: -salgrade[grade = ?]
+       old: emp/[?]dept               new: emp/[emp.empno = ?]dept
+       old: car[1111]/dept            new: car[car.nr = 1111]/dept
+
+       NOTE: default join shortcut compared primary key of the left table (emp and car in examples above)
+
+       NOTE: filter with optional part like dept[10 & dname = :n?] previously when :n was absent
+       resolved to primary key search, now it must be written as dept[deptno = 10 & dname = :n?]
+
+       NOTE: deprecated delete syntax with several filter expressions (dept - [10, 20]) is now parsed
+       as minus operation, use -dept[deptno in (10, 20)] instead
+
+       unchanged: value clauses like =dept[deptno = :id] {loc} [:loc]
+
+     Update or delete filter consisting only of absent optional variables (=dept[deptno = :id?] {...})
+     raises an error so that statement does not affect all rows.
+
+2. AST changes (breaking)
+
+  1) filter AST node is expression instead of array since filter always consists of single expression:
+     Filters(filters: List[Arr]) -> Filters(filters: List[Exp]),
+     Update.filter, Delete.filter, DMLExp.filter: Arr -> Exp.
+     Empty delete filter (-dept[]) is represented as null filter.
+     Serialized AST of previous version is not compatible.
+
+3. Bug fixes
 
   1) nested parsing (e.g. from macro interpolator) no longer clears outer parser memo
      and macro transformers.

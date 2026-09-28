@@ -327,12 +327,12 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     intercept[CompilerException](compiler.compile("dept/emp[l = 'x']{loc l}(l)^(count(loc) > 1)#(l || 'x')"))
     intercept[CompilerException](compiler.compile("dept/emp{loc l}(l)^(count(l) > 1)#(l || 'x')"))
     intercept[CompilerException](compiler.compile("dept d{deptno dn, dname || ' ' || loc}#(~(dept[dname = dn]{deptno}))"))
-    intercept[CompilerException](compiler.compile("dept d[d.dname in (d[1]{dname})]"))
+    intercept[CompilerException](compiler.compile("dept d[d.dname in (d{dname})]"))
     intercept[CompilerException](compiler.compile("(dummy{dummy} + dummy{dummy d}) d{d}"))
     intercept[CompilerException](compiler.compile("dept{group_concat(dname)#(dnamez)}"))
     intercept[CompilerException](compiler.compile("dept{group_concat(dname)#(dname)[dept{deptnox} < 30]}"))
     intercept[CompilerException](compiler.compile("dept{group_concat(dname)#(dname)[deptno{deptno} < 30]}"))
-    intercept[CompilerException](compiler.compile("{dept[10]{dnamez}}"))
+    intercept[CompilerException](compiler.compile("{dept[deptno = 10]{dnamez}}"))
     intercept[CompilerException](compiler.compile("b(# y) {a{x}}, a(# x) {dummy{dummy}} b{y}"))
     intercept[CompilerException](compiler.compile("i(# ename){emp e[empno = '']{*}} i{*}"))
     intercept[CompilerException](compiler.compile("d(# id) { dummy[dummy =0] }, u(# id) {dummy[dummy =2]}, upd(#) {dummy[dummy in (u.id)]{dummy} = [u.id + 1] }, remove_from(# ) { dummy - [ dummy in (d{id}) ] } remove_from{dummy}"))
@@ -369,6 +369,10 @@ class QueryTest extends AnyFunSuite with BeforeAndAfterAll {
     intercept[CompilerException](compiler.compile("emp[ename = 'BLAKE']{ ename, |contact_db:[id = emp.empno]contact{eml} email}"))
     intercept[CompilerException](compiler.compile("emp[ename = 'BLAKE']{ ename, |contact:[id = emp.empno]contact{eml} email}"))
     intercept[CompilerException](compiler.compile("+contact_db:contact{name}[:n] {namez}"))
+
+    //filter must contain single expression
+    intercept[CompilerException](compiler.compile("dept[10, 20] {dname}"))
+    intercept[CompilerException](compiler.compile("dept[?, ?] {dname}"))
 
     //function only found in child metadata
     intercept[CompilerException](compiler.compile("emp { instr (ename, job) }"))

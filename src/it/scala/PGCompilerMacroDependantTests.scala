@@ -16,23 +16,23 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
   override def api(implicit resources: Resources) = {
     println("\n---------------- Test API ----------------------\n")
     assertResult(10)(Query.head[Int]("dept{deptno}#(deptno)"))
-    assertResult(10)(Query.unique[Int]("dept[10]{deptno}#(deptno)"))
+    assertResult(10)(Query.unique[Int]("dept[deptno = 10]{deptno}#(deptno)"))
     assertResult(Some(10))(Query.headOption[Int]("dept{deptno}#(deptno)"))
     intercept[Exception](Query.unique[Int]("dept{deptno}#(deptno)"))
-    intercept[Exception](Query.unique[Int]("dept[100]{deptno}#(deptno)"))
-    intercept[Exception](Query.head[Int]("dept[100]{deptno}#(deptno)"))
-    assertResult(None)(Query.headOption[Int]("dept[100]{deptno}#(deptno)"))
-    assertResult("ACCOUNTING")(Query.unique[String]("dept[10]{dname}#(deptno)"))
+    intercept[Exception](Query.unique[Int]("dept[deptno = 100]{deptno}#(deptno)"))
+    intercept[Exception](Query.head[Int]("dept[deptno = 100]{deptno}#(deptno)"))
+    assertResult(None)(Query.headOption[Int]("dept[deptno = 100]{deptno}#(deptno)"))
+    assertResult("ACCOUNTING")(Query.unique[String]("dept[deptno = 10]{dname}#(deptno)"))
     assertResult((10, "ACCOUNTING", "NEW YORK"))(
       Query("dept{deptno, dname, loc}#(1)").toList.map(r => (r.l.deptno, r.s.dname, r.s.loc)).head)
     //option binding
     assertResult("ACCOUNTING")(Query.unique[String]("dept[deptno in ?]{dname}#(deptno)", Some(10)))
     assertResult("1981-11-17")(Query.unique[java.sql.Date]("emp[sal = 5000]{hiredate}").toString)
-    assertResult(BigDecimal(10))(Query.unique[BigDecimal]("dept[10]{deptno}#(deptno)"))
+    assertResult(BigDecimal(10))(Query.unique[BigDecimal]("dept[deptno = 10]{deptno}#(deptno)"))
     assertResult(5)(Query.unique[Int]("inc_val_5(?)", 0))
     assertResult(20)(Query.unique[Int]("inc_val_5(inc_val_5(?))", 10))
     assertResult(15)(Query.unique[Long]("inc_val_5(inc_val_5(?))", 5))
-    intercept[Exception](Query.head[Int]("emp[?]{empno}", 'z'))
+    intercept[Exception](Query.head[Int]("emp[empno = ?]{empno}", 'z'))
     //result closing
     intercept[SQLException] {
       val res = Query("emp")
@@ -47,8 +47,8 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
       ex().asInstanceOf[Result[_]].toList
     }
     //bind variables absence error message
-    assert(intercept[MissingBindVariableException](Query("emp[?]")).name === "1")
-    assert(intercept[MissingBindVariableException](Query("emp[:nr]")).name === "nr")
+    assert(intercept[MissingBindVariableException](Query("emp[empno = ?]")).name === "1")
+    assert(intercept[MissingBindVariableException](Query("emp[empno = :nr]")).name === "nr")
 
     //TODO
     //var op = OutPar()
@@ -59,37 +59,37 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
     assertResult(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)", 10, "ACC%"))
     assertResult(10)(Query.unique[Long]("dept[(deptno = ? | dname ~ ?)]{deptno} @(0 1)",
         Map("1" -> 10, "2" -> "ACC%")))
-    assertResult(None)(Query.headOption[Int]("dept[?]", -1))
+    assertResult(None)(Query.headOption[Int]("dept[deptno = ?]", -1))
     //dynamic tests
-    assertResult(1900)(Query("salgrade[1] {hisal, losal}").foldLeft(0)((x, r) => x +
+    assertResult(1900)(Query("salgrade[grade = 1] {hisal, losal}").foldLeft(0)((x, r) => x +
         r.i.hisal + r.i.losal))
-    assertResult(1900)(Query("salgrade[1] {hisal, losal}").foldLeft(0L)((x, r) => x +
+    assertResult(1900)(Query("salgrade[grade = 1] {hisal, losal}").foldLeft(0L)((x, r) => x +
         r.l.hisal + r.l.losal))
-    assertResult(1900.00)(Query("salgrade[1] {hisal, losal}").foldLeft(0D)((x, r) => x +
+    assertResult(1900.00)(Query("salgrade[grade = 1] {hisal, losal}").foldLeft(0D)((x, r) => x +
         r.dbl.hisal + r.dbl.losal))
-    assertResult(1900)(Query("salgrade[1] {hisal, losal}").foldLeft(BigDecimal(0))((x, r) => x +
+    assertResult(1900)(Query("salgrade[grade = 1] {hisal, losal}").foldLeft(BigDecimal(0))((x, r) => x +
         r.bd.hisal + r.bd.losal))
-    assertResult("KING PRESIDENT")(Query("emp[7839] {ename, job}").foldLeft("")((x, r) =>
+    assertResult("KING PRESIDENT")(Query("emp[empno = 7839] {ename, job}").foldLeft("")((x, r) =>
         r.s.ename + " " + r.s.job))
     assertResult("1982-12-09")(Query("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) =>
         r.d.hiredate.toString))
     assertResult("1982-12-09 00:00:00.0")(Query("emp[ename ~~ 'scott'] {hiredate}").foldLeft("")((x, r) =>
         r.t.hiredate.toString))
-    assertResult("KING PRESIDENT")(Query("emp[7839] {ename, job}").foldLeft("")((_, r) =>
+    assertResult("KING PRESIDENT")(Query("emp[empno = 7839] {ename, job}").foldLeft("")((_, r) =>
         r.ename.toString + " " + r.job))
     //typed tests
     assertResult(("MILLER", BigDecimal(2300.35)))(Query.head[(String, BigDecimal)]("emp[hiredate = '1982-01-23']{ename, sal}"))
     assertResult(List(("CLARK", "ACCOUNTING", 2450.00), ("KING", "ACCOUNTING", 5000.00),
-      ("MILLER", "ACCOUNTING", 2300.35)))(Query.list[(String, String, Double)]("emp/dept[?]{ename, dname, sal}#(1)", 10))
+      ("MILLER", "ACCOUNTING", 2300.35)))(Query.list[(String, String, Double)]("emp/dept[dept.deptno = ?]{ename, dname, sal}#(1)", 10))
     assertResult(List(("CLARK", "ACCOUNTING", 2450.00, "NEW YORK"), ("KING", "ACCOUNTING", 5000.00, "NEW YORK"),
       ("MILLER", "ACCOUNTING", 2300.35, "NEW YORK"))) {
-      Query.list[String, String, Double, String]("emp/dept[?]{ename, dname, sal, loc}#(1)", 10)
+      Query.list[String, String, Double, String]("emp/dept[dept.deptno = ?]{ename, dname, sal, loc}#(1)", 10)
     }
     assertResult(List("ACCOUNTING", "OPERATIONS", "RESEARCH", "SALES"))(Query.list[String]("dept{dname}#(1)"))
     assertResult(List((10,"ACCOUNTING",List((7782,"CLARK",List()), (7839,"KING",List((Date.valueOf("2012-06-06"),3),
         (Date.valueOf("2012-06-07"),4))), (7934, "MILLER", List())),List("PORCHE"))))(
             Query.list[Int, String, List[(Int, String, List[(Date, Int)])], List[String]] {
-      "dept[10]{deptno, dname, |emp[deptno = :1(deptno)]{empno, ename, |[empno]work{wdate, hours}#(1,2) work}#(1) emps," +
+      "dept[deptno = 10]{deptno, dname, |emp[deptno = :1(deptno)]{empno, ename, |[empno]work{wdate, hours}#(1,2) work}#(1) emps," +
       " |car[deptnr = :1(deptno)]{name}#(1) cars}"})
     assertResult(List((10, "ACCOUNTING"), (20, "RESEARCH")))(
         Query.list[Int, String]("dept[deptno = ? | deptno = ?]#(1)", 10, 20))
@@ -113,18 +113,18 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
         Query.list[Tyre]("tyres {carnr nr, brand} #(1, 2)"))
     //column alias test
     assertResult(List(("ACCOUNTING,CLARK", -2450.00), ("ACCOUNTING,KING", -5000.00), ("ACCOUNTING,MILLER", -2300.35))) {
-      Query("emp/dept[10] {dname || ',' || ename name, -sal salary}#(1)") map (r=> (r.name, r.dbl.salary)) toList
+      Query("emp/dept[dept.deptno = 10] {dname || ',' || ename name, -sal salary}#(1)") map (r=> (r.name, r.dbl.salary)) toList
     }
     assertResult(List(0.00, 0.00, 0.00)) {
-      Query("emp/dept[10] {sal + -sal salary}#(1)") map (_.salary) toList
+      Query("emp/dept[dept.deptno = 10] {sal + -sal salary}#(1)") map (_.salary) toList
     }
     assertResult(List(0.00, 0.00, 0.00)) {
-      Query("emp/dept[10] {(sal + -sal) salary}#(1)") map (_.salary) toList
+      Query("emp/dept[dept.deptno = 10] {(sal + -sal) salary}#(1)") map (_.salary) toList
     }
 
     assertResult(List(Map("dname" -> "ACCOUNTING", "emps" -> List(Map("ename" -> "CLARK"),
         Map("ename" -> "KING"), Map("ename" -> "MILLER"))))) {
-      Query.toListOfMaps("dept[10]{dname, |emp{ename}#(1) emps}")
+      Query.toListOfMaps("dept[deptno = 10]{dname, |emp{ename}#(1) emps}")
     }
 
     //bind variables test
@@ -186,7 +186,7 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
     assertResult(new UpdateResult(count = Some(1), children = List(
       (null, new DeleteResult(count = Some(2))),
       ("emps", List(new InsertResult(count = Some(1)), new InsertResult(count = Some(1)))))))(Query(
-      """dept[:deptno]{deptno, dname, loc,
+      """dept[deptno = :deptno]{deptno, dname, loc,
                -emp[deptno = :deptno],
                +emp {empno, ename, deptno} [:empno, :ename, :deptno] emps} =
         [:deptno, :dname, :loc]""",
@@ -194,7 +194,7 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
         "emps" -> List(Map("empno" -> 1111, "ename" -> "BROWN", "deptno" -> 50),
           Map("empno" -> 2222, "ename" -> "CHRIS", "deptno" -> 50)))))
     assertResult(List(new DeleteResult(count = Some(2)), new DeleteResult(count = Some(1))))(
-      Query("emp - [deptno = 50], dept - [50]"))
+      Query("emp - [deptno = 50], dept - [deptno = 50]"))
     assertResult(new InsertResult(count = Some(1), children = List(
       ("emps", List(new InsertResult(count = Some(1), id = Some(10002)),
         new InsertResult(count = Some(1), id = Some(10003))))), id = Some(10001)))(Query(
@@ -204,11 +204,11 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
         Map("ename" -> "SMITH"), Map("ename" -> "LEWIS")))))
 
     //tresql string interpolation tests
-    assertResult("CLARK, KING, MILLER")(tresql"dept[10] {dname, |emp {ename}#(1) emps}"
+    assertResult("CLARK, KING, MILLER")(tresql"dept[deptno = 10] {dname, |emp {ename}#(1) emps}"
         .head.emps.map(_.ename).mkString(", "))
     assertResult((List(Vector(0), Vector(10)),List(Vector(0)))){
       val (a, b) = ("acc%", -1)
-      tresql"/(dept[dname ~~ $a]{deptno} + dummy) a#(1), salgrade[$b] {grade} + dummy" match {
+      tresql"/(dept[dname ~~ $a]{deptno} + dummy) a#(1), salgrade[grade = $b] {grade} + dummy" match {
         case (r1, r2) => r1.toListOfVectors -> r2.toListOfVectors
       }
     }
@@ -976,8 +976,8 @@ class PGCompilerMacroDependantTests extends AnyFunSuite with PGCompilerMacroDepe
 //    assertResult(new UpdateResult(Some(1)))(ORT.update("dept", obj)())
     assertResult(new UpdateResult(Some(0)))(ORT.update("dept", obj))
 
-//    assertResult(List("DEVOP"))(tresql"dept[10079]{dname}".map(_.dname).toList)
-    assertResult(List("ATTORNEY"))(tresql"dept[10042]{dname}".map(_.dname).toList)
+//    assertResult(List("DEVOP"))(tresql"dept[deptno = 10079]{dname}".map(_.dname).toList)
+    assertResult(List("ATTORNEY"))(tresql"dept[deptno = 10042]{dname}".map(_.dname).toList)
 
     //primary key component not specified error must be thrown
     obj = Map("car_nr" -> "1111")

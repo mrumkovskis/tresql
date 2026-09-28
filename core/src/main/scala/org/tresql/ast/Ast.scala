@@ -11,10 +11,13 @@ private[tresql] object QueryParsers {
     case x => x.toString
   }
 
+  /** Filter in brackets or empty string if filter is null */
+  def filterTresql(filter: Exp): String = if (filter != null) "[" + filter.tresql + "]" else ""
+
   def formatType(typ: String): String =
     if (QueryParsers.simple_ident_regex.pattern.matcher(typ).matches) typ else "'" + typ + "'"}
 
-import QueryParsers.{any2tresql, formatType}
+import QueryParsers.{any2tresql, filterTresql, formatType}
 import org.tresql.metadata.Procedure
 import org.tresql.parsing.ExpTransformer
 
@@ -28,7 +31,8 @@ sealed trait DMLExp extends Exp {
   def table: Ident
   def alias: String
   def cols: List[Col]
-  def filter: Arr
+  /** filter expression, null means no filter */
+  def filter: Exp
   def vals: Exp
   def returning: Option[Cols]
   def db: Option[Db]
@@ -92,7 +96,7 @@ case class Fun(
   def tresql = name + "(" + (if (distinct) "# " else "") +
     ((parameters map any2tresql) mkString ", ") +
     s""")${aggregateOrder.map(o => " " + o.tresql).mkString}${
-      aggregateWhere.map(e => s"[${e.tresql}]").mkString}"""
+      aggregateWhere.map(filterTresql).mkString}"""
 }
 
 case class TableColDef(name: String, typ: Option[String])
@@ -336,23 +340,22 @@ case class InsertConflict(
 }
 case class InsertConflictTarget(target: List[Exp] = Nil, filter: Exp = null) extends Exp {
   def tresql = (if(target != null && target.nonEmpty) "(" + target.map(_.tresql).mkString(", ") + ")" else "") +
-    (if (filter != null) filter.tresql else "")
+    filterTresql(filter)
 }
 case class InsertConflictAction(cols: List[Col], filter: Exp = null, vals: Exp) extends Exp {
-  def tresql = " =" + (if (filter != null ) filter.tresql else "") +
+  def tresql = " =" + filterTresql(filter) +
     cols.map(_.tresql).mkString("{", ",", "}") + (if (vals == null) "" else " " + vals.tresql)
 }
-case class Update(table: Ident = null, alias: String = null, filter: Arr = null, cols: List[Col], vals: Exp = null,
+case class Update(table: Ident = null, alias: String = null, filter: Exp = null, cols: List[Col], vals: Exp = null,
                   returning: Option[Cols], db: Option[Db])
   extends DMLExp {
   def tresql = {
-    val filterTresql = if (filter != null) filter.tresql else ""
     val colsTresql = if (cols.nonEmpty) cols.map(_.tresql).mkString("{", ",", "}") else ""
     val valsTresql = if (vals != null) any2tresql(vals) else ""
     "=" + db.map(_.tresql).mkString + table.tresql + Option(alias).map(" " + _).getOrElse("") +
       (vals match {
-        case _: ValuesFromSelect => valsTresql + filterTresql + colsTresql
-        case _ => filterTresql + colsTresql + valsTresql
+        case _: ValuesFromSelect => valsTresql + filterTresql(filter) + colsTresql
+        case _ => filterTresql(filter) + colsTresql + valsTresql
       }) +
       returning.map(_.tresql).getOrElse("")
   }
@@ -362,7 +365,8 @@ case class ValuesFromSelect(select: Query) extends Exp {
     if (select.tables.size > 1) select.copy(tables = select.tables.tail).tresql
     else ""
 }
-case class Delete(table: Ident = null, alias: String = null, filter: Arr, using: Exp = null, returning: Option[Cols],
+/** Empty filter (`dept - []`) deletes all rows, it is represented by null filter */
+case class Delete(table: Ident = null, alias: String = null, filter: Exp = null, using: Exp = null, returning: Option[Cols],
                   db: Option[Db])
   extends DMLExp {
   override def cols = null
@@ -372,14 +376,14 @@ case class Delete(table: Ident = null, alias: String = null, filter: Arr, using:
       db.map(_.tresql).mkString + table.tresql + Option(alias).map(" " + _).getOrElse("") +
         (if (using == null) "" else using.tresql)
 
-    "-" + tbl + filter.tresql + returning.map(_.tresql).getOrElse("")
+    "-" + tbl + "[" + Option(filter).map(_.tresql).getOrElse("") + "]" + returning.map(_.tresql).getOrElse("")
   }
 }
 case class Arr(elements: List[Exp]) extends Exp {
   def tresql = "[" + any2tresql(elements) + "]"
 }
-case class Filters(filters: List[Arr]) extends Exp {
-  def tresql = filters map any2tresql mkString
+case class Filters(filters: List[Exp]) extends Exp {
+  def tresql = filters.map(filterTresql).mkString
 }
 case object All extends Exp {
   def tresql = "*"
