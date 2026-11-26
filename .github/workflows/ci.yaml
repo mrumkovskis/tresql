@@ -30,6 +30,6 @@ jobs:
     - name: Set up sbt
       uses: sbt/setup-sbt@v1
       with:
-        sbt-runner-version: 1.12.15
+        sbt-runner-version: 1.13.1
     - name: Compile and test
       run:  sbt -J-Xmx8G clean update +compile +test +it/test
